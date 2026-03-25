@@ -1030,17 +1030,19 @@ body.light-mode ::-webkit-scrollbar-thumb{background:var(--bdr2);}
 /* ══════════════════════════════════════
    SYNC TAB
 ══════════════════════════════════════ */
-.sync-setup{max-width:560px;}
-.sync-steps-panel{background:var(--surf);border:1px solid var(--bdr);border-radius:6px;padding:18px;margin-bottom:14px;}
-.sync-step-row{display:flex;gap:12px;margin-bottom:12px;align-items:flex-start;}
+.sync-setup{width:100%;max-width:560px;}
+.sync-steps-panel{background:var(--surf);border:1px solid var(--bdr);border-radius:6px;padding:18px;margin-bottom:14px;min-width:0;overflow:hidden;}
+.sync-step-row{display:flex;gap:12px;margin-bottom:12px;align-items:flex-start;min-width:0;}
 .sync-step-row:last-child{margin-bottom:0;}
 .sync-step-num{width:24px;height:24px;border-radius:50%;background:var(--gold-d);border:1px solid var(--gold);color:var(--gold-b);font-size:9px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-weight:bold;font-family:'Orbitron',monospace;}
-.sync-step-text{font-size:9px;color:var(--txt);line-height:1.8;}
+.sync-step-text{font-size:9px;color:var(--txt);line-height:1.8;min-width:0;word-break:break-word;}
 .sync-step-text b{color:var(--txt-b);}
 .sync-step-text code{background:var(--surf2);border:1px solid var(--bdr2);padding:1px 6px;border-radius:3px;font-size:8px;color:var(--gold);display:inline-block;margin:2px 0;}
-.sync-step-text pre{background:var(--bg);border:1px solid var(--bdr2);border-radius:4px;padding:8px 10px;font-size:8px;color:var(--grn-b);margin:6px 0;overflow-x:auto;line-height:1.6;}
+.sync-step-text pre{background:var(--bg);border:1px solid var(--bdr2);border-radius:4px;padding:8px 10px;font-size:8px;color:var(--grn-b);margin:6px 0;overflow-x:auto;line-height:1.6;white-space:pre-wrap;word-break:break-all;}
+.sync-sql-pre{font-size:6px;background:var(--bg);border:1px solid var(--bdr);border-radius:4px;padding:10px;overflow-x:auto;line-height:1.6;color:var(--txt-d);white-space:pre-wrap;word-break:break-all;max-width:100%;box-sizing:border-box;}
 .sync-connect-panel{background:var(--surf);border:1px solid var(--bdr);border-radius:6px;padding:18px;margin-bottom:14px;}
 .sync-status-panel{background:var(--surf);border:1px solid var(--bdr);border-radius:6px;padding:18px;margin-bottom:14px;}
+.sync-integrations-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:18px;}
 .sync-stat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px;}
 .sync-stat{background:var(--bg);border:1px solid var(--bdr);padding:8px;border-radius:4px;text-align:center;}
 .sync-stat-n{font-family:'Orbitron',monospace;font-size:14px;font-weight:700;}
@@ -7044,7 +7046,7 @@ function renderSync(){
   const shopifyPanel=renderIntegrationPanel('shopify');
   const etsyPanel=renderIntegrationPanel('etsy');
   const integrationsHtml=`
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:18px">
+    <div class="sync-integrations-grid">
       ${shopifyPanel}${etsyPanel}
     </div>
     <div id="unified-orders" style="display:none;margin-bottom:18px">
@@ -7076,7 +7078,7 @@ function renderSync(){
             Click <b>SQL Editor</b> in the left sidebar → <b>New query</b> → paste the SQL below → click <b>Run</b>
             <div style="margin-top:10px;position:relative">
               <button class="btn btn-gold btn-sm" onclick="copySQL()" style="margin-bottom:8px;width:100%;padding:8px;font-size:8px">📋 Copy SQL to Clipboard</button>
-              <pre style="font-size:6px;background:var(--bg);border:1px solid var(--bdr);border-radius:4px;padding:10px;overflow-x:auto;line-height:1.6;color:var(--txt-d)">create table if not exists ha3d_spools (id text primary key, payload text, updated_at timestamptz);
+              <pre class="sync-sql-pre">create table if not exists ha3d_spools (id text primary key, payload text, updated_at timestamptz);
 create table if not exists ha3d_prints (id text primary key, payload text, updated_at timestamptz);
 create table if not exists ha3d_queue (id text primary key, payload text, updated_at timestamptz);
 create table if not exists ha3d_orders (id text primary key, payload text, updated_at timestamptz);
@@ -7178,7 +7180,7 @@ create policy "Allow all" on ha3d_catalog for all using (true) with check (true)
         <summary style="font-size:7px;color:var(--txt-d);letter-spacing:2px;text-transform:uppercase;cursor:pointer;padding:6px 0;list-style:none">▸ Add new tables / re-run SQL setup</summary>
         <div style="margin-top:8px">
           <button class="btn btn-gold btn-sm" style="width:100%;margin-bottom:8px" onclick="copySQL()">📋 Copy SQL to Clipboard</button>
-          <pre style="font-size:6px;background:var(--bg);border:1px solid var(--bdr);border-radius:4px;padding:10px;overflow-x:auto;line-height:1.6;color:var(--txt-d);max-height:200px;overflow-y:auto">create table if not exists ha3d_catalog (id text primary key, payload text, updated_at timestamptz);
+          <pre class="sync-sql-pre" style="max-height:200px;overflow-y:auto">create table if not exists ha3d_catalog (id text primary key, payload text, updated_at timestamptz);
 drop policy if exists "Allow all" on ha3d_catalog;
 create policy "Allow all" on ha3d_catalog for all using (true) with check (true);</pre>
           <div style="font-size:7px;color:var(--txt-d);margin-top:6px">Paste into Supabase → SQL Editor → Run</div>
@@ -7248,7 +7250,7 @@ function disconnectSupabase(){
 }
 
 function copySQL(){
-  const pre=document.querySelector('.sync-steps-panel pre');
+  const pre=document.querySelector('.sync-sql-pre');
   const sql=pre?pre.textContent.trim():'';
   if(!sql){toast('Nothing to copy','','warning');return;}
   navigator.clipboard.writeText(sql)
