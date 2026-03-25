@@ -3772,22 +3772,34 @@ function renderShopify(){
   const el=document.getElementById('shopify-content');
   if(!el)return;
   if(shopifyCfg.connected&&shopifyCfg.domain&&!shopifyCfg.domain.includes('DEMO')){
+    const shopifyOrders=orders.filter(function(o){return o.fromShopify;});
+    const shopifyCatalog=catalogItems.filter(function(c){return c.shopifyId;});
     el.innerHTML='<div class="shopify-status-bar">'
       +'<div class="shopify-status-dot connected"></div>'
       +'<div style="flex:1">'
         +'<div style="font-size:9px;color:var(--shopify);font-weight:bold">Connected to '+esc(shopifyCfg.domain)+'</div>'
         +'<div style="font-size:7px;color:var(--txt-d);margin-top:1px">Last synced: '+(shopifyCfg.lastPoll?new Date(shopifyCfg.lastPoll).toLocaleTimeString():'-')+' · Auto-polls every 5 min</div>'
       +'</div>'
-      +'<button class="btn btn-ghost btn-sm" onclick="pollShopifyOrders()">↻ Refresh Now</button>'
       +'<button class="btn btn-red btn-sm" onclick="disconnectShopify()">Disconnect</button>'
     +'</div>'
-    +'<div class="shopify-preview-banner">✓ New orders automatically create entries in Orders + Queue · Missing 3MF files are flagged · Products synced from your store</div>'
-    +'<div class="ctrl"><span style="font-size:8px;color:var(--shopify);letter-spacing:1px;font-weight:bold">YOUR SHOPIFY PRODUCTS</span>'
-    +'<span class="cnt" id="shopify-product-count">Loading…</span></div>'
-    +'<div class="shopify-products-grid" id="shopify-products-grid">'
-    +[1,2,3,4].map(()=>'<div class="skeleton-card"></div>').join('')
-    +'</div>';
-    loadShopifyProducts();
+    +'<div class="shopify-preview-banner">✓ Orders → Orders tab · Products → Product Catalog · New orders auto-create Queue entries · Missing 3MF files flagged</div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">'
+      +'<div style="background:var(--surf);border:1px solid var(--bdr);border-radius:5px;padding:12px;text-align:center">'
+        +'<div style="font-size:22px;font-weight:bold;color:var(--teal);font-family:Orbitron,monospace">'+shopifyOrders.length+'</div>'
+        +'<div style="font-size:7px;color:var(--txt-d);letter-spacing:1px;margin-bottom:8px">ORDERS SYNCED</div>'
+        +'<button class="btn btn-teal btn-sm" style="width:100%" onclick="pollShopifyOrders().then(()=>render())">↻ Sync Orders</button>'
+      +'</div>'
+      +'<div style="background:var(--surf);border:1px solid var(--bdr);border-radius:5px;padding:12px;text-align:center">'
+        +'<div style="font-size:22px;font-weight:bold;color:var(--shopify);font-family:Orbitron,monospace">'+shopifyCatalog.length+'</div>'
+        +'<div style="font-size:7px;color:var(--txt-d);letter-spacing:1px;margin-bottom:8px">PRODUCTS IN CATALOG</div>'
+        +'<button class="btn btn-shopify btn-sm" style="width:100%" onclick="syncShopifyToCatalog()">↻ Sync Products</button>'
+      +'</div>'
+    +'</div>'
+    +'<div style="display:flex;gap:8px;margin-bottom:14px">'
+      +'<button class="btn btn-ghost btn-sm" style="flex:1" onclick="navTo(\'orders\',document.getElementById(\'nav-orders\'))">📬 View Orders</button>'
+      +'<button class="btn btn-ghost btn-sm" style="flex:1" onclick="navTo(\'catalog\',document.getElementById(\'nav-catalog\'))">🏪 View Catalog</button>'
+    +'</div>'
+    +'<div id="shopify-sync-status" style="font-size:7px;color:var(--txt-d);min-height:16px"></div>';
   }else if(shopifyCfg.connected){
     // DEMO view
     const demoProducts=[
@@ -3867,12 +3879,32 @@ async function pollShopifyOrders(){
     const resp=await fetch('/api/shopify/orders/sync');
     if(!resp.ok)return;
     const data=await resp.json();
-    const newOrders=(data.orders||[]).filter(o=>!orders.find(ex=>ex.shopifyId===String(o.id)));
-    newOrders.forEach(o=>ingestShopifyOrder(o));
+    const rawOrders=data.orders||[];
+    let changed=false;
+    rawOrders.forEach(function(o){
+      const existing=orders.find(function(ex){return ex.shopifyId===String(o.id);});
+      if(!existing){
+        ingestShopifyOrder(o);
+        changed=true;
+      }else{
+        // Update status for existing orders
+        const newStatus=shopifyStatusMap(o);
+        if(existing.status!==newStatus){
+          existing.status=newStatus;
+          changed=true;
+        }
+      }
+    });
     shopifyCfg.lastPoll=Date.now();
     saveShopify();
-    if(newOrders.length>0)render();
+    if(changed){saveOrders();render();}
   }catch(e){console.warn('[Shopify] poll failed:',e.message);}
+}
+function shopifyStatusMap(o){
+  if(o.fulfillment_status==='fulfilled')return 'shipped';
+  if(o.financial_status==='refunded'||o.financial_status==='voided')return 'cancelled';
+  if(o.fulfillment_status==='partial')return 'printing';
+  return 'pending';
 }
 
 function startPolling(){
@@ -3880,12 +3912,76 @@ function startPolling(){
   pollInterval=setInterval(pollShopifyOrders,5*60*1000);
 }
 
+async function syncShopifyToCatalog(){
+  if(!shopifyCfg.connected||shopifyCfg.domain.includes('DEMO'))return;
+  const statusEl=document.getElementById('shopify-sync-status');
+  function setStatus(msg){if(statusEl)statusEl.innerHTML=msg;}
+  setStatus('Fetching products from Shopify…');
+  try{
+    const resp=await fetch('/api/shopify/products');
+    if(!resp.ok)throw new Error('HTTP '+resp.status);
+    const data=await resp.json();
+    const products=data.products||[];
+    if(!products.length){setStatus('<span style="color:var(--amb)">No products found in your Shopify store.</span>');return;}
+    let added=0,updated=0;
+    products.forEach(function(p){
+      const shopifyId=String(p.id);
+      const existing=catalogItems.find(function(c){return c.shopifyId===shopifyId;});
+      const img=(p.images&&p.images[0])?p.images[0].src:'';
+      const basePrice=p.variants&&p.variants[0]?parseFloat(p.variants[0].price)||0:0;
+      const variants=(p.variants||[])
+        .filter(function(v){return v.title!=='Default Title';})
+        .map(function(v){return{title:v.title,price:v.price};});
+      const tags=p.tags?p.tags.split(',').map(function(t){return t.trim();}).filter(Boolean):[];
+      const category=p.product_type||'Other';
+      if(existing){
+        // Update image, price, variants if changed
+        existing.photo=existing.photo||img;
+        existing.shopifyImage=img;
+        existing.price=basePrice;
+        existing.variants=variants;
+        existing.tags=tags;
+        existing.category=category||existing.category;
+        existing.fromShopify=true;
+        updated++;
+      }else{
+        catalogItems.push({
+          id:uid(),
+          shopifyId,
+          name:p.title,
+          photo:img,
+          shopifyImage:img,
+          price:basePrice,
+          cost:0,
+          category,
+          variants,
+          tags,
+          description:p.body_html||'',
+          tmfId:'',
+          notes:'Synced from Shopify',
+          fromShopify:true,
+          createdAt:Date.now()
+        });
+        added++;
+      }
+    });
+    saveCatalog();
+    render();
+    setStatus('<span style="color:var(--grn)">✓ '+added+' added, '+updated+' updated in Product Catalog</span>');
+    if(added>0||updated>0)toast('Products Synced',added+' new · '+updated+' updated in Product Catalog','success');
+  }catch(e){
+    setStatus('<span style="color:var(--red)">✗ '+esc(e.message)+'</span>');
+    console.warn('[Shopify] product sync failed:',e);
+  }
+}
+
 function ingestShopifyOrder(o){
   const customer=o.customer?(o.customer.first_name+' '+(o.customer.last_name||'')).trim():'Guest';
   const items=(o.line_items||[]).map(li=>({name:li.title,qty:li.quantity,price:parseFloat(li.price||0).toFixed(2)}));
   const orderId=o.name||('#'+o.id);
+  const status=shopifyStatusMap(o);
   // Create order
-  const order={id:uid(),shopifyId:String(o.id),orderId,customer,platform:'Shopify',date:o.created_at?o.created_at.split('T')[0]:new Date().toISOString().split('T')[0],items,status:'pending',shipping:0,notes:'',timestamp:Date.now(),fromShopify:true};
+  const order={id:uid(),shopifyId:String(o.id),orderId,customer,platform:'Shopify',date:o.created_at?o.created_at.split('T')[0]:new Date().toISOString().split('T')[0],items,status,shipping:0,notes:'',timestamp:Date.now(),fromShopify:true};
   orders.push(order);saveOrders();
   // Add each item to queue
   items.forEach(it=>{
@@ -5124,6 +5220,8 @@ async function checkShopifyConfig(){
       if(!wasConnected){
         startPolling();
         toast('Shopify Connected','Store '+data.shop+' ready.','success');
+        pollShopifyOrders();
+        syncShopifyToCatalog();
         if(curTab==='shopify')renderShopify();
       }
     }
@@ -5169,7 +5267,9 @@ window.addEventListener('message',function(e){
     shopifyCfg.domain=shop;shopifyCfg.connected=true;shopifyCfg.lastPoll=null;
     saveShopify();render();
     toast('Shopify Connected!','Store '+shop+' connected. Syncing now.','success');
-    startPolling();pollShopifyOrders();
+    startPolling();
+    pollShopifyOrders();
+    syncShopifyToCatalog();
   }else if(e.data.type==='shopify_oauth_error'){
     toast('Shopify Error',e.data.message||'Connection failed.','error');
     var btn=document.querySelector('.btn-shopify');

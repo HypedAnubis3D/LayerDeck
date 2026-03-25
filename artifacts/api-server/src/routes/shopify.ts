@@ -325,11 +325,11 @@ router.get(
       const url = new URL(
         `https://${conn.shopDomain}/admin/api/2024-01/orders.json`
       );
-      url.searchParams.set("status", "open");
-      url.searchParams.set("limit", "50");
+      url.searchParams.set("status", "any");
+      url.searchParams.set("limit", "100");
       url.searchParams.set(
         "fields",
-        "id,name,customer,line_items,created_at,financial_status,discount_codes"
+        "id,name,customer,line_items,created_at,financial_status,fulfillment_status,discount_codes"
       );
 
       const shopifyResp = await fetch(url.toString(), {
