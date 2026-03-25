@@ -7224,9 +7224,10 @@ async function processSyncQueue(){
       let success=0,failed=0;
       for(const item of queue){
         try{
-          const{error}=await supabaseClient
-            .from('ha3d_user_data')
-            .upsert({user_id:currentUser.id,collection:item.collection,payload:item.data,updated_at:new Date().toISOString()});
+          const result=await sbWithTimeout(
+            supabaseClient.from('ha3d_user_data').upsert({user_id:currentUser.id,collection:item.collection,payload:item.data,updated_at:new Date().toISOString()})
+          );
+          const{error}=result;
           if(error)throw new Error(error.message);
           syncQueue=syncQueue.filter(q=>q.timestamp!==item.timestamp);
           success++;
@@ -7244,15 +7245,22 @@ async function processSyncQueue(){
   }
 }
 
+function sbWithTimeout(queryBuilder,ms=15000){
+  return Promise.race([
+    queryBuilder,
+    new Promise((_,reject)=>setTimeout(()=>reject(new Error('Sync timed out after '+ms/1000+'s — check your Supabase project is active')),ms))
+  ]);
+}
+
 async function pullFromCloud(silent=false){
   if(!supabaseClient||!currentUser){if(!silent)toast('Not signed in','Please sign in first','error');return;}
   updateSyncIndicator('syncing');
   addSyncLog('Pulling data from cloud…','info');
   try{
-    const{data,error}=await supabaseClient
-      .from('ha3d_user_data')
-      .select('collection,payload')
-      .eq('user_id',currentUser.id);
+    const result=await sbWithTimeout(
+      supabaseClient.from('ha3d_user_data').select('collection,payload').eq('user_id',currentUser.id)
+    );
+    const{data,error}=result;
     if(error)throw new Error(error.message);
     let pulled=0;
     const knownCollections={spools:1,prints:1,queueItems:1,orders:1,sales:1,usageHist:1,shinyRolls:1,maintLog:1,wasteLog:1,printerRecords:1,tmfLib:1,catalogItems:1};
@@ -7265,15 +7273,17 @@ async function pullFromCloud(silent=false){
           ss(KEYS[row.collection]||('ha3d_'+row.collection+'_v1'),parsed);
           pulled++;
         }
-      }catch(e){}
+      }catch(e){console.warn('Parse error for',row.collection,e);}
     }
     updateSyncIndicator('connected');
     addSyncLog('Pulled '+pulled+' collections ✓','ok');
     if(!silent)toast('Data Pulled','Your data is up to date','success');
   }catch(e){
+    console.error('pullFromCloud error:',e);
     updateSyncIndicator('error');
     addSyncLog('Pull failed: '+e.message,'err');
-    toast('Sync Error',e.message,'error');
+    if(!silent)toast('Sync Error',e.message,'error');
+    else toast('Sync Error',e.message,'error',5000);
   }
 }
 
