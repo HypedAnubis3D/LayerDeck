@@ -1046,6 +1046,11 @@ body.light-mode ::-webkit-scrollbar-thumb{background:var(--bdr2);}
 ══════════════════════════════════════ */
 .catalog-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;align-items:start;}
 .catalogItems-card{background:var(--surf);border:1px solid var(--bdr);border-radius:6px;overflow:hidden;display:flex;flex-direction:column;position:relative;}
+.cat-filter-active{background:var(--gold-d)!important;border-color:var(--gold)!important;color:var(--gold-b)!important;}
+.plat-badges{display:flex;gap:3px;flex-wrap:wrap;margin-bottom:5px;}
+.plat-badge{display:inline-flex;align-items:center;gap:2px;border-radius:3px;padding:2px 5px;font-size:5.5px;font-weight:bold;letter-spacing:.3px;}
+.plat-shopify{background:rgba(149,191,71,.12);color:#95BF47;border:1px solid rgba(149,191,71,.3);}
+.plat-etsy{background:rgba(241,112,34,.12);color:#F17022;border:1px solid rgba(241,112,34,.3);}
 .catalog-card{background:var(--surf);border:1px solid var(--bdr);border-radius:8px;overflow:hidden;transition:transform .2s,box-shadow .2s;}
 .catalog-card:hover{transform:translateY(-3px);box-shadow:0 10px 28px rgba(0,0,0,.5);}
 .catalog-photo{width:100%;height:150px;object-fit:cover;background:var(--bg);display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;}
@@ -1940,15 +1945,19 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
 <div id="tab-catalog" style="display:none">
   <div class="ctrl" style="flex-wrap:wrap;gap:6px">
     <button class="btn btn-gold" onclick="openAddCatalogItem()">+ Add Product</button>
-    <button class="btn btn-sm" style="background:var(--shopify-d,rgba(149,191,71,.1));border:1px solid var(--shopify,#95BF47);color:var(--shopify,#95BF47)" onclick="openShopifyImport()" title="Import via Supabase proxy">🛍 Import from Shopify</button>
     <button class="btn btn-sm" style="background:rgba(34,170,204,.1);border:1px solid var(--cyn);color:var(--cyn)" onclick="document.getElementById('csv-import-input').click()" title="Import from Shopify CSV export">📂 Import CSV</button>
     <input type="file" id="csv-import-input" accept=".csv" style="display:none" onchange="importShopifyCSV(this)"/>
-    <button class="btn btn-sm" style="background:var(--grn-d);border:1px solid var(--grn);color:var(--grn-b)" onclick="refreshCatalogFromShopify()" title="Check for new products">↻ Refresh</button>
     <button class="btn btn-ghost btn-sm" onclick="enterSelectMode('catalog')">☑ Select</button>
     <button class="btn btn-sm" style="background:var(--red-d);border:1px solid var(--red-d);color:var(--red-b)" onclick="deleteAllCatalog()">🗑 Delete All</button>
     <input class="srch" id="cat-s" placeholder="Search products…" oninput="render()"/>
     <span class="cnt" id="catalog-cnt"></span>
     <span id="catalog-last-sync" style="font-size:6px;color:var(--txt-d)"></span>
+  </div>
+  <div style="display:flex;gap:5px;margin-bottom:8px;flex-wrap:wrap">
+    <button id="catf-all" class="btn btn-sm cat-filter-active" onclick="setCatalogFilter('all')">All</button>
+    <button id="catf-shopify" class="btn btn-sm" onclick="setCatalogFilter('shopify')" style="border-color:rgba(149,191,71,.4);color:#95BF47">🛍 Shopify</button>
+    <button id="catf-etsy" class="btn btn-sm" onclick="setCatalogFilter('etsy')" style="border-color:rgba(240,112,40,.4);color:#F17022">🟠 Etsy</button>
+    <button id="catf-manual" class="btn btn-sm" onclick="setCatalogFilter('manual')" style="border-color:var(--bdr2);color:var(--txt-d)">✏ Manual</button>
   </div>
   <div id="shopify-import-panel" style="display:none;background:var(--surf);border:1px solid var(--bdr2);border-radius:6px;padding:14px;margin-bottom:12px">
     <div style="font-size:9px;color:var(--txt-b);font-weight:bold;margin-bottom:8px">Import from Shopify</div>
@@ -4661,7 +4670,7 @@ function quickUse(id){
 // ════════ NEW DATA ════════
 // Add to KEYS
 Object.assign(KEYS,{shiny:'ha3d_shiny_v1',etsy:'ha3d_etsy_v1',batch:'ha3d_batch_v1'});
-let shinyRolls=[],etsyCfg={domain:'',token:'',connected:false,lastOrderId:null,lastPoll:null},batchPlate=[];
+let shinyRolls=[],etsyCfg={domain:'',connected:false,lastOrderId:null,lastPoll:null},batchPlate=[];
 
 const _origLoad=load;
 // extend load
@@ -5061,6 +5070,12 @@ function renderIntegrationPanel(type){
   const label=type==='shopify'?'SHOPIFY':'ETSY';
   const btnClass=type==='shopify'?'btn-shopify':'btn-amb';
   if(cfg.connected&&cfg.domain){
+    const catCount=type==='shopify'
+      ?catalogItems.filter(i=>i.shopifyId||i.fromShopify).length
+      :catalogItems.filter(i=>i.etsyId||i.fromEtsy).length;
+    const ordCount=type==='shopify'
+      ?orders.filter(o=>o.fromShopify).length
+      :orders.filter(o=>o.fromEtsy).length;
     return `<div class="integration-panel">
       <div class="integration-hdr">
         <div>
@@ -5068,15 +5083,48 @@ function renderIntegrationPanel(type){
           <div class="integration-status" style="color:var(--grn)">● Connected · ${esc(cfg.domain)}</div>
         </div>
         <div style="display:flex;gap:5px;margin-left:auto">
-          <button class="btn btn-ghost btn-sm" onclick="${type==='shopify'?'pollShopifyOrders':'pollEtsyOrders'}()">↻ Sync</button>
           <button class="btn btn-red btn-sm" onclick="${type==='shopify'?'disconnectShopify':'disconnectEtsy'}()">Disconnect</button>
         </div>
       </div>
       <div class="integration-body">
-        <div style="font-size:7px;color:var(--txt-d);letter-spacing:1px;line-height:1.8">
-          Last synced: ${cfg.lastPoll?new Date(cfg.lastPoll).toLocaleTimeString():'-'}<br>
-          Auto-polls every 5 minutes · New orders auto-added to Queue + Orders
+        <div style="display:flex;gap:8px;margin-bottom:8px">
+          <div style="flex:1;background:var(--bg);border:1px solid var(--bdr);border-radius:4px;padding:6px;text-align:center">
+            <div style="font-family:'Orbitron',monospace;font-size:14px;color:var(--gold-b)">${catCount}</div>
+            <div style="font-size:6px;color:var(--txt-d)">Products</div>
+          </div>
+          <div style="flex:1;background:var(--bg);border:1px solid var(--bdr);border-radius:4px;padding:6px;text-align:center">
+            <div style="font-family:'Orbitron',monospace;font-size:14px;color:var(--cyn)">${ordCount}</div>
+            <div style="font-size:6px;color:var(--txt-d)">Orders</div>
+          </div>
         </div>
+        <div style="display:flex;gap:5px">
+          <button class="btn btn-ghost btn-sm" style="flex:1" onclick="${type==='shopify'?'syncShopifyToCatalog':'syncEtsyToCatalog'}()">↻ Sync Products</button>
+          <button class="btn btn-ghost btn-sm" style="flex:1" onclick="${type==='shopify'?'pollShopifyOrders':'pollEtsyOrders'}()">↻ Sync Orders</button>
+        </div>
+        <div style="font-size:6px;color:var(--txt-d);margin-top:6px">Last synced: ${cfg.lastPoll?new Date(cfg.lastPoll).toLocaleTimeString():'-'} · Auto-polls every 5 min</div>
+      </div>
+    </div>`;
+  }
+  if(type==='etsy'){
+    return `<div class="integration-panel">
+      <div class="integration-hdr">
+        <div>
+          <div class="integration-logo" style="color:#F17022">ETSY</div>
+          <div class="integration-status" style="color:var(--txt-d)">○ Not connected</div>
+        </div>
+      </div>
+      <div class="integration-body">
+        <div style="background:rgba(241,112,34,.07);border:1px solid rgba(241,112,34,.2);border-radius:4px;padding:8px 10px;margin-bottom:10px;font-size:7px;color:#F17022;line-height:1.7">
+          <b>Setup:</b> Go to <a href="https://www.etsy.com/developers/register" target="_blank" style="color:#F17022">etsy.com/developers</a> → Create App → copy your <b>Client ID (Keystring)</b> below. Scopes needed: <code>listings_r transactions_r</code>. Set your redirect URI to:<br>
+          <code style="font-size:6px;word-break:break-all">${window.location.origin}/api/etsy/oauth/callback</code>
+        </div>
+        <div class="int-field">
+          <div class="int-field-lbl">Etsy Client ID (Keystring)</div>
+          <input type="text" id="etsy-client-id-input" placeholder="etsy_api_key_xxxxxxxxxxxx"/>
+        </div>
+        <div id="etsy-connect-status" style="font-size:7px;color:var(--txt-d);min-height:14px;margin-top:4px"></div>
+        <button class="btn btn-amb" style="width:100%;padding:8px;margin-top:4px" onclick="connectEtsy()">🟠 Connect with Etsy OAuth</button>
+        <button class="btn btn-ghost btn-sm" style="width:100%;padding:6px;margin-top:4px" onclick="previewEtsyDemo()">👁 Preview Demo</button>
       </div>
     </div>`;
   }
@@ -5088,15 +5136,14 @@ function renderIntegrationPanel(type){
       </div>
     </div>
     <div class="integration-body">
-      ${type==='etsy'?`<div style="background:rgba(224,120,40,.07);border:1px solid var(--org-d);border-radius:4px;padding:8px 10px;margin-bottom:10px;font-size:7px;color:var(--org);line-height:1.7"><b>Etsy Setup:</b> Go to Etsy Developer → Create App → copy your API key and shop name below</div>`:''}
-      <div class="int-field"><div class="int-field-lbl">${type==='shopify'?'Store Domain':'Shop Name'}</div>
-        <input type="text" id="${type}-domain-input" placeholder="${type==='shopify'?'yourstore.myshopify.com':'yourshopname'}"/>
+      <div class="int-field"><div class="int-field-lbl">Store Domain</div>
+        <input type="text" id="${type}-domain-input" placeholder="yourstore.myshopify.com"/>
       </div>
-      <div class="int-field"><div class="int-field-lbl">${type==='shopify'?'Admin API Token':'API Key'}</div>
-        <input type="password" id="${type}-token-input" placeholder="${type==='shopify'?'shpat_xxx':'etsy_xxx'}"/>
+      <div class="int-field"><div class="int-field-lbl">Admin API Token</div>
+        <input type="password" id="${type}-token-input" placeholder="shpat_xxx"/>
       </div>
-      <button class="btn ${btnClass}" style="width:100%;padding:8px;margin-top:4px" onclick="${type==='shopify'?'connectShopify':'connectEtsy'}()">Connect ${label}</button>
-      <button class="btn btn-ghost btn-sm" style="width:100%;padding:6px;margin-top:4px" onclick="${type==='shopify'?'previewShopifyDemo':'previewEtsyDemo'}()">👁 Preview Demo</button>
+      <button class="btn ${btnClass}" style="width:100%;padding:8px;margin-top:4px" onclick="connectShopify()">Connect ${label}</button>
+      <button class="btn btn-ghost btn-sm" style="width:100%;padding:6px;margin-top:4px" onclick="previewShopifyDemo()">👁 Preview Demo</button>
     </div>
   </div>`;
 }
@@ -5278,19 +5325,51 @@ window.addEventListener('message',function(e){
     toast('Shopify Error',e.data.message||'Connection failed.','error');
     var btn=document.querySelector('.btn-shopify');
     if(btn){btn.disabled=false;btn.textContent='🛍 Connect with Shopify';}
+  }else if(e.data.type==='etsy_oauth_complete'){
+    var eshop=e.data.shop||'Etsy Shop';
+    etsyCfg.domain=eshop;etsyCfg.connected=true;etsyCfg.lastPoll=null;
+    saveEtsy();render();
+    toast('Etsy Connected!','Shop '+eshop+' connected. Syncing now.','success');
+    syncEtsyToCatalog();
+    pollEtsyOrders();
+  }else if(e.data.type==='etsy_oauth_error'){
+    toast('Etsy Error',e.data.message||'Connection failed.','error');
+    var ebtn=document.querySelector('.btn-amb');
+    if(ebtn){ebtn.disabled=false;ebtn.textContent='🟠 Connect with Etsy OAuth';}
   }
 });
 
-function connectEtsy(){
-  const domain=document.getElementById('etsy-domain-input')?.value?.trim();
-  const token=document.getElementById('etsy-token-input')?.value?.trim();
-  if(!domain||!token){alert('Please enter your Etsy shop name and API key.');return;}
-  etsyCfg.domain=domain;etsyCfg.token=token;etsyCfg.connected=true;
-  saveEtsy();render();
+async function connectEtsy(){
+  const clientId=(document.getElementById('etsy-client-id-input')?.value||'').trim();
+  const statusEl=document.getElementById('etsy-connect-status');
+  if(!clientId){if(statusEl)statusEl.textContent='⚠ Enter your Etsy Client ID (Keystring).';return;}
+  if(statusEl)statusEl.textContent='Saving credentials and opening Etsy authorization…';
+  const btn=document.querySelector('.btn-amb');
+  if(btn){btn.disabled=true;btn.textContent='Opening Etsy…';}
+  try{
+    const resp=await fetch('/api/etsy/oauth/credentials',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({clientId})
+    });
+    const data=await resp.json();
+    if(!resp.ok){
+      if(statusEl)statusEl.textContent='✗ '+(data.error||'Failed to save credentials');
+      if(btn){btn.disabled=false;btn.textContent='🟠 Connect with Etsy OAuth';}
+      return;
+    }
+    if(statusEl)statusEl.textContent='✓ Etsy authorization opened — authorize the app in the new tab…';
+    var oauthWin=window.open(data.authUrl,'_blank');
+    if(!oauthWin){window.location.href=data.authUrl;}
+  }catch(e){
+    if(statusEl)statusEl.textContent='✗ Network error — check connection';
+    if(btn){btn.disabled=false;btn.textContent='🟠 Connect with Etsy OAuth';}
+  }
 }
 function disconnectEtsy(){
-  showConfirm('Disconnect Etsy?','Your local data will remain intact.',()=>{
-    etsyCfg={domain:'',token:'',connected:false,lastOrderId:null,lastPoll:null};saveEtsy();render();
+  showConfirm('Disconnect Etsy?','Your local data will remain intact.',async()=>{
+    try{await fetch('/api/etsy/disconnect',{method:'DELETE'});}catch(e){}
+    etsyCfg={domain:'',connected:false,lastOrderId:null,lastPoll:null};
+    saveEtsy();render();
     toast('Etsy Disconnected','','warning');
   },'Disconnect','btn-red');
 }
@@ -5312,7 +5391,157 @@ function previewEtsyDemo(){
     document.getElementById('nav-badge-orders')?.classList.add('show');
   },800);
 }
-function pollEtsyOrders(){/* Etsy API call would go here — same pattern as Shopify */}
+
+async function checkEtsyConfig(){
+  try{
+    const resp=await fetch('/api/etsy/config');
+    if(!resp.ok) return;
+    const data=await resp.json();
+    if(data.connected&&data.shop&&!etsyCfg.connected){
+      etsyCfg.connected=true;
+      etsyCfg.domain=data.shop;
+      saveEtsy();render();
+    }
+  }catch(e){}
+}
+
+function checkEtsyOAuthCallback(){
+  const params=new URLSearchParams(window.location.search);
+  if(params.get('etsy_connected')==='true'){
+    const shop=params.get('shop')||'Etsy Shop';
+    window.history.replaceState({},'',window.location.pathname);
+    if(window.opener&&!window.opener.closed){
+      window.opener.postMessage({type:'etsy_oauth_complete',shop:shop},'*');
+      setTimeout(function(){window.close();},300);
+      return;
+    }
+    etsyCfg.domain=shop;etsyCfg.connected=true;etsyCfg.lastPoll=null;
+    saveEtsy();
+    setTimeout(function(){
+      toast('Etsy Connected!','Shop '+shop+' connected. Syncing now.','success');
+      syncEtsyToCatalog();pollEtsyOrders();render();
+    },500);
+  }else if(params.get('etsy_error')==='true'){
+    var msg=params.get('error_message')||'Connection failed. Please try again.';
+    window.history.replaceState({},'',window.location.pathname);
+    if(window.opener&&!window.opener.closed){
+      window.opener.postMessage({type:'etsy_oauth_error',message:decodeURIComponent(msg.replace(/\+/g,' '))},'*');
+      setTimeout(function(){window.close();},300);
+      return;
+    }
+    setTimeout(function(){toast('Etsy Error',decodeURIComponent(msg.replace(/\+/g,' ')),'error');},400);
+  }
+}
+
+async function syncEtsyToCatalog(){
+  if(!etsyCfg.connected) return;
+  try{
+    toast('Etsy Sync','Fetching Etsy listings…','info');
+    const resp=await fetch('/api/etsy/listings');
+    if(!resp.ok){
+      const d=await resp.json().catch(()=>({}));
+      toast('Etsy Sync Error',d.error||'Failed to fetch listings','error');
+      return;
+    }
+    const data=await resp.json();
+    const listings=data.listings||[];
+    if(!listings.length){toast('Etsy Sync','No active listings found','warning');return;}
+    let added=0,updated=0;
+    listings.forEach(function(l){
+      const etsyId=String(l.listing_id);
+      const name=(l.title||'').trim();
+      const price=l.price?(parseFloat(l.price.amount)/Math.max(1,parseInt(l.price.divisor||100))):0;
+      const category=(l.taxonomy_path&&l.taxonomy_path[0])||'Etsy';
+      const photo=(l.MainImage&&(l.MainImage.url_fullxfull||l.MainImage.url_570xN))||
+                  (l.Images&&l.Images[0]&&(l.Images[0].url_fullxfull||l.Images[0].url_570xN))||'';
+      const tags=l.tags||[];
+      // Try to find existing item by etsyId first, then by name-match with Shopify
+      let existing=catalogItems.find(function(c){return c.etsyId===etsyId;});
+      if(!existing&&name){
+        const nameLower=name.toLowerCase();
+        existing=catalogItems.find(function(c){
+          return c.name&&c.name.toLowerCase()===nameLower;
+        });
+      }
+      if(existing){
+        existing.etsyId=etsyId;
+        existing.fromEtsy=true;
+        if(!existing.price) existing.price=price;
+        if(!existing.photo&&photo) existing.photo=photo;
+        if(tags.length&&(!existing.tags||!existing.tags.length)) existing.tags=tags;
+        updated++;
+      }else{
+        catalogItems.push({
+          id:uid(),name:name,etsyId:etsyId,fromEtsy:true,
+          price:price,photo:photo,category:category,tags:tags,
+          variants:[],cost:0,description:'',createdAt:new Date().toISOString()
+        });
+        added++;
+      }
+    });
+    saveCatalog();
+    etsyCfg.lastPoll=Date.now();saveEtsy();
+    toast('Etsy Products Synced',added+' added, '+updated+' updated','success');
+    render();
+  }catch(e){
+    toast('Etsy Sync Error','Network error — is the API server running?','error');
+  }
+}
+
+async function pollEtsyOrders(){
+  if(!etsyCfg.connected) return;
+  try{
+    const resp=await fetch('/api/etsy/orders');
+    if(!resp.ok) return;
+    const data=await resp.json();
+    const receipts=data.receipts||[];
+    let added=0;
+    receipts.forEach(function(r){
+      const etsyOrderId='ETSY-'+r.receipt_id;
+      if(orders.find(function(o){return o.orderId===etsyOrderId;})) return;
+      const statusMap={open:'pending',paid:'pending',complete:'shipped',cancelled:'cancelled'};
+      const status=statusMap[r.status]||'pending';
+      const items=(r.transactions||[]).map(function(t){
+        return{name:t.title||'Item',qty:t.quantity||1,price:String((t.price&&t.price.amount?t.price.amount/Math.max(1,t.price.divisor||100):0).toFixed(2))};
+      });
+      const customer=r.name||(r.buyer_email?r.buyer_email.split('@')[0]:'Etsy Buyer');
+      const total=items.reduce(function(a,i){return a+parseFloat(i.price)*parseInt(i.qty||1);},0);
+      const newOrder={
+        id:uid(),orderId:etsyOrderId,etsyReceiptId:r.receipt_id,
+        customer:customer,email:r.buyer_email||'',platform:'Etsy',fromEtsy:true,
+        date:r.created_timestamp?new Date(r.created_timestamp*1000).toISOString().split('T')[0]:new Date().toISOString().split('T')[0],
+        items:items,status:status,shipping:0,notes:'Etsy order',
+        timestamp:r.created_timestamp?r.created_timestamp*1000:Date.now()
+      };
+      orders.push(newOrder);
+      added++;
+      // Auto-queue items
+      items.forEach(function(item){
+        var catItem=catalogItems.find(function(c){return c.name&&c.name.toLowerCase()===item.name.toLowerCase();});
+        queueItems.push({
+          id:uid(),name:item.name,
+          category:catItem?catItem.category:'Etsy',
+          printer:printerRecords[0]?.name||'X1C',
+          hrs:catItem?.tmfId?(tmfLib.find(function(t){return t.id===catItem.tmfId;})||{}).hrs||3:3,
+          qty:parseInt(item.qty||1),priority:'normal',orderId:etsyOrderId,
+          stage:'queued',fromEtsy:true,timestamp:Date.now()
+        });
+      });
+    });
+    if(added>0){
+      saveOrders();saveQueue();
+      etsyCfg.lastPoll=Date.now();saveEtsy();
+      toast('Etsy Orders Synced',added+' new order'+(added!==1?'s':'')+' imported','success');
+      render();
+      document.getElementById('nav-badge-queue')?.classList.add('show');
+      document.getElementById('nav-badge-orders')?.classList.add('show');
+    }else{
+      etsyCfg.lastPoll=Date.now();saveEtsy();
+    }
+  }catch(e){
+    toast('Etsy Sync Error','Network error — is the API server running?','error');
+  }
+}
 
 // ════════ PRICE ENGINE ════════
 async function runPriceAnalysis(){
@@ -7433,6 +7662,7 @@ function initSupabase(){
           await pullFromCloud(true);
           render();
           checkShopifyConfig();
+          checkEtsyConfig();
         }
         startAutoSync();
       }else{
@@ -8219,6 +8449,15 @@ Object.assign(TAB_NAMES,{
 ALL_TABS.push('catalog','nozzle','splitter','purchases','shipping','tax');
 
 let catalogItems=[],nozzleLog=[],purchases=[],shippingLog=[];
+let catalogFilter='all';
+function setCatalogFilter(f){
+  catalogFilter=f;
+  ['all','shopify','etsy','manual'].forEach(function(k){
+    const btn=document.getElementById('catf-'+k);
+    if(btn){btn.classList.toggle('cat-filter-active',k===f);}
+  });
+  render();
+}
 
 function loadV14(){
   catalogItems=gs(KEYS.catalog);
@@ -8558,6 +8797,15 @@ function renderCatalog(){
   checkCatalogAutoRefresh();
   const q=(document.getElementById('cat-s')?.value||'').toLowerCase();
   let items=catalogItems.filter(i=>!q||i.name.toLowerCase().includes(q)||(i.category||'').toLowerCase().includes(q));
+  // Platform filter
+  if(catalogFilter==='shopify') items=items.filter(i=>i.shopifyId||i.fromShopify);
+  else if(catalogFilter==='etsy') items=items.filter(i=>i.etsyId||i.fromEtsy);
+  else if(catalogFilter==='manual') items=items.filter(i=>!i.shopifyId&&!i.fromShopify&&!i.etsyId&&!i.fromEtsy);
+  // Sync filter button active states
+  ['all','shopify','etsy','manual'].forEach(function(k){
+    const btn=document.getElementById('catf-'+k);
+    if(btn) btn.classList.toggle('cat-filter-active',k===catalogFilter);
+  });
   document.getElementById('catalog-cnt').textContent=items.length+' products';
   const g=document.getElementById('catalog-grid');
   if(selectMode==='catalog')g.classList.add('multi-select-mode');
@@ -8584,6 +8832,11 @@ function renderCatalog(){
         '<input type="file" id="photo-'+item.id+'" accept="image/*" style="display:none" onchange="handlePhotoUpload(\''+item.id+'\',this)"/>'+
       '</div>'+
       '<div class="catalogItems-body">'+
+        ((item.shopifyId||item.fromShopify||item.etsyId||item.fromEtsy)?
+          '<div class="plat-badges">'+
+            ((item.shopifyId||item.fromShopify)?'<span class="plat-badge plat-shopify">🛍 Shopify</span>':'')+
+            ((item.etsyId||item.fromEtsy)?'<span class="plat-badge plat-etsy">🟠 Etsy</span>':'')+
+          '</div>':'')+
         '<div class="catalogItems-name">'+esc(item.name)+'</div>'+
         '<div class="catalogItems-cat">'+esc(item.category||'Other')+'</div>'+
         '<div class="catalogItems-price">$'+(item.price||0).toFixed(2)+'</div>'+
@@ -9832,11 +10085,16 @@ checkOnboarding();
 <!-- PTR indicator uses position:fixed which still works fine for overlays -->
 
 <script>
-// ── Check for Shopify OAuth redirect params on page load ──
-if(document.readyState==='loading'){
-  document.addEventListener('DOMContentLoaded',function(){setTimeout(checkShopifyOAuthCallback,700);});
-}else{
+// ── Check for OAuth redirect params on page load ──
+function _onReady(){
   setTimeout(checkShopifyOAuthCallback,700);
+  setTimeout(checkEtsyOAuthCallback,750);
+  setTimeout(checkEtsyConfig,1500);
+}
+if(document.readyState==='loading'){
+  document.addEventListener('DOMContentLoaded',_onReady);
+}else{
+  _onReady();
 }
 </script>
 </body>
