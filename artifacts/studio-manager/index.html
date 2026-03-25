@@ -1719,6 +1719,7 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
 <div id="tab-orders" style="display:none">
   <div class="ctrl">
     <button class="btn btn-teal" onclick="openAddOrder()">+ New Order</button>
+    <button class="btn btn-gold btn-sm" onclick="toggleQuickOrderBar()">⚡ Quick Add</button>
     <button class="btn btn-ghost btn-sm" onclick="exportOrdersCSV()">⬇ Export CSV</button>
     <button class="btn btn-ghost btn-sm" onclick="enterSelectMode('orders')">☑ Select</button>
     <input class="srch" id="or-s" placeholder="Search customer, order ID…" oninput="render()"/>
@@ -1731,11 +1732,30 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
     </select>
     <span class="cnt" id="or-cnt"></span>
   </div>
-  <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">
-    <button id="orf-all"     class="btn btn-sm cat-filter-active" onclick="setOrderFilter('all')">All</button>
-    <button id="orf-shopify" class="btn btn-sm" onclick="setOrderFilter('shopify')" style="border-color:rgba(149,191,71,.4);color:#95BF47">🛍 Shopify</button>
-    <button id="orf-etsy"    class="btn btn-sm" onclick="setOrderFilter('etsy')"    style="border-color:rgba(240,112,40,.4);color:#F17022">🟠 Etsy</button>
-    <button id="orf-manual"  class="btn btn-sm" onclick="setOrderFilter('manual')"  style="border-color:var(--bdr2);color:var(--txt-d)">✏ Manual</button>
+  <!-- QUICK ADD BAR -->
+  <div id="quick-order-bar" style="display:none;background:var(--surf);border:1px solid var(--bdr2);border-radius:6px;padding:10px;margin-bottom:10px;gap:8px;flex-wrap:wrap;align-items:flex-end">
+    <div style="flex:1;min-width:130px">
+      <div style="font-size:6px;color:var(--txt-d);margin-bottom:3px;letter-spacing:1px">CUSTOMER</div>
+      <input id="qo-cust" class="srch" placeholder="Customer name…" style="width:100%;margin:0"/>
+    </div>
+    <div style="flex:2;min-width:200px">
+      <div style="font-size:6px;color:var(--txt-d);margin-bottom:3px;letter-spacing:1px">ITEMS (Name · Qty · $Price per line)</div>
+      <textarea id="qo-items" rows="2" placeholder="e.g. Anubis Figure · 1 · $35.00" style="width:100%;background:var(--bg);border:1px solid var(--bdr2);color:var(--txt);padding:5px 8px;font-family:'Share Tech Mono',monospace;font-size:8px;border-radius:3px;resize:none;box-sizing:border-box"></textarea>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:4px">
+      <select id="qo-plat" style="background:var(--bg);border:1px solid var(--bdr2);color:var(--txt);padding:4px 8px;font-family:'Share Tech Mono',monospace;font-size:8px;border-radius:3px">
+        <option>Direct</option><option>Convention</option><option>Instagram</option><option>Etsy</option><option>Shopify</option><option>Other</option>
+      </select>
+      <button class="btn btn-gold btn-sm" onclick="quickAddOrder()">⚡ Add</button>
+    </div>
+    <button onclick="document.getElementById('quick-order-bar').style.display='none'" style="background:none;border:none;color:var(--txt-d);font-size:14px;cursor:pointer;align-self:flex-start;padding:2px">✕</button>
+  </div>
+  <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;align-items:center">
+    <button id="orf-all"        class="btn btn-sm cat-filter-active" onclick="setOrderFilter('all')">All</button>
+    <button id="orf-shopify"    class="btn btn-sm" onclick="setOrderFilter('shopify')"    style="border-color:rgba(149,191,71,.4);color:#95BF47">🛍 Shopify</button>
+    <button id="orf-etsy"       class="btn btn-sm" onclick="setOrderFilter('etsy')"       style="border-color:rgba(240,112,40,.4);color:#F17022">🟠 Etsy</button>
+    <button id="orf-convention" class="btn btn-sm" onclick="setOrderFilter('convention')" style="border-color:rgba(168,85,247,.4);color:#c084fc">🎪 Convention</button>
+    <button id="orf-manual"     class="btn btn-sm" onclick="setOrderFilter('manual')"     style="border-color:var(--bdr2);color:var(--txt-d)">✏ Manual</button>
   </div>
   <div class="orders-grid" id="orders-grid"></div>
 </div>
@@ -3782,6 +3802,7 @@ function renderOrders(){
   const grid=document.getElementById('orders-grid');
   const cnt=document.getElementById('or-cnt');
   if(!grid)return;
+  updateConventionOrderPill();
   const q=(document.getElementById('or-s')?.value||'').toLowerCase();
   const st=document.getElementById('or-st')?.value||'';
   let list=[...orders];
@@ -3790,9 +3811,11 @@ function renderOrders(){
   // Platform filter
   const isShopify=function(o){return o.fromShopify||(o.platform||'').toLowerCase()==='shopify';};
   const isEtsy=function(o){return o.fromEtsy||(o.platform||'').toLowerCase()==='etsy';};
+  const isConvention=function(o){return (o.platform||'').toLowerCase()==='convention'||!!o.fromConvention;};
   if(orderFilter==='shopify') list=list.filter(isShopify);
   else if(orderFilter==='etsy') list=list.filter(isEtsy);
-  else if(orderFilter==='manual') list=list.filter(function(o){return !isShopify(o)&&!isEtsy(o);});
+  else if(orderFilter==='convention') list=list.filter(isConvention);
+  else if(orderFilter==='manual') list=list.filter(function(o){return !isShopify(o)&&!isEtsy(o)&&!isConvention(o);});
   list.sort(function(a,b){return (b.timestamp||0)-(a.timestamp||0);});
   if(cnt)cnt.textContent=list.length+' order'+(list.length!==1?'s':'');
   if(!list.length){
@@ -7619,6 +7642,9 @@ function renderDashboard(){
   document.getElementById('dashboard-content').innerHTML=`
     <div style="font-family:'Orbitron',monospace;font-size:8px;color:var(--gold-dim);letter-spacing:2px;margin-bottom:10px;text-transform:uppercase">${now.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'})}</div>
 
+    <!-- ONBOARDING CHECKLIST -->
+    <div class="dash-widget" id="ob-checklist-widget" style="margin-bottom:10px"></div>
+
     <!-- GOAL WIDGET -->
     <div class="goal-widget" id="goal-widget" style="margin-bottom:10px"></div>
 
@@ -7698,8 +7724,9 @@ function renderDashboard(){
       :emptyState('📊','No activity yet','Start adding prints, orders and spools to see your activity feed here')}
     </div>`;
 
-  // Update goal widget now that it's in the DOM
+  // Update goal widget and checklist now that they're in the DOM
   updateGoalWidget();
+  if(typeof renderObChecklist==='function') renderObChecklist();
 
   // Draw sparklines
   const nowTs=Date.now();
@@ -8783,11 +8810,17 @@ let catalogItems=[],nozzleLog=[],purchases=[],shippingLog=[];
 let orderFilter='all';
 function setOrderFilter(f){
   orderFilter=f;
-  ['all','shopify','etsy','manual'].forEach(function(k){
+  ['all','shopify','etsy','convention','manual'].forEach(function(k){
     const btn=document.getElementById('orf-'+k);
     if(btn) btn.classList.toggle('cat-filter-active',k===f);
   });
   renderOrders();
+}
+function updateConventionOrderPill(){
+  const btn=document.getElementById('orf-convention');
+  if(!btn)return;
+  const cnt=orders.filter(function(o){return (o.platform||'').toLowerCase()==='convention'||o.fromConvention;}).length;
+  btn.textContent='🎪 Convention'+(cnt?' ('+cnt+')':'');
 }
 let catalogFilter='all';
 function setCatalogFilter(f){
@@ -10391,13 +10424,18 @@ function renderDaySales(){
   renderRunningTotal();
   const sales=[...c.daySales||[]].reverse();
   const methodIcons={cash:'💵',card:'💳',venmo:'📱',other:'💰'};
+  const c2=getEvt();
   document.getElementById('em-sales-list').innerHTML=sales.length
     ?sales.map(function(s){
+        var alreadyOrdered=orders.some(function(o){return o.conventionSaleId===s.id;});
         return `<div class="sale-row">
           <span style="color:var(--txt-d);font-size:10px">${methodIcons[s.method]||'💰'}</span>
           <span style="flex:1;color:var(--txt)">${esc(s.itemName)}</span>
           <span style="color:var(--txt-d)">×${s.qty}</span>
           <span style="color:var(--grn-b);font-family:Orbitron,monospace;min-width:50px;text-align:right">$${(parseFloat(s.price||0)*parseInt(s.qty||1)).toFixed(2)}</span>
+          ${alreadyOrdered
+            ?'<span style="font-size:6px;color:var(--grn-b);padding:2px 6px;border:1px solid var(--grn);border-radius:2px">✓ Ordered</span>'
+            :`<button onclick="recordSaleAsOrder('${s.id}')" title="Create order record" style="background:rgba(168,85,247,.15);border:1px solid rgba(168,85,247,.4);color:#c084fc;font-size:7px;cursor:pointer;padding:2px 6px;border-radius:3px">→ Order</button>`}
           <button onclick="deleteSale('${s.id}')" style="background:none;border:none;color:var(--txt-d);font-size:10px;cursor:pointer;padding:2px 4px">✕</button>
         </div>`;
     }).join('')
@@ -11207,6 +11245,107 @@ function addToOrderFromCatalog(id){
     if(eoPlatform)eoPlatform.value='Direct';
   },50);
 }
+
+// ════════ QUICK ORDER ADD ════════
+function toggleQuickOrderBar(){
+  var bar=document.getElementById('quick-order-bar');
+  if(!bar)return;
+  var showing=bar.style.display==='flex';
+  bar.style.display=showing?'none':'flex';
+  if(!showing){
+    var custEl=document.getElementById('qo-cust');
+    if(custEl){custEl.value='';custEl.focus();}
+    var itEl=document.getElementById('qo-items');if(itEl)itEl.value='';
+  }
+}
+function quickAddOrder(){
+  var cust=(document.getElementById('qo-cust')?.value||'').trim();
+  if(!cust){toast('Customer name required','','warning');document.getElementById('qo-cust')?.focus();return;}
+  var rawItems=(document.getElementById('qo-items')?.value||'').trim();
+  var plat=document.getElementById('qo-plat')?.value||'Direct';
+  var items=rawItems?rawItems.split('\n').filter(Boolean).map(function(l){
+    var pts=l.split('·').map(function(p){return p.trim();});
+    return{name:pts[0]||'Item',qty:parseInt(pts[1])||1,price:parseFloat((pts[2]||'0').replace('$',''))||0};
+  }):[];
+  if(!items.length){toast('Add at least one item','e.g. Anubis Figure · 1 · $35','warning');return;}
+  var order={
+    id:uid(),
+    orderId:'ORD-'+Date.now().toString().slice(-5),
+    customer:cust,platform:plat,
+    date:new Date().toISOString().split('T')[0],
+    items,status:'pending',shipping:0,notes:'Quick add',
+    fromConvention:plat==='Convention',
+    timestamp:Date.now()
+  };
+  orders.push(order);saveOrders();
+  document.getElementById('quick-order-bar').style.display='none';
+  document.getElementById('nav-badge-orders')?.classList.add('show');
+  render();
+  toast('Order Created',order.orderId+' — '+cust,'success');
+}
+
+// ════════ CONVENTION SALE → ORDER RECORD ════════
+function recordSaleAsOrder(saleId){
+  var c=getEvt();if(!c)return;
+  var sale=(c.daySales||[]).find(function(s){return s.id===saleId;});
+  if(!sale)return;
+  var order={
+    id:uid(),
+    orderId:'CON-'+Date.now().toString().slice(-4),
+    customer:c.name+' Attendee',
+    platform:'Convention',
+    date:new Date().toISOString().split('T')[0],
+    items:[{name:sale.itemName,qty:sale.qty||1,price:sale.price||0}],
+    status:'shipped',shipping:0,
+    notes:'Day-of sale at '+esc(c.name)+' ('+sale.method+')',
+    fromConvention:true,conventionId:c.id,conventionSaleId:sale.id,
+    timestamp:Date.now()
+  };
+  orders.push(order);saveOrders();
+  renderDaySales();
+  updateConventionOrderPill();
+  document.getElementById('nav-badge-orders')?.classList.add('show');
+  toast('Order Recorded',order.orderId+' from '+c.name,'success');
+}
+
+// ════════ ONBOARDING CHECKLIST ════════
+(function(){
+  var KEY_OB_CHECK='ha3d_ob_checklist_dismissed_v1';
+  window.dismissObChecklist=function(){
+    localStorage.setItem(KEY_OB_CHECK,'1');
+    var el=document.getElementById('ob-checklist-widget');
+    if(el)el.style.display='none';
+  };
+  window.renderObChecklist=function(){
+    var el=document.getElementById('ob-checklist-widget');
+    if(!el)return;
+    if(localStorage.getItem(KEY_OB_CHECK)){el.style.display='none';return;}
+    var steps=[
+      {label:'Add your first filament spool',done:spools.length>0,tab:'spools'},
+      {label:'Add a product to your catalog',done:catalogItems.length>0,tab:'catalog'},
+      {label:'Create your first print record',done:prints.length>0,tab:'prints'},
+      {label:'Add a convention or event',done:conventions.length>0,tab:'convention'},
+      {label:'Log a sale',done:sales.length>0,tab:'revenue'},
+      {label:'Link your Shopify store',done:!!(typeof shopifyCfg!=='undefined'&&shopifyCfg.shop&&shopifyCfg.accessToken),tab:'shopify'},
+    ];
+    var doneCount=steps.filter(function(s){return s.done;}).length;
+    var allDone=doneCount===steps.length;
+    el.style.display='';
+    el.innerHTML='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">'
+      +'<div class="dw-title" style="margin:0">🚀 Setup Checklist <span style="color:var(--txt-d);font-weight:normal">('+doneCount+'/'+steps.length+')</span></div>'
+      +'<button onclick="dismissObChecklist()" style="background:none;border:none;color:var(--txt-d);font-size:12px;cursor:pointer;padding:2px 6px" title="Dismiss">✕</button>'
+      +'</div>'
+      +(allDone?'<div style="color:var(--grn-b);font-size:8px;text-align:center;padding:4px 0">✓ All set! Your studio is fully configured.</div>'
+        :steps.map(function(s){
+          return '<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--bdr)">'
+            +'<div style="width:14px;height:14px;border-radius:50%;border:2px solid '+(s.done?'var(--grn)':'var(--bdr2)')+';background:'+(s.done?'var(--grn-d)':'none')+';flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:8px">'+(s.done?'✓':'')+'</div>'
+            +'<div style="flex:1;font-size:8px;color:'+(s.done?'var(--txt-d)':'var(--txt)')+';'+(s.done?'text-decoration:line-through;':'')+'">'+s.label+'</div>'
+            +(!s.done?'<button class="btn btn-ghost btn-xs" onclick="navTo(\''+s.tab+'\',document.getElementById(\'nav-\'+\''+s.tab+'\'))" style="font-size:6px">Go →</button>':'')
+            +'</div>';
+        }).join(''))
+      +(allDone?'<div style="text-align:center;margin-top:8px"><button class="btn btn-ghost btn-xs" onclick="dismissObChecklist()">Dismiss</button></div>':'');
+  };
+})();
 
 // ════════ CONVENTION BADGE ════════
 function updateConventionBadge(){
