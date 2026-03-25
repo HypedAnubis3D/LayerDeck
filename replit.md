@@ -48,6 +48,17 @@ Every package extends `tsconfig.base.json` which sets `composite: true`. The roo
 - `pnpm run build` — runs `typecheck` first, then recursively runs `build` in all packages that define it
 - `pnpm run typecheck` — runs `tsc --build --emitDeclarationOnly` using project references
 
+## Artifacts
+
+### `artifacts/studio-manager` (HypedAnubis3D Studio Manager)
+
+- Vanilla JS single-page app (v19 HTML) served by Vite as a static HTML entry point
+- No React or Tailwind processing — Vite plugins stripped to avoid CSS transform conflicts with inline `<style>` blocks
+- The `index.html` is the ~9,500-line v19 app with an OAuth integration script injected before `</body>`
+- The injected script overrides `connectShopify`, `disconnectShopify`, `pollShopifyOrders`, and `renderShopify` to use backend routes instead of direct browser API calls
+- OAuth callback: URL params `?shopify_connected=true&shop=...` or `?shopify_error=true&error_message=...` trigger UI updates on load
+- Shopify access token is **never** sent to the browser — stored server-side only in PostgreSQL
+
 ## Packages
 
 ### `artifacts/api-server` (`@workspace/api-server`)
@@ -57,6 +68,16 @@ Express 5 API server. Routes live in `src/routes/` and use `@workspace/api-zod` 
 - Entry: `src/index.ts` — reads `PORT`, starts Express
 - App setup: `src/app.ts` — mounts CORS, JSON/urlencoded parsing, routes at `/api`
 - Routes: `src/routes/index.ts` mounts sub-routers; `src/routes/health.ts` exposes `GET /health` (full path: `/api/health`)
+- Shopify routes: `src/routes/shopify.ts` handles all Shopify OAuth and API proxy endpoints:
+  - `GET /api/shopify/oauth/start?shop=...` — begins OAuth redirect
+  - `GET /api/shopify/oauth/callback` — exchanges code for token, stores in DB
+  - `GET /api/shopify/config` — returns connection status (no token exposed)
+  - `GET /api/shopify/orders/sync` — proxies Shopify orders API
+  - `GET /api/shopify/products` — proxies Shopify products API
+  - `POST /api/shopify/webhooks/orders/create` — receives HMAC-verified webhooks
+  - `DELETE /api/shopify/disconnect` — clears server-side credentials
+- Required env vars for Shopify: `SHOPIFY_API_KEY`, `SHOPIFY_API_SECRET`, `SHOPIFY_WEBHOOK_SECRET` (optional), `SHOPIFY_REDIRECT_URI` (optional, auto-detected if not set)
+- Raw body middleware at `/api/shopify/webhooks/*` for HMAC verification (must come before `express.json()`)
 - Depends on: `@workspace/db`, `@workspace/api-zod`
 - `pnpm --filter @workspace/api-server run dev` — run the dev server
 - `pnpm --filter @workspace/api-server run build` — production esbuild bundle (`dist/index.cjs`)

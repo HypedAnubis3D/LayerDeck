@@ -26,6 +26,13 @@ app.use(
   }),
 );
 app.use(cors());
+
+// Raw body capture for Shopify webhook HMAC verification
+app.use(
+  "/api/shopify/webhooks",
+  express.raw({ type: "application/json" })
+);
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
