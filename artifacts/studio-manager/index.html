@@ -1522,7 +1522,6 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
       <div class="sb-group-body">
         <button class="nav-item" id="nav-revenue" onclick="navTo('revenue',this)"><span class="nav-icon">💰</span><span class="nav-label">Revenue, Tax & Power</span></button>
         <button class="nav-item" id="nav-catalog" onclick="navTo('catalog',this)"><span class="nav-icon">🏪</span><span class="nav-label">Product Catalog</span></button>
-        <button class="nav-item" id="nav-inperson" onclick="navTo('inperson',this)"><span class="nav-icon">🏬</span><span class="nav-label">In-Person Stock</span></button>
         <button class="nav-item" id="nav-convention" onclick="navTo('convention',this)"><span class="nav-icon">🎪</span><span class="nav-label">Conventions</span><span class="nav-badge" id="nav-badge-convention"></span></button>
         <button class="nav-item" id="nav-priceengine" onclick="navTo('priceengine',this)"><span class="nav-icon">🤖</span><span class="nav-label">Price AI</span></button>
       </div>
@@ -2009,18 +2008,6 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
 <!-- WASTE TRACKER -->
 <div id="tab-waste" style="display:none"></div>
 
-<!-- IN-PERSON STOCK -->
-<div id="tab-inperson" style="display:none">
-  <div class="ctrl">
-    <button class="btn btn-gold" onclick="openInPersonPicker()">+ Add from Catalog</button>
-    <button class="btn btn-ghost btn-sm" onclick="exportInPersonCSV()">⬇ Export CSV</button>
-    <span class="cnt" id="ip-cnt"></span>
-    <span id="ip-value" style="font-size:8px;color:var(--grn-b);font-family:'Orbitron',monospace;margin-left:auto"></span>
-  </div>
-  <div id="ip-stats" style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px"></div>
-  <div id="ip-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px"></div>
-</div>
-
 <!-- PRODUCT CATALOG -->
 <div id="tab-catalog" style="display:none">
   <div class="ctrl" style="flex-wrap:wrap;gap:6px">
@@ -2441,16 +2428,6 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
     <button class="btn btn-pur" onclick="saveConvention()">Save Event</button>
     <button class="btn btn-ghost" onclick="closeConvention()">Cancel</button>
   </div>
-</div>
-</div>
-
-<!-- IN-PERSON PICKER -->
-<div class="overlay" id="mod-inperson-picker" style="display:none" onclick="if(event.target.id==='mod-inperson-picker')closeInPersonPicker()">
-<div class="modal" style="max-width:700px;width:96vw">
-  <div class="mtitle">🏬 Add to In-Person Stock</div>
-  <input class="srch" id="ip-pick-s" placeholder="Search catalog…" oninput="renderInPersonPicker()" style="width:100%;margin-bottom:10px"/>
-  <div class="catalog-picker-grid" id="ip-pick-grid" style="max-height:60vh"></div>
-  <div class="macts"><button class="btn btn-ghost" onclick="closeInPersonPicker()">Done</button></div>
 </div>
 </div>
 
@@ -5041,7 +5018,7 @@ function saveEtsy(){ss(KEYS.etsy,etsyCfg);}
 function saveBatch(){ss(KEYS.batch,batchPlate);}
 
 // ════════ TAB SWITCH EXTENSION ════════
-const ALL_TABS=['dashboard','spools','prints','tmf','queue','orders','scheduler','shiny','revenue','customers','batch','maint','forecast','priceengine','shop','history','stats','backup','labels','inperson'];
+const ALL_TABS=['dashboard','spools','prints','tmf','queue','orders','scheduler','shiny','revenue','customers','batch','maint','forecast','priceengine','shop','history','stats','backup','labels'];
 
 const _origSwitch=switchTab;
 function switchTab(t,el){
@@ -5055,8 +5032,7 @@ function switchTab(t,el){
     const el2=document.getElementById('tab-'+x);
     if(el2)el2.style.display=x===t?'':'none';
   });
-  if(t==='inperson')renderInPerson();
-  else render();
+  render();
 }
 
 // ════════ STAT BAR EXTENSION ════════
@@ -11085,12 +11061,14 @@ function renderInPerson(){
 }
 
 function openInPersonPicker(){
-  document.getElementById('ip-pick-s').value='';
+  var mod=document.getElementById('mod-inperson-picker');if(!mod)return;
+  var s=document.getElementById('ip-pick-s');if(s)s.value='';
   renderInPersonPicker();
-  document.getElementById('mod-inperson-picker').style.display='flex';
+  mod.style.display='flex';
 }
 function closeInPersonPicker(){
-  document.getElementById('mod-inperson-picker').style.display='none';
+  var mod=document.getElementById('mod-inperson-picker');
+  if(mod)mod.style.display='none';
   renderInPerson();
 }
 function renderInPersonPicker(){
