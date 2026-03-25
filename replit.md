@@ -112,6 +112,32 @@ Generated Zod schemas from the OpenAPI spec (e.g. `HealthCheckResponse`). Used b
 
 Generated React Query hooks and fetch client from the OpenAPI spec (e.g. `useHealthCheck`, `healthCheck`).
 
+### `artifacts/studio-manager` — HypedAnubis3D Studio Manager
+
+Single-file HTML PWA for managing a Bambu Lab 3D printing collectibles business (hypedanubis3d-2.myshopify.com). All code is in `index.html` (~9,600+ lines). No frameworks — vanilla JS with JSZip (CDN) for 3MF parsing.
+
+**UI state (v19+):**
+- Dark theme: gold (#c9a227), purple (#7c3aed), near-black (#09070a); Share Tech Mono + Orbitron fonts
+- Sidebar with collapsible section groups; bottom nav bar (5 items)
+- `hmr: false` in vite.config.ts — manual reload required after code changes
+- `fmtDried(dateStr)` utility: formats ISO dates to "Feb 10" style for dried badges
+
+**Tab merges applied:**
+| Merged Into | Includes (via navTo redirect) | Sidebar Label |
+|---|---|---|
+| `maint` | `nozzle` | Maintenance & Nozzles |
+| `failrate` | `waste` | Fail Rates & Waste |
+| `restock` | `shop` | Restock & Shop List |
+| `revenue` | `tax`, `power` | Revenue, Tax & Power |
+
+`navTo()` has a `MERGED_TABS` map: `{nozzle:'maint', waste:'failrate', shop:'restock', tax:'revenue', power:'revenue'}`. Old tab divs kept as empty shells to avoid ALL_TABS issues.
+
+**Key patterns:**
+- Use `showConfirm()` not `confirm()`; use `toast()` for notifications
+- No nested backtick template literals
+- No `const _orig = fn; function fn()` override pattern — use `window.fn = ...`
+- OAuth override script re-injected before `</body>` for Shopify/Etsy
+
 ### `scripts` (`@workspace/scripts`)
 
 Utility scripts package. Each script is a `.ts` file in `src/` with a corresponding npm script in `package.json`. Run scripts via `pnpm --filter @workspace/scripts run <script>`. Scripts can import any workspace package (e.g., `@workspace/db`) by adding it as a dependency in `scripts/package.json`.
