@@ -1,7 +1,10 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { createHmac, timingSafeEqual } from "crypto";
 import { db } from "@workspace/db";
-import { shopifyConnectionsTable } from "@workspace/db/schema";
+import {
+  shopifyConnectionsTable,
+  shopifyAppConfigTable,
+} from "@workspace/db/schema";
 import { eq } from "drizzle-orm";
 
 const router: IRouter = Router();
@@ -16,34 +19,103 @@ function getRedirectUri(req: Request): string {
   );
 }
 
+/** Resolve OAuth credentials: prefer env vars, fall back to DB-stored config. */
+async function getOAuthCredentials(): Promise<{
+  clientId: string;
+  clientSecret: string;
+} | null> {
+  const envKey = process.env.SHOPIFY_API_KEY;
+  const envSecret = process.env.SHOPIFY_API_SECRET;
+  if (envKey && envSecret) return { clientId: envKey, clientSecret: envSecret };
+
+  const rows = await db
+    .select()
+    .from(shopifyAppConfigTable)
+    .limit(1);
+  if (rows.length > 0) {
+    return { clientId: rows[0].clientId, clientSecret: rows[0].clientSecret };
+  }
+  return null;
+}
+
+/** POST /api/shopify/oauth/credentials — save Client ID + Secret, then return the OAuth URL */
+router.post(
+  "/oauth/credentials",
+  async (req: Request, res: Response): Promise<void> => {
+    const { clientId, clientSecret, shopDomain } = req.body as {
+      clientId?: string;
+      clientSecret?: string;
+      shopDomain?: string;
+    };
+
+    if (!clientId || !clientSecret || !shopDomain) {
+      res
+        .status(400)
+        .json({ error: "clientId, clientSecret and shopDomain are required" });
+      return;
+    }
+
+    const shop = shopDomain
+      .trim()
+      .replace(/^https?:\/\//, "")
+      .replace(/\/$/, "");
+
+    // Persist credentials (upsert the single config row)
+    await db
+      .insert(shopifyAppConfigTable)
+      .values({ clientId: clientId.trim(), clientSecret: clientSecret.trim() })
+      .onConflictDoUpdate({
+        target: shopifyAppConfigTable.id,
+        set: {
+          clientId: clientId.trim(),
+          clientSecret: clientSecret.trim(),
+        },
+      });
+
+    const redirectUri = getRedirectUri(req);
+    const state = Math.random().toString(36).substring(2, 18);
+
+    const authUrl = new URL(`https://${shop}/admin/oauth/authorize`);
+    authUrl.searchParams.set("client_id", clientId.trim());
+    authUrl.searchParams.set("scope", SCOPES);
+    authUrl.searchParams.set("redirect_uri", redirectUri);
+    authUrl.searchParams.set("state", state);
+
+    req.log.info({ shop }, "Shopify OAuth flow initiated via stored credentials");
+    res.json({ authUrl: authUrl.toString(), shop });
+  }
+);
+
 /** GET /api/shopify/oauth/start?shop=yourstore.myshopify.com */
-router.get("/oauth/start", (req: Request, res: Response): void => {
-  const shop = ((req.query.shop as string) || "").trim();
-  if (!shop) {
-    res.status(400).json({ error: "shop parameter required" });
-    return;
+router.get(
+  "/oauth/start",
+  async (req: Request, res: Response): Promise<void> => {
+    const shop = ((req.query.shop as string) || "").trim();
+    if (!shop) {
+      res.status(400).json({ error: "shop parameter required" });
+      return;
+    }
+
+    const creds = await getOAuthCredentials();
+    if (!creds) {
+      res.redirect(
+        "/?shopify_error=true&error_message=Shopify+app+not+configured+—+enter+your+Client+ID+and+Secret+in+the+Shopify+tab."
+      );
+      return;
+    }
+
+    const redirectUri = getRedirectUri(req);
+    const state = Math.random().toString(36).substring(2, 18);
+
+    const authUrl = new URL(`https://${shop}/admin/oauth/authorize`);
+    authUrl.searchParams.set("client_id", creds.clientId);
+    authUrl.searchParams.set("scope", SCOPES);
+    authUrl.searchParams.set("redirect_uri", redirectUri);
+    authUrl.searchParams.set("state", state);
+
+    res.redirect(authUrl.toString());
   }
-
-  const apiKey = process.env.SHOPIFY_API_KEY;
-  if (!apiKey) {
-    // No Partner app configured yet — redirect with helpful error
-    res.redirect(
-      "/?shopify_error=true&error_message=Shopify+app+not+configured.+Set+SHOPIFY_API_KEY+%26+SHOPIFY_API_SECRET+in+environment+variables."
-    );
-    return;
-  }
-
-  const redirectUri = getRedirectUri(req);
-  const state = Math.random().toString(36).substring(2, 18);
-
-  const authUrl = new URL(`https://${shop}/admin/oauth/authorize`);
-  authUrl.searchParams.set("client_id", apiKey);
-  authUrl.searchParams.set("scope", SCOPES);
-  authUrl.searchParams.set("redirect_uri", redirectUri);
-  authUrl.searchParams.set("state", state);
-
-  res.redirect(authUrl.toString());
-});
+);
 
 /** GET /api/shopify/oauth/callback */
 router.get("/oauth/callback", async (req: Request, res: Response): Promise<void> => {
@@ -56,15 +128,15 @@ router.get("/oauth/callback", async (req: Request, res: Response): Promise<void>
     return;
   }
 
-  const apiKey = process.env.SHOPIFY_API_KEY;
-  const apiSecret = process.env.SHOPIFY_API_SECRET;
-
-  if (!apiKey || !apiSecret) {
+  const creds = await getOAuthCredentials();
+  if (!creds) {
     res.redirect(
-      "/?shopify_error=true&error_message=Shopify+app+not+fully+configured"
+      "/?shopify_error=true&error_message=Shopify+app+not+configured+—+enter+credentials+in+the+Shopify+tab."
     );
     return;
   }
+
+  const { clientId: apiKey, clientSecret: apiSecret } = creds;
 
   // Verify HMAC signature from Shopify
   const params = new URLSearchParams(
