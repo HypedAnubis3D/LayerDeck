@@ -1572,15 +1572,12 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
   <span class="header-tab-name" id="header-tab-name">Dashboard</span>
   <div class="header-right">
     <div style="position:relative">
-      <button class="btn btn-sm" id="cloud-btn" style="background:var(--surf);border:1px solid var(--bdr2);color:var(--txt-d);padding:4px 10px;font-size:7px;gap:4px" onclick="toggleCloudPanel()" title="Cloud sync options">☁ Cloud</button>
-      <div id="cloud-panel" style="display:none;position:absolute;right:0;top:calc(100% + 4px);background:var(--surf);border:1px solid var(--bdr2);border-radius:6px;padding:6px;z-index:200;min-width:130px;box-shadow:0 4px 16px rgba(0,0,0,.4)">
-        <button class="btn btn-sm" style="width:100%;background:var(--grn-d);border:1px solid var(--grn);color:var(--grn-b);padding:5px 10px;font-size:7px;margin-bottom:4px" onclick="syncAll();toggleCloudPanel()" title="Push all local changes to cloud">⬆ Push to Cloud</button>
-        <button class="btn btn-sm" style="width:100%;background:var(--cyn-d,rgba(34,170,204,.1));border:1px solid var(--cyn);color:var(--cyn);padding:5px 10px;font-size:7px" onclick="pullAll();toggleCloudPanel()" title="Pull latest from cloud">⬇ Pull from Cloud</button>
+      <button class="btn btn-sm" id="cloud-btn" style="background:var(--surf);border:1px solid var(--bdr2);color:var(--txt-d);padding:4px 10px;font-size:7px;gap:5px;display:flex;align-items:center" onclick="toggleCloudPanel()" title="Cloud sync">
+        <div class="sync-dot disconnected" id="sync-dot" style="width:7px;height:7px;flex-shrink:0"></div>
+        <span id="sync-label">Sign In</span>
+      </button>
+      <div id="cloud-panel" style="display:none;position:absolute;right:0;top:calc(100% + 4px);background:var(--surf);border:1px solid var(--bdr2);border-radius:6px;padding:6px;z-index:200;min-width:140px;box-shadow:0 4px 16px rgba(0,0,0,.4)">
       </div>
-    </div>
-    <div class="sync-indicator" id="sync-indicator" onclick="navTo('sync')" title="Sync status">
-      <div class="sync-dot disconnected" id="sync-dot"></div>
-      <span class="sync-label" id="sync-label">Sync</span>
     </div>
     <button class="theme-toggle" id="theme-toggle-btn" onclick="toggleTheme()" title="Toggle light/dark mode">🌙</button>
     <button class="btn btn-ghost btn-sm" onclick="openKbGuide()" title="Keyboard shortcuts">⌨ ?</button>
@@ -7183,16 +7180,20 @@ function saveSyncQueue(){localStorage.setItem(KEYS.syncQueue,JSON.stringify(sync
 function updateSyncIndicator(state){
   const dot=document.getElementById('sync-dot');
   const lbl=document.getElementById('sync-label');
+  const btn=document.getElementById('cloud-btn');
   if(!dot||!lbl)return;
   const s=state||(currentUser&&syncCfg.enabled?'connected':'disconnected');
   dot.className='sync-dot '+s;
   const labels={connected:'Synced',syncing:'Syncing…',offline:'Offline',error:'Error',disconnected:'Sign In'};
   const colors={connected:'var(--grn-b)',syncing:'var(--gold-b)',offline:'var(--txt-d)',error:'var(--red-b)',disconnected:'var(--txt-d)'};
-  lbl.textContent=labels[s]||'Sync';
+  const borders={connected:'var(--grn)',syncing:'var(--gold)',offline:'var(--bdr2)',error:'var(--red)',disconnected:'var(--bdr2)'};
+  lbl.textContent=labels[s]||'Cloud';
   lbl.style.color=colors[s]||'var(--txt-d)';
+  if(btn)btn.style.borderColor=borders[s]||'var(--bdr2)';
   if(syncQueue.length>0&&s==='connected'){
     lbl.textContent=syncQueue.length+' pending';
     lbl.style.color='var(--gold-b)';
+    if(btn)btn.style.borderColor='var(--gold)';
   }
 }
 
@@ -7216,23 +7217,31 @@ async function processSyncQueue(){
   if(isSyncing||!supabaseClient||!currentUser||syncQueue.length===0)return;
   isSyncing=true;
   updateSyncIndicator('syncing');
-  const queue=[...syncQueue];
-  let success=0,failed=0;
-  for(const item of queue){
-    try{
-      const{error}=await supabaseClient
-        .from('ha3d_user_data')
-        .upsert({user_id:currentUser.id,collection:item.collection,payload:item.data,updated_at:new Date().toISOString()});
-      if(error)throw new Error(error.message);
-      syncQueue=syncQueue.filter(q=>q.timestamp!==item.timestamp);
-      success++;
-    }catch(e){failed++;addSyncLog('Sync failed for '+item.collection+': '+e.message,'err');}
+  let totalSuccess=0,totalFailed=0;
+  try{
+    while(syncQueue.length>0){
+      const queue=[...syncQueue];
+      let success=0,failed=0;
+      for(const item of queue){
+        try{
+          const{error}=await supabaseClient
+            .from('ha3d_user_data')
+            .upsert({user_id:currentUser.id,collection:item.collection,payload:item.data,updated_at:new Date().toISOString()});
+          if(error)throw new Error(error.message);
+          syncQueue=syncQueue.filter(q=>q.timestamp!==item.timestamp);
+          success++;
+        }catch(e){failed++;addSyncLog('Sync failed for '+item.collection+': '+e.message,'err');}
+      }
+      totalSuccess+=success;totalFailed+=failed;
+      if(failed>0)break;
+    }
+  }finally{
+    saveSyncQueue();
+    isSyncing=false;
+    lastSyncTime=Date.now();
+    if(totalFailed===0){updateSyncIndicator('connected');if(totalSuccess>0)addSyncLog('Synced '+totalSuccess+' collection'+(totalSuccess!==1?'s':'')+' ✓','ok');}
+    else{updateSyncIndicator('error');}
   }
-  saveSyncQueue();
-  isSyncing=false;
-  lastSyncTime=Date.now();
-  if(failed===0){updateSyncIndicator('connected');if(success>0)addSyncLog('Synced '+success+' collection'+(success!==1?'s':'')+' ✓','ok');}
-  else{updateSyncIndicator('error');}
 }
 
 async function pullFromCloud(silent=false){
@@ -7308,7 +7317,11 @@ async function pushAllToCloud(){
   if(!supabaseClient||!currentUser){toast('Not signed in','Please sign in first','error');return;}
   addSyncLog('Pushing all data to cloud…','info');
   const collections={spools,prints,queueItems,orders,sales,usageHist,shinyRolls,maintLog,wasteLog,printerRecords,tmfLib,catalogItems};
-  for(const[col,data]of Object.entries(collections)){queueSync(col,data);}
+  for(const[col,data]of Object.entries(collections)){
+    syncQueue=syncQueue.filter(q=>q.collection!==col);
+    syncQueue.push({collection:col,data:JSON.stringify(data),timestamp:Date.now()});
+  }
+  saveSyncQueue();
   await processSyncQueue();
   toast('All Data Pushed','Cloud is up to date ✓','success');
 }
