@@ -411,7 +411,10 @@ input.srch::placeholder{color:var(--txt-d);}
 .dash-widget{background:var(--surf);border:1px solid var(--bdr);border-radius:6px;padding:14px;}
 .dash-widget.span2{grid-column:span 2;}
 .dash-widget.span3{grid-column:span 3;}
-.dw-title{font-size:7px;color:var(--txt-d);letter-spacing:2px;text-transform:uppercase;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;}
+.dw-title{font-size:7px;color:var(--txt-d);letter-spacing:2px;text-transform:uppercase;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;gap:6px;}
+.dw-pin-btn{background:none;border:none;color:var(--bdr2);font-size:11px;cursor:pointer;padding:0;line-height:1;opacity:0;transition:opacity .15s;flex-shrink:0;margin-left:auto;}
+.dash-widget:hover .dw-pin-btn{opacity:1;}
+.dw-restore-bar{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:10px;padding:7px 12px;background:var(--surf);border:1px solid var(--bdr2);border-radius:6px;}
 .dw-big{font-family:'Orbitron',monospace;font-size:28px;font-weight:700;line-height:1;}
 .dw-sub{font-size:7px;color:var(--txt-d);margin-top:4px;}
 .dash-alert-row{display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--bdr);font-size:8px;}
@@ -7639,8 +7642,19 @@ function renderDashboard(){
     ...shinyRolls.filter(r=>r.result==='shiny').slice(-2).map(r=>({ts:r.timestamp,icon:'✨',text:`Shiny for ${r.orderId||'order'}!`,color:'var(--gold-b)'})),
   ].sort((a,b)=>b.ts-a.ts).slice(0,8);
 
+  const h=dashHidden;
+  const pin=function(id){return '<button class="dw-pin-btn" onclick="toggleDashWidget(\''+id+'\')" title="Hide widget">⊖</button>';};
+  const hiddenLabels=Object.keys(DASH_WIDGET_LABELS).filter(function(id){return h.includes(id);});
+  const restoreBar=hiddenLabels.length
+    ?'<div class="dw-restore-bar"><span style="font-size:7px;color:var(--txt-d);letter-spacing:1px">HIDDEN:</span>'
+      +hiddenLabels.map(function(id){return '<button class="btn btn-ghost btn-xs" onclick="toggleDashWidget(\''+id+'\')" style="font-size:7px">'+DASH_WIDGET_LABELS[id]+' ⊕</button>';}).join('')
+      +'</div>'
+    :'';
+
   document.getElementById('dashboard-content').innerHTML=`
     <div style="font-family:'Orbitron',monospace;font-size:8px;color:var(--gold-dim);letter-spacing:2px;margin-bottom:10px;text-transform:uppercase">${now.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'})}</div>
+
+    ${restoreBar}
 
     <!-- ONBOARDING CHECKLIST -->
     <div class="dash-widget" id="ob-checklist-widget" style="margin-bottom:10px"></div>
@@ -7649,80 +7663,76 @@ function renderDashboard(){
     <div class="goal-widget" id="goal-widget" style="margin-bottom:10px"></div>
 
     <!-- STAT CARDS -->
-    <div class="dash-grid" style="margin-bottom:10px">
-      <div class="dash-widget">
-        <div class="dw-title">This Month Revenue</div>
-        <div class="dw-big" style="color:var(--grn-b)">$${monthRev.toFixed(2)}</div>
-        <div class="dw-sub">${monthSales.length} sales · $${(monthRev/Math.max(monthSales.length,1)).toFixed(2)} avg</div>
-        <canvas id="spark-rev" class="sparkline" style="margin-top:8px;height:36px;display:block;width:100%"></canvas>
-      </div>
-      <div class="dash-widget">
-        <div class="dw-title">This Month Profit</div>
-        <div class="dw-big" style="color:${monthProfit>=0?'var(--grn-b)':'var(--red-b)'}">$${monthProfit.toFixed(2)}</div>
-        <div class="dw-sub">${monthRev>0?((monthProfit/monthRev)*100).toFixed(1):'0'}% margin</div>
-      </div>
-      <div class="dash-widget">
-        <div class="dw-title">Active Prints</div>
-        <div class="dw-big" style="color:var(--org-b)">${activePrints.length}</div>
-        <div class="dw-sub">${queueItems.filter(q=>q.stage==='queued').length} in queue</div>
-        <canvas id="spark-print" class="sparkline" style="margin-top:8px;height:36px;display:block;width:100%"></canvas>
-      </div>
-      <div class="dash-widget">
-        <div class="dw-title">Pending Orders</div>
-        <div class="dw-big" style="color:var(--teal-b)">${pendingOrds.length}</div>
-        <div class="dw-sub">${orders.filter(o=>o.status==='shipped').length} shipped total</div>
-      </div>
-    </div>
+    ${h.includes('dw-stats')?'':
+    '<div class="dash-grid" style="margin-bottom:10px">'
+      +'<div class="dash-widget">'
+        +'<div class="dw-title">This Month Revenue '+pin('dw-stats')+'</div>'
+        +'<div class="dw-big" style="color:var(--grn-b)">$'+monthRev.toFixed(2)+'</div>'
+        +'<div class="dw-sub">'+monthSales.length+' sales &middot; $'+(monthRev/Math.max(monthSales.length,1)).toFixed(2)+' avg</div>'
+        +'<canvas id="spark-rev" class="sparkline" style="margin-top:8px;height:36px;display:block;width:100%"></canvas>'
+      +'</div>'
+      +'<div class="dash-widget">'
+        +'<div class="dw-title">This Month Profit</div>'
+        +'<div class="dw-big" style="color:'+(monthProfit>=0?'var(--grn-b)':'var(--red-b)')+'">$'+monthProfit.toFixed(2)+'</div>'
+        +'<div class="dw-sub">'+(monthRev>0?((monthProfit/monthRev)*100).toFixed(1):'0')+'% margin</div>'
+      +'</div>'
+      +'<div class="dash-widget">'
+        +'<div class="dw-title">Active Prints</div>'
+        +'<div class="dw-big" style="color:var(--org-b)">'+activePrints.length+'</div>'
+        +'<div class="dw-sub">'+queueItems.filter(q=>q.stage==='queued').length+' in queue</div>'
+        +'<canvas id="spark-print" class="sparkline" style="margin-top:8px;height:36px;display:block;width:100%"></canvas>'
+      +'</div>'
+      +'<div class="dash-widget">'
+        +'<div class="dw-title">Pending Orders</div>'
+        +'<div class="dw-big" style="color:var(--teal-b)">'+pendingOrds.length+'</div>'
+        +'<div class="dw-sub">'+orders.filter(o=>o.status==='shipped').length+' shipped total</div>'
+      +'</div>'
+    +'</div>'}
 
     <!-- PRINTERS -->
-    <div class="dash-widget" style="margin-bottom:10px">
-      <div class="dw-title">🖨 Printer Status</div>
-      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:7px;margin-top:6px">
-        ${printers.slice(0,6).map(pr=>{
+    ${h.includes('dw-printers')?'':
+    '<div class="dash-widget" style="margin-bottom:10px">'
+      +'<div class="dw-title">🖨 Printer Status '+pin('dw-printers')+'</div>'
+      +'<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:7px;margin-top:6px">'
+        +printers.slice(0,6).map(function(pr){
           const active=activeQueues.find(q=>q.printer===pr);
           const next=queueItems.filter(q=>q.stage==='queued'&&q.printer===pr)[0];
-          return `<div class="dash-printer-card">
-            <div class="dpc-name">${esc(pr)}</div>
-            ${active
-              ?`<div style="font-size:7px;color:var(--grn-b);display:flex;align-items:center;gap:4px"><span style="width:6px;height:6px;border-radius:50%;background:var(--grn);display:inline-block;animation:pulse-dot 1.5s ease-in-out infinite"></span>${esc(active.name.slice(0,16))}</div><div class="dpc-bar"><div class="dpc-fill" style="width:${active.startedAt&&active.hrs?Math.min(100,((Date.now()-active.startedAt)/(active.hrs*3600000))*100).toFixed(1):35}%"></div></div>${formatFinishBadge(active)}`
-              :`<div style="font-size:7px;color:var(--txt-d)">— Idle</div>${next?`<div style="font-size:6px;color:var(--txt-d);margin-top:2px">Next: ${esc(next.name.slice(0,14))}</div>`:'<div style="font-size:6px;color:var(--bdr2);margin-top:2px">Queue empty</div>'}`}
-          ${renderAmsMap(pr,true)}
-          </div>`;
-        }).join('')}
-      </div>
-    </div>
+          return '<div class="dash-printer-card">'
+            +'<div class="dpc-name">'+esc(pr)+'</div>'
+            +(active
+              ?'<div style="font-size:7px;color:var(--grn-b);display:flex;align-items:center;gap:4px"><span style="width:6px;height:6px;border-radius:50%;background:var(--grn);display:inline-block;animation:pulse-dot 1.5s ease-in-out infinite"></span>'+esc(active.name.slice(0,16))+'</div><div class="dpc-bar"><div class="dpc-fill" style="width:'+(active.startedAt&&active.hrs?Math.min(100,((Date.now()-active.startedAt)/(active.hrs*3600000))*100).toFixed(1):35)+'%"></div></div>'+formatFinishBadge(active)
+              :'<div style="font-size:7px;color:var(--txt-d)">— Idle</div>'+(next?'<div style="font-size:6px;color:var(--txt-d);margin-top:2px">Next: '+esc(next.name.slice(0,14))+'</div>':'<div style="font-size:6px;color:var(--bdr2);margin-top:2px">Queue empty</div>'))
+            +renderAmsMap(pr,true)
+            +'</div>';
+        }).join('')
+      +'</div>'
+    +'</div>'}
 
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
-      <div class="dash-widget">
-        <div class="dw-title">⚠ Low Stock <span style="color:var(--red-b)">${lowSpools.length}</span></div>
-        ${lowSpools.length?lowSpools.slice(0,5).map(s=>`
-          <div class="dash-alert-row">
-            <div style="width:8px;height:8px;border-radius:50%;background:${s.color};flex-shrink:0;box-shadow:0 0 4px ${s.color}66"></div>
-            <div style="flex:1;color:var(--txt)">${esc(s.name)}</div>
-            <div style="font-family:'Orbitron',monospace;font-size:8px;color:${pct(s)<10?'var(--red-b)':'var(--gold-b)'}">${pct(s)}%</div>
-          </div>`).join(''):'<div style="font-size:8px;color:var(--txt-d);padding:8px 0">All spools healthy ✓</div>'}
-      </div>
-      <div class="dash-widget">
-        <div class="dw-title">📬 Pending Orders</div>
-        ${pendingOrds.length?pendingOrds.slice(0,5).map(o=>`
-          <div class="dash-alert-row">
-            <div style="font-size:7px;color:var(--gold);font-family:'Orbitron',monospace">${esc(o.orderId)}</div>
-            <div style="flex:1;color:var(--txt);margin-left:4px">${esc(o.customer)}</div>
-            <span class="order-status ${({'pending':'os-pending','printing':'os-printing'}[o.status])||'os-pending'}">${o.status}</span>
-          </div>`).join(''):'<div style="font-size:8px;color:var(--txt-d);padding:8px 0">No pending orders</div>'}
-      </div>
-    </div>
+    <!-- ALERTS ROW -->
+    ${h.includes('dw-alerts')?'':
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">'
+      +'<div class="dash-widget">'
+        +'<div class="dw-title">⚠ Low Stock <span style="color:var(--red-b)">'+lowSpools.length+'</span>'+pin('dw-alerts')+'</div>'
+        +(lowSpools.length
+          ?lowSpools.slice(0,5).map(function(s){return '<div class="dash-alert-row"><div style="width:8px;height:8px;border-radius:50%;background:'+s.color+';flex-shrink:0;box-shadow:0 0 4px '+s.color+'66"></div><div style="flex:1;color:var(--txt)">'+esc(s.name)+'</div><div style="font-family:\'Orbitron\',monospace;font-size:8px;color:'+(pct(s)<10?'var(--red-b)':'var(--gold-b)')+'">'+pct(s)+'%</div></div>';}).join('')
+          :'<div style="font-size:8px;color:var(--txt-d);padding:8px 0">All spools healthy ✓</div>')
+      +'</div>'
+      +'<div class="dash-widget">'
+        +'<div class="dw-title">📬 Pending Orders</div>'
+        +(pendingOrds.length
+          ?pendingOrds.slice(0,5).map(function(o){return '<div class="dash-alert-row"><div style="font-size:7px;color:var(--gold);font-family:\'Orbitron\',monospace">'+esc(o.orderId)+'</div><div style="flex:1;color:var(--txt);margin-left:4px">'+esc(o.customer)+'</div><span class="order-status '+({'pending':'os-pending','printing':'os-printing'}[o.status]||'os-pending')+'">'+o.status+'</span></div>';}).join('')
+          :'<div style="font-size:8px;color:var(--txt-d);padding:8px 0">No pending orders</div>')
+      +'</div>'
+    +'</div>'}
 
-    <div class="dash-widget">
-      <div class="dw-title">Recent Activity</div>
-      ${activity.length?activity.map(a=>`
-        <div class="activity-item">
-          <div style="font-size:12px;flex-shrink:0">${a.icon}</div>
-          <div style="flex:1;color:${a.color}">${esc(a.text)}</div>
-          <div style="font-size:6px;color:var(--txt-d)">${new Date(a.ts).toLocaleDateString('en-US',{month:'short',day:'numeric'})}</div>
-        </div>`).join('')
-      :emptyState('📊','No activity yet','Start adding prints, orders and spools to see your activity feed here')}
-    </div>`;
+    <!-- RECENT ACTIVITY -->
+    ${h.includes('dw-activity')?'':
+    '<div class="dash-widget">'
+      +'<div class="dw-title">Recent Activity '+pin('dw-activity')+'</div>'
+      +(activity.length
+        ?activity.map(function(a){return '<div class="activity-item"><div style="font-size:12px;flex-shrink:0">'+a.icon+'</div><div style="flex:1;color:'+a.color+'">'+esc(a.text)+'</div><div style="font-size:6px;color:var(--txt-d)">'+new Date(a.ts).toLocaleDateString('en-US',{month:'short',day:'numeric'})+'</div></div>';}).join('')
+        :emptyState('📊','No activity yet','Start adding prints, orders and spools to see your activity feed here'))
+    +'</div>'}`;
 
   // Update goal widget and checklist now that they're in the DOM
   updateGoalWidget();
@@ -11244,6 +11254,21 @@ function addToOrderFromCatalog(id){
     var eoPlatform=document.getElementById('eo-platform');
     if(eoPlatform)eoPlatform.value='Direct';
   },50);
+}
+
+// ════════ DASHBOARD WIDGET PINNING ════════
+const DASH_WIDGET_LABELS={
+  'dw-stats':'Stat Cards',
+  'dw-printers':'Printer Status',
+  'dw-alerts':'Alerts & Orders',
+  'dw-activity':'Recent Activity',
+};
+function saveDashHidden(){ss(KEYS.dashHidden,dashHidden);}
+function toggleDashWidget(id){
+  if(dashHidden.includes(id)){dashHidden=dashHidden.filter(function(x){return x!==id;});}
+  else{dashHidden.push(id);}
+  saveDashHidden();
+  renderDashboard();
 }
 
 // ════════ QUICK ORDER ADD ════════
