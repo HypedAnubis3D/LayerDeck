@@ -7105,7 +7105,7 @@ function initSupabase(){
         addSyncLog('Signed in as '+currentUser.email,'ok');
         if(event==='SIGNED_IN'||event==='INITIAL_SESSION'){
           await new Promise(r=>setTimeout(r,1200));
-          await pullFromCloud();
+          await pullFromCloud(true);
           render();
         }
         startAutoSync();
@@ -7260,7 +7260,6 @@ async function pullFromCloud(silent=false){
     updateSyncIndicator('error');
     addSyncLog('Pull failed: '+msg,'err');
     if(!silent)toast('Sync Error',msg,'error');
-    else toast('Sync Error',msg,'error',5000);
   }
 }
 
