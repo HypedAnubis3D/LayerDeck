@@ -1,4 +1,4 @@
-import { defineConfig } from "vite";
+import { defineConfig, loadEnv } from "vite";
 import path from "path";
 
 const rawPort = process.env.PORT;
@@ -17,24 +17,32 @@ if (Number.isNaN(port) || port <= 0) {
 
 const basePath = process.env.BASE_PATH || "/";
 
-export default defineConfig({
-  base: basePath,
-  plugins: [],
-  root: path.resolve(import.meta.dirname),
-  build: {
-    outDir: path.resolve(import.meta.dirname, "dist/public"),
-    emptyOutDir: true,
-  },
-  server: {
-    port,
-    host: "0.0.0.0",
-    allowedHosts: true,
-    fs: { strict: false },
-    hmr: false,
-  },
-  preview: {
-    port,
-    host: "0.0.0.0",
-    allowedHosts: true,
-  },
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), "");
+
+  return {
+    base: basePath,
+    plugins: [],
+    root: path.resolve(import.meta.dirname),
+    define: {
+      __SUPABASE_URL__: JSON.stringify(env.SUPABASE_URL || ""),
+      __SUPABASE_ANON_KEY__: JSON.stringify(env.SUPABASE_ANON_KEY || ""),
+    },
+    build: {
+      outDir: path.resolve(import.meta.dirname, "dist/public"),
+      emptyOutDir: true,
+    },
+    server: {
+      port,
+      host: "0.0.0.0",
+      allowedHosts: true,
+      fs: { strict: false },
+      hmr: false,
+    },
+    preview: {
+      port,
+      host: "0.0.0.0",
+      allowedHosts: true,
+    },
+  };
 });
