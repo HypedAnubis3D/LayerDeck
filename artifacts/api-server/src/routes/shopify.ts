@@ -153,6 +153,52 @@ router.get("/oauth/callback", async (req: Request, res: Response): Promise<void>
   }
 });
 
+/** POST /api/shopify/connect — store a custom-app token (never echoed back) */
+router.post("/connect", async (req: Request, res: Response): Promise<void> => {
+  const { shopDomain, accessToken } = req.body as {
+    shopDomain?: string;
+    accessToken?: string;
+  };
+
+  if (!shopDomain || !accessToken) {
+    res.status(400).json({ error: "shopDomain and accessToken are required" });
+    return;
+  }
+
+  const domain = shopDomain.trim().replace(/^https?:\/\//, "").replace(/\/$/, "");
+
+  // Quick validation — try to fetch shop info with the token
+  try {
+    const testResp = await fetch(
+      `https://${domain}/admin/api/2024-01/shop.json`,
+      { headers: { "X-Shopify-Access-Token": accessToken } }
+    );
+    if (!testResp.ok) {
+      res.status(401).json({ error: "Invalid token or store domain — Shopify returned " + testResp.status });
+      return;
+    }
+  } catch {
+    res.status(502).json({ error: "Could not reach Shopify. Check your store domain." });
+    return;
+  }
+
+  try {
+    await db
+      .insert(shopifyConnectionsTable)
+      .values({ shopDomain: domain, accessToken, scopes: "custom_app" })
+      .onConflictDoUpdate({
+        target: shopifyConnectionsTable.shopDomain,
+        set: { accessToken, scopes: "custom_app" },
+      });
+
+    req.log.info({ domain }, "Shopify custom app connected");
+    res.json({ connected: true, shop: domain });
+  } catch (err) {
+    req.log.error(err, "Failed to store Shopify connection");
+    res.status(500).json({ error: "Internal error saving connection" });
+  }
+});
+
 /** GET /api/shopify/config — returns connection status (no token!) */
 router.get("/config", async (req: Request, res: Response): Promise<void> => {
   try {

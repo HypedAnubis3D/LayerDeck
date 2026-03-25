@@ -52,12 +52,13 @@ Every package extends `tsconfig.base.json` which sets `composite: true`. The roo
 
 ### `artifacts/studio-manager` (HypedAnubis3D Studio Manager)
 
-- Vanilla JS single-page app served by Vite as a static HTML entry point
-- No React or Tailwind processing — Vite plugins stripped to avoid CSS transform conflicts with inline `<style>` blocks
-- The `index.html` is the ~9,500-line v19 app with an OAuth integration script injected before `</body>`
-- The injected script overrides `connectShopify`, `disconnectShopify`, `pollShopifyOrders`, and `renderShopify` to use backend routes instead of direct browser API calls
-- OAuth callback: URL params `?shopify_connected=true&shop=...` or `?shopify_error=true&error_message=...` trigger UI updates on load
-- Shopify access token is **never** sent to the browser — stored server-side only in PostgreSQL
+- Vanilla JS single-page app served by Vite as a static HTML entry point; no React or Tailwind — Vite plugins stripped to avoid CSS transform conflicts with inline `<style>` blocks
+- All Shopify logic lives directly in `index.html` — no IIFE overrides
+- Shopify uses **custom app / private app token flow** (no OAuth keys required): user pastes `shpat_` token, `POST /api/shopify/connect` validates it against Shopify then stores it server-side
+- Shopify token is **never** stored in the browser — only the domain and `connected:true` state are in localStorage
+- "Integrations" sidebar group (id `sbg-integrations`) houses the Shopify nav button; Shopify tab registered in ALL_TABS
+- OAuth callback params `?shopify_connected=true&shop=...` or `?shopify_error=true` still handled via `checkShopifyOAuthCallback()` on load
+- `checkShopifyConfig()` called after login to verify server-side token is still valid
 
 ## Packages
 
@@ -68,15 +69,16 @@ Express 5 API server. Routes live in `src/routes/` and use `@workspace/api-zod` 
 - Entry: `src/index.ts` — reads `PORT`, starts Express
 - App setup: `src/app.ts` — mounts CORS, JSON/urlencoded parsing, routes at `/api`
 - Routes: `src/routes/index.ts` mounts sub-routers; `src/routes/health.ts` exposes `GET /health` (full path: `/api/health`)
-- Shopify routes: `src/routes/shopify.ts` handles all Shopify OAuth and API proxy endpoints:
-  - `GET /api/shopify/oauth/start?shop=...` — begins OAuth redirect
-  - `GET /api/shopify/oauth/callback` — exchanges code for token, stores in DB
+- Shopify routes: `src/routes/shopify.ts` handles all Shopify API proxy endpoints:
+  - `POST /api/shopify/connect` — validates custom app token against Shopify, stores in DB (token never echoed back)
+  - `GET /api/shopify/oauth/start?shop=...` — begins OAuth redirect (kept for future use)
+  - `GET /api/shopify/oauth/callback` — exchanges OAuth code for token, stores in DB
   - `GET /api/shopify/config` — returns connection status (no token exposed)
-  - `GET /api/shopify/orders/sync` — proxies Shopify orders API
-  - `GET /api/shopify/products` — proxies Shopify products API
+  - `GET /api/shopify/orders/sync` — proxies Shopify orders API server-side
+  - `GET /api/shopify/products` — proxies Shopify products API server-side
   - `POST /api/shopify/webhooks/orders/create` — receives HMAC-verified webhooks
   - `DELETE /api/shopify/disconnect` — clears server-side credentials
-- Required env vars for Shopify: `SHOPIFY_API_KEY`, `SHOPIFY_API_SECRET`, `SHOPIFY_WEBHOOK_SECRET` (optional), `SHOPIFY_REDIRECT_URI` (optional, auto-detected if not set)
+- Shopify env vars (`SHOPIFY_API_KEY`, `SHOPIFY_API_SECRET`) only needed for OAuth flow; custom app token approach requires none
 - Raw body middleware at `/api/shopify/webhooks/*` for HMAC verification (must come before `express.json()`)
 - Depends on: `@workspace/db`, `@workspace/api-zod`
 - `pnpm --filter @workspace/api-server run dev` — run the dev server

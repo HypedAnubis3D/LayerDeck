@@ -1487,6 +1487,18 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
       </div>
     </div>
 
+    <!-- INTEGRATIONS -->
+    <div class="sb-group" id="sbg-integrations">
+      <div class="sb-group-hdr" onclick="toggleGroup('sbg-integrations')">
+        <span class="sb-group-icon">🔗</span>
+        <span class="sb-group-name">Integrations</span>
+        <span class="sb-group-chevron">▾</span>
+      </div>
+      <div class="sb-group-body">
+        <button class="nav-item" id="nav-shopify" onclick="navTo('shopify',this)"><span class="nav-icon">🛍</span><span class="nav-label">Shopify</span></button>
+      </div>
+    </div>
+
     <!-- SYSTEM -->
     <div class="sb-group" id="sbg-system">
       <div class="sb-group-hdr" onclick="toggleGroup('sbg-system')">
@@ -2916,7 +2928,7 @@ const KEYS={spools:'ha3d_fil_v2',hist:'ha3d_hist_v2',prints:'ha3d_prints_v1',
 const MAT_C={'PLA Basic':'#3a80e0','PLA Matte':'#8858c0','PLA Silk':'#c09828','PLA+':'#28a858','PLA-CF':'#786860','PETG Basic':'#22aacc','PETG-CF':'#1a5050','ABS':'#c04828','ASA':'#a07828','TPU 95A':'#9050b0','PA':'#507080','PC':'#3a6090','Support':'#404850'};
 
 let spools=[],usageHist=[],prints=[],tmfLib=[],queueItems=[],orders=[],sales=[],maintLog=[];
-let shopifyCfg={domain:'',token:'',connected:false,lastOrderId:null,lastPoll:null};
+let shopifyCfg={domain:'',connected:false,lastOrderId:null,lastPoll:null};
 let cfg={kwh:0.13,watts:350,labor:0,markup:30};
 let qrScanner=null,rowScanner=null,targetRowId=null,filRowCount=0,finOutcome=null,scannerMode='use';
 let pollInterval=null,pendingNotifOrderId=null;
@@ -2945,7 +2957,7 @@ function load(){
     ss(KEYS.spools,spools);
   }
   // cfg loaded from storage — applied when printer is selected in print form
-  if(shopifyCfg.connected&&shopifyCfg.domain&&shopifyCfg.token){
+  if(shopifyCfg.connected&&shopifyCfg.domain&&!shopifyCfg.domain.includes('DEMO')){
     startPolling();
   }
 }
@@ -3709,80 +3721,84 @@ function renderForecast(){
 // ─── SHOPIFY ───
 function renderShopify(){
   const el=document.getElementById('shopify-content');
-  if(shopifyCfg.connected&&shopifyCfg.domain){
-    // Connected view
+  if(!el)return;
+  if(shopifyCfg.connected&&shopifyCfg.domain&&!shopifyCfg.domain.includes('DEMO')){
+    el.innerHTML='<div class="shopify-status-bar">'
+      +'<div class="shopify-status-dot connected"></div>'
+      +'<div style="flex:1">'
+        +'<div style="font-size:9px;color:var(--shopify);font-weight:bold">Connected to '+esc(shopifyCfg.domain)+'</div>'
+        +'<div style="font-size:7px;color:var(--txt-d);margin-top:1px">Last synced: '+(shopifyCfg.lastPoll?new Date(shopifyCfg.lastPoll).toLocaleTimeString():'-')+' · Auto-polls every 5 min</div>'
+      +'</div>'
+      +'<button class="btn btn-ghost btn-sm" onclick="pollShopifyOrders()">↻ Refresh Now</button>'
+      +'<button class="btn btn-red btn-sm" onclick="disconnectShopify()">Disconnect</button>'
+    +'</div>'
+    +'<div class="shopify-preview-banner">✓ New orders automatically create entries in Orders + Queue · Missing 3MF files are flagged · Products synced from your store</div>'
+    +'<div class="ctrl"><span style="font-size:8px;color:var(--shopify);letter-spacing:1px;font-weight:bold">YOUR SHOPIFY PRODUCTS</span>'
+    +'<span class="cnt" id="shopify-product-count">Loading…</span></div>'
+    +'<div class="shopify-products-grid" id="shopify-products-grid">'
+    +[1,2,3,4].map(()=>'<div class="skeleton-card"></div>').join('')
+    +'</div>';
+    loadShopifyProducts();
+  }else if(shopifyCfg.connected){
+    // DEMO view
     const demoProducts=[
-      {title:'Anubis Figurine Standard',price:'24.99',inventory:8,variants:['Black','Gold Silk']},
-      {title:'Rubber Duck Wizard',price:'14.99',inventory:15,variants:['White','Yellow']},
-      {title:'Poncho Fox Ball',price:'19.99',inventory:3,variants:['Matte Black','Cobalt Blue','Shiny Variant']},
-      {title:'Cosplay Mask — Anubis',price:'34.99',inventory:2,variants:['Standard','Deluxe']},
+      {title:'Anubis Figurine Standard',price:'24.99',variants:['Black','Gold Silk']},
+      {title:'Rubber Duck Wizard',price:'14.99',variants:['White','Yellow']},
+      {title:'Poncho Fox Ball',price:'19.99',variants:['Matte Black','Cobalt Blue','Shiny']},
+      {title:'Cosplay Mask — Anubis',price:'34.99',variants:['Standard','Deluxe']},
     ];
-    el.innerHTML=`
-      <div class="shopify-status-bar">
-        <div class="shopify-status-dot connected"></div>
-        <div style="flex:1">
-          <div style="font-size:9px;color:var(--shopify);font-weight:bold">Connected to ${esc(shopifyCfg.domain)}</div>
-          <div style="font-size:7px;color:var(--txt-d);margin-top:1px">Last synced: ${shopifyCfg.lastPoll?new Date(shopifyCfg.lastPoll).toLocaleTimeString():'-'} · Auto-polls every 5 min</div>
-        </div>
-        <button class="btn btn-ghost btn-sm" onclick="pollShopifyOrders()">↻ Refresh Now</button>
-        <button class="btn btn-red btn-sm" onclick="disconnectShopify()">Disconnect</button>
-      </div>
-      <div class="shopify-preview-banner">
-        ✓ New orders automatically create entries in Orders + Queue tabs · Missing 3MF files are flagged · Products below are synced from your store
-      </div>
-      <div class="ctrl">
-        <span style="font-size:8px;color:var(--shopify);letter-spacing:1px;font-weight:bold">YOUR SHOPIFY PRODUCTS</span>
-        <span class="cnt">${demoProducts.length} products (demo)</span>
-      </div>
-      <div class="shopify-products-grid">
-        ${demoProducts.map(p=>`
-          <div class="shopify-product-card">
-            <div class="sp-title">${esc(p.title)}</div>
-            <div class="sp-sub">${p.variants.length} variant${p.variants.length!==1?'s':''}</div>
-            <div class="sp-inventory">
-              <div class="sp-price">$${p.price}</div>
-              <div class="sp-stock" style="color:${p.inventory<5?'var(--amb)':'var(--grn)'}">${p.inventory} in stock</div>
-            </div>
-            <div class="sp-variants">${p.variants.map(v=>`<div class="sp-variant">${esc(v)}</div>`).join('')}</div>
-            <div style="margin-top:8px;font-size:6px;color:${tmfLib.find(t=>t.name.toLowerCase().includes(p.title.split(' ')[0].toLowerCase()))?'var(--grn)':'var(--amb)'}">
-              ${tmfLib.find(t=>t.name.toLowerCase().includes(p.title.split(' ')[0].toLowerCase()))?'✓ 3MF on file':'⚠ No 3MF — add to library for auto-fill'}
-            </div>
-          </div>`).join('')}
-      </div>`;
+    el.innerHTML='<div class="shopify-status-bar">'
+      +'<div class="shopify-status-dot connected" style="background:var(--txt-d)"></div>'
+      +'<div style="flex:1"><div style="font-size:9px;color:var(--txt-d);font-weight:bold">DEMO — '+esc(shopifyCfg.domain)+'</div>'
+      +'<div style="font-size:7px;color:var(--txt-d)">Preview only — no real data</div></div>'
+      +'<button class="btn btn-ghost btn-sm" onclick="disconnectShopify()">Exit Demo</button>'
+    +'</div>'
+    +'<div class="shopify-preview-banner" style="background:rgba(255,165,0,.1);border-color:var(--org)">⚠ Demo mode — connect a real Shopify store to enable live order sync</div>'
+    +'<div class="ctrl"><span style="font-size:8px;color:var(--txt-d);letter-spacing:1px">DEMO PRODUCTS</span>'
+    +'<span class="cnt">'+demoProducts.length+' products (demo)</span></div>'
+    +'<div class="shopify-products-grid">'
+    +demoProducts.map(function(p){
+      var hasTmf=tmfLib.find(function(t){return t.name&&t.name.toLowerCase().includes(p.title.split(' ')[0].toLowerCase());});
+      return '<div class="shopify-product-card">'
+        +'<div class="sp-title">'+esc(p.title)+'</div>'
+        +'<div class="sp-sub">'+p.variants.length+' variants</div>'
+        +'<div class="sp-inventory"><div class="sp-price">$'+p.price+'</div></div>'
+        +'<div class="sp-variants">'+p.variants.map(function(v){return '<div class="sp-variant">'+esc(v)+'</div>';}).join('')+'</div>'
+        +'<div style="margin-top:8px;font-size:6px;color:'+(hasTmf?'var(--grn)':'var(--amb)')+'">'+(hasTmf?'✓ 3MF on file':'⚠ No 3MF')+'</div>'
+      +'</div>';
+    }).join('')+'</div>';
   }else{
-    // Setup view
-    el.innerHTML=`
-      <div class="shopify-connect">
-        <div class="shopify-logo">SHOPIFY</div>
-        <div class="shopify-tagline">Connect your store to sync products, track orders, and auto-fill prints</div>
-        <div class="connect-steps">
-          <div class="step-title">One-Time Setup (5 minutes)</div>
-          <div class="step-row"><div class="step-num">1</div><div class="step-text">In your Shopify Admin, go to <b>Settings → Apps and sales channels</b> and click <b>Develop apps</b></div></div>
-          <div class="step-row"><div class="step-num">2</div><div class="step-text">Click <b>Create an app</b> — name it anything, e.g. <b>"HypedAnubis Studio"</b></div></div>
-          <div class="step-row"><div class="step-num">3</div><div class="step-text">Under <b>Configuration → Admin API scopes</b>, enable: <code>read_products</code> <code>read_orders</code> <code>read_inventory</code></div></div>
-          <div class="step-row"><div class="step-num">4</div><div class="step-text">Click <b>Install app</b> then copy your <b>Admin API access token</b></div></div>
-          <div class="step-row"><div class="step-num">5</div><div class="step-text">Paste your store domain and token below and click Connect</div></div>
-        </div>
-        <div class="connect-form">
-          <div class="connect-form-title">Store Credentials</div>
-          <div class="field"><div class="fl">Store Domain</div>
-            <input type="text" id="sh-domain" placeholder="yourstore.myshopify.com" value="${shopifyCfg.domain||''}"/>
-          </div>
-          <div class="field"><div class="fl">Admin API Access Token</div>
-            <input type="password" id="sh-token" placeholder="shpat_xxxxxxxxxxxxxxxxxxxx" value="${shopifyCfg.token||''}"/>
-            <div class="hint">Your token is stored locally on your device only — never sent anywhere except directly to Shopify</div>
-          </div>
-          <div style="display:flex;gap:8px;margin-top:10px">
-            <button class="btn btn-shopify" style="flex:1;padding:9px 0" onclick="connectShopify()">Connect Store</button>
-            <button class="btn btn-ghost btn-sm" onclick="previewShopifyDemo()">👁 Preview Demo</button>
-          </div>
-        </div>
-        <div style="text-align:center;font-size:7px;color:var(--txt-d);line-height:2;letter-spacing:.5px">
-          Once connected, new orders will auto-appear in Queue + Orders tabs<br>
-          Products will be synced and matched against your 3MF library<br>
-          You'll get in-app notifications with a 5-minute poll interval
-        </div>
-      </div>`;
+    el.innerHTML='<div class="shopify-connect">'
+      +'<div class="shopify-logo">SHOPIFY</div>'
+      +'<div class="shopify-tagline">Connect your store to sync orders, products, and auto-fill prints</div>'
+      +'<div class="connect-steps">'
+        +'<div class="step-title">Setup (2 minutes)</div>'
+        +'<div class="step-row"><div class="step-num">1</div><div class="step-text">Shopify Admin → <b>Settings → Apps and sales channels → Develop apps</b></div></div>'
+        +'<div class="step-row"><div class="step-num">2</div><div class="step-text">Click <b>Create an app</b> → name it <b>HypedAnubis Studio</b></div></div>'
+        +'<div class="step-row"><div class="step-num">3</div><div class="step-text">Configuration → Admin API scopes → enable <code>read_products</code> <code>read_orders</code> <code>read_inventory</code></div></div>'
+        +'<div class="step-row"><div class="step-num">4</div><div class="step-text"><b>Install app</b> → copy the <b>Admin API access token</b> (shown once)</div></div>'
+        +'<div class="step-row"><div class="step-num">5</div><div class="step-text">Paste your token below and click Connect</div></div>'
+      +'</div>'
+      +'<div class="connect-form">'
+        +'<div class="connect-form-title">Store Credentials</div>'
+        +'<div class="field"><div class="fl">Store Domain</div>'
+          +'<input type="text" id="sh-domain" placeholder="yourstore.myshopify.com" value="hypedanubis3d-2.myshopify.com"/>'
+        +'</div>'
+        +'<div class="field"><div class="fl">Admin API Access Token</div>'
+          +'<input type="password" id="sh-token" placeholder="shpat_xxxxxxxxxxxxxxxxxxxxxxxx"/>'
+          +'<div class="hint">🔒 Token stored securely server-side — never in your browser</div>'
+        +'</div>'
+        +'<div id="sh-connect-status" style="font-size:8px;min-height:18px;color:var(--txt-d)"></div>'
+        +'<div style="display:flex;gap:8px;margin-top:4px">'
+          +'<button class="btn btn-shopify" style="flex:1;padding:9px 0" onclick="connectShopify()">🛍 Connect Store</button>'
+          +'<button class="btn btn-ghost btn-sm" onclick="previewShopifyDemo()">👁 Demo</button>'
+        +'</div>'
+      +'</div>'
+      +'<div style="text-align:center;font-size:7px;color:var(--txt-d);line-height:2;margin-top:12px">'
+        +'🔒 Token stored server-side only · New orders auto-create Queue + Orders entries<br>'
+        +'Products matched against 3MF library · 5-minute auto-sync'
+      +'</div>'
+    +'</div>';
   }
 }
 
@@ -3793,26 +3809,10 @@ function previewShopifyDemo(){
   // Show a demo notification
   setTimeout(()=>showNotification('Demo Order #1042','Sarah K. ordered: Anubis Figurine × 1, Rubber Duck Wizard × 2 · $54.97','demo-order'),1200);
 }
-function connectShopify(){
-  const domain=document.getElementById('sh-domain').value.trim();
-  const token=document.getElementById('sh-token').value.trim();
-  if(!domain||!token){alert('Please enter both your store domain and API token.');return;}
-  shopifyCfg.domain=domain;
-  shopifyCfg.token=token;
-  shopifyCfg.connected=true;
-  saveShopify();
-  renderShopify();
-  startPolling();
-  pollShopifyOrders();
-}
-// disconnectShopify defined later with showConfirm
-
 async function pollShopifyOrders(){
-  if(!shopifyCfg.connected||!shopifyCfg.token||shopifyCfg.domain.includes('DEMO'))return;
+  if(!shopifyCfg.connected||shopifyCfg.domain.includes('DEMO'))return;
   try{
-    const domain=shopifyCfg.domain.replace('https://','').replace(/\/$/,'');
-    const url=`https://${domain}/admin/api/2024-01/orders.json?status=open&limit=10&fields=id,name,customer,line_items,created_at,financial_status`;
-    const resp=await fetch(url,{headers:{'X-Shopify-Access-Token':shopifyCfg.token,'Content-Type':'application/json'}});
+    const resp=await fetch('/api/shopify/orders/sync');
     if(!resp.ok)return;
     const data=await resp.json();
     const newOrders=(data.orders||[]).filter(o=>!orders.find(ex=>ex.shopifyId===String(o.id)));
@@ -3820,7 +3820,7 @@ async function pollShopifyOrders(){
     shopifyCfg.lastPoll=Date.now();
     saveShopify();
     if(newOrders.length>0)render();
-  }catch(e){}
+  }catch(e){console.warn('[Shopify] poll failed:',e.message);}
 }
 
 function startPolling(){
@@ -4935,17 +4935,47 @@ function renderIntegrationPanel(type){
   </div>`;
 }
 
-function connectShopify(){
-  const domain=document.getElementById('shopify-domain-input')?.value?.trim()||document.getElementById('sh-domain')?.value?.trim();
-  const token=document.getElementById('shopify-token-input')?.value?.trim()||document.getElementById('sh-token')?.value?.trim();
-  if(!domain||!token){alert('Please enter both domain and token.');return;}
-  shopifyCfg.domain=domain;shopifyCfg.token=token;shopifyCfg.connected=true;
-  saveShopify();startPolling();pollShopifyOrders();render();
+async function connectShopify(){
+  const domain=(document.getElementById('sh-domain')?.value||'').trim().replace(/^https?:\/\//,'').replace(/\/$/,'');
+  const token=(document.getElementById('sh-token')?.value||'').trim();
+  const statusEl=document.getElementById('sh-connect-status');
+  if(!domain||!token){
+    if(statusEl)statusEl.textContent='⚠ Enter store domain and access token.';
+    return;
+  }
+  if(statusEl)statusEl.textContent='Connecting…';
+  const btn=document.querySelector('.btn-shopify');
+  if(btn){btn.disabled=true;btn.textContent='Connecting…';}
+  try{
+    const resp=await fetch('/api/shopify/connect',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({shopDomain:domain,accessToken:token})
+    });
+    const data=await resp.json();
+    if(!resp.ok){
+      if(statusEl)statusEl.textContent='✗ '+( data.error||'Connection failed');
+      if(btn){btn.disabled=false;btn.textContent='🛍 Connect Store';}
+      return;
+    }
+    shopifyCfg.domain=data.shop||domain;
+    shopifyCfg.connected=true;
+    shopifyCfg.lastPoll=null;
+    saveShopify();
+    startPolling();
+    toast('Shopify Connected!','Orders will sync automatically.','success');
+    render();
+    setTimeout(pollShopifyOrders,1000);
+  }catch(e){
+    if(statusEl)statusEl.textContent='✗ Network error — check connection';
+    if(btn){btn.disabled=false;btn.textContent='🛍 Connect Store';}
+  }
 }
 function disconnectShopify(){
   showConfirm('Disconnect Shopify?','Your local data will remain intact.',()=>{
-    shopifyCfg={domain:'',token:'',connected:false,lastOrderId:null,lastPoll:null};
-    saveShopify();if(pollInterval){clearInterval(pollInterval);pollInterval=null;}render();
+    shopifyCfg={domain:'',connected:false,lastOrderId:null,lastPoll:null};
+    saveShopify();if(pollInterval){clearInterval(pollInterval);pollInterval=null;}
+    render();
     toast('Shopify Disconnected','','warning');
   },'Disconnect','btn-red');
 }
@@ -4979,6 +5009,78 @@ function previewShopifyDemo(){
     document.getElementById('nav-badge-queue')?.classList.add('show');
     document.getElementById('nav-badge-orders')?.classList.add('show');
   },800);
+}
+
+async function loadShopifyProducts(){
+  const grid=document.getElementById('shopify-products-grid');
+  const cnt=document.getElementById('shopify-product-count');
+  if(!grid)return;
+  try{
+    const resp=await fetch('/api/shopify/products');
+    if(!resp.ok)throw new Error('HTTP '+resp.status);
+    const data=await resp.json();
+    const products=data.products||[];
+    if(cnt)cnt.textContent=products.length+' products';
+    if(products.length===0){
+      grid.innerHTML='<div style="grid-column:1/-1;text-align:center;padding:20px;color:var(--txt-d);font-size:8px">No products found in store</div>';
+      return;
+    }
+    grid.innerHTML=products.map(function(p){
+      var price=p.variants&&p.variants[0]?p.variants[0].price:'—';
+      var inv=p.variants?p.variants.reduce(function(s,v){return s+(parseInt(v.inventory_quantity)||0);},0):0;
+      var variantNames=p.variants?p.variants.map(function(v){return v.title;}).filter(function(v){return v!=='Default Title';}).join(', '):'';
+      var hasTmf=tmfLib.find(function(t){return t.name&&t.name.toLowerCase().includes(p.title.split(' ')[0].toLowerCase());});
+      return '<div class="shopify-product-card">'
+        +'<div class="sp-title">'+esc(p.title)+'</div>'
+        +(variantNames?'<div class="sp-sub">'+esc(variantNames)+'</div>':'')
+        +'<div class="sp-inventory">'
+          +'<div class="sp-price">$'+price+'</div>'
+          +'<div class="sp-stock" style="color:'+(inv<5?'var(--amb)':'var(--grn)')+'">'+inv+' in stock</div>'
+        +'</div>'
+        +'<div style="margin-top:6px;font-size:6px;color:'+(hasTmf?'var(--grn)':'var(--amb)')+'">'+(hasTmf?'✓ 3MF on file':'⚠ No 3MF — add to library')+'</div>'
+      +'</div>';
+    }).join('');
+  }catch(e){
+    if(grid)grid.innerHTML='<div style="grid-column:1/-1;text-align:center;padding:20px;color:var(--red);font-size:8px">Failed to load products: '+esc(e.message)+'</div>';
+  }
+}
+
+async function checkShopifyConfig(){
+  try{
+    const resp=await fetch('/api/shopify/config');
+    if(!resp.ok)return;
+    const data=await resp.json();
+    if(data.connected&&data.shop){
+      const wasConnected=shopifyCfg.connected;
+      shopifyCfg.domain=data.shop;
+      shopifyCfg.connected=true;
+      saveShopify();
+      if(!wasConnected){
+        startPolling();
+        toast('Shopify Connected','Store '+data.shop+' ready.','success');
+        if(curTab==='shopify')renderShopify();
+      }
+    }
+  }catch(e){/* network error or server offline — ignore silently */}
+}
+
+function checkShopifyOAuthCallback(){
+  const params=new URLSearchParams(window.location.search);
+  if(params.get('shopify_connected')==='true'){
+    const shop=params.get('shop')||'your store';
+    window.history.replaceState({},'',window.location.pathname);
+    shopifyCfg.domain=shop;shopifyCfg.connected=true;shopifyCfg.lastPoll=null;
+    saveShopify();
+    setTimeout(function(){
+      toast('Shopify Connected!','Store '+shop+' connected. Syncing now.','success');
+      startPolling();pollShopifyOrders();
+      if(curTab==='shopify')renderShopify();
+    },500);
+  }else if(params.get('shopify_error')==='true'){
+    var msg=params.get('error_message')||'Connection failed. Please try again.';
+    window.history.replaceState({},'',window.location.pathname);
+    setTimeout(function(){toast('Shopify Error',decodeURIComponent(msg.replace(/\+/g,' ')),'error');},400);
+  }
 }
 
 function connectEtsy(){
@@ -5608,7 +5710,8 @@ function savePokemonMap(){localStorage.setItem(KEYS.pokemonMap,JSON.stringify(po
 Object.assign(TAB_NAMES,{printers:'Printers',fulfillment:'Fulfillment',restock:'Restock & Shop List',failrate:'Fail Rates & Waste'});
 
 // Extend ALL_TABS
-ALL_TABS.push('printers','fulfillment','restock','failrate');
+ALL_TABS.push('printers','fulfillment','restock','failrate','shopify');
+Object.assign(TAB_NAMES,{shopify:'Shopify'});
 
 // ════════════════════════════════════════
 // RENDER EXTENSION v9
@@ -6844,6 +6947,7 @@ function render(){
   if(curTab==='customers')  renderCustomers();
   if(curTab==='maint')      {renderMaint();renderNozzle();}
   if(curTab==='forecast')   renderForecast();
+  if(curTab==='shopify')    renderShopify();
   if(curTab==='history')    renderHistory();
   if(curTab==='stats')      renderStats();
   if(curTab==='backup')     {renderBackup();checkBackupReminder();}
@@ -7106,6 +7210,7 @@ function initSupabase(){
           await new Promise(r=>setTimeout(r,1200));
           await pullFromCloud(true);
           render();
+          checkShopifyConfig();
         }
         startAutoSync();
       }else{
@@ -9469,147 +9574,13 @@ checkOnboarding();
 
 <!-- PTR indicator uses position:fixed which still works fine for overlays -->
 
-<!-- ═══════════════════════════════════════════
-     SHOPIFY BACKEND OAUTH INTEGRATION
-     Overrides connectShopify, disconnectShopify,
-     pollShopifyOrders, renderShopify to use
-     server-side OAuth flow (token never in browser)
-═══════════════════════════════════════════ -->
 <script>
-(function(){
-  var _origRenderShopify = window.renderShopify;
-
-  window.renderShopify = function(){
-    var el = document.getElementById('shopify-content');
-    if(!el) return;
-    if(shopifyCfg.connected && shopifyCfg.domain && !shopifyCfg.domain.includes('DEMO')){
-      _origRenderShopify();
-      _loadShopifyProducts();
-    } else if(shopifyCfg.connected){
-      _origRenderShopify();
-    } else {
-      var h = '<div class="shopify-connect">';
-      h += '<div class="shopify-logo">SHOPIFY</div>';
-      h += '<div class="shopify-tagline">Connect your store via secure OAuth — no token copying required</div>';
-      h += '<div class="connect-steps"><div class="step-title">One-Time Setup</div>';
-      h += '<div class="step-row"><div class="step-num">1</div><div class="step-text">Enter your Shopify store domain below</div></div>';
-      h += '<div class="step-row"><div class="step-num">2</div><div class="step-text">Click <b>Connect with Shopify</b> — you\'ll approve access on Shopify\'s secure login page</div></div>';
-      h += '<div class="step-row"><div class="step-num">3</div><div class="step-text">You\'ll return here automatically with orders, products &amp; webhooks all live</div></div>';
-      h += '</div>';
-      h += '<div class="connect-form"><div class="connect-form-title">Your Store</div>';
-      h += '<div class="field"><div class="fl">Store Domain</div>';
-      h += '<input type="text" id="sh-domain" placeholder="yourstore.myshopify.com" value="hypedanubis3d-2.myshopify.com"/>';
-      h += '<div class="hint">Your .myshopify.com domain</div></div>';
-      h += '<div style="display:flex;gap:8px;margin-top:12px">';
-      h += '<button class="btn btn-shopify" style="flex:1;padding:10px 0;font-size:9px;letter-spacing:1.5px" onclick="connectShopify()">&#x1F6CD; CONNECT WITH SHOPIFY</button>';
-      h += '<button class="btn btn-ghost btn-sm" onclick="previewShopifyDemo()">&#x1F441; Demo</button></div>';
-      h += '<div id="shopify-oauth-msg" style="margin-top:10px;font-size:8px;color:var(--txt-d)"></div></div>';
-      h += '<div class="shopify-preview-banner" style="margin-top:12px">&#x1F512; Secure OAuth — your access token is stored server-side only.<br>Orders auto-sync every 5 min &middot; Real-time webhooks &middot; 3MF auto-matching.</div>';
-      h += '</div>';
-      el.innerHTML = h;
-    }
-  };
-
-  window.connectShopify = function(){
-    var domain = '';
-    var domEl = document.getElementById('sh-domain') || document.getElementById('shopify-domain-input');
-    if(domEl) domain = domEl.value.trim();
-    if(!domain) domain = 'hypedanubis3d-2.myshopify.com';
-    var msgEl = document.getElementById('shopify-oauth-msg');
-    if(msgEl) msgEl.textContent = 'Redirecting to Shopify for authorization...';
-    window.location.href = '/api/shopify/oauth/start?shop=' + encodeURIComponent(domain);
-  };
-
-  window.disconnectShopify = function(){
-    showConfirm('Disconnect Shopify?','Your local order data will remain. Server-side credentials will be cleared.',function(){
-      shopifyCfg = {domain:'',token:'',connected:false,lastOrderId:null,lastPoll:null};
-      saveShopify();
-      if(pollInterval){clearInterval(pollInterval);pollInterval=null;}
-      fetch('/api/shopify/disconnect',{method:'DELETE'}).catch(function(){});
-      render();
-      toast('Shopify Disconnected','Store disconnected and credentials cleared.','warning');
-    },'Disconnect','btn-red');
-  };
-
-  window.pollShopifyOrders = async function(){
-    if(!shopifyCfg.connected) return;
-    if(shopifyCfg.domain && shopifyCfg.domain.includes('DEMO')) return;
-    try{
-      var resp = await fetch('/api/shopify/orders/sync');
-      if(!resp.ok) return;
-      var data = await resp.json();
-      var newOrders = (data.orders||[]).filter(function(o){
-        return !orders.find(function(ex){ return ex.shopifyId === String(o.id); });
-      });
-      newOrders.forEach(function(o){ ingestShopifyOrder(o); });
-      shopifyCfg.lastPoll = Date.now();
-      saveShopify();
-      if(newOrders.length > 0) render();
-    }catch(e){ console.warn('[Shopify] sync failed:',e.message); }
-  };
-
-  async function _loadShopifyProducts(){
-    try{
-      var resp = await fetch('/api/shopify/products');
-      if(!resp.ok) return;
-      var data = await resp.json();
-      var products = data.products || [];
-      if(!products.length) return;
-      var el = document.getElementById('shopify-content');
-      if(!el) return;
-      var cnt = el.querySelector('.cnt');
-      if(cnt) cnt.textContent = products.length + ' products (live)';
-      var grid = el.querySelector('.shopify-products-grid');
-      if(!grid) return;
-      var html = '';
-      products.forEach(function(p){
-        var price = parseFloat((p.variants && p.variants[0] && p.variants[0].price) || 0).toFixed(2);
-        var vars = (p.variants||[]).map(function(v){ return '<div class="sp-variant">' + esc(v.title||'') + '</div>'; }).join('');
-        var hasTmf = tmfLib && tmfLib.find(function(t){ return t.name && p.title && (t.name.toLowerCase().includes(p.title.split(' ')[0].toLowerCase()) || p.title.toLowerCase().includes(t.name.split(' ')[0].toLowerCase())); });
-        html += '<div class="shopify-product-card">';
-        html += '<div class="sp-title">' + esc(p.title||'') + '</div>';
-        html += '<div class="sp-sub">' + (p.variants||[]).length + ' variant(s)</div>';
-        html += '<div class="sp-inventory"><div class="sp-price">$' + price + '</div>';
-        html += '<div class="sp-stock" style="color:var(--grn)">&#x25CF; Live</div></div>';
-        html += '<div class="sp-variants">' + vars + '</div>';
-        html += '<div style="margin-top:8px;font-size:6px;color:' + (hasTmf?'var(--grn)':'var(--amb)') + '">';
-        html += hasTmf ? '&#x2713; 3MF on file' : '&#x26A0; No 3MF linked';
-        html += '</div></div>';
-      });
-      grid.innerHTML = html;
-    }catch(e){}
-  }
-
-  function _checkOAuthCallback(){
-    var params = new URLSearchParams(window.location.search);
-    if(params.get('shopify_connected') === 'true'){
-      var shop = params.get('shop') || '';
-      shopifyCfg.connected = true;
-      shopifyCfg.domain = shop;
-      shopifyCfg.token = '__server_side__';
-      saveShopify();
-      window.history.replaceState({},'',window.location.pathname);
-      setTimeout(function(){
-        toast('Shopify Connected!','Store ' + shop + ' connected. Orders syncing automatically.','success');
-        if(curTab === 'shopify' && typeof renderShopify === 'function') renderShopify();
-        if(typeof startPolling === 'function') startPolling();
-        if(typeof pollShopifyOrders === 'function') pollShopifyOrders();
-      }, 500);
-    } else if(params.get('shopify_error') === 'true'){
-      var msg = params.get('error_message') || 'Connection failed. Please try again.';
-      window.history.replaceState({},'',window.location.pathname);
-      setTimeout(function(){
-        toast('Shopify Error', decodeURIComponent(msg.replace(/\+/g,' ')), 'error');
-      }, 400);
-    }
-  }
-
-  if(document.readyState === 'loading'){
-    document.addEventListener('DOMContentLoaded', function(){ setTimeout(_checkOAuthCallback, 700); });
-  } else {
-    setTimeout(_checkOAuthCallback, 700);
-  }
-})();
+// ── Check for Shopify OAuth redirect params on page load ──
+if(document.readyState==='loading'){
+  document.addEventListener('DOMContentLoaded',function(){setTimeout(checkShopifyOAuthCallback,700);});
+}else{
+  setTimeout(checkShopifyOAuthCallback,700);
+}
 </script>
 </body>
 </html>
