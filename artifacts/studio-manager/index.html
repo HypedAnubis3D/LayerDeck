@@ -195,6 +195,7 @@ input.srch::placeholder{color:var(--txt-d);}
 .kcard{background:var(--surf2);border:1px solid var(--bdr2);border-radius:4px;padding:9px;cursor:pointer;transition:border-color .15s;position:relative;}
 .kcard:hover{border-color:var(--bdr2);}
 .kcard.kc-shopify{border-left:2px solid var(--shopify);}
+.kcard.kc-etsy{border-left:2px solid #e07828;}
 .kcard.kc-warn{border-left:2px solid var(--amb);}
 .kcard-name{font-size:9px;color:var(--txt-b);font-weight:bold;margin-bottom:2px;}
 .kcard-meta{font-size:6px;color:var(--txt-d);line-height:1.6;}
@@ -3677,13 +3678,15 @@ function renderQueue(){
     const items=queueItems.filter(q=>(q.stage||'queued')===st.key);
     const cards=items.map(q=>{
       const isShopify=q.fromShopify;
+      const isEtsy=q.fromEtsy;
       const isWarn=q.noTmf;
       const prioIcon=q.priority==='high'?'🔴':q.priority==='low'?'🔵':'';
       const prevStage=st.key==='inprogress'?'queued':st.key==='done'?'inprogress':null;
       const nextStage=st.key==='queued'?'inprogress':st.key==='inprogress'?'done':null;
-      return `<div class="kcard${isShopify?' kc-shopify':''}${isWarn?' kc-warn':''}">
+      return `<div class="kcard${isShopify?' kc-shopify':''}${isEtsy&&!isShopify?' kc-etsy':''}${isWarn?' kc-warn':''}">
         ${prioIcon?`<div class="k-priority">${prioIcon}</div>`:''}
         ${isShopify?`<div style="font-size:6px;color:var(--shopify);letter-spacing:1px;margin-bottom:3px">🛍 SHOPIFY ORDER</div>`:''}
+        ${isEtsy&&!isShopify?`<div style="font-size:6px;color:#e07828;letter-spacing:1px;margin-bottom:3px">🟠 ETSY ORDER</div>`:''}
         ${isWarn?`<div style="font-size:6px;color:var(--amb);letter-spacing:1px;margin-bottom:3px">⚠ NO 3MF ON FILE</div>`:''}
         <div class="kcard-name">${esc(q.name)}${q.qty>1?' ×'+q.qty:''}</div>
         <div class="kcard-meta">${esc(q.printer||'?')} · ${q.hrs||'?'}h${q.orderId?' · '+esc(q.orderId):''}</div>
@@ -5820,13 +5823,19 @@ async function pollEtsyOrders(){
       // Auto-queue items
       items.forEach(function(item){
         var catItem=catalogItems.find(function(c){return c.name&&c.name.toLowerCase()===item.name.toLowerCase();});
+        var matchTmf=catItem&&catItem.tmfId?tmfLib.find(function(t){return t.id===catItem.tmfId;}):
+          tmfLib.find(function(t){return t.name&&(t.name.toLowerCase().includes(item.name.split(' ')[0].toLowerCase())||item.name.toLowerCase().includes(t.name.split(' ')[0].toLowerCase()));});
         queueItems.push({
           id:uid(),name:item.name,
           category:catItem?catItem.category:'Etsy',
           printer:printerRecords[0]?.name||'X1C',
-          hrs:catItem?.tmfId?(tmfLib.find(function(t){return t.id===catItem.tmfId;})||{}).hrs||3:3,
+          hrs:matchTmf?matchTmf.hrs||0:0,
           qty:parseInt(item.qty||1),priority:'normal',orderId:etsyOrderId,
-          stage:'queued',fromEtsy:true,timestamp:Date.now()
+          stage:'queued',fromEtsy:true,
+          noTmf:!matchTmf,
+          tmfId:matchTmf?matchTmf.id:null,
+          notes:matchTmf?'3MF matched: '+matchTmf.name:'⚠ No 3MF — update print info before starting',
+          timestamp:Date.now()
         });
       });
     });
