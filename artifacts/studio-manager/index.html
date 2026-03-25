@@ -2423,8 +2423,22 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
     <div class="evt-section" id="esec-packlist">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
         <div style="font-size:9px;color:var(--txt-b);font-weight:bold">In-Person Catalog</div>
-        <button class="btn btn-pur btn-sm" onclick="openCatalogPicker()">+ Add from Catalog</button>
+        <button class="btn btn-pur btn-sm" onclick="openCatalogPicker()">+ From Catalog</button>
+        <button class="btn btn-ghost btn-sm" onclick="toggleManualAdd()">+ Manual Add</button>
         <span style="margin-left:auto;font-size:7px;color:var(--txt-d)" id="em-pack-value"></span>
+      </div>
+      <div id="em-manual-add" style="display:none;background:var(--surf);border:1px solid var(--bdr);border-radius:6px;padding:12px;margin-bottom:12px">
+        <div style="font-size:8px;font-weight:bold;color:var(--txt-b);margin-bottom:8px">Add Custom Item</div>
+        <div class="fr2">
+          <div class="field"><div class="fl">Item Name</div><input type="text" id="em-manual-name" placeholder="Custom Figurine" style="font-size:8px"/></div>
+          <div class="field"><div class="fl">Price ($)</div><input type="number" id="em-manual-price" step="0.01" min="0" placeholder="25.00" style="font-size:9px"/></div>
+        </div>
+        <div class="fr2">
+          <div class="field"><div class="fl">Qty to Bring</div><input type="number" id="em-manual-qty" min="1" value="1" style="font-size:9px"/></div>
+          <div class="field" style="display:flex;align-items:flex-end">
+            <button class="btn btn-pur" style="width:100%;padding:6px" onclick="addManualPackItem()">Add Item</button>
+          </div>
+        </div>
       </div>
       <div id="em-pack-picker" style="display:none;background:var(--surf);border:1px solid var(--bdr);border-radius:6px;padding:12px;margin-bottom:12px">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
@@ -10034,6 +10048,7 @@ function renderPackList(){
 
 function openCatalogPicker(){
   document.getElementById('em-pack-picker').style.display='';
+  document.getElementById('em-manual-add').style.display='none';
   document.getElementById('em-picker-search').value='';
   renderCatalogPicker();
 }
@@ -10079,6 +10094,32 @@ function updatePackQty(catalogItemId,delta){
   item.qtyBring=Math.max(0,(item.qtyBring||0)+delta);
   saveEvt();
   renderPackList();
+}
+function toggleManualAdd(){
+  const el=document.getElementById('em-manual-add');
+  el.style.display=el.style.display==='none'?'':'none';
+  if(el.style.display!=='none'){
+    document.getElementById('em-manual-name').focus();
+    document.getElementById('em-pack-picker').style.display='none';
+  }
+}
+function addManualPackItem(){
+  const name=(document.getElementById('em-manual-name')?.value||'').trim();
+  if(!name){document.getElementById('em-manual-name').focus();return;}
+  const price=parseFloat(document.getElementById('em-manual-price')?.value||0)||0;
+  const qty=parseInt(document.getElementById('em-manual-qty')?.value||1)||1;
+  const c=getEvt();if(!c)return;
+  if(!c.inPersonCatalog) c.inPersonCatalog=[];
+  const catalogItemId='manual-'+uid();
+  c.inPersonCatalog.push({catalogItemId,name,photo:'',price,shopifyHandle:'',qtyBring:qty,manual:true});
+  saveEvt();
+  document.getElementById('em-manual-name').value='';
+  document.getElementById('em-manual-price').value='';
+  document.getElementById('em-manual-qty').value='1';
+  document.getElementById('em-manual-add').style.display='none';
+  renderPackList();
+  populateSaleDropdown();
+  toast('Item Added',name,'success');
 }
 
 // ── Checklist ──
