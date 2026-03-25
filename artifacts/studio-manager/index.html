@@ -7145,9 +7145,11 @@ function initSupabase(){
         updateSyncIndicator('connected');
         addSyncLog('Signed in as '+currentUser.email,'ok');
         if(event==='SIGNED_IN'){await pullFromCloud();render();}
+        startAutoSync();
       }else{
         currentUser=null;
         syncCfg.enabled=false;
+        stopAutoSync();
         updateSyncIndicator('disconnected');
         showAuthScreen();
       }
@@ -7224,8 +7226,8 @@ async function processSyncQueue(){
   else{updateSyncIndicator('error');}
 }
 
-async function pullFromCloud(){
-  if(!supabaseClient||!currentUser){toast('Not signed in','Please sign in first','error');return;}
+async function pullFromCloud(silent=false){
+  if(!supabaseClient||!currentUser){if(!silent)toast('Not signed in','Please sign in first','error');return;}
   updateSyncIndicator('syncing');
   addSyncLog('Pulling data from cloud…','info');
   try{
@@ -7249,7 +7251,7 @@ async function pullFromCloud(){
     }
     updateSyncIndicator('connected');
     addSyncLog('Pulled '+pulled+' collections ✓','ok');
-    toast('Data Pulled','Your data is up to date','success');
+    if(!silent)toast('Data Pulled','Your data is up to date','success');
   }catch(e){
     updateSyncIndicator('error');
     addSyncLog('Pull failed: '+e.message,'err');
@@ -7349,9 +7351,16 @@ function renderSync(){
       +'<div style="font-size:7px;color:var(--txt-d);margin-top:1px">'+esc(email)+'</div></div>'
       +'<button class="btn btn-ghost btn-xs" onclick="signOutUser()">Sign Out</button>'
       +'</div>'
-      +'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">'
+      +'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">'
       +'<button class="btn btn-grn btn-sm" style="flex:1;min-width:90px" onclick="pushAllToCloud()">⬆ Push All</button>'
       +'<button class="btn btn-cyn btn-sm" style="flex:1;min-width:90px" onclick="pullFromCloud()">⬇ Pull Latest</button>'
+      +'</div>'
+      +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;background:var(--surf2);border:1px solid var(--bdr);border-radius:4px;padding:7px 10px">'
+      +'<span style="font-size:8px;color:var(--txt-d);letter-spacing:1px;white-space:nowrap">Auto-sync</span>'
+      +'<select onchange="setAutoSyncMins(parseInt(this.value))" style="flex:1;background:var(--surf3,var(--bg));border:1px solid var(--bdr2);color:var(--txt-b);font-family:\'Share Tech Mono\',monospace;font-size:9px;padding:4px 6px;border-radius:3px">'
+      +['Off:0','1 min:1','5 min:5','15 min:15','30 min:30','60 min:60'].map(o=>{const[l,v]=o.split(':');return '<option value="'+v+'"'+(getAutoSyncMins()===parseInt(v)?' selected':'')+'>'+l+'</option>';}).join('')
+      +'</select>'
+      +'<span id="autosync-countdown" style="font-size:7px;color:var(--txt-d);white-space:nowrap;min-width:70px;text-align:right"></span>'
       +'</div>'
       +'<div class="sync-stat-grid">'
       +'<div class="sync-stat"><div class="sync-stat-n" style="color:'+(pendingCount>0?'var(--gold-b)':'var(--grn-b)')+'">'+pendingCount+'</div><div class="sync-stat-l">Pending</div></div>'
@@ -9377,20 +9386,55 @@ setInitialNav();
 if(typeof updateMysteryBadge==='function')updateMysteryBadge();
 initSupabase();
 
-// ── AUTO-REFRESH ──
-let autoRefreshInterval=null;
-function startAutoRefresh(){
-  if(autoRefreshInterval)clearInterval(autoRefreshInterval);
-  const mins=parseInt(localStorage.getItem('ha3d_autorefresh')||'10');
-  if(mins<=0)return;
-  autoRefreshInterval=setInterval(()=>{
-    if(supabaseClient&&currentUser)processSyncQueue();
-    if(shopifyCfg.connected)pollShopifyOrders();
-    if(etsyCfg.connected)pollEtsyOrders();
-    updateMysteryBadge();
-  },mins*60000);
+// ── AUTO-SYNC ──
+const AUTO_SYNC_KEY='ha3d_autosync_mins';
+let autoSyncInterval=null;
+let autoSyncNextAt=null;
+let autoSyncCountdownTimer=null;
+
+function getAutoSyncMins(){
+  return parseInt(localStorage.getItem(AUTO_SYNC_KEY)||'5');
 }
-startAutoRefresh();
+function setAutoSyncMins(mins){
+  localStorage.setItem(AUTO_SYNC_KEY,String(mins));
+  startAutoSync();
+  if(typeof renderSync==='function')renderSync();
+}
+function startAutoSync(){
+  if(autoSyncInterval)clearInterval(autoSyncInterval);
+  if(autoSyncCountdownTimer)clearInterval(autoSyncCountdownTimer);
+  autoSyncNextAt=null;
+  const mins=getAutoSyncMins();
+  if(mins<=0||!supabaseClient||!currentUser)return;
+  const ms=mins*60000;
+  autoSyncNextAt=Date.now()+ms;
+  autoSyncInterval=setInterval(async()=>{
+    if(!supabaseClient||!currentUser)return;
+    await processSyncQueue();
+    await pullFromCloud(true);
+    if(shopifyCfg&&shopifyCfg.connected)pollShopifyOrders();
+    if(etsyCfg&&etsyCfg.connected)pollEtsyOrders();
+    updateMysteryBadge();
+    autoSyncNextAt=Date.now()+ms;
+    updateAutoSyncCountdown();
+  },ms);
+  autoSyncCountdownTimer=setInterval(updateAutoSyncCountdown,10000);
+  updateAutoSyncCountdown();
+}
+function stopAutoSync(){
+  if(autoSyncInterval)clearInterval(autoSyncInterval);
+  if(autoSyncCountdownTimer)clearInterval(autoSyncCountdownTimer);
+  autoSyncInterval=null;autoSyncCountdownTimer=null;autoSyncNextAt=null;
+}
+function updateAutoSyncCountdown(){
+  const el=document.getElementById('autosync-countdown');
+  if(!el)return;
+  if(!autoSyncNextAt||!supabaseClient||!currentUser){el.textContent='';return;}
+  const secs=Math.max(0,Math.round((autoSyncNextAt-Date.now())/1000));
+  const m=Math.floor(secs/60),s=secs%60;
+  el.textContent='Next sync in '+(m>0?m+'m ':'')+s+'s';
+}
+startAutoSync();
 
 curTab='dashboard';
 ALL_TABS.forEach(t=>{const el=document.getElementById('tab-'+t);if(el)el.style.display=t==='dashboard'?'':'none';});
