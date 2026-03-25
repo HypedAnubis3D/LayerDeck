@@ -2170,11 +2170,15 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
   </div>
   <div class="field"><div class="fl">Description</div><textarea id="ec-desc" rows="2" placeholder="Brief product description for your catalog…"></textarea></div>
   <div class="field"><div class="fl">Photo URL (optional)</div><input type="text" id="ec-photo" placeholder="https://… or leave blank"/></div>
-  <div class="field"><div class="fl">Linked 3MF File</div>
+  <div class="field"><div class="fl">Linked 3MF File (product default)</div>
     <select id="ec-tmf" style="width:100%;background:var(--bg);border:1px solid var(--bdr2);color:var(--txt);padding:7px 9px;font-family:'Share Tech Mono',monospace;font-size:9px;border-radius:3px;">
       <option value="">— None —</option>
     </select>
     <div id="ec-tmf-info" style="font-size:7px;color:var(--txt-d);margin-top:4px"></div>
+  </div>
+  <div id="ec-variants-wrap" style="display:none">
+    <div class="fl" style="margin-bottom:5px">3MF per Variant</div>
+    <div id="ec-variants-section"></div>
   </div>
   <div class="field"><div class="fl">Linked Print Profile (optional)</div>
     <select id="ec-profile" style="width:100%;background:var(--bg);border:1px solid var(--bdr2);color:var(--txt);padding:7px 9px;font-family:'Share Tech Mono',monospace;font-size:9px;border-radius:3px;">
@@ -5823,16 +5827,40 @@ function delPrint(id){
 // Override ingestShopifyOrder to badge nav items
 function ingestShopifyOrder(o){
   const customer=(o.customer?(o.customer.first_name+' '+(o.customer.last_name||'')).trim():'Guest');
-  const items=(o.line_items||[]).map(li=>({name:li.title,qty:li.quantity,price:parseFloat(li.price||0).toFixed(2)}));
+  const items=(o.line_items||[]).map(li=>({name:li.title,variantTitle:li.variant_title||'',qty:li.quantity,price:parseFloat(li.price||0).toFixed(2),shopifyVariantId:String(li.variant_id||'')}));
   const orderId=o.name||('#'+o.id);
-  const order={id:uid(),shopifyId:String(o.id),orderId,customer,platform:'Shopify',date:o.created_at?o.created_at.split('T')[0]:new Date().toISOString().split('T')[0],items,status:'pending',shipping:0,notes:'',timestamp:Date.now(),fromShopify:true};
+  const status=shopifyStatusMap(o);
+  const order={id:uid(),shopifyId:String(o.id),orderId,customer,platform:'Shopify',date:o.created_at?o.created_at.split('T')[0]:new Date().toISOString().split('T')[0],items,status,shipping:0,notes:'',timestamp:Date.now(),fromShopify:true};
   orders.push(order);saveOrders();
   items.forEach(it=>{
-    const matchTmf=tmfLib.find(t=>t.name.toLowerCase().includes(it.name.split(' ')[0].toLowerCase())||it.name.toLowerCase().includes(t.name.split(' ')[0].toLowerCase()));
+    // 1. Look up catalog item by name
+    const catalogItem=catalogItems.find(function(c){
+      return c.name&&(c.name.toLowerCase()===it.name.toLowerCase()||it.name.toLowerCase().includes(c.name.toLowerCase())||c.name.toLowerCase().includes(it.name.toLowerCase()));
+    });
+    // 2. Find variant-specific tmfId
+    let resolvedTmfId=null;
+    if(catalogItem&&it.variantTitle&&catalogItem.variants&&catalogItem.variants.length){
+      const matchedVariant=catalogItem.variants.find(function(v){
+        const vt=(typeof v==='object'?v.title:v)||'';
+        return vt.toLowerCase()===it.variantTitle.toLowerCase()||vt.toLowerCase().includes(it.variantTitle.toLowerCase())||it.variantTitle.toLowerCase().includes(vt.toLowerCase());
+      });
+      if(matchedVariant&&typeof matchedVariant==='object'&&matchedVariant.tmfId){
+        resolvedTmfId=matchedVariant.tmfId;
+      }
+    }
+    // 3. Fall back to catalog-level tmfId
+    if(!resolvedTmfId&&catalogItem&&catalogItem.tmfId)resolvedTmfId=catalogItem.tmfId;
+    // 4. Fall back to TMF library name-match
+    if(!resolvedTmfId){
+      const fallback=tmfLib.find(t=>t.name.toLowerCase().includes(it.name.split(' ')[0].toLowerCase())||it.name.toLowerCase().includes(t.name.split(' ')[0].toLowerCase()));
+      if(fallback)resolvedTmfId=fallback.id;
+    }
+    const matchTmf=resolvedTmfId?tmfLib.find(t=>t.id===resolvedTmfId):null;
+    const queueLabel=it.variantTitle?(it.name+' — '+it.variantTitle):it.name;
     const newPrintId=uid();
     // Shopify orders → start in QUEUED (move to In Progress after QR scan/ignore)
-    queueItems.push({id:uid(),name:it.name,category:'Other',printer:printerRecords[0]?.name||'X1C',hrs:matchTmf?matchTmf.hrs||0:0,qty:it.qty,priority:'high',orderId,stage:'queued',fromShopify:true,noTmf:!matchTmf,tmfId:matchTmf?matchTmf.id:null,printId:newPrintId,notes:matchTmf?'3MF: '+matchTmf.name:'⚠ No 3MF on file',timestamp:Date.now()});
-    if(matchTmf){prints.push({id:newPrintId,name:it.name,category:'Other',printer:printerRecords[0]?.name||'X1C',hrs:matchTmf.hrs||0,qty:it.qty,filaments:matchTmf.filamentGrams.map(g=>({spoolId:spools[0]?.id||'',grams:g})),notes:'Auto from Shopify '+orderId,tmfName:matchTmf.name,timestamp:Date.now(),status:'printing'});}
+    queueItems.push({id:uid(),name:queueLabel,category:catalogItem?catalogItem.category:'Other',printer:printerRecords[0]?.name||'X1C',hrs:matchTmf?matchTmf.hrs||0:0,qty:it.qty,priority:'high',orderId,stage:'queued',fromShopify:true,noTmf:!matchTmf,tmfId:matchTmf?matchTmf.id:null,printId:newPrintId,notes:matchTmf?'3MF: '+matchTmf.name+(it.variantTitle?' ['+it.variantTitle+']':''):'⚠ No 3MF on file',timestamp:Date.now()});
+    if(matchTmf){prints.push({id:newPrintId,name:queueLabel,category:catalogItem?catalogItem.category:'Other',printer:printerRecords[0]?.name||'X1C',hrs:matchTmf.hrs||0,qty:it.qty,filaments:matchTmf.filamentGrams.map(g=>({spoolId:spools[0]?.id||'',grams:g})),notes:'Auto from Shopify '+orderId,tmfName:matchTmf.name,timestamp:Date.now(),status:'printing'});}
   });
   savePrints();saveQueue();
   initFulfillmentForOrder(orderId,customer,items);saveFulfillment();
@@ -8570,9 +8598,15 @@ function renderCatalog(){
             item.variants.map(v=>{
               const vt=typeof v==='object'?v.title:v;
               const vp=typeof v==='object'&&v.price!=null?v.price:null;
-              return '<div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid var(--bdr)">'+
-                '<span style="font-size:7px;color:var(--txt)">'+esc(vt)+'</span>'+
-                (vp!=null?'<span style="font-size:7px;font-family:Orbitron,monospace;color:var(--grn-b)">$'+parseFloat(vp).toFixed(2)+'</span>':'')+
+              const vtmf=typeof v==='object'&&v.tmfId?tmfLib.find(t=>t.id===v.tmfId):null;
+              return '<div style="padding:4px 0;border-bottom:1px solid var(--bdr)">'+ 
+                '<div style="display:flex;justify-content:space-between;align-items:center">'+
+                  '<span style="font-size:7px;color:var(--txt)">'+esc(vt)+'</span>'+
+                  (vp!=null?'<span style="font-size:7px;font-family:Orbitron,monospace;color:var(--grn-b)">$'+parseFloat(vp).toFixed(2)+'</span>':'')+
+                '</div>'+
+                (vtmf
+                  ?'<div style="font-size:6px;color:var(--org-b);margin-top:2px">📦 '+esc(vtmf.name)+(vtmf.hrs?' · '+formatHms(vtmf.hrs):'')+'</div>'
+                  :'<div style="font-size:6px;color:var(--bdr2);margin-top:2px">No 3MF — edit to link</div>')+
               '</div>';
             }).join('')+
           '</div>':'')+ 
@@ -8586,6 +8620,22 @@ function renderCatalog(){
   }).join('');
 }
 
+let _editingVariants=[];
+function renderVariantRows(variants){
+  _editingVariants=(variants||[]).map(v=>typeof v==='object'?{title:v.title||'',price:v.price!=null?v.price:'',tmfId:v.tmfId||''}:{title:v,price:'',tmfId:''});
+  const wrap=document.getElementById('ec-variants-wrap');
+  const sec=document.getElementById('ec-variants-section');
+  if(!_editingVariants.length){wrap.style.display='none';return;}
+  wrap.style.display='';
+  sec.innerHTML=_editingVariants.map(function(v,i){
+    const selOpts='<option value=""'+(v.tmfId===''?' selected':'')+'>— None —</option>'
+      +tmfLib.map(function(t){return '<option value="'+t.id+'"'+(t.id===v.tmfId?' selected':'')+'>'+esc(t.name)+(t.hrs?' ('+formatHms(t.hrs)+')':'')+'</option>';}).join('');
+    return '<div style="display:flex;align-items:center;gap:6px;padding:5px 0;border-bottom:1px solid var(--bdr)">'
+      +'<span style="font-size:7px;color:var(--txt);flex:0 0 80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+esc(v.title)+'">'+esc(v.title)+'</span>'
+      +'<select id="ec-var-tmf-'+i+'" style="flex:1;background:var(--bg);border:1px solid var(--bdr2);color:var(--txt);padding:4px 6px;font-family:\'Share Tech Mono\',monospace;font-size:7px;border-radius:3px">'+selOpts+'</select>'
+    +'</div>';
+  }).join('');
+}
 function openAddCatalogItem(){
   document.getElementById('catalog-modal-title').textContent='Add Product';
   ['ec-id','ec-name','ec-desc','ec-photo'].forEach(i=>document.getElementById(i).value='');
@@ -8598,6 +8648,7 @@ function openAddCatalogItem(){
   tmfSel.value='';
   document.getElementById('ec-tmf-info').textContent='';
   tmfSel.onchange=()=>updateTmfInfo();
+  renderVariantRows([]);
   // Print profile dropdown
   const sel=document.getElementById('ec-profile');
   sel.innerHTML=`<option value="">— None —</option>`+[...new Set(prints.map(p=>p.name))].map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join('');
@@ -8618,6 +8669,8 @@ function openEditCatalogItem(id){
   tmfSel.innerHTML='<option value="">— None —</option>'+tmfLib.map(t=>'<option value="'+t.id+'"'+(t.id===item.tmfId?' selected':'')+'>'+esc(t.name)+(t.hrs?' ('+formatHms(t.hrs)+')':'')+'</option>').join('');
   tmfSel.onchange=()=>updateTmfInfo();
   updateTmfInfo(item.tmfId);
+  // Variant rows with per-variant 3MF
+  renderVariantRows(item.variants||[]);
   // Print profile
   const sel=document.getElementById('ec-profile');
   sel.innerHTML=`<option value="">— None —</option>`+[...new Set(prints.map(p=>p.name))].map(n=>`<option value="${esc(n)}"${n===item.profile?' selected':''}>${esc(n)}</option>`).join('');
@@ -8637,7 +8690,14 @@ function saveCatalogItem(){
   const name=document.getElementById('ec-name').value.trim();
   if(!name){document.getElementById('ec-name').focus();return;}
   const id=document.getElementById('ec-id').value;
+  const existing=id?(catalogItems.find(x=>x.id===id)||{}):{}; 
+  // Collect variant tmfIds from DOM, merging back into _editingVariants
+  const updatedVariants=_editingVariants.map(function(v,i){
+    const sel=document.getElementById('ec-var-tmf-'+i);
+    return {title:v.title,price:v.price,tmfId:sel?sel.value||null:v.tmfId||null};
+  });
   const item={
+    ...existing,
     id:id||uid(),name,category:document.getElementById('ec-cat').value,
     price:parseFloat(document.getElementById('ec-price').value)||0,
     cost:parseFloat(document.getElementById('ec-cost').value)||0,
@@ -8645,7 +8705,8 @@ function saveCatalogItem(){
     photo:document.getElementById('ec-photo').value.trim(),
     profile:document.getElementById('ec-profile').value,
     tmfId:document.getElementById('ec-tmf').value||null,
-    createdAt:id?(catalogItems.find(x=>x.id===id)||{}).createdAt||Date.now():Date.now()
+    variants:updatedVariants.length?updatedVariants:(existing.variants||[]),
+    createdAt:id?existing.createdAt||Date.now():Date.now()
   };
   if(id){catalogItems=catalogItems.map(x=>x.id===id?item:x);}else{catalogItems.push(item);}
   saveCatalog();closeCatalog();render();
@@ -8687,7 +8748,8 @@ function handlePhotoUpload(id,input){
 }
 function quickQueueFromCatalog(id){
   const item=catalogItems.find(x=>x.id===id);if(!item)return;
-  queueItems.push({id:uid(),name:item.name,category:item.category,printer:printerRecords[0]?.name||'X1C',hrs:0,qty:1,priority:'normal',stage:'queued',timestamp:Date.now(),notes:'From catalogItems'});
+  const tmf=item.tmfId?tmfLib.find(t=>t.id===item.tmfId):null;
+  queueItems.push({id:uid(),name:item.name,category:item.category,printer:printerRecords[0]?.name||'X1C',hrs:tmf?tmf.hrs||0:0,qty:1,priority:'normal',stage:'queued',timestamp:Date.now(),tmfId:item.tmfId||null,notes:tmf?'3MF: '+tmf.name:'From catalog'});
   saveQueue();toast('Added to Queue',item.name,'success');
   navTo('queue',document.getElementById('nav-queue'));
 }
