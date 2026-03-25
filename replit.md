@@ -52,7 +52,7 @@ Every package extends `tsconfig.base.json` which sets `composite: true`. The roo
 
 ### `artifacts/studio-manager` (HypedAnubis3D Studio Manager)
 
-- Vanilla JS single-page app (v19 HTML) served by Vite as a static HTML entry point
+- Vanilla JS single-page app served by Vite as a static HTML entry point
 - No React or Tailwind processing — Vite plugins stripped to avoid CSS transform conflicts with inline `<style>` blocks
 - The `index.html` is the ~9,500-line v19 app with an OAuth integration script injected before `</body>`
 - The injected script overrides `connectShopify`, `disconnectShopify`, `pollShopifyOrders`, and `renderShopify` to use backend routes instead of direct browser API calls
@@ -147,7 +147,9 @@ Single-file HTML PWA for managing a Bambu Lab 3D printing collectibles business 
 - Old `connectSupabase()`/`disconnectSupabase()` functions removed; old manual credential UI removed from Sync tab
 
 **Key patterns:**
-- Use `showConfirm()` not `confirm()`; use `toast()` for notifications
+- Use `showConfirm()` not `confirm()`, `prompt()`, or `alert()`; use `toast()` for notifications
+- `showForgotPassword()` now shows an inline auth form panel (`#auth-form-forgot`) — no `prompt()`
+- Auth inputs are wrapped in `<form onsubmit="event.preventDefault();authSubmit()">` — supports Enter key + password managers
 - No nested backtick template literals
 - No `const _orig = fn; function fn()` override pattern — use `window.fn = ...`
 - OAuth override script re-injected before `</body>` for Shopify/Etsy

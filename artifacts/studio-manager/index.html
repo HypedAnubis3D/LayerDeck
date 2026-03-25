@@ -3,7 +3,8 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>HypedAnubis3D — Studio Manager v19</title>
+<title>HypedAnubis3D — Studio Manager</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='18' fill='%23c9a227'/><text y='.85em' font-size='72' x='14'>🖨</text></svg>"/>
 <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
@@ -1378,31 +1379,45 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
       <button id="auth-tab-signup" onclick="switchAuthTab('signup')" style="flex:1;padding:9px;background:var(--surf2);color:var(--txt-d);font-family:'Orbitron',monospace;font-size:8px;font-weight:700;border:none;cursor:pointer;letter-spacing:1px">CREATE ACCOUNT</button>
     </div>
     <div id="auth-form-login">
+      <form onsubmit="event.preventDefault();authSubmit()" autocomplete="on">
       <div style="margin-bottom:12px">
         <div style="font-size:7px;color:var(--txt-d);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:4px">Email</div>
-        <input type="email" id="auth-email" placeholder="you@email.com" autocomplete="email" style="width:100%;background:var(--surf2);border:1px solid var(--bdr2);color:var(--txt-b);padding:9px 12px;font-family:'Share Tech Mono',monospace;font-size:11px;border-radius:4px"/>
+        <input type="email" id="auth-email" placeholder="you@email.com" autocomplete="email" style="width:100%;background:var(--surf2);border:1px solid var(--bdr2);color:var(--txt-b);padding:9px 12px;font-family:'Share Tech Mono',monospace;font-size:11px;border-radius:4px;box-sizing:border-box"/>
       </div>
       <div style="margin-bottom:16px">
         <div style="font-size:7px;color:var(--txt-d);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:4px">Password</div>
-        <input type="password" id="auth-pass" placeholder="••••••••" autocomplete="current-password" style="width:100%;background:var(--surf2);border:1px solid var(--bdr2);color:var(--txt-b);padding:9px 12px;font-family:'Share Tech Mono',monospace;font-size:11px;border-radius:4px" onkeydown="if(event.key==='Enter')authSubmit()"/>
+        <input type="password" id="auth-pass" placeholder="••••••••" autocomplete="current-password" style="width:100%;background:var(--surf2);border:1px solid var(--bdr2);color:var(--txt-b);padding:9px 12px;font-family:'Share Tech Mono',monospace;font-size:11px;border-radius:4px;box-sizing:border-box"/>
       </div>
       <div id="auth-error" style="display:none;background:var(--red-d);border:1px solid var(--red);border-radius:4px;padding:8px 10px;font-size:8px;color:var(--red-b);margin-bottom:12px"></div>
-      <button onclick="authSubmit()" style="width:100%;padding:11px;background:var(--gold);border:none;color:#000;font-family:'Orbitron',monospace;font-size:9px;font-weight:700;letter-spacing:2px;border-radius:4px;cursor:pointer;margin-bottom:10px">SIGN IN</button>
+      <button type="submit" style="width:100%;padding:11px;background:var(--gold);border:none;color:#000;font-family:'Orbitron',monospace;font-size:9px;font-weight:700;letter-spacing:2px;border-radius:4px;cursor:pointer;margin-bottom:10px">SIGN IN</button>
+      </form>
       <button onclick="signInGoogle()" style="width:100%;padding:10px;background:var(--surf2);border:1px solid var(--bdr2);color:var(--txt-b);font-family:'Share Tech Mono',monospace;font-size:9px;border-radius:4px;cursor:pointer;margin-bottom:14px">Continue with Google</button>
       <button onclick="showForgotPassword()" style="display:block;width:100%;text-align:center;background:none;border:none;color:var(--txt-d);font-size:8px;cursor:pointer;font-family:'Share Tech Mono',monospace">Forgot password?</button>
     </div>
     <div id="auth-form-signup" style="display:none">
+      <form onsubmit="event.preventDefault();authSubmit()" autocomplete="on">
       <div style="margin-bottom:12px">
         <div style="font-size:7px;color:var(--txt-d);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:4px">Email</div>
-        <input type="email" id="auth-su-email" placeholder="you@email.com" autocomplete="email" style="width:100%;background:var(--surf2);border:1px solid var(--bdr2);color:var(--txt-b);padding:9px 12px;font-family:'Share Tech Mono',monospace;font-size:11px;border-radius:4px"/>
+        <input type="email" id="auth-su-email" placeholder="you@email.com" autocomplete="email" style="width:100%;background:var(--surf2);border:1px solid var(--bdr2);color:var(--txt-b);padding:9px 12px;font-family:'Share Tech Mono',monospace;font-size:11px;border-radius:4px;box-sizing:border-box"/>
       </div>
       <div style="margin-bottom:16px">
         <div style="font-size:7px;color:var(--txt-d);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:4px">Password (min 6 chars)</div>
-        <input type="password" id="auth-su-pass" placeholder="••••••••" autocomplete="new-password" style="width:100%;background:var(--surf2);border:1px solid var(--bdr2);color:var(--txt-b);padding:9px 12px;font-family:'Share Tech Mono',monospace;font-size:11px;border-radius:4px" onkeydown="if(event.key==='Enter')authSubmit()"/>
+        <input type="password" id="auth-su-pass" placeholder="••••••••" autocomplete="new-password" style="width:100%;background:var(--surf2);border:1px solid var(--bdr2);color:var(--txt-b);padding:9px 12px;font-family:'Share Tech Mono',monospace;font-size:11px;border-radius:4px;box-sizing:border-box"/>
       </div>
       <div id="auth-su-error" style="display:none;background:var(--red-d);border:1px solid var(--red);border-radius:4px;padding:8px 10px;font-size:8px;color:var(--red-b);margin-bottom:12px"></div>
-      <button onclick="authSubmit()" style="width:100%;padding:11px;background:var(--pur);border:none;color:#fff;font-family:'Orbitron',monospace;font-size:9px;font-weight:700;letter-spacing:2px;border-radius:4px;cursor:pointer;margin-bottom:10px">CREATE ACCOUNT</button>
+      <button type="submit" style="width:100%;padding:11px;background:var(--pur);border:none;color:#fff;font-family:'Orbitron',monospace;font-size:9px;font-weight:700;letter-spacing:2px;border-radius:4px;cursor:pointer;margin-bottom:10px">CREATE ACCOUNT</button>
+      </form>
       <button onclick="signInGoogle()" style="width:100%;padding:10px;background:var(--surf2);border:1px solid var(--bdr2);color:var(--txt-b);font-family:'Share Tech Mono',monospace;font-size:9px;border-radius:4px;cursor:pointer">Continue with Google</button>
+    </div>
+    <div id="auth-form-forgot" style="display:none">
+      <div style="margin-bottom:16px">
+        <div style="font-size:8px;color:var(--txt-b);margin-bottom:12px;line-height:1.6">Enter your email and we'll send you a password reset link.</div>
+        <div style="font-size:7px;color:var(--txt-d);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:4px">Email</div>
+        <input type="email" id="auth-forgot-email" placeholder="you@email.com" autocomplete="email" style="width:100%;background:var(--surf2);border:1px solid var(--bdr2);color:var(--txt-b);padding:9px 12px;font-family:'Share Tech Mono',monospace;font-size:11px;border-radius:4px;box-sizing:border-box" onkeydown="if(event.key==='Enter')authSendReset()"/>
+      </div>
+      <div id="auth-forgot-error" style="display:none;background:var(--red-d);border:1px solid var(--red);border-radius:4px;padding:8px 10px;font-size:8px;color:var(--red-b);margin-bottom:12px"></div>
+      <button onclick="authSendReset()" style="width:100%;padding:11px;background:var(--gold);border:none;color:#000;font-family:'Orbitron',monospace;font-size:9px;font-weight:700;letter-spacing:2px;border-radius:4px;cursor:pointer;margin-bottom:10px">SEND RESET LINK</button>
+      <button onclick="switchAuthTab('login')" style="display:block;width:100%;text-align:center;background:none;border:none;color:var(--txt-d);font-size:8px;cursor:pointer;font-family:'Share Tech Mono',monospace">← Back to Sign In</button>
     </div>
     <div id="auth-loading" style="display:none;text-align:center;padding:30px">
       <div style="font-family:'Orbitron',monospace;font-size:9px;color:var(--gold-b);letter-spacing:2px">AUTHENTICATING…</div>
@@ -4595,7 +4610,6 @@ function renderStatBar(){
 }
 
 // ════════ RENDER EXTENSION ════════
-const _origRender=render;
 function render(){
   renderStatBar();
   if(curTab==='dashboard')  renderDashboard();
@@ -7056,16 +7070,19 @@ function hideAuthScreen(){
 function switchAuthTab(tab){
   authMode=tab;
   const isLogin=tab==='login';
-  document.getElementById('auth-form-login').style.display=isLogin?'block':'none';
-  document.getElementById('auth-form-signup').style.display=isLogin?'none':'block';
+  const isForgot=tab==='forgot';
+  document.getElementById('auth-form-login').style.display=(isLogin&&!isForgot)?'block':'none';
+  document.getElementById('auth-form-signup').style.display=tab==='signup'?'block':'none';
+  document.getElementById('auth-form-forgot').style.display=isForgot?'block':'none';
   document.getElementById('auth-loading').style.display='none';
   const tl=document.getElementById('auth-tab-login');
   const ts=document.getElementById('auth-tab-signup');
   if(tl){tl.style.background=isLogin?'var(--gold)':'var(--surf2)';tl.style.color=isLogin?'#000':'var(--txt-d)';}
-  if(ts){ts.style.background=isLogin?'var(--surf2)':'var(--pur)';ts.style.color=isLogin?'var(--txt-d)':'#fff';}
+  if(ts){ts.style.background=(tab==='signup')?'var(--pur)':'var(--surf2)';ts.style.color=(tab==='signup')?'#fff':'var(--txt-d)';}
+  if(isForgot){if(tl){tl.style.background='var(--surf2)';tl.style.color='var(--txt-d)';}}
 }
 function setAuthError(msg){
-  const el=document.getElementById(authMode==='login'?'auth-error':'auth-su-error');
+  const el=document.getElementById(authMode==='login'?'auth-error':(authMode==='signup'?'auth-su-error':'auth-forgot-error'));
   if(!el)return;
   el.textContent=msg||'';
   el.style.display=msg?'block':'none';
@@ -7074,9 +7091,30 @@ function showAuthLoading(show){
   const ld=document.getElementById('auth-loading');
   const fl=document.getElementById('auth-form-login');
   const fs=document.getElementById('auth-form-signup');
+  const ff=document.getElementById('auth-form-forgot');
   if(ld)ld.style.display=show?'block':'none';
   if(fl)fl.style.display=show?'none':(authMode==='login'?'block':'none');
   if(fs)fs.style.display=show?'none':(authMode==='signup'?'block':'none');
+  if(ff)ff.style.display=show?'none':(authMode==='forgot'?'block':'none');
+}
+async function showForgotPassword(){switchAuthTab('forgot');}
+async function authSendReset(){
+  const emailEl=document.getElementById('auth-forgot-email');
+  const email=(emailEl?.value||'').trim();
+  if(!email){
+    const err=document.getElementById('auth-forgot-error');
+    if(err){err.textContent='Please enter your email.';err.style.display='block';}
+    return;
+  }
+  document.getElementById('auth-forgot-error').style.display='none';
+  const{error}=await supabaseClient.auth.resetPasswordForEmail(email);
+  if(error){
+    const err=document.getElementById('auth-forgot-error');
+    if(err){err.textContent=error.message;err.style.display='block';}
+  } else {
+    toast('Email Sent','Check your inbox for a reset link','success');
+    switchAuthTab('login');
+  }
 }
 async function authSubmit(){
   const isLogin=authMode==='login';
@@ -7122,13 +7160,6 @@ function signOutUser(){
   if(supabaseClient){supabaseClient.auth.signOut().catch(()=>{});}
   setTimeout(()=>{signingOut=false;},3000);
   toast('Signed out','See you next time!','success',3000);
-}
-async function showForgotPassword(){
-  const email=prompt('Enter your email:');
-  if(!email)return;
-  const{error}=await supabaseClient.auth.resetPasswordForEmail(email);
-  if(error)toast('Error',error.message,'error');
-  else toast('Email Sent','Check your inbox for a reset link','success');
 }
 
 // ── INIT SUPABASE (auto from env vars) ──
@@ -7278,8 +7309,20 @@ async function pullFromCloud(silent=false){
       try{
         const parsed=JSON.parse(row.payload);
         if(Array.isArray(parsed)){
-          eval(row.collection+'=parsed');
-          ss(KEYS[row.collection]||('ha3d_'+row.collection+'_v1'),parsed);
+          const c=row.collection;
+          if(c==='spools')spools=parsed;
+          else if(c==='prints')prints=parsed;
+          else if(c==='queueItems')queueItems=parsed;
+          else if(c==='orders')orders=parsed;
+          else if(c==='sales')sales=parsed;
+          else if(c==='usageHist')usageHist=parsed;
+          else if(c==='shinyRolls')shinyRolls=parsed;
+          else if(c==='maintLog')maintLog=parsed;
+          else if(c==='wasteLog')wasteLog=parsed;
+          else if(c==='printerRecords')printerRecords=parsed;
+          else if(c==='tmfLib')tmfLib=parsed;
+          else if(c==='catalogItems')catalogItems=parsed;
+          ss(KEYS[c]||('ha3d_'+c+'_v1'),parsed);
           pulled++;
         }
       }catch(e){console.warn('Parse error for',row.collection,e);}
