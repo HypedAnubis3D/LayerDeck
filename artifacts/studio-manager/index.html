@@ -596,7 +596,6 @@ input.srch::placeholder{color:var(--txt-d);}
 .nav-item.active::before{content:'';position:absolute;left:8px;top:50%;transform:translateY(-50%);width:3px;height:16px;background:var(--gold);border-radius:2px;}
 .nav-icon{font-size:12px;flex-shrink:0;}
 .nav-label{flex:1;font-size:8px;}
-.nav-shortcut{font-size:6px;color:var(--bdr2);margin-left:auto;background:var(--bg);border:1px solid var(--bdr);padding:1px 4px;border-radius:2px;}
 .nav-badge{background:var(--red);color:#fff;font-size:6px;padding:1px 4px;border-radius:8px;min-width:12px;text-align:center;margin-left:auto;display:none;}
 .nav-badge.show{display:block;}
 .sb-section{margin-bottom:2px;}
@@ -615,7 +614,6 @@ input.srch::placeholder{color:var(--txt-d);}
 .nav-label{flex:1;}
 .nav-badge{background:var(--red);color:#fff;font-size:6px;padding:1px 5px;border-radius:10px;font-weight:bold;display:none;margin-left:auto;}
 .nav-badge.show{display:inline-block;}
-.nav-shortcut{font-size:6px;color:var(--bdr2);font-family:'Share Tech Mono',monospace;margin-left:auto;}
 .sidebar-footer{padding:10px 14px;border-top:1px solid var(--bdr);flex-shrink:0;font-size:6px;color:var(--txt-d);letter-spacing:1px;}
 
 /* ──────────────────────────────
@@ -713,21 +711,6 @@ header{
    SPARKLINE
 ──────────────────────────────── */
 .sparkline{width:100%;height:36px;display:block;}
-
-/* ──────────────────────────────
-   KEYBOARD SHORTCUT GUIDE
-──────────────────────────────── */
-.kb-overlay{position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:280;display:none;align-items:center;justify-content:center;backdrop-filter:blur(5px);}
-.kb-overlay.open{display:flex;}
-.kb-modal{background:var(--surf);border:1px solid var(--bdr2);border-radius:8px;padding:24px;width:500px;max-width:92vw;box-shadow:0 20px 60px rgba(0,0,0,.8);}
-.kb-title{font-family:'Orbitron',monospace;font-size:9px;color:var(--gold-b);letter-spacing:3px;margin-bottom:4px;}
-.kb-sub{font-size:7px;color:var(--txt-d);margin-bottom:16px;}
-.kb-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px;}
-.kb-section-label{font-size:6px;color:var(--gold-dim);letter-spacing:2px;text-transform:uppercase;padding:8px 0 3px;grid-column:1/-1;border-bottom:1px solid var(--bdr);}
-.kb-row{display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid var(--bdr);font-size:8px;}
-.kb-row:last-child{border-bottom:none;}
-.kb-key{background:var(--surf3);border:1px solid var(--bdr2);color:var(--gold);padding:2px 7px;border-radius:3px;font-family:'Share Tech Mono',monospace;font-size:8px;font-weight:bold;flex-shrink:0;min-width:28px;text-align:center;}
-.kb-desc{color:var(--txt-d);}
 
 /* sbar */
 .sbar{display:grid;grid-template-columns:repeat(8,1fr);border-bottom:1px solid var(--bdr);}
@@ -907,8 +890,6 @@ body.light-mode ::-webkit-scrollbar-thumb{background:var(--bdr2);}
   .toast-container{right:10px;left:10px;max-width:100%;}
   /* Sidebar overlay closes on tap */
   .sidebar-overlay{display:block;}
-  /* Hide keyboard shortcuts on mobile */
-  .nav-shortcut{display:none;}
 }
 @media(max-width:480px){
   .dash-grid{grid-template-columns:1fr 1fr!important;}
@@ -1425,34 +1406,6 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
   </div>
 </div>
 
-<!-- KEYBOARD SHORTCUT GUIDE -->
-<div class="kb-overlay" id="kb-overlay" onclick="if(event.target.id==='kb-overlay')closeKbGuide()">
-  <div class="kb-modal">
-    <div class="kb-title">⌨ Keyboard Shortcuts</div>
-    <div class="kb-sub">Press <span style="color:var(--gold)">?</span> anytime · <span style="color:var(--gold)">Esc</span> to close</div>
-    <div class="kb-grid">
-      <div class="kb-section-label">Navigation</div>
-      <div class="kb-row"><span class="kb-key">D</span><span class="kb-desc">Dashboard</span></div>
-      <div class="kb-row"><span class="kb-key">S</span><span class="kb-desc">Spools</span></div>
-      <div class="kb-row"><span class="kb-key">P</span><span class="kb-desc">Prints</span></div>
-      <div class="kb-row"><span class="kb-key">Q</span><span class="kb-desc">Queue</span></div>
-      <div class="kb-row"><span class="kb-key">O</span><span class="kb-desc">Orders</span></div>
-      <div class="kb-row"><span class="kb-key">R</span><span class="kb-desc">Revenue</span></div>
-      <div class="kb-row"><span class="kb-key">C</span><span class="kb-desc">Customers</span></div>
-      <div class="kb-row"><span class="kb-key">M</span><span class="kb-desc">Maintenance</span></div>
-      <div class="kb-section-label">Actions</div>
-      <div class="kb-row"><span class="kb-key">N</span><span class="kb-desc">New Print</span></div>
-      <div class="kb-row"><span class="kb-key">A</span><span class="kb-desc">Add Spool</span></div>
-      <div class="kb-row"><span class="kb-key">B</span><span class="kb-desc">Backup</span></div>
-      <div class="kb-row"><span class="kb-key">\</span><span class="kb-desc">Toggle Sidebar</span></div>
-      <div class="kb-section-label">App</div>
-      <div class="kb-row"><span class="kb-key">Esc</span><span class="kb-desc">Close modals</span></div>
-      <div class="kb-row"><span class="kb-key">?</span><span class="kb-desc">This guide</span></div>
-    </div>
-    <div style="text-align:right;margin-top:14px"><button class="btn btn-ghost btn-sm" onclick="closeKbGuide()">Close</button></div>
-  </div>
-</div>
-
 <!-- SIDEBAR OVERLAY -->
 <div class="sidebar-overlay" id="sidebar-overlay" onclick="closeSidebar()"></div>
 
@@ -1466,7 +1419,7 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
 
     <!-- DASHBOARD — standalone, always visible -->
     <div style="padding:6px 8px 4px">
-      <button class="nav-item active" id="nav-dashboard" onclick="navTo('dashboard',this)" style="padding:8px 12px;border-radius:5px;background:rgba(201,162,39,.06);border:1px solid rgba(201,162,39,.15)"><span class="nav-icon">🏛</span><span class="nav-label" style="font-size:9px;font-weight:bold;color:var(--gold-dim)">Dashboard</span><span class="nav-shortcut">D</span></button>
+      <button class="nav-item active" id="nav-dashboard" onclick="navTo('dashboard',this)" style="padding:8px 12px;border-radius:5px;background:rgba(201,162,39,.06);border:1px solid rgba(201,162,39,.15)"><span class="nav-icon">🏛</span><span class="nav-label" style="font-size:9px;font-weight:bold;color:var(--gold-dim)">Dashboard</span></button>
     </div>
 
     <!-- PRODUCTION -->
@@ -1477,9 +1430,9 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
         <span class="sb-group-chevron">▾</span>
       </div>
       <div class="sb-group-body">
-        <button class="nav-item" id="nav-prints" onclick="navTo('prints',this)"><span class="nav-icon">🖨</span><span class="nav-label">Prints</span><span class="nav-shortcut">P</span></button>
+        <button class="nav-item" id="nav-prints" onclick="navTo('prints',this)"><span class="nav-icon">🖨</span><span class="nav-label">Prints</span></button>
         <button class="nav-item" id="nav-tmf" onclick="navTo('tmf',this)"><span class="nav-icon">📦</span><span class="nav-label">3MF Library</span></button>
-        <button class="nav-item" id="nav-queue" onclick="navTo('queue',this)"><span class="nav-icon">📋</span><span class="nav-label">Queue</span><span class="nav-badge" id="nav-badge-queue">!</span><span class="nav-shortcut">Q</span></button>
+        <button class="nav-item" id="nav-queue" onclick="navTo('queue',this)"><span class="nav-icon">📋</span><span class="nav-label">Queue</span><span class="nav-badge" id="nav-badge-queue">!</span></button>
       </div>
     </div>
 
@@ -1492,8 +1445,8 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
         <span class="sb-group-chevron">▾</span>
       </div>
       <div class="sb-group-body">
-        <button class="nav-item" id="nav-orders" onclick="navTo('orders',this)"><span class="nav-icon">📬</span><span class="nav-label">Orders</span><span class="nav-badge" id="nav-badge-orders">!</span><span class="nav-shortcut">O</span></button>
-        <button class="nav-item" id="nav-customers" onclick="navTo('customers',this)"><span class="nav-icon">👥</span><span class="nav-label">Customers</span><span class="nav-shortcut">C</span></button>
+        <button class="nav-item" id="nav-orders" onclick="navTo('orders',this)"><span class="nav-icon">📬</span><span class="nav-label">Orders</span><span class="nav-badge" id="nav-badge-orders">!</span></button>
+        <button class="nav-item" id="nav-customers" onclick="navTo('customers',this)"><span class="nav-icon">👥</span><span class="nav-label">Customers</span></button>
         <button class="nav-item" id="nav-mystery" onclick="navTo('mystery',this)"><span class="nav-icon">🎁</span><span class="nav-label">Mystery Prints</span><span class="nav-badge" id="nav-badge-mystery"></span></button>
         <button class="nav-item" id="nav-reviews" onclick="navTo('reviews',this)"><span class="nav-icon">🌟</span><span class="nav-label">Reviews</span></button>
         <button class="nav-item" id="nav-shiny" onclick="navTo('shiny',this)"><span class="nav-icon">✨</span><span class="nav-label">Shiny Tracker</span></button>
@@ -1508,7 +1461,7 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
         <span class="sb-group-chevron">▾</span>
       </div>
       <div class="sb-group-body">
-        <button class="nav-item" id="nav-revenue" onclick="navTo('revenue',this)"><span class="nav-icon">💰</span><span class="nav-label">Revenue, Tax & Power</span><span class="nav-shortcut">R</span></button>
+        <button class="nav-item" id="nav-revenue" onclick="navTo('revenue',this)"><span class="nav-icon">💰</span><span class="nav-label">Revenue, Tax & Power</span></button>
         <button class="nav-item" id="nav-catalog" onclick="navTo('catalog',this)"><span class="nav-icon">🏪</span><span class="nav-label">Product Catalog</span></button>
         <button class="nav-item" id="nav-convention" onclick="navTo('convention',this)"><span class="nav-icon">🎪</span><span class="nav-label">Conventions</span></button>
         <button class="nav-item" id="nav-priceengine" onclick="navTo('priceengine',this)"><span class="nav-icon">🤖</span><span class="nav-label">Price AI</span></button>
@@ -1524,10 +1477,10 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
       </div>
       <div class="sb-group-body">
         <button class="nav-item" id="nav-printers" onclick="navTo('printers',this)"><span class="nav-icon">🖨</span><span class="nav-label">Printers</span></button>
-        <button class="nav-item" id="nav-spools" onclick="navTo('spools',this)"><span class="nav-icon">🧵</span><span class="nav-label">Spools</span><span class="nav-shortcut">S</span></button>
+        <button class="nav-item" id="nav-spools" onclick="navTo('spools',this)"><span class="nav-icon">🧵</span><span class="nav-label">Spools</span></button>
         <button class="nav-item" id="nav-fildb" onclick="navTo('fildb',this)"><span class="nav-icon">🗄</span><span class="nav-label">Filament Database</span></button>
         <button class="nav-item" id="nav-drying" onclick="navTo('drying',this)"><span class="nav-icon">🌡</span><span class="nav-label">Dry Scheduler</span></button>
-        <button class="nav-item" id="nav-maint" onclick="navTo('maint',this)"><span class="nav-icon">🔧</span><span class="nav-label">Maintenance & Nozzles</span><span class="nav-shortcut">M</span></button>
+        <button class="nav-item" id="nav-maint" onclick="navTo('maint',this)"><span class="nav-icon">🔧</span><span class="nav-label">Maintenance & Nozzles</span></button>
         <button class="nav-item" id="nav-purchases" onclick="navTo('purchases',this)"><span class="nav-icon">🛍</span><span class="nav-label">Fil. Purchases</span></button>
         <button class="nav-item" id="nav-shipping" onclick="navTo('shipping',this)"><span class="nav-icon">📬</span><span class="nav-label">Shipping</span></button>
         <button class="nav-item" id="nav-forecast" onclick="navTo('forecast',this)"><span class="nav-icon">📈</span><span class="nav-label">Forecast</span></button>
@@ -1548,7 +1501,7 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
         <button class="nav-item" id="nav-sync" onclick="navTo('sync',this)"><span class="nav-icon">☁</span><span class="nav-label">Sync</span></button>
         <button class="nav-item" id="nav-history" onclick="navTo('history',this)"><span class="nav-icon">📜</span><span class="nav-label">History</span></button>
         <button class="nav-item" id="nav-stats" onclick="navTo('stats',this)"><span class="nav-icon">📊</span><span class="nav-label">Stats</span></button>
-        <button class="nav-item" id="nav-backup" onclick="navTo('backup',this)"><span class="nav-icon">💾</span><span class="nav-label">Backup</span><span class="nav-shortcut">B</span></button>
+        <button class="nav-item" id="nav-backup" onclick="navTo('backup',this)"><span class="nav-icon">💾</span><span class="nav-label">Backup</span></button>
         <button class="nav-item" id="nav-labels" onclick="navTo('labels',this)"><span class="nav-icon">🏷</span><span class="nav-label">Labels</span></button>
       </div>
     </div>
@@ -1595,7 +1548,6 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
       </div>
     </div>
     <button class="theme-toggle" id="theme-toggle-btn" onclick="toggleTheme()" title="Toggle light/dark mode">🌙</button>
-    <button class="btn btn-ghost btn-sm" onclick="openKbGuide()" title="Keyboard shortcuts">⌨ ?</button>
   </div>
 </header>
 
@@ -5310,37 +5262,12 @@ function showNotification(title,text,orderId){
 }
 
 // ════════════════════════════════════════
-// KEYBOARD SHORTCUTS
+// ESCAPE KEY — close any open overlay
 // ════════════════════════════════════════
-function openKbGuide(){document.getElementById('kb-overlay').classList.add('open');}
-function closeKbGuide(){document.getElementById('kb-overlay').classList.remove('open');}
 document.addEventListener('keydown',e=>{
-  // Ignore if typing in an input
-  const tag=(e.target.tagName||'').toLowerCase();
-  if(tag==='input'||tag==='textarea'||tag==='select')return;
-  // Ignore if modal is open
-  const anyOpen=[...document.querySelectorAll('.overlay')].some(el=>el.style.display!=='none');
-  if(anyOpen&&e.key!=='Escape')return;
-  switch(e.key){
-    case '?': openKbGuide(); break;
-    case 'Escape':
-      closeKbGuide();
-      document.querySelectorAll('.overlay').forEach(el=>{if(el.style.display!=='none')el.style.display='none';});
-      document.getElementById('kb-overlay').classList.remove('open');
-      if(finOutcome!==undefined)finOutcome=null;
-      break;
-    case '\\': toggleSidebar(); break;
-    case 'd': case 'D': navTo('dashboard'); break;
-    case 's': case 'S': navTo('spools'); break;
-    case 'p': case 'P': navTo('prints'); break;
-    case 'q': case 'Q': navTo('queue'); break;
-    case 'o': case 'O': navTo('orders'); break;
-    case 'r': case 'R': navTo('revenue'); break;
-    case 'c': case 'C': navTo('customers'); break;
-    case 'm': case 'M': navTo('maint'); break;
-    case 'n': case 'N': if(curTab==='prints')openAddPrint(); break;
-    case 'a': case 'A': if(curTab==='spools')openAddSpool(); break;
-    case 'b': case 'B': navTo('backup'); break;
+  if(e.key==='Escape'){
+    document.querySelectorAll('.overlay').forEach(el=>{if(el.style.display!=='none')el.style.display='none';});
+    if(finOutcome!==undefined)finOutcome=null;
   }
 });
 
