@@ -3823,10 +3823,10 @@ function renderShopify(){
       +'<div class="connect-steps">'
         +'<div class="step-title">One-time setup in your Dev Dashboard</div>'
         +'<div class="step-row"><div class="step-num">1</div><div class="step-text"><a href="https://dev.shopify.com" target="_blank" rel="noopener" style="color:var(--shopify)">Open dev.shopify.com</a> → select your <b>Studio Manager</b> app</div></div>'
-        +'<div class="step-row"><div class="step-num">2</div><div class="step-text">Sidebar → <b>Configuration</b> → <b>Admin API integration</b> → click <b>Configure</b><br>Enable: <code>read_products</code> <code>read_orders</code> <code>read_inventory</code> → <b>Save</b></div></div>'
+        +'<div class="step-row"><div class="step-num">2</div><div class="step-text">Sidebar → <b>Configuration</b> → <b>Admin API integration</b> → click <b>Configure</b><br>Enable: <code>read_products</code> <code>read_orders</code> <code>read_inventory</code> <code>read_customers</code> → <b>Save</b></div></div>'
         +'<div class="step-row"><div class="step-num">3</div><div class="step-text">Sidebar → <b>Settings</b> → copy your <b>Client ID</b> and click <b>👁</b> to reveal your <b>Client Secret</b></div></div>'
         +'<div class="step-row"><div class="step-num">4</div><div class="step-text">Sidebar → <b>Configuration</b> → scroll to <b>URLs</b> → add to <b>Allowed redirect URLs</b>:<br><code style="font-size:6px;word-break:break-all">https://532b18cb-ebe8-4a79-931f-6a9ccf745bb5-00-23gio08zls740.spock.replit.dev/api/shopify/oauth/callback</code></div></div>'
-        +'<div class="step-row"><div class="step-num">5</div><div class="step-text">Paste Client ID + Secret below → click <b>Connect with Shopify</b></div></div>'
+        +'<div class="step-row"><div class="step-num">5</div><div class="step-text">Paste Client ID + Secret below → click <b>Connect with Shopify</b><br><span style="color:var(--txt-d)">A new browser tab will open for Shopify authorization — authorize then close it.</span></div></div>'
       +'</div>'
       +'<div class="connect-form">'
         +'<div class="connect-form-title">Your App Credentials</div>'
@@ -5025,8 +5025,13 @@ async function connectShopify(){
       if(btn){btn.disabled=false;btn.textContent='🛍 Connect with Shopify';}
       return;
     }
-    if(statusEl)statusEl.textContent='✓ Redirecting to Shopify for authorization…';
-    setTimeout(function(){window.location.href=data.authUrl;},400);
+    if(statusEl)statusEl.textContent='✓ Shopify auth opened in a new tab — authorize the app there…';
+    // Must open in a new tab because Shopify blocks iframe embedding
+    var oauthWin=window.open(data.authUrl,'_blank');
+    if(!oauthWin){
+      // Popup blocked — fall back to current tab
+      window.location.href=data.authUrl;
+    }
   }catch(e){
     if(statusEl)statusEl.textContent='✗ Network error — check connection';
     if(btn){btn.disabled=false;btn.textContent='🛍 Connect with Shopify';}
@@ -5130,6 +5135,13 @@ function checkShopifyOAuthCallback(){
   if(params.get('shopify_connected')==='true'){
     const shop=params.get('shop')||'your store';
     window.history.replaceState({},'',window.location.pathname);
+    // If this is the OAuth popup tab, signal the opener and close
+    if(window.opener&&!window.opener.closed){
+      window.opener.postMessage({type:'shopify_oauth_complete',shop:shop},'*');
+      setTimeout(function(){window.close();},300);
+      return;
+    }
+    // Otherwise handle inline (direct navigation fallback)
     shopifyCfg.domain=shop;shopifyCfg.connected=true;shopifyCfg.lastPoll=null;
     saveShopify();
     setTimeout(function(){
@@ -5140,9 +5152,30 @@ function checkShopifyOAuthCallback(){
   }else if(params.get('shopify_error')==='true'){
     var msg=params.get('error_message')||'Connection failed. Please try again.';
     window.history.replaceState({},'',window.location.pathname);
+    // If popup, signal error to opener and close
+    if(window.opener&&!window.opener.closed){
+      window.opener.postMessage({type:'shopify_oauth_error',message:decodeURIComponent(msg.replace(/\+/g,' '))},'*');
+      setTimeout(function(){window.close();},300);
+      return;
+    }
     setTimeout(function(){toast('Shopify Error',decodeURIComponent(msg.replace(/\+/g,' ')),'error');},400);
   }
 }
+// Listen for postMessage from the OAuth popup tab
+window.addEventListener('message',function(e){
+  if(!e.data||typeof e.data!=='object')return;
+  if(e.data.type==='shopify_oauth_complete'){
+    var shop=e.data.shop||'your store';
+    shopifyCfg.domain=shop;shopifyCfg.connected=true;shopifyCfg.lastPoll=null;
+    saveShopify();render();
+    toast('Shopify Connected!','Store '+shop+' connected. Syncing now.','success');
+    startPolling();pollShopifyOrders();
+  }else if(e.data.type==='shopify_oauth_error'){
+    toast('Shopify Error',e.data.message||'Connection failed.','error');
+    var btn=document.querySelector('.btn-shopify');
+    if(btn){btn.disabled=false;btn.textContent='🛍 Connect with Shopify';}
+  }
+});
 
 function connectEtsy(){
   const domain=document.getElementById('etsy-domain-input')?.value?.trim();

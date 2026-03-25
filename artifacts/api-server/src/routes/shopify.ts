@@ -10,13 +10,18 @@ import { eq } from "drizzle-orm";
 const router: IRouter = Router();
 
 const SCOPES =
-  "read_products,read_orders,read_inventory,write_orders,read_customers";
+  "read_products,read_orders,read_inventory,read_customers";
 
-function getRedirectUri(req: Request): string {
-  return (
-    process.env.SHOPIFY_REDIRECT_URI ||
-    `${req.protocol}://${req.get("host")}/api/shopify/oauth/callback`
-  );
+function getRedirectUri(_req: Request): string {
+  if (process.env.SHOPIFY_REDIRECT_URI) return process.env.SHOPIFY_REDIRECT_URI;
+  // Use Replit's dev domain (always HTTPS) when available
+  if (process.env.REPLIT_DEV_DOMAIN) {
+    return `https://${process.env.REPLIT_DEV_DOMAIN}/api/shopify/oauth/callback`;
+  }
+  // Fallback: derive from request (works behind a correctly configured proxy)
+  const proto = _req.get("x-forwarded-proto") || _req.protocol || "https";
+  const host = _req.get("x-forwarded-host") || _req.get("host") || "";
+  return `${proto}://${host}/api/shopify/oauth/callback`;
 }
 
 /** Resolve OAuth credentials: prefer env vars, fall back to DB-stored config. */
@@ -81,7 +86,7 @@ router.post(
     authUrl.searchParams.set("redirect_uri", redirectUri);
     authUrl.searchParams.set("state", state);
 
-    req.log.info({ shop }, "Shopify OAuth flow initiated via stored credentials");
+    req.log.info({ shop, redirectUri }, "Shopify OAuth flow initiated via stored credentials");
     res.json({ authUrl: authUrl.toString(), shop });
   }
 );
