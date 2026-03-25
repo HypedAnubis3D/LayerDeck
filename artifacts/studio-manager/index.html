@@ -1709,6 +1709,12 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
     </select>
     <span class="cnt" id="or-cnt"></span>
   </div>
+  <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">
+    <button id="orf-all"     class="btn btn-sm cat-filter-active" onclick="setOrderFilter('all')">All</button>
+    <button id="orf-shopify" class="btn btn-sm" onclick="setOrderFilter('shopify')" style="border-color:rgba(149,191,71,.4);color:#95BF47">🛍 Shopify</button>
+    <button id="orf-etsy"    class="btn btn-sm" onclick="setOrderFilter('etsy')"    style="border-color:rgba(240,112,40,.4);color:#F17022">🟠 Etsy</button>
+    <button id="orf-manual"  class="btn btn-sm" onclick="setOrderFilter('manual')"  style="border-color:var(--bdr2);color:var(--txt-d)">✏ Manual</button>
+  </div>
   <div class="orders-grid" id="orders-grid"></div>
 </div>
 
@@ -3734,12 +3740,18 @@ function renderOrders(){
   const q=(document.getElementById('or-s')?.value||'').toLowerCase();
   const st=document.getElementById('or-st')?.value||'';
   let list=[...orders];
-  if(q)list=list.filter(o=>(o.customer||'').toLowerCase().includes(q)||(o.orderId||'').toLowerCase().includes(q)||(o.platform||'').toLowerCase().includes(q));
-  if(st)list=list.filter(o=>o.status===st);
-  list.sort((a,b)=>(b.timestamp||0)-(a.timestamp||0));
+  if(q)list=list.filter(function(o){return (o.customer||'').toLowerCase().includes(q)||(o.orderId||'').toLowerCase().includes(q)||(o.platform||'').toLowerCase().includes(q);});
+  if(st)list=list.filter(function(o){return o.status===st;});
+  // Platform filter
+  const isShopify=function(o){return o.fromShopify||(o.platform||'').toLowerCase()==='shopify';};
+  const isEtsy=function(o){return o.fromEtsy||(o.platform||'').toLowerCase()==='etsy';};
+  if(orderFilter==='shopify') list=list.filter(isShopify);
+  else if(orderFilter==='etsy') list=list.filter(isEtsy);
+  else if(orderFilter==='manual') list=list.filter(function(o){return !isShopify(o)&&!isEtsy(o);});
+  list.sort(function(a,b){return (b.timestamp||0)-(a.timestamp||0);});
   if(cnt)cnt.textContent=list.length+' order'+(list.length!==1?'s':'');
   if(!list.length){
-    grid.innerHTML='<div style="grid-column:1/-1;text-align:center;padding:30px;color:var(--txt-d);font-size:8px">'+(q||st?'No orders match your filter.':'No orders yet. Add your first order above.')+'</div>';
+    grid.innerHTML='<div style="grid-column:1/-1;text-align:center;padding:30px;color:var(--txt-d);font-size:8px">'+(q||st||orderFilter!=='all'?'No orders match your filter.':'No orders yet. Add your first order above.')+'</div>';
     return;
   }
   const STATUS_COLOR={pending:'var(--amb)',printing:'var(--cyn)',shipped:'var(--grn)',cancelled:'var(--red)'};
@@ -3748,15 +3760,23 @@ function renderOrders(){
     var itemsText=(o.items||[]).map(function(i){return esc(i.name)+(i.qty>1?' ×'+i.qty:'');}).join(', ');
     var statusColor=STATUS_COLOR[o.status]||'var(--txt-d)';
     var sel=selectedIds.includes(o.id);
-    return '<div class="order-card'+(o.fromShopify?' from-shopify':'')+(sel?' selected':'')+'" data-selid="'+o.id+'" onclick="if(selectMode===\'orders\')toggleSelect(\''+o.id+'\')">'
+    var shopify=isShopify(o), etsy=isEtsy(o);
+    var platformBadge=shopify
+      ?'<span class="uorder-platform up-shopify">🛍 Shopify</span>'
+      :etsy
+        ?'<span class="uorder-platform up-etsy">🟠 Etsy</span>'
+        :'<span class="uorder-platform" style="background:var(--bdr);color:var(--txt-d);border:1px solid var(--bdr2)">✏ Manual</span>';
+    var borderAccent=shopify?'var(--shopify)':etsy?'#e07828':'var(--bdr)';
+    return '<div class="order-card'+(sel?' selected':'')+'" data-selid="'+o.id+'" style="border-top:2px solid '+borderAccent+'" onclick="if(selectMode===\'orders\')toggleSelect(\''+o.id+'\')">'
       +'<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">'
-        +'<div>'
+        +'<div style="flex:1;min-width:0">'
+          +'<div style="display:flex;align-items:center;gap:5px;margin-bottom:2px">'+platformBadge+'</div>'
           +'<div style="font-weight:bold;font-size:9px">'+esc(o.customer)+'</div>'
-          +'<div style="font-size:7px;color:var(--txt-d)">'+(o.orderId||'')+(o.platform?' · '+esc(o.platform):'')+(o.date?' · '+esc(o.date):'')+'</div>'
+          +'<div style="font-size:7px;color:var(--txt-d)">'+(o.orderId||'')+(o.date?' · '+esc(o.date):'')+'</div>'
         +'</div>'
-        +'<div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">'
+        +'<div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;margin-left:8px">'
           +'<span style="font-size:8px;color:'+statusColor+';font-weight:bold;text-transform:uppercase">'+esc(o.status||'pending')+'</span>'
-          +'<span style="font-size:9px;font-weight:bold">$'+total.toFixed(2)+'</span>'
+          +'<span style="font-size:9px;font-weight:bold;font-family:Orbitron,monospace">$'+total.toFixed(2)+'</span>'
         +'</div>'
       +'</div>'
       +(itemsText?'<div style="font-size:7px;color:var(--txt-d);margin-bottom:6px">'+itemsText+'</div>':'')
@@ -8704,6 +8724,15 @@ Object.assign(TAB_NAMES,{
 ALL_TABS.push('catalog','nozzle','splitter','purchases','shipping','tax');
 
 let catalogItems=[],nozzleLog=[],purchases=[],shippingLog=[];
+let orderFilter='all';
+function setOrderFilter(f){
+  orderFilter=f;
+  ['all','shopify','etsy','manual'].forEach(function(k){
+    const btn=document.getElementById('orf-'+k);
+    if(btn) btn.classList.toggle('cat-filter-active',k===f);
+  });
+  renderOrders();
+}
 let catalogFilter='all';
 function setCatalogFilter(f){
   catalogFilter=f;
