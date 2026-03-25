@@ -1080,6 +1080,18 @@ body.light-mode ::-webkit-scrollbar-thumb{background:var(--bdr2);}
 .break-even-bar{height:10px;border-radius:5px;background:var(--bg);border:1px solid var(--bdr2);overflow:hidden;margin:4px 0;}
 .break-even-fill{height:100%;border-radius:5px;transition:width .5s;}
 .catalog-picker-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;margin-top:10px;max-height:55vh;overflow-y:auto;}
+.stock-row{display:flex;align-items:center;gap:4px;margin-bottom:6px;}
+.stock-badge{font-size:7px;font-weight:bold;font-family:'Orbitron',monospace;padding:2px 7px;border-radius:3px;background:var(--bg);border:1px solid var(--bdr2);color:var(--txt-d);}
+.stock-badge.in-stock{background:var(--grn-d);border-color:var(--grn);color:var(--grn-b);}
+.stock-badge.low-stock{background:var(--red-d);border-color:var(--red);color:var(--red-b);animation:pulse 1.5s ease-in-out infinite;}
+.stock-adj{width:18px;height:18px;border-radius:2px;border:1px solid var(--bdr2);background:var(--bg);color:var(--txt);font-size:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1;}
+.cmp-table{width:100%;border-collapse:collapse;font-size:7.5px;}
+.cmp-table th{background:var(--surf);color:var(--txt-d);padding:7px 10px;text-align:left;border-bottom:1px solid var(--bdr);font-size:6.5px;letter-spacing:1px;text-transform:uppercase;white-space:nowrap;}
+.cmp-table td{padding:7px 10px;border-bottom:1px solid var(--bdr2);color:var(--txt);white-space:nowrap;}
+.cmp-table tr:hover td{background:var(--surf);}
+.cmp-best{color:var(--grn-b)!important;font-weight:bold;}
+.cmp-worst{color:var(--red-b)!important;}
+.cmp-total td{background:var(--surf);font-weight:bold;color:var(--txt-b);border-top:2px solid var(--bdr);}
 .plat-badges{display:flex;gap:3px;flex-wrap:wrap;margin-bottom:5px;}
 .plat-badge{display:inline-flex;align-items:center;gap:2px;border-radius:3px;padding:2px 5px;font-size:5.5px;font-weight:bold;letter-spacing:.3px;}
 .plat-shopify{background:rgba(149,191,71,.12);color:#95BF47;border:1px solid rgba(149,191,71,.3);}
@@ -2108,6 +2120,7 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
 <div id="tab-convention" style="display:none">
   <div class="ctrl">
     <button class="btn btn-pur" onclick="openAddConvention()">+ Add Event</button>
+    <button class="btn btn-ghost btn-sm" onclick="openEventCompare()" id="btn-compare-events" style="display:none">📊 Compare Events</button>
     <span class="cnt" id="convention-cnt"></span>
   </div>
   <div id="convention-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:10px"></div>
@@ -2221,6 +2234,10 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
   <div class="fr2">
     <div class="field"><div class="fl">Sale Price ($)</div><input type="number" id="ec-price" min="0" step="0.01" placeholder="24.99"/></div>
     <div class="field"><div class="fl">Cost to Make ($)</div><input type="number" id="ec-cost" min="0" step="0.01" placeholder="8.50"/></div>
+  </div>
+  <div class="fr2">
+    <div class="field"><div class="fl">Qty In Stock</div><input type="number" id="ec-stock" min="0" placeholder="0" style="font-size:9px"/></div>
+    <div class="field"><div class="fl">Low Stock Alert At</div><input type="number" id="ec-lowstock" min="0" placeholder="3" style="font-size:9px"/></div>
   </div>
   <div class="field"><div class="fl">Description</div><textarea id="ec-desc" rows="2" placeholder="Brief product description for your catalog…"></textarea></div>
   <div class="field"><div class="fl">Photo URL (optional)</div><input type="text" id="ec-photo" placeholder="https://… or leave blank"/></div>
@@ -2399,6 +2416,17 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
   <div class="macts">
     <button class="btn btn-pur" onclick="saveConvention()">Save Event</button>
     <button class="btn btn-ghost" onclick="closeConvention()">Cancel</button>
+  </div>
+</div>
+</div>
+
+<!-- EVENT COMPARE -->
+<div class="overlay" id="mod-event-compare" style="display:none" onclick="if(event.target.id==='mod-event-compare')closeEventCompare()">
+<div class="modal" style="max-width:900px;width:96vw">
+  <div class="mtitle">📊 Convention Performance Comparison</div>
+  <div id="event-compare-body" style="overflow-x:auto"></div>
+  <div class="macts">
+    <button class="btn btn-ghost" onclick="closeEventCompare()">Close</button>
   </div>
 </div>
 </div>
@@ -9129,6 +9157,19 @@ function renderCatalog(){
           '<div class="cstat"><div class="cstat-n" style="color:var(--grn-b)">$'+totalRev.toFixed(0)+'</div><div class="cstat-l">Revenue</div></div>'+
           '<div class="cstat"><div class="cstat-n" style="color:'+(profit>=0?'var(--gold-b)':'var(--red-b)')+'">$'+profit.toFixed(0)+'</div><div class="cstat-l">Profit</div></div>'+
         '</div>'+
+        // Stock qty row
+        (function(){
+          var qty=item.stockQty;
+          if(qty==null) return '';
+          var threshold=item.lowStockAt!=null?item.lowStockAt:3;
+          var cls=qty<=0?'low-stock':qty<=threshold?'low-stock':'in-stock';
+          var label=qty<=0?'OUT OF STOCK':qty<=threshold?'LOW: '+qty+' left':qty+' in stock';
+          return '<div class="stock-row">'+
+            '<button class="stock-adj" onclick="event.stopPropagation();updateStockQty(\''+item.id+'\',-1)">−</button>'+
+            '<span class="stock-badge '+cls+'">'+label+'</span>'+
+            '<button class="stock-adj" onclick="event.stopPropagation();updateStockQty(\''+item.id+'\',1)">+</button>'+
+          '</div>';
+        })()+
         // 3MF badge
         (tmf
           ?'<div style="font-size:6px;background:var(--org-d);color:var(--org-b);border:1px solid rgba(230,140,40,.2);border-radius:3px;padding:3px 7px;margin-bottom:6px;display:flex;align-items:center;gap:5px">'+
@@ -9190,6 +9231,8 @@ function openAddCatalogItem(){
   document.getElementById('ec-cat').value='Figurines';
   document.getElementById('ec-price').value='';
   document.getElementById('ec-cost').value='';
+  document.getElementById('ec-stock').value='';
+  document.getElementById('ec-lowstock').value='3';
   // 3MF dropdown
   const tmfSel=document.getElementById('ec-tmf');
   tmfSel.innerHTML='<option value="">— None —</option>'+tmfLib.map(t=>'<option value="'+t.id+'">'+esc(t.name)+(t.hrs?' ('+formatHms(t.hrs)+')':'')+'</option>').join('');
@@ -9210,6 +9253,8 @@ function openEditCatalogItem(id){
   document.getElementById('ec-cat').value=item.category||'Figurines';
   document.getElementById('ec-price').value=item.price||'';
   document.getElementById('ec-cost').value=item.cost||'';
+  document.getElementById('ec-stock').value=item.stockQty!=null?item.stockQty:'';
+  document.getElementById('ec-lowstock').value=item.lowStockAt!=null?item.lowStockAt:3;
   document.getElementById('ec-desc').value=item.desc||'';
   document.getElementById('ec-photo').value=item.photo||'';
   // 3MF dropdown
@@ -9249,6 +9294,8 @@ function saveCatalogItem(){
     id:id||uid(),name,category:document.getElementById('ec-cat').value,
     price:parseFloat(document.getElementById('ec-price').value)||0,
     cost:parseFloat(document.getElementById('ec-cost').value)||0,
+    stockQty:document.getElementById('ec-stock').value!==''?parseInt(document.getElementById('ec-stock').value):existing.stockQty,
+    lowStockAt:document.getElementById('ec-lowstock').value!==''?parseInt(document.getElementById('ec-lowstock').value):3,
     desc:document.getElementById('ec-desc').value.trim(),
     photo:document.getElementById('ec-photo').value.trim(),
     profile:document.getElementById('ec-profile').value,
@@ -9259,6 +9306,12 @@ function saveCatalogItem(){
   if(id){catalogItems=catalogItems.map(x=>x.id===id?item:x);}else{catalogItems.push(item);}
   saveCatalog();closeCatalog();render();
   toast('Product Saved',name,'success');
+}
+function updateStockQty(id,delta){
+  const item=catalogItems.find(function(x){return x.id===id;});
+  if(!item)return;
+  item.stockQty=Math.max(0,(item.stockQty||0)+delta);
+  saveCatalog();renderCatalog();
 }
 function delCatalogItem(id){
   const item=catalogItems.find(x=>x.id===id);
@@ -9830,6 +9883,8 @@ function saveEvt(){
 
 function renderConvention(){
   document.getElementById('convention-cnt').textContent=conventions.length+' events';
+  const cmpBtn=document.getElementById('btn-compare-events');
+  if(cmpBtn)cmpBtn.style.display=conventions.length>=2?'':'none';
   const g=document.getElementById('convention-grid');
   if(!conventions.length){g.innerHTML=emptyState('🎪','No Events Planned','Track conventions, markets, and popup events — full inventory, day-of sales, and QR tags',`<button class="btn btn-pur" onclick="openAddConvention()">+ Add First Event</button>`);return;}
   const now=Date.now();
@@ -9878,6 +9933,81 @@ function renderConvention(){
   }).join('');
 }
 
+function openEventCompare(){
+  renderEventCompare();
+  document.getElementById('mod-event-compare').style.display='flex';
+}
+function closeEventCompare(){
+  document.getElementById('mod-event-compare').style.display='none';
+}
+function renderEventCompare(){
+  const el=document.getElementById('event-compare-body');
+  if(!el)return;
+  if(!conventions.length){el.innerHTML='<div style="color:var(--txt-d);padding:16px;text-align:center">No events to compare yet.</div>';return;}
+  const rows=conventions.map(function(c){
+    const daySalesRev=(c.daySales||[]).reduce(function(a,s){return a+parseFloat(s.price||0)*parseInt(s.qty||1);},0);
+    const revenue=daySalesRev||(c.revenue||0);
+    const cost=c.cost||0;
+    const net=revenue-cost;
+    const salesCount=(c.daySales||[]).reduce(function(a,s){return a+parseInt(s.qty||1);},0);
+    // Top seller by qty
+    const salesMap={};
+    (c.daySales||[]).forEach(function(s){
+      const nm=s.name||'Unknown';
+      salesMap[nm]=(salesMap[nm]||0)+parseInt(s.qty||1);
+    });
+    const topSeller=Object.keys(salesMap).sort(function(a,b){return salesMap[b]-salesMap[a];})[0]||'—';
+    const packCount=(c.inPersonCatalog||[]).reduce(function(a,i){return a+(i.qtyBring||0);},0);
+    return {id:c.id,name:c.name,date:c.start||'?',revenue,cost,net,salesCount,topSeller,packCount};
+  });
+  // Sort by date
+  rows.sort(function(a,b){return a.date<b.date?-1:a.date>b.date?1:0;});
+  // Find bests
+  const bestRev=Math.max.apply(null,rows.map(function(r){return r.revenue;}));
+  const bestNet=Math.max.apply(null,rows.map(function(r){return r.net;}));
+  const bestSales=Math.max.apply(null,rows.map(function(r){return r.salesCount;}));
+  const worstNet=Math.min.apply(null,rows.map(function(r){return r.net;}));
+  // Totals
+  const totRev=rows.reduce(function(a,r){return a+r.revenue;},0);
+  const totCost=rows.reduce(function(a,r){return a+r.cost;},0);
+  const totNet=rows.reduce(function(a,r){return a+r.net;},0);
+  const totSales=rows.reduce(function(a,r){return a+r.salesCount;},0);
+  function fmtMoney(v){return '$'+v.toFixed(2);}
+  function cell(val,isBest,isWorst,isNum){
+    var cls=isBest?' class="cmp-best"':isWorst?' class="cmp-worst"':'';
+    return '<td'+cls+'>'+val+'</td>';
+  }
+  const trs=rows.map(function(r){
+    return '<tr>'+
+      '<td style="color:var(--txt-b);font-weight:bold">'+esc(r.name)+'</td>'+
+      '<td style="color:var(--txt-d)">'+esc(r.date)+'</td>'+
+      cell(fmtMoney(r.revenue),r.revenue===bestRev,false)+
+      cell(fmtMoney(r.cost),false,false)+
+      cell(fmtMoney(r.net),r.net===bestNet,r.net===worstNet&&rows.length>1)+
+      cell(r.salesCount,r.salesCount===bestSales&&r.salesCount>0,false)+
+      '<td style="color:var(--txt-d);max-width:120px;overflow:hidden;text-overflow:ellipsis">'+esc(r.topSeller)+'</td>'+
+      '<td>'+r.packCount+'</td>'+
+    '</tr>';
+  }).join('');
+  el.innerHTML='<table class="cmp-table">'+
+    '<thead><tr>'+
+      '<th>Event</th><th>Date</th><th>Revenue</th><th>Booth Cost</th><th>Net Profit</th><th># Sold</th><th>Top Seller</th><th>Items Packed</th>'+
+    '</tr></thead>'+
+    '<tbody>'+trs+'</tbody>'+
+    '<tfoot><tr class="cmp-total">'+
+      '<td colspan="2">TOTALS ('+rows.length+' events)</td>'+
+      '<td>'+fmtMoney(totRev)+'</td>'+
+      '<td>'+fmtMoney(totCost)+'</td>'+
+      '<td style="color:'+(totNet>=0?'var(--grn-b)':'var(--red-b)')+'">'+fmtMoney(totNet)+'</td>'+
+      '<td>'+totSales+'</td>'+
+      '<td colspan="2"></td>'+
+    '</tr></tfoot>'+
+  '</table>'+
+  '<div style="font-size:6.5px;color:var(--txt-d);margin-top:8px;text-align:right">'+
+    '<span style="color:var(--grn-b)">Bold green</span> = best in column · '+
+    '<span style="color:var(--red-b)">Red</span> = worst in column'+
+  '</div>';
+}
 function openAddConvention(){
   document.getElementById('conv-modal-title').textContent='Add Convention / Event';
   ['conv-id','conv-name','conv-loc','conv-notes'].forEach(function(i){document.getElementById(i).value='';});
