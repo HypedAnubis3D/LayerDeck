@@ -3297,8 +3297,6 @@ async function parse3mfFile(file){
       }catch(ex){}
     }
 
-    console.log('[3MF debug] grams found:',filamentGramsPerColor,'hrs:',hrs,'colors:',filamentColors);
-
     // Fallback title from filename
     if(!title)title=file.name.replace(/\.3mf$/i,'').replace(/_/g,' ');
 
