@@ -245,7 +245,7 @@ input.srch::placeholder{color:var(--txt-d);}
 .maint-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:8px;}
 .maint-card{background:var(--surf);border:1px solid var(--bdr);border-radius:5px;padding:12px;}
 .maint-printer{font-family:'Orbitron',monospace;font-size:10px;color:var(--txt-b);font-weight:700;margin-bottom:2px;}
-.maint-item{display:flex;align-items:center;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--bdr);}
+.maint-item{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:5px 0;border-bottom:1px solid var(--bdr);}
 .maint-item:last-child{border-bottom:none;}
 .maint-label{font-size:8px;color:var(--txt);}
 .maint-date{font-size:7px;color:var(--txt-d);}
@@ -1560,6 +1560,7 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
   <div class="ctrl">
     <button class="btn btn-cyn" onclick="openAddSpool()">+ Add Spool</button>
     <button class="btn btn-ghost btn-sm" onclick="enterSelectMode('spools')">☑ Select</button>
+    <button class="btn btn-grn btn-sm" onclick="openDryScanner()" title="Scan a spool QR code to mark it as dried right now">🔥 Dry by QR</button>
     <input class="srch" id="sp-s" placeholder="Search spools…" oninput="render()"/>
     <select class="flt" id="sp-m" onchange="render()">
       <option value="">All Materials</option>
@@ -2406,7 +2407,13 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
   </div>
   <div class="field"><div class="fl">Tags (comma-separated)</div><input type="text" id="es-tags" placeholder="warm tones, skin"/></div>
   <div class="fr2">
-    <div class="field"><div class="fl">Last Dried</div><input type="date" id="es-ddate"/></div>
+    <div class="field">
+      <div class="fl">Last Dried</div>
+      <div style="display:flex;gap:5px;align-items:center">
+        <input type="date" id="es-ddate" style="flex:1;min-width:0"/>
+        <button type="button" class="btn btn-grn btn-xs" onclick="setDriedNow()" style="white-space:nowrap;padding:4px 7px;flex-shrink:0">📅 Now</button>
+      </div>
+    </div>
     <div class="field"><div class="fl">Hours Dried</div><input type="number" id="es-dhrs" min="0" step="0.5" placeholder="6"/></div>
   </div>
   <div class="field"><div class="fl">Notes</div><textarea id="es-notes" rows="2"></textarea></div>
@@ -2674,7 +2681,13 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
     </select>
   </div>
   <div class="fr2">
-    <div class="field"><div class="fl">Date</div><input type="date" id="mm-date"/></div>
+    <div class="field">
+      <div class="fl">Date</div>
+      <div style="display:flex;gap:5px;align-items:center">
+        <input type="date" id="mm-date" style="flex:1;min-width:0"/>
+        <button type="button" class="btn btn-grn btn-xs" onclick="setMaintDateNow()" style="white-space:nowrap;padding:4px 7px;flex-shrink:0">📅 Now</button>
+      </div>
+    </div>
     <div class="field"><div class="fl">Next Due (days)</div><input type="number" id="mm-interval" min="1" placeholder="30"/></div>
   </div>
   <div class="field"><div class="fl">Notes</div><textarea id="mm-notes" rows="2"></textarea></div>
@@ -2715,6 +2728,36 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
   <div id="row-qr-reader" style="width:100%"></div>
   <div class="scan-status" id="row-scan-status">Point camera at spool QR…</div>
   <div style="margin-top:9px"><button class="btn btn-ghost" style="width:100%" onclick="closeRowScanner()">Cancel</button></div>
+</div>
+</div>
+
+<!-- DRY CONFIRM — shown after QR scan in dry mode -->
+<div class="overlay" id="mod-dry-confirm" style="display:none" onclick="if(event.target.id==='mod-dry-confirm')closeDryConfirm()">
+<div class="modal narrow">
+  <div class="mtitle">🔥 Confirm Drying</div>
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+    <div id="dc-dot" style="width:14px;height:14px;border-radius:50%;flex-shrink:0"></div>
+    <div>
+      <div style="font-size:11px;font-weight:bold;color:var(--txt-b)" id="dc-name">—</div>
+      <div style="font-size:7px;color:var(--txt-d);margin-top:2px" id="dc-sub">—</div>
+    </div>
+  </div>
+  <div style="background:var(--surf);border:1px solid var(--bdr);border-radius:6px;padding:12px;margin-bottom:14px">
+    <div style="font-size:7px;color:var(--txt-d);letter-spacing:2px;text-transform:uppercase;margin-bottom:6px">Drying Record</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+      <span style="font-size:8px;color:var(--txt)">Date &amp; Time</span>
+      <span style="font-size:8px;font-family:'Share Tech Mono',monospace;color:var(--grn-b)" id="dc-timestamp">—</span>
+    </div>
+    <div class="field" style="margin-bottom:0">
+      <div class="fl">Hours in Dryer</div>
+      <input type="number" id="dc-hours" min="0.5" max="48" step="0.5" value="4" style="text-align:center;font-size:13px"/>
+    </div>
+  </div>
+  <input type="hidden" id="dc-spool-id"/>
+  <div class="macts">
+    <button class="btn btn-grn" onclick="confirmDryAction()" style="flex:1;padding:10px">✓ Confirm Dried</button>
+    <button class="btn btn-ghost" onclick="closeDryConfirm()">Cancel</button>
+  </div>
 </div>
 </div>
 
@@ -2875,7 +2918,7 @@ const MAT_C={'PLA Basic':'#3a80e0','PLA Matte':'#8858c0','PLA Silk':'#c09828','P
 let spools=[],usageHist=[],prints=[],tmfLib=[],queueItems=[],orders=[],sales=[],maintLog=[];
 let shopifyCfg={domain:'',token:'',connected:false,lastOrderId:null,lastPoll:null};
 let cfg={kwh:0.13,watts:350,labor:0,markup:30};
-let qrScanner=null,rowScanner=null,targetRowId=null,filRowCount=0,finOutcome=null;
+let qrScanner=null,rowScanner=null,targetRowId=null,filRowCount=0,finOutcome=null,scannerMode='use';
 let pollInterval=null,pendingNotifOrderId=null;
 
 function uid(){return Math.random().toString(36).substr(2,9);}
@@ -3554,16 +3597,19 @@ function renderMaint(){
     logs.forEach(m=>{if(!tm[m.type]||m.timestamp>tm[m.type].timestamp)tm[m.type]=m;});
     const rows=maintTypes.map(type=>{
       const m=tm[type];
+      const qBtn=`<button class="btn btn-grn btn-xs" style="padding:3px 8px;flex-shrink:0;font-size:7px" onclick="event.stopPropagation();quickLogMaint('${pr}','${type}')">✓ Now</button>`;
       if(!m)return `<div class="maint-item" onclick="openLogMaint('${pr}','${type}')" style="cursor:pointer">
-        <div><div class="maint-label">${esc(type)}</div><div class="maint-date" style="color:var(--bdr2)">Never logged</div></div>
-        <div style="font-size:7px;color:var(--bdr2)">+ Log</div></div>`;
+        <div style="flex:1;min-width:0"><div class="maint-label">${esc(type)}</div><div class="maint-date" style="color:var(--bdr2)">Never logged</div></div>
+        ${qBtn}
+        <div style="font-size:7px;color:var(--bdr2);flex-shrink:0">+ Details</div></div>`;
       const ds=Math.floor((now-m.timestamp)/86400000);
       const dl=m.interval?(m.interval-ds):null;
       const dc=dl===null?'ok':dl<0?'overdue':dl<14?'soon':'ok';
       const dt=dl===null?'—':dl<0?Math.abs(dl)+'d overdue':dl===0?'Today':dl+'d left';
       return `<div class="maint-item" onclick="openLogMaint('${pr}','${type}')" style="cursor:pointer">
-        <div><div class="maint-label">${esc(type)}</div><div class="maint-date">${new Date(m.timestamp).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}</div></div>
-        <div class="maint-due ${dc}">${dt}</div></div>`;
+        <div style="flex:1;min-width:0"><div class="maint-label">${esc(type)}</div><div class="maint-date">${new Date(m.timestamp).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}</div></div>
+        ${qBtn}
+        <div class="maint-due ${dc}" style="flex-shrink:0">${dt}</div></div>`;
     }).join('');
     const overdueCount=Object.values(tm).filter(m=>{
       const ds=Math.floor((now-m.timestamp)/86400000);
@@ -4298,14 +4344,67 @@ function showQR(id){
 }
 function closeQR(){document.getElementById('mod-qr').style.display='none';}
 function openScanner(){
+  scannerMode='use';
   document.getElementById('scan-status').textContent='Starting camera…';
+  const title=document.querySelector('#mod-scan .mtitle');
+  if(title)title.textContent='Scan Spool QR';
   document.getElementById('mod-scan').style.display='flex';
   try{
     qrScanner=new Html5Qrcode('qr-reader');
     qrScanner.start({facingMode:'environment'},{fps:10,qrbox:{width:180,height:180}},
-      txt=>{if(!txt.startsWith('HA3D_SPOOL:'))return;const id=txt.replace('HA3D_SPOOL:','');closeScanner();const s=spools.find(x=>x.id===id);if(s)openUse(id);else alert('Spool not found.');},()=>{}
+      txt=>{
+        if(!txt.startsWith('HA3D_SPOOL:'))return;
+        const id=txt.replace('HA3D_SPOOL:','');
+        closeScanner();
+        const s=spools.find(x=>x.id===id);
+        if(!s){toast('Not Found','Spool QR not recognised','warning');return;}
+        if(scannerMode==='dry') openDryConfirm(id);
+        else openUse(id);
+      },()=>{}
     ).then(()=>{document.getElementById('scan-status').textContent='Point camera at spool QR…';}).catch(e=>{document.getElementById('scan-status').textContent='Camera error: '+e;});
   }catch(e){document.getElementById('scan-status').textContent='Scanner unavailable: '+e;}
+}
+function openDryScanner(){
+  scannerMode='dry';
+  document.getElementById('scan-status').textContent='Starting camera…';
+  const title=document.querySelector('#mod-scan .mtitle');
+  if(title)title.textContent='Scan Spool to Dry';
+  document.getElementById('mod-scan').style.display='flex';
+  try{
+    qrScanner=new Html5Qrcode('qr-reader');
+    qrScanner.start({facingMode:'environment'},{fps:10,qrbox:{width:180,height:180}},
+      txt=>{
+        if(!txt.startsWith('HA3D_SPOOL:'))return;
+        const id=txt.replace('HA3D_SPOOL:','');
+        closeScanner();
+        const s=spools.find(x=>x.id===id);
+        if(!s){toast('Not Found','Spool QR not recognised','warning');return;}
+        openDryConfirm(id);
+      },()=>{}
+    ).then(()=>{document.getElementById('scan-status').textContent='Point camera at spool QR…';}).catch(e=>{document.getElementById('scan-status').textContent='Camera error: '+e;});
+  }catch(e){document.getElementById('scan-status').textContent='Scanner unavailable: '+e;}
+}
+function openDryConfirm(id){
+  const s=spools.find(x=>x.id===id);if(!s)return;
+  const now=new Date();
+  const label=now.toLocaleString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'2-digit',minute:'2-digit'});
+  document.getElementById('dc-spool-id').value=id;
+  document.getElementById('dc-dot').style.cssText='background:'+s.color+';box-shadow:0 0 6px '+s.color+'66;width:14px;height:14px;border-radius:50%;flex-shrink:0';
+  document.getElementById('dc-name').textContent=s.name;
+  document.getElementById('dc-sub').textContent=s.material+(s.brand?' · '+s.brand:'')+(s.remaining?' · '+s.remaining+'g left':'');
+  document.getElementById('dc-timestamp').textContent=label;
+  document.getElementById('dc-hours').value='4';
+  document.getElementById('mod-dry-confirm').style.display='flex';
+}
+function closeDryConfirm(){document.getElementById('mod-dry-confirm').style.display='none';}
+function confirmDryAction(){
+  const id=document.getElementById('dc-spool-id').value;
+  const hours=parseFloat(document.getElementById('dc-hours').value)||4;
+  const s=spools.find(x=>x.id===id);if(!s)return;
+  const now=new Date();
+  spools=spools.map(sp=>sp.id===id?{...sp,driedDate:now.toISOString().split('T')[0],driedHours:hours}:sp);
+  saveSpools();closeDryConfirm();render();
+  toast('Dried! 🔥',s.name+' — '+hours+'h logged','success');
 }
 function closeScanner(){document.getElementById('mod-scan').style.display='none';if(qrScanner){try{qrScanner.stop().then(()=>{qrScanner.clear();qrScanner=null;});}catch{qrScanner=null;}}}
 function openRowScanner(rowId){
@@ -4320,6 +4419,38 @@ function openRowScanner(rowId){
   }catch(e){document.getElementById('row-scan-status').textContent='Scanner unavailable: '+e;}
 }
 function closeRowScanner(){document.getElementById('mod-row-scan').style.display='none';if(rowScanner){try{rowScanner.stop().then(()=>{rowScanner.clear();rowScanner=null;});}catch{rowScanner=null;}}}
+
+// ════════════════════════════════════════
+// QUICK DATE HELPERS
+// ════════════════════════════════════════
+function setDriedNow(){
+  const now=new Date();
+  const el=document.getElementById('es-ddate');
+  if(el){el.value=now.toISOString().split('T')[0];}
+  const hrs=document.getElementById('es-dhrs');
+  if(hrs&&!hrs.value)hrs.value='4';
+  toast('Dried date set',now.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}),'success',1800);
+}
+function setMaintDateNow(){
+  const now=new Date();
+  const el=document.getElementById('mm-date');
+  if(el){el.value=now.toISOString().split('T')[0];}
+  toast('Date set to today',now.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}),'success',1800);
+}
+function quickLogMaint(printer,type){
+  const now=new Date();
+  const label=now.toLocaleString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'2-digit',minute:'2-digit'});
+  showConfirm(
+    'Log '+type+'?',
+    printer+' — '+type+'<br><span style="font-size:8px;color:var(--txt-d)">'+label+'</span>',
+    function(){
+      maintLog.push({id:uid(),printer,type,date:now.toISOString().split('T')[0],interval:30,notes:'',timestamp:now.getTime()});
+      saveMaintLog();render();
+      toast('Logged!',printer+' — '+type,'success');
+    },
+    'Log Now','btn-grn'
+  );
+}
 
 // ════════════════════════════════════════
 // LOG USE (standalone)
@@ -8949,8 +9080,7 @@ function renderDrying(){
       </div>`:'<div style="text-align:center;padding:30px;font-size:10px;color:var(--grn-b)">✓ All spools are dry and ready to print!</div>'}`;
 }
 function markSpoolDried(id){
-  spools=spools.map(s=>s.id===id?{...s,driedDate:new Date().toISOString().split('T')[0],driedHours:4}:s);
-  saveSpools();render();toast('Marked Dried','Spool dry timer reset','success');
+  openDryConfirm(id);
 }
 
 // ── POWER COST DASHBOARD ──
