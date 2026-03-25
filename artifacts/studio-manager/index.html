@@ -4864,13 +4864,15 @@ function renderCustomers(){
     const initial=c.name.charAt(0).toUpperCase();
     const lastOrder=c.orders.sort((a,b)=>new Date(b.date||b.timestamp)-new Date(a.date||a.timestamp))[0];
     const shinyCount=shinyRolls.filter(r=>r.customer===c.name&&r.result==='shiny').length;
-    return `<div class="customer-card">
+    const activeCount=c.orders.filter(o=>o.status!=='shipped'&&o.status!=='cancelled').length;
+    return `<div class="customer-card" data-cname="${esc(c.name)}">
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:9px">
         <div class="cust-avatar">${initial}</div>
-        <div>
+        <div style="flex:1;min-width:0">
           <div class="cust-name">${esc(c.name)}</div>
           <div class="cust-meta">Customer since ${lastOrder?new Date(lastOrder.timestamp||lastOrder.date).toLocaleDateString('en-US',{month:'short',year:'numeric'}):'—'}${c.platform?' · '+esc(c.platform):''}</div>
         </div>
+        <button class="btn btn-red btn-sm" style="flex-shrink:0" onclick="deleteCustomer(this.closest('[data-cname]').dataset.cname)">🗑</button>
       </div>
       <div class="cust-stats">
         <div class="cst"><div class="cst-n" style="color:var(--grn)">$${c.totalSpend.toFixed(0)}</div><div class="cst-l">Lifetime</div></div>
@@ -4881,9 +4883,21 @@ function renderCustomers(){
         <div style="font-size:6px;color:var(--txt-d);letter-spacing:1px;margin-bottom:4px">ORDERS</div>
         ${c.orders.map(o=>`<span class="cust-order-chip">${esc(o.orderId)} · $${(o.items||[]).reduce((a,i)=>a+parseFloat(i.price||0)*parseInt(i.qty||1),0).toFixed(0)}</span>`).join('')}
       </div>
-      ${c.orders.filter(o=>o.status!=='shipped'&&o.status!=='cancelled').length>0?`<div style="margin-top:7px;font-size:7px;color:var(--amb)">⟳ ${c.orders.filter(o=>o.status!=='shipped'&&o.status!=='cancelled').length} active order(s)</div>`:''}
+      ${activeCount>0?`<div style="margin-top:7px;font-size:7px;color:var(--amb)">⟳ ${activeCount} active order(s)</div>`:''}
     </div>`;
   }).join('');
+}
+function deleteCustomer(name){
+  const orderCount=orders.filter(function(o){return o.customer===name;}).length;
+  showConfirm(
+    'Delete '+name+'?',
+    'This will permanently delete all '+orderCount+' order'+(orderCount!==1?'s':'')+' for this customer.',
+    function(){
+      orders=orders.filter(function(o){return o.customer!==name;});
+      saveOrders();render();
+    },
+    'Delete Customer','btn-red'
+  );
 }
 
 // ════════ BATCH PLANNER ════════
