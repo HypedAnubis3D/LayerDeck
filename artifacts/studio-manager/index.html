@@ -1081,6 +1081,14 @@ body.light-mode ::-webkit-scrollbar-thumb{background:var(--bdr2);}
 .break-even-bar{height:10px;border-radius:5px;background:var(--bg);border:1px solid var(--bdr2);overflow:hidden;margin:4px 0;}
 .break-even-fill{height:100%;border-radius:5px;transition:width .5s;}
 .catalog-picker-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;margin-top:10px;max-height:55vh;overflow-y:auto;}
+.ip-card{background:var(--surf);border:1px solid var(--bdr);border-radius:6px;overflow:hidden;display:flex;flex-direction:column;}
+.ip-photo{width:100%;height:100px;object-fit:cover;background:var(--bg);display:flex;align-items:center;justify-content:center;font-size:28px;color:var(--bdr2);}
+.ip-body{padding:10px;flex:1;display:flex;flex-direction:column;}
+.ip-name{font-size:9px;font-weight:bold;color:var(--txt-b);margin-bottom:3px;}
+.ip-price{font-size:8px;font-family:'Orbitron',monospace;color:var(--grn-b);margin-bottom:8px;}
+.ip-qty-row{display:flex;align-items:center;gap:6px;margin-bottom:8px;}
+.ip-qty-val{font-size:13px;font-weight:bold;font-family:'Orbitron',monospace;color:var(--txt-b);min-width:28px;text-align:center;}
+.ip-stat-card{background:var(--surf);border:1px solid var(--bdr);border-radius:6px;padding:12px;text-align:center;}
 .stock-row{display:flex;align-items:center;gap:4px;margin-bottom:6px;}
 .stock-badge{font-size:7px;font-weight:bold;font-family:'Orbitron',monospace;padding:2px 7px;border-radius:3px;background:var(--bg);border:1px solid var(--bdr2);color:var(--txt-d);}
 .stock-badge.in-stock{background:var(--grn-d);border-color:var(--grn);color:var(--grn-b);}
@@ -1514,7 +1522,8 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
       <div class="sb-group-body">
         <button class="nav-item" id="nav-revenue" onclick="navTo('revenue',this)"><span class="nav-icon">💰</span><span class="nav-label">Revenue, Tax & Power</span></button>
         <button class="nav-item" id="nav-catalog" onclick="navTo('catalog',this)"><span class="nav-icon">🏪</span><span class="nav-label">Product Catalog</span></button>
-        <button class="nav-item" id="nav-convention" onclick="navTo('convention',this)"><span class="nav-icon">🎪</span><span class="nav-label">Conventions</span></button>
+        <button class="nav-item" id="nav-inperson" onclick="navTo('inperson',this)"><span class="nav-icon">🏬</span><span class="nav-label">In-Person Stock</span></button>
+        <button class="nav-item" id="nav-convention" onclick="navTo('convention',this)"><span class="nav-icon">🎪</span><span class="nav-label">Conventions</span><span class="nav-badge" id="nav-badge-convention"></span></button>
         <button class="nav-item" id="nav-priceengine" onclick="navTo('priceengine',this)"><span class="nav-icon">🤖</span><span class="nav-label">Price AI</span></button>
       </div>
     </div>
@@ -1711,6 +1720,7 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
 <div id="tab-orders" style="display:none">
   <div class="ctrl">
     <button class="btn btn-teal" onclick="openAddOrder()">+ New Order</button>
+    <button class="btn btn-ghost btn-sm" onclick="exportOrdersCSV()">⬇ Export CSV</button>
     <button class="btn btn-ghost btn-sm" onclick="enterSelectMode('orders')">☑ Select</button>
     <input class="srch" id="or-s" placeholder="Search customer, order ID…" oninput="render()"/>
     <select class="flt" id="or-st" onchange="render()">
@@ -1999,12 +2009,25 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
 <!-- WASTE TRACKER -->
 <div id="tab-waste" style="display:none"></div>
 
+<!-- IN-PERSON STOCK -->
+<div id="tab-inperson" style="display:none">
+  <div class="ctrl">
+    <button class="btn btn-gold" onclick="openInPersonPicker()">+ Add from Catalog</button>
+    <button class="btn btn-ghost btn-sm" onclick="exportInPersonCSV()">⬇ Export CSV</button>
+    <span class="cnt" id="ip-cnt"></span>
+    <span id="ip-value" style="font-size:8px;color:var(--grn-b);font-family:'Orbitron',monospace;margin-left:auto"></span>
+  </div>
+  <div id="ip-stats" style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px"></div>
+  <div id="ip-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px"></div>
+</div>
+
 <!-- PRODUCT CATALOG -->
 <div id="tab-catalog" style="display:none">
   <div class="ctrl" style="flex-wrap:wrap;gap:6px">
     <button class="btn btn-gold" onclick="openAddCatalogItem()">+ Add Product</button>
     <button class="btn btn-sm" style="background:rgba(34,170,204,.1);border:1px solid var(--cyn);color:var(--cyn)" onclick="document.getElementById('csv-import-input').click()" title="Import from Shopify CSV export">📂 Import CSV</button>
     <input type="file" id="csv-import-input" accept=".csv" style="display:none" onchange="importShopifyCSV(this)"/>
+    <button class="btn btn-ghost btn-sm" onclick="exportCatalogCSV()">⬇ Export CSV</button>
     <button class="btn btn-ghost btn-sm" onclick="enterSelectMode('catalog')">☑ Select</button>
     <button class="btn btn-sm" style="background:var(--red-d);border:1px solid var(--red-d);color:var(--red-b)" onclick="deleteAllCatalog()">🗑 Delete All</button>
     <input class="srch" id="cat-s" placeholder="Search products…" oninput="render()"/>
@@ -2418,6 +2441,16 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
     <button class="btn btn-pur" onclick="saveConvention()">Save Event</button>
     <button class="btn btn-ghost" onclick="closeConvention()">Cancel</button>
   </div>
+</div>
+</div>
+
+<!-- IN-PERSON PICKER -->
+<div class="overlay" id="mod-inperson-picker" style="display:none" onclick="if(event.target.id==='mod-inperson-picker')closeInPersonPicker()">
+<div class="modal" style="max-width:700px;width:96vw">
+  <div class="mtitle">🏬 Add to In-Person Stock</div>
+  <input class="srch" id="ip-pick-s" placeholder="Search catalog…" oninput="renderInPersonPicker()" style="width:100%;margin-bottom:10px"/>
+  <div class="catalog-picker-grid" id="ip-pick-grid" style="max-height:60vh"></div>
+  <div class="macts"><button class="btn btn-ghost" onclick="closeInPersonPicker()">Done</button></div>
 </div>
 </div>
 
@@ -3117,11 +3150,13 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
 const KEYS={spools:'ha3d_fil_v2',hist:'ha3d_hist_v2',prints:'ha3d_prints_v1',
   tmfs:'ha3d_tmfs_v1',queue:'ha3d_queue_v1',orders:'ha3d_orders_v1',
   sales:'ha3d_sales_v1',maint:'ha3d_maint_v1',cfg:'ha3d_cfg_v1',
-  shopify:'ha3d_shopify_v1',inv:'hypedanubis_v2'};
+  shopify:'ha3d_shopify_v1',inv:'hypedanubis_v2',inperson:'ha3d_inperson_v1',
+  dashHidden:'ha3d_dash_hidden_v1'};
 
 const MAT_C={'PLA Basic':'#3a80e0','PLA Matte':'#8858c0','PLA Silk':'#c09828','PLA+':'#28a858','PLA-CF':'#786860','PETG Basic':'#22aacc','PETG-CF':'#1a5050','ABS':'#c04828','ASA':'#a07828','TPU 95A':'#9050b0','PA':'#507080','PC':'#3a6090','Support':'#404850'};
 
-let spools=[],usageHist=[],prints=[],tmfLib=[],queueItems=[],orders=[],sales=[],maintLog=[];
+let spools=[],usageHist=[],prints=[],tmfLib=[],queueItems=[],orders=[],sales=[],maintLog=[],inPersonInventory=[];
+let dashHidden=[];
 let shopifyCfg={domain:'',connected:false,lastOrderId:null,lastPoll:null};
 let cfg={kwh:0.13,watts:350,labor:0,markup:30};
 let qrScanner=null,rowScanner=null,targetRowId=null,filRowCount=0,finOutcome=null,scannerMode='use';
@@ -3136,6 +3171,8 @@ function load(){
   spools=gs(KEYS.spools);usageHist=gs(KEYS.hist);prints=gs(KEYS.prints);
   tmfLib=gs(KEYS.tmfs);queueItems=gs(KEYS.queue);orders=gs(KEYS.orders);
   sales=gs(KEYS.sales);maintLog=gs(KEYS.maint);
+  inPersonInventory=gs(KEYS.inperson);
+  dashHidden=gs(KEYS.dashHidden);
   shopifyCfg={...shopifyCfg,...go(KEYS.shopify)};
   try{const c=JSON.parse(localStorage.getItem(KEYS.cfg));if(c)cfg=c;}catch(e){}
   // Only seed demo spools on very first launch — never after a reset
@@ -4263,8 +4300,9 @@ async function syncShopifyToCatalog(){
         .map(function(v){return{title:v.title,price:v.price};});
       const tags=p.tags?p.tags.split(',').map(function(t){return t.trim();}).filter(Boolean):[];
       const category=p.product_type||'Other';
+      const shopifyInv=p.variants?p.variants.reduce(function(s,v){return s+(parseInt(v.inventory_quantity)||0);},0):0;
       if(existing){
-        // Update image, price, variants if changed
+        // Update image, price, variants, stock if changed
         existing.photo=existing.photo||img;
         existing.shopifyImage=img;
         existing.price=basePrice;
@@ -4272,6 +4310,7 @@ async function syncShopifyToCatalog(){
         existing.tags=tags;
         existing.category=category||existing.category;
         existing.fromShopify=true;
+        if(existing.stockQty==null||existing.fromShopify) existing.stockQty=shopifyInv;
         updated++;
       }else{
         catalogItems.push({
@@ -4282,6 +4321,8 @@ async function syncShopifyToCatalog(){
           shopifyImage:img,
           price:basePrice,
           cost:0,
+          stockQty:shopifyInv,
+          lowStockAt:3,
           category,
           variants,
           tags,
@@ -5000,7 +5041,7 @@ function saveEtsy(){ss(KEYS.etsy,etsyCfg);}
 function saveBatch(){ss(KEYS.batch,batchPlate);}
 
 // ════════ TAB SWITCH EXTENSION ════════
-const ALL_TABS=['dashboard','spools','prints','tmf','queue','orders','scheduler','shiny','revenue','customers','batch','maint','forecast','priceengine','shop','history','stats','backup','labels'];
+const ALL_TABS=['dashboard','spools','prints','tmf','queue','orders','scheduler','shiny','revenue','customers','batch','maint','forecast','priceengine','shop','history','stats','backup','labels','inperson'];
 
 const _origSwitch=switchTab;
 function switchTab(t,el){
@@ -5009,11 +5050,13 @@ function switchTab(t,el){
   el.classList.add('active');
   if(t==='queue')document.getElementById('nav-badge-queue')?.classList.remove('show');
   if(t==='orders')document.getElementById('nav-badge-orders')?.classList.remove('show');
+  if(t==='convention')document.getElementById('nav-badge-convention')?.classList.remove('show');
   ALL_TABS.forEach(x=>{
     const el2=document.getElementById('tab-'+x);
     if(el2)el2.style.display=x===t?'':'none';
   });
-  render();
+  if(t==='inperson')renderInPerson();
+  else render();
 }
 
 // ════════ STAT BAR EXTENSION ════════
@@ -9165,6 +9208,7 @@ function renderCatalog(){
           '<div class="cstat"><div class="cstat-n" style="color:var(--teal-b)">'+totalSold+'</div><div class="cstat-l">Sold</div></div>'+
           '<div class="cstat"><div class="cstat-n" style="color:var(--grn-b)">$'+totalRev.toFixed(0)+'</div><div class="cstat-l">Revenue</div></div>'+
           '<div class="cstat"><div class="cstat-n" style="color:'+(profit>=0?'var(--gold-b)':'var(--red-b)')+'">$'+profit.toFixed(0)+'</div><div class="cstat-l">Profit</div></div>'+
+          (item.cost?'<div class="cstat"><div class="cstat-n" style="color:var(--txt-d)">$'+parseFloat(item.cost).toFixed(0)+'</div><div class="cstat-l">Make Cost</div></div>':'')+
         '</div>'+
         // Stock qty row
         (function(){
@@ -9208,8 +9252,10 @@ function renderCatalog(){
               '</div>';
             }).join('')+
           '</div>':'')+ 
-        '<div class="card-acts">'+ 
+        '<div class="card-acts" style="flex-wrap:wrap;gap:3px">'+ 
           '<button class="btn btn-pur btn-xs" style="flex:1" onclick="quickQueueFromCatalog(this.closest(\'[data-selid]\').dataset.selid)">+ Queue</button>'+ 
+          (item.tmfId?'<button class="btn btn-cyn btn-xs" onclick="addToPrintsFromCatalog(this.closest(\'[data-selid]\').dataset.selid)">→ Print</button>':'')+
+          '<button class="btn btn-teal btn-xs" onclick="addToOrderFromCatalog(this.closest(\'[data-selid]\').dataset.selid)">→ Order</button>'+ 
           '<button class="btn btn-ghost btn-xs" onclick="openEditCatalogItem(this.closest(\'[data-selid]\').dataset.selid)">Edit</button>'+ 
           '<button class="btn btn-xs" style="background:var(--red-d);border:1px solid var(--red-d);color:var(--red-b)" onclick="delCatalogItem(this.closest(\'[data-selid]\').dataset.selid)">&#x2715;</button>'+ 
         '</div>'+
@@ -9894,6 +9940,7 @@ function renderConvention(){
   document.getElementById('convention-cnt').textContent=conventions.length+' events';
   const cmpBtn=document.getElementById('btn-compare-events');
   if(cmpBtn)cmpBtn.style.display=conventions.length>=2?'':'none';
+  updateConventionBadge();
   const g=document.getElementById('convention-grid');
   if(!conventions.length){g.innerHTML=emptyState('🎪','No Events Planned','Track conventions, markets, and popup events — full inventory, day-of sales, and QR tags',`<button class="btn btn-pur" onclick="openAddConvention()">+ Add First Event</button>`);return;}
   const now=Date.now();
@@ -10988,6 +11035,219 @@ ALL_TABS.forEach(t=>{const el=document.getElementById('tab-'+t);if(el)el.style.d
 render();
 startCountdown();
 checkOnboarding();
+
+// ════════ IN-PERSON STOCK ════════
+function saveInPerson(){ss(KEYS.inperson,inPersonInventory);}
+
+function renderInPerson(){
+  const cnt=document.getElementById('ip-cnt');
+  const grid=document.getElementById('ip-grid');
+  const statsEl=document.getElementById('ip-stats');
+  const valEl=document.getElementById('ip-value');
+  if(!grid)return;
+  if(cnt)cnt.textContent=inPersonInventory.length+' item'+(inPersonInventory.length!==1?'s':'');
+  const totalQty=inPersonInventory.reduce(function(a,i){return a+(i.qty||0);},0);
+  const totalVal=inPersonInventory.reduce(function(a,i){return a+(i.qty||0)*(i.price||0);},0);
+  const totalCost=inPersonInventory.reduce(function(a,i){return a+(i.qty||0)*(i.cost||0);},0);
+  if(valEl)valEl.textContent=totalVal>0?'Total Value: $'+totalVal.toFixed(2):'';
+  if(statsEl){
+    statsEl.innerHTML=
+      '<div class="ip-stat-card"><div class="dw-big" style="color:var(--cyn)">'+inPersonInventory.length+'</div><div class="dw-sub">Product Lines</div></div>'+
+      '<div class="ip-stat-card"><div class="dw-big" style="color:var(--grn)">'+totalQty+'</div><div class="dw-sub">Total Units</div></div>'+
+      '<div class="ip-stat-card"><div class="dw-big" style="color:var(--gold-b)">$'+totalVal.toFixed(2)+'</div><div class="dw-sub">Retail Value</div></div>';
+  }
+  if(!inPersonInventory.length){
+    grid.innerHTML=emptyState('🏬','No In-Person Stock','Add items from your product catalog to track what you have on hand for in-person sales',
+      '<button class="btn btn-gold" onclick="openInPersonPicker()">+ Add from Catalog</button>');
+    return;
+  }
+  grid.innerHTML=inPersonInventory.map(function(item){
+    var lowAt=item.lowStockAt!=null?item.lowStockAt:3;
+    var stockCls=item.qty<=0?'low-stock':item.qty<=lowAt?'low-stock':'in-stock';
+    var stockLabel=item.qty<=0?'OUT OF STOCK':item.qty<=lowAt?'LOW: '+item.qty+' left':item.qty+' in stock';
+    return '<div class="ip-card">'+
+      (item.photo?'<img class="ip-photo" src="'+esc(item.photo)+'" alt="'+esc(item.name)+'" onerror="this.parentElement.innerHTML=\'<div class=ip-photo>🏬</div>\'+this.parentElement.innerHTML.slice(this.parentElement.innerHTML.indexOf(\'</img>\')+6)">':
+        '<div class="ip-photo">🏬</div>')+
+      '<div class="ip-body">'+
+        '<div class="ip-name">'+esc(item.name)+'</div>'+
+        '<div class="ip-price">$'+parseFloat(item.price||0).toFixed(2)+'</div>'+
+        '<div class="ip-qty-row">'+
+          '<button class="stock-adj" onclick="updateInPersonQty(\''+item.id+'\',-1)">−</button>'+
+          '<span class="ip-qty-val">'+item.qty+'</span>'+
+          '<button class="stock-adj" onclick="updateInPersonQty(\''+item.id+'\',1)">+</button>'+
+          '<span class="stock-badge '+stockCls+'" style="margin-left:4px">'+stockLabel+'</span>'+
+        '</div>'+
+        (item.price&&item.qty?'<div style="font-size:6px;color:var(--txt-d);margin-bottom:6px">Value: $'+(item.qty*item.price).toFixed(2)+'</div>':'')+
+        '<button class="btn btn-xs" style="background:var(--red-d);border:1px solid var(--red-d);color:var(--red-b);width:100%;margin-top:auto" onclick="removeFromInPerson(\''+item.id+'\')">Remove</button>'+
+      '</div>'+
+    '</div>';
+  }).join('');
+}
+
+function openInPersonPicker(){
+  document.getElementById('ip-pick-s').value='';
+  renderInPersonPicker();
+  document.getElementById('mod-inperson-picker').style.display='flex';
+}
+function closeInPersonPicker(){
+  document.getElementById('mod-inperson-picker').style.display='none';
+  renderInPerson();
+}
+function renderInPersonPicker(){
+  const q=(document.getElementById('ip-pick-s')?.value||'').toLowerCase();
+  const grid=document.getElementById('ip-pick-grid');
+  if(!grid)return;
+  const inPerson=new Set(inPersonInventory.map(function(i){return i.catalogItemId;}));
+  const items=catalogItems.filter(function(c){
+    if(q&&!c.name.toLowerCase().includes(q))return false;
+    return true;
+  });
+  if(!items.length){grid.innerHTML='<div style="color:var(--txt-d);text-align:center;padding:16px;font-size:8px">No products in catalog yet</div>';return;}
+  grid.innerHTML=items.map(function(item){
+    var already=inPerson.has(item.id);
+    return '<div style="background:var(--surf);border:1px solid '+(already?'var(--grn)':'var(--bdr)')+';border-radius:5px;padding:9px;cursor:pointer;position:relative" onclick="addToInPersonInventory(\''+item.id+'\')" >'+
+      (already?'<div style="position:absolute;top:4px;right:4px;font-size:7px;color:var(--grn);background:var(--grn-d);padding:1px 5px;border-radius:2px">✓ Added</div>':'')+
+      (item.photo?'<img src="'+esc(item.photo)+'" style="width:100%;height:70px;object-fit:cover;border-radius:3px;margin-bottom:5px" onerror="this.style.display=\'none\'">':
+        '<div style="height:70px;background:var(--bg);border-radius:3px;display:flex;align-items:center;justify-content:center;font-size:22px;margin-bottom:5px">🏬</div>')+
+      '<div style="font-size:8px;font-weight:bold;color:var(--txt-b)">'+esc(item.name)+'</div>'+
+      '<div style="font-size:7px;color:var(--grn-b);font-family:Orbitron,monospace">$'+parseFloat(item.price||0).toFixed(2)+'</div>'+
+    '</div>';
+  }).join('');
+}
+function addToInPersonInventory(catalogItemId){
+  const catItem=catalogItems.find(function(c){return c.id===catalogItemId;});
+  if(!catItem)return;
+  var existing=inPersonInventory.find(function(i){return i.catalogItemId===catalogItemId;});
+  if(existing){
+    existing.qty=(existing.qty||0)+1;
+    saveInPerson();renderInPersonPicker();
+    toast('Stock Updated',catItem.name+' qty → '+existing.qty,'success');
+    return;
+  }
+  inPersonInventory.push({
+    id:uid(),catalogItemId,name:catItem.name,photo:catItem.photo||catItem.shopifyImage||'',
+    price:catItem.price||0,cost:catItem.cost||0,lowStockAt:catItem.lowStockAt!=null?catItem.lowStockAt:3,
+    qty:1,notes:''
+  });
+  saveInPerson();renderInPersonPicker();
+  toast('Added to In-Person Stock',catItem.name,'success');
+}
+function removeFromInPerson(id){
+  const item=inPersonInventory.find(function(i){return i.id===id;});
+  showConfirm('Remove "'+( item?.name||'item')+'" from in-person stock?','',function(){
+    inPersonInventory=inPersonInventory.filter(function(i){return i.id!==id;});
+    saveInPerson();renderInPerson();
+  });
+}
+function updateInPersonQty(id,delta){
+  var item=inPersonInventory.find(function(i){return i.id===id;});
+  if(!item)return;
+  item.qty=Math.max(0,(item.qty||0)+delta);
+  saveInPerson();renderInPerson();
+}
+function exportInPersonCSV(){
+  if(!inPersonInventory.length){toast('Nothing to export','Add items to in-person stock first','warning');return;}
+  var rows=[['Name','Price','Make Cost','Qty','Retail Value']];
+  inPersonInventory.forEach(function(i){
+    rows.push(['"'+esc(i.name)+'"','$'+parseFloat(i.price||0).toFixed(2),'$'+parseFloat(i.cost||0).toFixed(2),i.qty||0,'$'+((i.qty||0)*(i.price||0)).toFixed(2)]);
+  });
+  downloadCSV('inperson-stock.csv',rows);
+}
+
+// ════════ CSV EXPORT ════════
+function downloadCSV(filename,rows){
+  var csv=rows.map(function(r){return r.join(',');}).join('\r\n');
+  var a=document.createElement('a');
+  a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);
+  a.download=filename;a.click();
+}
+function exportCatalogCSV(){
+  if(!catalogItems.length){toast('Nothing to export','Add products first','warning');return;}
+  var rows=[['Name','Category','Price','Make Cost','Stock Qty','Low Stock At','Platform','Description']];
+  catalogItems.forEach(function(c){
+    rows.push([
+      '"'+(c.name||'').replace(/"/g,'""')+'"',
+      '"'+(c.category||'').replace(/"/g,'""')+'"',
+      '$'+parseFloat(c.price||0).toFixed(2),
+      '$'+parseFloat(c.cost||0).toFixed(2),
+      c.stockQty!=null?c.stockQty:'',
+      c.lowStockAt!=null?c.lowStockAt:3,
+      c.fromShopify?'Shopify':c.fromEtsy?'Etsy':'Manual',
+      '"'+(c.desc||'').replace(/"/g,'""')+'"'
+    ]);
+  });
+  downloadCSV('catalog-'+new Date().toISOString().split('T')[0]+'.csv',rows);
+  toast('Catalog Exported',catalogItems.length+' products','success');
+}
+function exportOrdersCSV(){
+  var list=[...orders];
+  if(!list.length){toast('No orders to export','','warning');return;}
+  list.sort(function(a,b){return (b.timestamp||0)-(a.timestamp||0);});
+  var rows=[['Order ID','Date','Customer','Platform','Status','Items','Total']];
+  list.forEach(function(o){
+    var total=(o.items||[]).reduce(function(s,i){return s+(parseFloat(i.price)||0)*(parseInt(i.qty)||1);},0)+(parseFloat(o.shipping)||0);
+    var itemsStr=(o.items||[]).map(function(i){return i.name+(i.qty>1?' x'+i.qty:'');}).join('; ');
+    rows.push([
+      o.orderId||'',
+      o.date||'',
+      '"'+(o.customer||'').replace(/"/g,'""')+'"',
+      o.platform||'Manual',
+      o.status||'pending',
+      '"'+itemsStr.replace(/"/g,'""')+'"',
+      '$'+total.toFixed(2)
+    ]);
+  });
+  downloadCSV('orders-'+new Date().toISOString().split('T')[0]+'.csv',rows);
+  toast('Orders Exported',list.length+' orders','success');
+}
+
+// ════════ CATALOG → PRINTS / ORDER ════════
+function addToPrintsFromCatalog(id){
+  var item=catalogItems.find(function(c){return c.id===id;});
+  if(!item)return;
+  var tmf=item.tmfId?tmfLib.find(function(t){return t.id===item.tmfId;}):null;
+  if(!tmf){toast('No 3MF Linked','Edit the product to link a 3MF file first','warning');return;}
+  var newPrint={
+    id:uid(),name:item.name,category:item.category||'Other',
+    printer:printerRecords[0]?.name||'X1C',
+    hrs:tmf.hrs||0,qty:1,
+    filaments:tmf.filamentGrams?tmf.filamentGrams.map(function(g){return{spoolId:spools[0]?.id||'',grams:g};}): [],
+    notes:'From catalog',tmfName:tmf.name,timestamp:Date.now(),status:'printing'
+  };
+  prints.push(newPrint);savePrints();
+  toast('Added to Prints',item.name+' → Prints tab','success');
+  navTo('prints',document.getElementById('nav-prints'));
+}
+function addToOrderFromCatalog(id){
+  var item=catalogItems.find(function(c){return c.id===id;});
+  if(!item)return;
+  openAddOrder();
+  setTimeout(function(){
+    var eoItems=document.getElementById('eo-items');
+    if(eoItems)eoItems.value=item.name+' · 1 · $'+parseFloat(item.price||0).toFixed(2);
+    var eoPlatform=document.getElementById('eo-platform');
+    if(eoPlatform)eoPlatform.value='Direct';
+  },50);
+}
+
+// ════════ CONVENTION BADGE ════════
+function updateConventionBadge(){
+  var badge=document.getElementById('nav-badge-convention');
+  if(!badge)return;
+  var now=Date.now();
+  var soon=conventions.filter(function(c){
+    var start=new Date(c.start).getTime();
+    var end=new Date(c.end||c.start).getTime()+86399999;
+    var daysAway=(start-now)/86400000;
+    return end>=now&&daysAway<=7;
+  });
+  if(soon.length){
+    badge.textContent=soon.length;
+    badge.classList.add('show');
+  }else{
+    badge.classList.remove('show');
+  }
+}
 </script>
 <!-- BULK ACTION BAR -->
 <div class="bulk-bar" id="bulk-bar">
