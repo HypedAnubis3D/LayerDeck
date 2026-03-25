@@ -1436,7 +1436,6 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
         <button class="nav-item" id="nav-orders" onclick="navTo('orders',this)"><span class="nav-icon">📬</span><span class="nav-label">Orders</span><span class="nav-badge" id="nav-badge-orders">!</span><span class="nav-shortcut">O</span></button>
         <button class="nav-item" id="nav-customers" onclick="navTo('customers',this)"><span class="nav-icon">👥</span><span class="nav-label">Customers</span><span class="nav-shortcut">C</span></button>
         <button class="nav-item" id="nav-mystery" onclick="navTo('mystery',this)"><span class="nav-icon">🎁</span><span class="nav-label">Mystery Prints</span><span class="nav-badge" id="nav-badge-mystery"></span></button>
-        <button class="nav-item" id="nav-loyalty" onclick="navTo('loyalty',this)"><span class="nav-icon">⭐</span><span class="nav-label">Loyalty Tracker</span></button>
         <button class="nav-item" id="nav-reviews" onclick="navTo('reviews',this)"><span class="nav-icon">🌟</span><span class="nav-label">Reviews</span></button>
         <button class="nav-item" id="nav-shiny" onclick="navTo('shiny',this)"><span class="nav-icon">✨</span><span class="nav-label">Shiny Tracker</span></button>
       </div>
@@ -1988,15 +1987,6 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
   </div>
   <div id="mystery-summary" style="margin-bottom:12px"></div>
   <div id="mystery-grid"></div>
-</div>
-
-<!-- CUSTOMER LOYALTY -->
-<div id="tab-loyalty" style="display:none">
-  <div class="ctrl">
-    <span style="font-size:8px;color:var(--txt-d)">Customers automatically advance tiers based on order count · Bronze 3+ · Silver 6+ · Gold 10+</span>
-    <span class="cnt" id="loyalty-cnt"></span>
-  </div>
-  <div id="loyalty-grid"></div>
 </div>
 
 <!-- REVIEW TRACKER -->
@@ -6889,7 +6879,6 @@ function render(){
   if(curTab==='catalog')    renderCatalog();
   if(curTab==='purchases')  renderPurchases();
   if(curTab==='shipping')   renderShipping();
-  if(curTab==='loyalty')    renderLoyalty();
   if(curTab==='reviews')    renderReviews();
   if(curTab==='mystery')    renderMystery();
   if(curTab==='fildb')      renderFildb();
@@ -8739,24 +8728,22 @@ function exportTaxReport(){
 // V15 DATA & INIT
 // ════════════════════════════════════════
 Object.assign(KEYS,{
-  loyalty:'ha3d_loyalty_v1', reviews:'ha3d_reviews_v1',
+  reviews:'ha3d_reviews_v1',
   conventions:'ha3d_conventions_v1'
 });
 Object.assign(TAB_NAMES,{
-  loyalty:'Loyalty Tracker', reviews:'Review Tracker', fildb:'Filament Database',
+  reviews:'Review Tracker', fildb:'Filament Database',
   convention:'Convention Planner', drying:'Dry Time Scheduler',
   power:'Power Cost Dashboard'
 });
-ALL_TABS.push('loyalty','reviews','fildb','convention','drying','power');
+ALL_TABS.push('reviews','fildb','convention','drying','power');
 
-let loyaltyData={}, reviewsList=[], conventions=[];
+let reviewsList=[], conventions=[];
 
 function loadV15(){
-  try{loyaltyData=JSON.parse(localStorage.getItem(KEYS.loyalty)||'{}');}catch(e){loyaltyData={};}
   reviewsList=gs(KEYS.reviews);
   conventions=gs(KEYS.conventions);
 }
-function saveLoyalty(){localStorage.setItem(KEYS.loyalty,JSON.stringify(loyaltyData));}
 function saveReviews(){ss(KEYS.reviews,reviewsList);}
 function saveConventions(){ss(KEYS.conventions,conventions);}
 
@@ -8776,7 +8763,7 @@ function openGroupForTab(tab){
   const tabGroups={
     dashboard:null,
     prints:'sbg-production',tmf:'sbg-production',queue:'sbg-production',
-    orders:'sbg-orders',customers:'sbg-orders',loyalty:'sbg-orders',reviews:'sbg-orders',mystery:'sbg-orders',shiny:'sbg-orders',
+    orders:'sbg-orders',customers:'sbg-orders',reviews:'sbg-orders',mystery:'sbg-orders',shiny:'sbg-orders',
     revenue:'sbg-business',catalogItems:'sbg-business',tax:'sbg-business',convention:'sbg-business',priceengine:'sbg-business',
     printers:'sbg-ops',spools:'sbg-ops',fildb:'sbg-ops',drying:'sbg-ops',power:'sbg-ops',maint:'sbg-ops',nozzle:'sbg-ops',waste:'sbg-ops',purchases:'sbg-ops',shipping:'sbg-ops',forecast:'sbg-ops',restock:'sbg-ops',shop:'sbg-ops',
     fulfillment:'sbg-system',failrate:'sbg-system',sync:'sbg-system',history:'sbg-system',stats:'sbg-system',backup:'sbg-system',labels:'sbg-system'
@@ -8790,75 +8777,6 @@ function openGroupForTab(tab){
   });
 }
 // openGroupForTab is called directly inside the consolidated navTo function above
-
-// ── CUSTOMER LOYALTY TRACKER ──
-const LOYALTY_TIERS={bronze:{min:3,max:5,icon:'🥉',color:'var(--org-b)',label:'Bronze'},silver:{min:6,max:9,icon:'🥈',color:'#a8b4c0',label:'Silver'},gold:{min:10,max:99999,icon:'🥇',color:'var(--gold-b)',label:'Gold'}};
-function getLoyaltyTier(orderCount){
-  if(orderCount>=10)return LOYALTY_TIERS.gold;
-  if(orderCount>=6)return LOYALTY_TIERS.silver;
-  if(orderCount>=3)return LOYALTY_TIERS.bronze;
-  return null;
-}
-function renderLoyalty(){
-  // Build customer order counts from orders
-  const custMap={};
-  orders.forEach(o=>{
-    const name=o.customer||'Unknown';
-    if(!custMap[name]){custMap[name]={name,orders:[],totalSpend:0};}
-    custMap[name].orders.push(o);
-    custMap[name].totalSpend+=(o.items||[]).reduce((a,i)=>a+parseFloat(i.price||0)*parseInt(i.qty||1),0)+(parseFloat(o.shipping)||0);
-  });
-  const customers=Object.values(custMap).filter(c=>c.orders.length>=3).sort((a,b)=>b.orders.length-a.orders.length);
-  document.getElementById('loyalty-cnt').textContent=customers.length+' loyal customers';
-  const g=document.getElementById('loyalty-grid');
-  if(!customers.length){
-    g.innerHTML=emptyState('⭐','No Loyal Customers Yet','Customers with 3+ orders appear here automatically',`<button class="btn btn-teal" onclick="navTo('orders')">View Orders</button>`);
-    return;
-  }
-  g.innerHTML=`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:9px">`+customers.map(c=>{
-    const tier=getLoyaltyTier(c.orders.length);
-    const nextTier=c.orders.length<6?LOYALTY_TIERS.silver:c.orders.length<10?LOYALTY_TIERS.gold:null;
-    const toNext=nextTier?nextTier.min-c.orders.length:0;
-    const notes=loyaltyData[c.name]?.notes||'';
-    const perked=loyaltyData[c.name]?.perked||false;
-    return `<div class="spool-card" style="border-left:3px solid ${tier.color}">
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
-        <span style="font-size:22px">${tier.icon}</span>
-        <div style="flex:1">
-          <div style="font-size:12px;font-weight:bold;color:var(--txt-b)">${esc(c.name)}</div>
-          <div style="font-size:7px;color:${tier.color};font-weight:bold;letter-spacing:1px">${tier.label} Customer</div>
-        </div>
-        <div style="text-align:right">
-          <div style="font-family:'Orbitron',monospace;font-size:14px;font-weight:700;color:var(--gold-b)">${c.orders.length}</div>
-          <div style="font-size:6px;color:var(--txt-d)">orders</div>
-        </div>
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px">
-        <div class="ws-stat"><div class="ws-n" style="color:var(--grn-b)">$${c.totalSpend.toFixed(0)}</div><div class="ws-l">Lifetime</div></div>
-        <div class="ws-stat"><div class="ws-n" style="color:var(--cyn)">$${(c.totalSpend/c.orders.length).toFixed(0)}</div><div class="ws-l">Avg Order</div></div>
-      </div>
-      ${nextTier?`<div style="font-size:7px;color:var(--txt-d);margin-bottom:6px">${toNext} more order${toNext!==1?'s':''} to reach <span style="color:${nextTier.color}">${nextTier.label}</span></div>`:'<div style="font-size:7px;color:var(--gold-b);margin-bottom:6px">🏆 Top tier customer!</div>'}
-      ${notes?`<div class="notes-box" style="margin-bottom:8px">${esc(notes)}</div>`:''}
-      <div class="card-acts">
-        <button class="btn btn-ghost btn-xs" style="flex:1" onclick="openLoyaltyNote('${esc(c.name)}','${esc(notes)}')">✏ Notes</button>
-        ${tier===LOYALTY_TIERS.gold?`<button class="btn btn-xs" style="background:var(--gold-d);border:1px solid var(--gold);color:var(--gold-b);flex:1" onclick="markPerked('${esc(c.name)}')">${perked?'✓ Perked':'🎁 Send Perk'}</button>`:''}
-      </div>
-    </div>`;
-  }).join('')+'</div>';
-}
-function openLoyaltyNote(name,current){
-  const note=prompt('Notes for '+name+':',current);
-  if(note===null)return;
-  if(!loyaltyData[name])loyaltyData[name]={};
-  loyaltyData[name].notes=note;
-  saveLoyalty();render();
-}
-function markPerked(name){
-  if(!loyaltyData[name])loyaltyData[name]={};
-  loyaltyData[name].perked=true;
-  saveLoyalty();render();
-  toast('Perk Marked',name+' flagged as perked ✓','success');
-}
 
 // ── REVIEW TRACKER ──
 function renderReviews(){
