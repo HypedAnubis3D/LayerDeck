@@ -9346,58 +9346,45 @@ checkOnboarding();
 
 <!-- ═══════════════════════════════════════════
      SHOPIFY BACKEND OAUTH INTEGRATION
-     Overrides connectShopify, pollShopifyOrders,
-     renderShopify to use server-side OAuth flow.
+     Overrides connectShopify, disconnectShopify,
+     pollShopifyOrders, renderShopify to use
+     server-side OAuth flow (token never in browser)
 ═══════════════════════════════════════════ -->
 <script>
 (function(){
-  // Capture original renderShopify before override
   var _origRenderShopify = window.renderShopify;
 
-  // Override renderShopify to show OAuth UI when not connected
   window.renderShopify = function(){
     var el = document.getElementById('shopify-content');
     if(!el) return;
     if(shopifyCfg.connected && shopifyCfg.domain && !shopifyCfg.domain.includes('DEMO')){
-      // Connected to real store - render connected state then load live products
       _origRenderShopify();
       _loadShopifyProducts();
     } else if(shopifyCfg.connected){
-      // Demo mode - use original render
       _origRenderShopify();
     } else {
-      // Not connected - show OAuth-based connection UI
       var h = '<div class="shopify-connect">';
       h += '<div class="shopify-logo">SHOPIFY</div>';
       h += '<div class="shopify-tagline">Connect your store via secure OAuth — no token copying required</div>';
-      h += '<div class="connect-steps">';
-      h += '<div class="step-title">One-Time Setup</div>';
+      h += '<div class="connect-steps"><div class="step-title">One-Time Setup</div>';
       h += '<div class="step-row"><div class="step-num">1</div><div class="step-text">Enter your Shopify store domain below</div></div>';
       h += '<div class="step-row"><div class="step-num">2</div><div class="step-text">Click <b>Connect with Shopify</b> — you\'ll approve access on Shopify\'s secure login page</div></div>';
       h += '<div class="step-row"><div class="step-num">3</div><div class="step-text">You\'ll return here automatically with orders, products &amp; webhooks all live</div></div>';
       h += '</div>';
-      h += '<div class="connect-form">';
-      h += '<div class="connect-form-title">Your Store</div>';
+      h += '<div class="connect-form"><div class="connect-form-title">Your Store</div>';
       h += '<div class="field"><div class="fl">Store Domain</div>';
       h += '<input type="text" id="sh-domain" placeholder="yourstore.myshopify.com" value="hypedanubis3d-2.myshopify.com"/>';
-      h += '<div class="hint">Your .myshopify.com domain (e.g. hypedanubis3d-2.myshopify.com)</div>';
-      h += '</div>';
+      h += '<div class="hint">Your .myshopify.com domain</div></div>';
       h += '<div style="display:flex;gap:8px;margin-top:12px">';
       h += '<button class="btn btn-shopify" style="flex:1;padding:10px 0;font-size:9px;letter-spacing:1.5px" onclick="connectShopify()">&#x1F6CD; CONNECT WITH SHOPIFY</button>';
-      h += '<button class="btn btn-ghost btn-sm" onclick="previewShopifyDemo()">&#x1F441; Demo</button>';
-      h += '</div>';
-      h += '<div id="shopify-oauth-msg" style="margin-top:10px;font-size:8px;color:var(--txt-d)"></div>';
-      h += '</div>';
-      h += '<div class="shopify-preview-banner" style="margin-top:12px">';
-      h += '&#x1F512; Secure OAuth — your access token is stored server-side only, never in the browser.<br>';
-      h += 'Orders auto-sync every 5 min · Real-time webhooks available · 3MF auto-matching included.';
-      h += '</div>';
+      h += '<button class="btn btn-ghost btn-sm" onclick="previewShopifyDemo()">&#x1F441; Demo</button></div>';
+      h += '<div id="shopify-oauth-msg" style="margin-top:10px;font-size:8px;color:var(--txt-d)"></div></div>';
+      h += '<div class="shopify-preview-banner" style="margin-top:12px">&#x1F512; Secure OAuth — your access token is stored server-side only.<br>Orders auto-sync every 5 min &middot; Real-time webhooks &middot; 3MF auto-matching.</div>';
       h += '</div>';
       el.innerHTML = h;
     }
   };
 
-  // Override connectShopify to use backend OAuth redirect
   window.connectShopify = function(){
     var domain = '';
     var domEl = document.getElementById('sh-domain') || document.getElementById('shopify-domain-input');
@@ -9408,7 +9395,6 @@ checkOnboarding();
     window.location.href = '/api/shopify/oauth/start?shop=' + encodeURIComponent(domain);
   };
 
-  // Override disconnectShopify to also clear server-side credentials
   window.disconnectShopify = function(){
     showConfirm('Disconnect Shopify?','Your local order data will remain. Server-side credentials will be cleared.',function(){
       shopifyCfg = {domain:'',token:'',connected:false,lastOrderId:null,lastPoll:null};
@@ -9420,7 +9406,6 @@ checkOnboarding();
     },'Disconnect','btn-red');
   };
 
-  // Override pollShopifyOrders to route through backend proxy (avoids CORS + hides token)
   window.pollShopifyOrders = async function(){
     if(!shopifyCfg.connected) return;
     if(shopifyCfg.domain && shopifyCfg.domain.includes('DEMO')) return;
@@ -9438,7 +9423,6 @@ checkOnboarding();
     }catch(e){ console.warn('[Shopify] sync failed:',e.message); }
   };
 
-  // Load live products from backend and replace demo products in DOM
   async function _loadShopifyProducts(){
     try{
       var resp = await fetch('/api/shopify/products');
@@ -9460,27 +9444,24 @@ checkOnboarding();
         html += '<div class="shopify-product-card">';
         html += '<div class="sp-title">' + esc(p.title||'') + '</div>';
         html += '<div class="sp-sub">' + (p.variants||[]).length + ' variant(s)</div>';
-        html += '<div class="sp-inventory">';
-        html += '<div class="sp-price">$' + price + '</div>';
-        html += '<div class="sp-stock" style="color:var(--grn)">&#x25CF; Live</div>';
-        html += '</div>';
+        html += '<div class="sp-inventory"><div class="sp-price">$' + price + '</div>';
+        html += '<div class="sp-stock" style="color:var(--grn)">&#x25CF; Live</div></div>';
         html += '<div class="sp-variants">' + vars + '</div>';
         html += '<div style="margin-top:8px;font-size:6px;color:' + (hasTmf?'var(--grn)':'var(--amb)') + '">';
-        html += hasTmf ? '&#x2713; 3MF on file' : '&#x26A0; No 3MF linked \u2014 add to library for auto-queue';
+        html += hasTmf ? '&#x2713; 3MF on file' : '&#x26A0; No 3MF linked';
         html += '</div></div>';
       });
       grid.innerHTML = html;
     }catch(e){}
   }
 
-  // Check URL params for OAuth callback result on page load
   function _checkOAuthCallback(){
     var params = new URLSearchParams(window.location.search);
     if(params.get('shopify_connected') === 'true'){
       var shop = params.get('shop') || '';
       shopifyCfg.connected = true;
       shopifyCfg.domain = shop;
-      shopifyCfg.token = '__server_side__'; // token stored on backend only
+      shopifyCfg.token = '__server_side__';
       saveShopify();
       window.history.replaceState({},'',window.location.pathname);
       setTimeout(function(){
