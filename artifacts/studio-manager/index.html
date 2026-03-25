@@ -1047,6 +1047,39 @@ body.light-mode ::-webkit-scrollbar-thumb{background:var(--bdr2);}
 .catalog-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;align-items:start;}
 .catalogItems-card{background:var(--surf);border:1px solid var(--bdr);border-radius:6px;overflow:hidden;display:flex;flex-direction:column;position:relative;}
 .cat-filter-active{background:var(--gold-d)!important;border-color:var(--gold)!important;color:var(--gold-b)!important;}
+/* ── EVENT MANAGER ── */
+.evt-manage-overlay{position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:1200;display:flex;flex-direction:column;overflow:hidden;}
+.evt-manage-header{background:var(--surf);border-bottom:1px solid var(--bdr);padding:10px 14px;display:flex;align-items:center;gap:10px;flex-shrink:0;}
+.evt-manage-tabs{display:flex;gap:3px;padding:8px 12px;background:var(--bg);border-bottom:1px solid var(--bdr2);overflow-x:auto;flex-shrink:0;}
+.evt-tab{padding:5px 11px;border-radius:5px;border:1px solid var(--bdr2);background:none;color:var(--txt-d);font-size:7.5px;cursor:pointer;white-space:nowrap;font-family:inherit;}
+.evt-tab.active{background:var(--pur-d);border-color:var(--pur);color:var(--pur-b);}
+.evt-manage-body{flex:1;overflow-y:auto;padding:14px;}
+.evt-section{display:none;}.evt-section.active{display:block;}
+.pack-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin-top:10px;}
+.pack-card{background:var(--surf);border:1px solid var(--bdr);border-radius:6px;overflow:hidden;display:flex;flex-direction:column;}
+.pack-card-img{width:100%;height:90px;object-fit:cover;background:var(--bg);display:flex;align-items:center;justify-content:center;font-size:24px;}
+.pack-card-body{padding:8px;}
+.pack-card-name{font-size:7.5px;font-weight:bold;color:var(--txt-b);margin-bottom:3px;line-height:1.3;}
+.pack-card-price{font-size:7px;color:var(--grn-b);font-family:'Orbitron',monospace;margin-bottom:5px;}
+.pack-qty-row{display:flex;align-items:center;gap:4px;}
+.pack-qty-btn{width:20px;height:20px;border-radius:3px;border:1px solid var(--bdr2);background:var(--bg);color:var(--txt);font-size:11px;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+.pack-qty-val{flex:1;text-align:center;font-size:9px;font-weight:bold;font-family:'Orbitron',monospace;color:var(--gold-b);}
+.checklist-item{display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--bdr2);}
+.checklist-item:last-child{border-bottom:none;}
+.checklist-cb{width:15px;height:15px;accent-color:var(--pur);cursor:pointer;flex-shrink:0;}
+.checklist-lbl{font-size:8px;color:var(--txt);flex:1;cursor:pointer;}
+.checklist-lbl.done{text-decoration:line-through;color:var(--txt-d);}
+.sale-method{padding:5px 10px;border-radius:4px;border:1px solid var(--bdr2);background:none;color:var(--txt-d);font-size:7px;cursor:pointer;}
+.sale-method.active{background:var(--pur-d);border-color:var(--pur);color:var(--pur-b);}
+.sale-row{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--bdr2);font-size:7.5px;}
+.qr-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin-top:10px;}
+.qr-card{background:var(--surf);border:1px solid var(--bdr);border-radius:6px;padding:10px;text-align:center;}
+.qr-card img{width:120px;height:120px;border-radius:4px;background:white;padding:4px;}
+.qr-card-name{font-size:7px;color:var(--txt-b);font-weight:bold;margin-top:6px;line-height:1.3;}
+.qr-card-price{font-size:8px;color:var(--grn-b);font-family:'Orbitron',monospace;margin-top:2px;}
+.break-even-bar{height:10px;border-radius:5px;background:var(--bg);border:1px solid var(--bdr2);overflow:hidden;margin:4px 0;}
+.break-even-fill{height:100%;border-radius:5px;transition:width .5s;}
+.catalog-picker-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;margin-top:10px;max-height:55vh;overflow-y:auto;}
 .plat-badges{display:flex;gap:3px;flex-wrap:wrap;margin-bottom:5px;}
 .plat-badge{display:inline-flex;align-items:center;gap:2px;border-radius:3px;padding:2px 5px;font-size:5.5px;font-weight:bold;letter-spacing:.3px;}
 .plat-shopify{background:rgba(149,191,71,.12);color:#95BF47;border:1px solid rgba(149,191,71,.3);}
@@ -2356,13 +2389,106 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
     <div class="field"><div class="fl">Revenue Target ($)</div><input type="number" id="conv-target" min="0" placeholder="500"/></div>
     <div class="field"><div class="fl">Actual Revenue ($)</div><input type="number" id="conv-revenue" min="0" placeholder="0"/></div>
   </div>
-  <div class="field"><div class="fl">Products to Bring (one per line)</div><textarea id="conv-products" rows="3" placeholder="Anubis Figurine ×20&#10;Rubber Duck Wizard ×15&#10;Charizard Ball ×10"></textarea></div>
   <div class="field"><div class="fl">Notes</div><textarea id="conv-notes" rows="2" placeholder="What worked, what to bring next time…"></textarea></div>
   <div class="macts">
     <button class="btn btn-pur" onclick="saveConvention()">Save Event</button>
     <button class="btn btn-ghost" onclick="closeConvention()">Cancel</button>
   </div>
 </div>
+</div>
+
+<!-- EVENT MANAGER (full-screen) -->
+<div class="evt-manage-overlay" id="mod-event-manage" style="display:none">
+  <div class="evt-manage-header">
+    <button class="btn btn-ghost btn-sm" onclick="closeEventManage()" style="padding:4px 10px">← Back</button>
+    <div style="flex:1">
+      <div id="em-title" style="font-size:11px;font-weight:bold;color:var(--txt-b)"></div>
+      <div id="em-subtitle" style="font-size:7px;color:var(--txt-d)"></div>
+    </div>
+    <div id="em-status-badge" style="font-size:7px;padding:3px 8px;border-radius:10px"></div>
+    <button class="btn btn-ghost btn-sm" onclick="openEditConvention(currentEventId)">Edit Details</button>
+  </div>
+  <div class="evt-manage-tabs">
+    <button class="evt-tab active" id="etab-overview"  onclick="setEvtSection('overview')">📊 Overview</button>
+    <button class="evt-tab"        id="etab-packlist"  onclick="setEvtSection('packlist')">📦 Pack List</button>
+    <button class="evt-tab"        id="etab-checklist" onclick="setEvtSection('checklist')">✅ Checklist</button>
+    <button class="evt-tab"        id="etab-sales"     onclick="setEvtSection('sales')">💰 Day Sales</button>
+    <button class="evt-tab"        id="etab-reconcile" onclick="setEvtSection('reconcile')">🔄 Reconcile</button>
+    <button class="evt-tab"        id="etab-qr"        onclick="setEvtSection('qr')">🏷 Price Tags</button>
+  </div>
+  <div class="evt-manage-body">
+    <!-- OVERVIEW -->
+    <div class="evt-section active" id="esec-overview"></div>
+    <!-- PACK LIST -->
+    <div class="evt-section" id="esec-packlist">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+        <div style="font-size:9px;color:var(--txt-b);font-weight:bold">In-Person Catalog</div>
+        <button class="btn btn-pur btn-sm" onclick="openCatalogPicker()">+ Add from Catalog</button>
+        <span style="margin-left:auto;font-size:7px;color:var(--txt-d)" id="em-pack-value"></span>
+      </div>
+      <div id="em-pack-picker" style="display:none;background:var(--surf);border:1px solid var(--bdr);border-radius:6px;padding:12px;margin-bottom:12px">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+          <div style="font-size:8px;font-weight:bold;color:var(--txt-b)">Select products to bring</div>
+          <button class="btn btn-ghost btn-sm" style="margin-left:auto" onclick="closeCatalogPicker()">Done</button>
+        </div>
+        <input class="srch" id="em-picker-search" placeholder="Search catalog…" oninput="renderCatalogPicker()" style="margin-bottom:8px"/>
+        <div class="catalog-picker-grid" id="em-picker-grid"></div>
+      </div>
+      <div class="pack-grid" id="em-pack-grid"></div>
+    </div>
+    <!-- CHECKLIST -->
+    <div class="evt-section" id="esec-checklist">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+        <div style="font-size:9px;color:var(--txt-b);font-weight:bold">Pre-Event Checklist</div>
+        <div id="em-check-progress" style="font-size:7px;color:var(--txt-d)"></div>
+        <button class="btn btn-ghost btn-sm" style="margin-left:auto" onclick="resetChecklist()">Reset All</button>
+      </div>
+      <div id="em-checklist"></div>
+      <div style="display:flex;gap:6px;margin-top:10px">
+        <input class="srch" id="em-check-new" placeholder="Add custom item…" style="flex:1" onkeydown="if(event.key==='Enter')addChecklistItem()"/>
+        <button class="btn btn-ghost btn-sm" onclick="addChecklistItem()">+ Add</button>
+      </div>
+    </div>
+    <!-- DAY SALES -->
+    <div class="evt-section" id="esec-sales">
+      <div id="em-running-total" style="background:var(--surf);border:1px solid var(--bdr);border-radius:6px;padding:12px;margin-bottom:12px;text-align:center"></div>
+      <div style="background:var(--surf);border:1px solid var(--bdr);border-radius:6px;padding:12px;margin-bottom:12px">
+        <div style="font-size:8px;font-weight:bold;color:var(--txt-b);margin-bottom:8px">Record a Sale</div>
+        <div class="field">
+          <div class="fl">Product</div>
+          <select id="em-sale-item" style="font-size:8px" onchange="fillSalePrice()"></select>
+        </div>
+        <div class="fr2">
+          <div class="field"><div class="fl">Qty</div><input type="number" id="em-sale-qty" value="1" min="1" style="font-size:9px"/></div>
+          <div class="field"><div class="fl">Price Each ($)</div><input type="number" id="em-sale-price" step="0.01" style="font-size:9px"/></div>
+        </div>
+        <div style="display:flex;gap:4px;margin-bottom:8px" id="em-method-btns">
+          <button class="sale-method active" data-m="cash"   onclick="setSaleMethod(this)">💵 Cash</button>
+          <button class="sale-method"        data-m="card"   onclick="setSaleMethod(this)">💳 Card</button>
+          <button class="sale-method"        data-m="venmo"  onclick="setSaleMethod(this)">📱 Venmo</button>
+          <button class="sale-method"        data-m="other"  onclick="setSaleMethod(this)">Other</button>
+        </div>
+        <button class="btn btn-grn" style="width:100%;padding:8px" onclick="recordSale()">+ Record Sale</button>
+      </div>
+      <div style="font-size:8px;font-weight:bold;color:var(--txt-b);margin-bottom:6px">Today's Sales</div>
+      <div id="em-sales-list"></div>
+    </div>
+    <!-- RECONCILE -->
+    <div class="evt-section" id="esec-reconcile">
+      <div style="font-size:8px;color:var(--txt-d);margin-bottom:12px;line-height:1.8">After the event, confirm what sold and what's coming back. This updates your revenue automatically.</div>
+      <div id="em-reconcile-list"></div>
+      <div id="em-reconcile-summary" style="margin-top:12px"></div>
+    </div>
+    <!-- QR / PRICE TAGS -->
+    <div class="evt-section" id="esec-qr">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+        <div style="font-size:9px;color:var(--txt-b);font-weight:bold">Price Tags &amp; QR Codes</div>
+        <button class="btn btn-ghost btn-sm" style="margin-left:auto" onclick="printQRTags()">🖨 Print All</button>
+      </div>
+      <div style="font-size:7px;color:var(--txt-d);margin-bottom:10px">QR codes link to your Shopify product page. Items without a Shopify handle link to a product search.</div>
+      <div class="qr-grid" id="em-qr-grid"></div>
+    </div>
+  </div>
 </div>
 
 <!-- REVIEW MODAL -->
@@ -9636,57 +9762,90 @@ function addFilamentToSpools(brand,name,mat,cost,weight){
   },300);
 }
 
-// ── CONVENTION PLANNER ──
+// ════════ CONVENTION PLANNER ════════
+let currentEventId=null;
+let evtSection='overview';
+let evtSaleMethod='cash';
+
+function defaultChecklist(){
+  return [
+    '🖨 Printer(s) charged and tested','🔌 Power strip / extension cord','🧵 Extra filament spools',
+    '🔧 Spare nozzle + toolkit','📋 Business cards / flyers','🏷 Price signs / display cards',
+    '💰 Cash box + change','📱 Square reader + phone mount','💳 Card reader charged',
+    '📦 Display stands / risers','🪤 Velcro / tape / zip ties','📷 Phone charger + battery bank',
+    '🛍 Bags / tissue paper for purchases','🧼 Hand sanitizer','📝 Order log / receipt book',
+    '🎟 Event badge / tickets','🚗 Parking pass / directions'
+  ].map(function(t){return {id:uid(),text:t,done:false};});
+}
+
+function getEvt(){return conventions.find(function(c){return c.id===currentEventId;});}
+function saveEvt(){
+  const idx=conventions.findIndex(function(c){return c.id===currentEventId;});
+  if(idx>=0){conventions[idx]=getEvt();}
+  saveConventions();
+}
+
 function renderConvention(){
   document.getElementById('convention-cnt').textContent=conventions.length+' events';
   const g=document.getElementById('convention-grid');
-  if(!conventions.length){g.innerHTML=emptyState('🎪','No Events Planned','Track conventions, markets, and popup events — manage inventory targets and actual sales',`<button class="btn btn-pur" onclick="openAddConvention()">+ Add First Event</button>`);return;}
+  if(!conventions.length){g.innerHTML=emptyState('🎪','No Events Planned','Track conventions, markets, and popup events — full inventory, day-of sales, and QR tags',`<button class="btn btn-pur" onclick="openAddConvention()">+ Add First Event</button>`);return;}
   const now=Date.now();
-  const sorted=[...conventions].sort((a,b)=>new Date(a.start)-new Date(b.start));
-  g.innerHTML=sorted.map(c=>{
+  const sorted=[...conventions].sort(function(a,b){return new Date(a.start)-new Date(b.start);});
+  g.innerHTML=sorted.map(function(c){
     const startTs=new Date(c.start).getTime();
-    const endTs=new Date(c.end||c.start).getTime();
+    const endTs=new Date(c.end||c.start).getTime()+86399999;
     const isPast=endTs<now;
     const isLive=startTs<=now&&endTs>=now;
-    const profit=(c.revenue||0)-(c.cost||0);
-    const products=(c.products||'').split('\n').filter(Boolean);
+    const daySalesRev=(c.daySales||[]).reduce(function(a,s){return a+parseFloat(s.price||0)*parseInt(s.qty||1);},0);
+    const revenue=daySalesRev||c.revenue||0;
+    const cost=c.cost||0;
+    const profit=revenue-cost;
+    const packCount=(c.inPersonCatalog||[]).reduce(function(a,i){return a+(i.qtyBring||0);},0);
+    const checkDone=(c.checklist||[]).filter(function(x){return x.done;}).length;
+    const checkTotal=(c.checklist||[]).length;
     return `<div class="catalogItems-card" style="border-left:3px solid ${isLive?'var(--grn)':isPast?'var(--bdr2)':'var(--pur)'}">
       <div class="catalogItems-body">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
-          <div>
-            <div style="font-size:12px;font-weight:bold;color:var(--txt-b)">${esc(c.name)}</div>
-            <div style="font-size:7px;color:var(--txt-d)">${esc(c.loc||'—')} · ${c.start||'TBD'}</div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:12px;font-weight:bold;color:var(--txt-b);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(c.name)}</div>
+            <div style="font-size:7px;color:var(--txt-d)">${esc(c.loc||'—')} · ${c.start||'TBD'}${c.end&&c.end!==c.start?' → '+c.end:''}</div>
           </div>
-          <span style="font-size:8px;padding:3px 8px;border-radius:10px;background:${isLive?'var(--grn-d)':isPast?'var(--bdr)':'var(--pur-d)'};color:${isLive?'var(--grn-b)':isPast?'var(--txt-d)':'var(--pur-b)'}">
+          <span style="font-size:7px;padding:2px 7px;border-radius:10px;margin-left:6px;flex-shrink:0;background:${isLive?'var(--grn-d)':isPast?'var(--bdr)':'var(--pur-d)'};color:${isLive?'var(--grn-b)':isPast?'var(--txt-d)':'var(--pur-b)'}">
             ${isLive?'🟢 LIVE':isPast?'Past':'Upcoming'}
           </span>
         </div>
-        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin-bottom:8px">
-          <div class="cstat"><div class="cstat-n" style="color:var(--red-b)">$${(c.cost||0).toFixed(0)}</div><div class="cstat-l">Table Cost</div></div>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin-bottom:8px">
+          <div class="cstat"><div class="cstat-n" style="color:var(--red-b)">$${cost.toFixed(0)}</div><div class="cstat-l">Booth</div></div>
           <div class="cstat"><div class="cstat-n" style="color:var(--gold-b)">$${(c.target||0).toFixed(0)}</div><div class="cstat-l">Target</div></div>
+          <div class="cstat"><div class="cstat-n" style="color:var(--cyn)">${packCount}</div><div class="cstat-l">Items</div></div>
           <div class="cstat"><div class="cstat-n" style="color:${profit>=0?'var(--grn-b)':'var(--red-b)'}">$${profit.toFixed(0)}</div><div class="cstat-l">Net</div></div>
         </div>
-        ${c.revenue?`<div style="margin-bottom:8px"><div style="font-size:7px;color:var(--txt-d);margin-bottom:3px">Revenue vs Target</div><div style="background:var(--bg);border-radius:3px;height:6px;overflow:hidden"><div style="height:100%;background:var(--grn);border-radius:3px;width:${Math.min(100,((c.revenue/c.target||0)*100)).toFixed(1)}%"></div></div></div>`:''}
-        ${products.length?`<div style="font-size:7px;color:var(--txt-d);margin-bottom:8px">📦 ${products.slice(0,3).map(p=>esc(p)).join(' · ')}${products.length>3?' +more':''}</div>`:''}
-        ${c.notes?`<div class="notes-box" style="margin-bottom:8px">${esc(c.notes)}</div>`:''}
+        ${revenue&&c.target?`<div style="margin-bottom:8px">
+          <div style="display:flex;justify-content:space-between;font-size:6px;color:var(--txt-d);margin-bottom:3px"><span>Revenue $${revenue.toFixed(0)}</span><span>${Math.min(100,Math.round(revenue/c.target*100))}%</span></div>
+          <div class="break-even-bar"><div class="break-even-fill" style="width:${Math.min(100,revenue/c.target*100).toFixed(1)}%;background:${revenue>=cost?'var(--grn)':'var(--amb)'}"></div></div>
+        </div>`:''}
+        ${checkTotal?`<div style="font-size:6.5px;color:var(--txt-d);margin-bottom:6px">✅ Checklist ${checkDone}/${checkTotal} done</div>`:''}
         <div class="card-acts">
-          <button class="btn btn-ghost btn-xs" style="flex:1" onclick="openEditConvention('${c.id}')">Edit</button>
+          <button class="btn btn-pur btn-xs" style="flex:2" onclick="openEventManage('${c.id}')">🎪 Manage →</button>
+          <button class="btn btn-ghost btn-xs" onclick="openEditConvention('${c.id}')">Edit</button>
           <button class="btn btn-xs" style="background:var(--red-d);border:1px solid var(--red-d);color:var(--red-b)" onclick="delConvention('${c.id}')">✕</button>
         </div>
       </div>
     </div>`;
   }).join('');
 }
+
 function openAddConvention(){
   document.getElementById('conv-modal-title').textContent='Add Convention / Event';
-  ['conv-id','conv-name','conv-loc','conv-products','conv-notes'].forEach(i=>document.getElementById(i).value='');
-  ['conv-cost','conv-target','conv-revenue'].forEach(i=>document.getElementById(i).value='');
+  ['conv-id','conv-name','conv-loc','conv-notes'].forEach(function(i){document.getElementById(i).value='';});
+  ['conv-cost','conv-target','conv-revenue'].forEach(function(i){document.getElementById(i).value='';});
   document.getElementById('conv-start').value=new Date().toISOString().split('T')[0];
   document.getElementById('conv-end').value='';
   document.getElementById('mod-convention').style.display='flex';
 }
 function openEditConvention(id){
-  const c=conventions.find(x=>x.id===id);if(!c)return;
+  const c=conventions.find(function(x){return x.id===id;});if(!c)return;
+  // Close event manager if open (edit details from within it)
   document.getElementById('conv-modal-title').textContent='Edit Event';
   document.getElementById('conv-id').value=id;
   document.getElementById('conv-name').value=c.name||'';
@@ -9696,7 +9855,6 @@ function openEditConvention(id){
   document.getElementById('conv-cost').value=c.cost||'';
   document.getElementById('conv-target').value=c.target||'';
   document.getElementById('conv-revenue').value=c.revenue||'';
-  document.getElementById('conv-products').value=c.products||'';
   document.getElementById('conv-notes').value=c.notes||'';
   document.getElementById('mod-convention').style.display='flex';
 }
@@ -9704,12 +9862,444 @@ function saveConvention(){
   const name=document.getElementById('conv-name').value.trim();
   if(!name){document.getElementById('conv-name').focus();return;}
   const id=document.getElementById('conv-id').value;
-  const obj={id:id||uid(),name,loc:document.getElementById('conv-loc').value.trim(),start:document.getElementById('conv-start').value,end:document.getElementById('conv-end').value,cost:parseFloat(document.getElementById('conv-cost').value)||0,target:parseFloat(document.getElementById('conv-target').value)||0,revenue:parseFloat(document.getElementById('conv-revenue').value)||0,products:document.getElementById('conv-products').value,notes:document.getElementById('conv-notes').value.trim()};
-  if(id){conventions=conventions.map(c=>c.id===id?obj:c);}else{conventions.push(obj);}
-  saveConventions();closeConvention();render();toast('Event Saved',name,'success');
+  const existing=id?conventions.find(function(c){return c.id===id;}):null;
+  const obj=Object.assign({},existing||{},{
+    id:id||uid(),name,
+    loc:document.getElementById('conv-loc').value.trim(),
+    start:document.getElementById('conv-start').value,
+    end:document.getElementById('conv-end').value,
+    cost:parseFloat(document.getElementById('conv-cost').value)||0,
+    target:parseFloat(document.getElementById('conv-target').value)||0,
+    revenue:parseFloat(document.getElementById('conv-revenue').value)||0,
+    notes:document.getElementById('conv-notes').value.trim(),
+    inPersonCatalog:existing?existing.inPersonCatalog||[]:existing?existing.inPersonCatalog||[]:[],
+    checklist:existing?existing.checklist||defaultChecklist():defaultChecklist(),
+    daySales:existing?existing.daySales||[]:[],
+    reconciled:existing?existing.reconciled||false:false
+  });
+  if(id){conventions=conventions.map(function(c){return c.id===id?obj:c;});}else{conventions.push(obj);}
+  saveConventions();closeConvention();
+  if(currentEventId===id) renderEvtOverview();
+  render();toast('Event Saved',name,'success');
 }
-function delConvention(id){showConfirm('Delete event?','',()=>{conventions=conventions.filter(c=>c.id!==id);saveConventions();render();});}
+function delConvention(id){
+  showConfirm('Delete event?','All pack list, sales and checklist data will be lost.',function(){
+    conventions=conventions.filter(function(c){return c.id!==id;});
+    saveConventions();
+    if(currentEventId===id) closeEventManage();
+    render();
+  });
+}
 function closeConvention(){document.getElementById('mod-convention').style.display='none';}
+
+// ── Event Manager ──
+function openEventManage(id){
+  currentEventId=id;
+  const c=getEvt();if(!c)return;
+  // Ensure new fields exist
+  if(!c.inPersonCatalog) c.inPersonCatalog=[];
+  if(!c.checklist||!c.checklist.length) c.checklist=defaultChecklist();
+  if(!c.daySales) c.daySales=[];
+  saveEvt();
+  // Set header
+  const now=Date.now();
+  const startTs=new Date(c.start).getTime();
+  const endTs=new Date(c.end||c.start).getTime()+86399999;
+  const isPast=endTs<now;
+  const isLive=startTs<=now&&endTs>=now;
+  document.getElementById('em-title').textContent=c.name;
+  document.getElementById('em-subtitle').textContent=(c.loc||'')+' · '+(c.start||'TBD')+(c.end&&c.end!==c.start?' → '+c.end:'');
+  const badge=document.getElementById('em-status-badge');
+  badge.textContent=isLive?'🟢 LIVE':isPast?'Past':'Upcoming';
+  badge.style.background=isLive?'var(--grn-d)':isPast?'var(--bdr)':'var(--pur-d)';
+  badge.style.color=isLive?'var(--grn-b)':isPast?'var(--txt-d)':'var(--pur-b)';
+  document.getElementById('mod-event-manage').style.display='flex';
+  setEvtSection('overview');
+}
+function closeEventManage(){
+  document.getElementById('mod-event-manage').style.display='none';
+  currentEventId=null;
+  render();
+}
+function setEvtSection(s){
+  evtSection=s;
+  ['overview','packlist','checklist','sales','reconcile','qr'].forEach(function(k){
+    document.getElementById('esec-'+k).classList.toggle('active',k===s);
+    document.getElementById('etab-'+k).classList.toggle('active',k===s);
+  });
+  if(s==='overview') renderEvtOverview();
+  else if(s==='packlist') renderPackList();
+  else if(s==='checklist') renderChecklist();
+  else if(s==='sales') renderDaySales();
+  else if(s==='reconcile') renderReconcile();
+  else if(s==='qr') renderQRTags();
+}
+
+// ── Overview ──
+function renderEvtOverview(){
+  const c=getEvt();if(!c)return;
+  const daySalesRev=(c.daySales||[]).reduce(function(a,s){return a+parseFloat(s.price||0)*parseInt(s.qty||1);},0);
+  const revenue=daySalesRev||c.revenue||0;
+  const cost=c.cost||0;
+  const target=c.target||0;
+  const profit=revenue-cost;
+  const breakEvenPct=cost>0?Math.min(100,revenue/cost*100):100;
+  const targetPct=target>0?Math.min(100,revenue/target*100):0;
+  const packItems=(c.inPersonCatalog||[]);
+  const totalItems=packItems.reduce(function(a,i){return a+(i.qtyBring||0);},0);
+  const totalInventoryValue=packItems.reduce(function(a,i){return a+(i.qtyBring||0)*(i.price||0);},0);
+  const checkDone=(c.checklist||[]).filter(function(x){return x.done;}).length;
+  const checkTotal=(c.checklist||[]).length;
+  const topSellers=Object.entries((c.daySales||[]).reduce(function(acc,s){acc[s.itemName]=(acc[s.itemName]||0)+parseInt(s.qty||1);return acc;},{}))
+    .sort(function(a,b){return b[1]-a[1];}).slice(0,5);
+  const methodBreakdown=(c.daySales||[]).reduce(function(acc,s){acc[s.method]=(acc[s.method]||0)+parseFloat(s.price||0)*parseInt(s.qty||1);return acc;},{});
+  document.getElementById('esec-overview').innerHTML=`
+    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:12px">
+      <div style="background:var(--surf);border:1px solid var(--bdr);border-radius:6px;padding:12px;text-align:center">
+        <div style="font-size:22px;font-weight:bold;color:var(--grn-b);font-family:Orbitron,monospace">$${revenue.toFixed(0)}</div>
+        <div style="font-size:6px;color:var(--txt-d);letter-spacing:1px;margin-top:2px">REVENUE</div>
+      </div>
+      <div style="background:var(--surf);border:1px solid var(--bdr);border-radius:6px;padding:12px;text-align:center">
+        <div style="font-size:22px;font-weight:bold;color:${profit>=0?'var(--gold-b)':'var(--red-b)'};font-family:Orbitron,monospace">$${profit.toFixed(0)}</div>
+        <div style="font-size:6px;color:var(--txt-d);letter-spacing:1px;margin-top:2px">NET PROFIT</div>
+      </div>
+      <div style="background:var(--surf);border:1px solid var(--bdr);border-radius:6px;padding:12px;text-align:center">
+        <div style="font-size:22px;font-weight:bold;color:var(--cyn);font-family:Orbitron,monospace">${totalItems}</div>
+        <div style="font-size:6px;color:var(--txt-d);letter-spacing:1px;margin-top:2px">ITEMS PACKED</div>
+      </div>
+      <div style="background:var(--surf);border:1px solid var(--bdr);border-radius:6px;padding:12px;text-align:center">
+        <div style="font-size:22px;font-weight:bold;color:var(--pur-b);font-family:Orbitron,monospace">$${totalInventoryValue.toFixed(0)}</div>
+        <div style="font-size:6px;color:var(--txt-d);letter-spacing:1px;margin-top:2px">TABLE VALUE</div>
+      </div>
+    </div>
+    <div style="background:var(--surf);border:1px solid var(--bdr);border-radius:6px;padding:12px;margin-bottom:10px">
+      <div style="font-size:8px;font-weight:bold;color:var(--txt-b);margin-bottom:8px">Break-Even Progress</div>
+      <div style="display:flex;justify-content:space-between;font-size:6.5px;color:var(--txt-d);margin-bottom:3px">
+        <span>Booth cost: $${cost.toFixed(0)}</span><span>${breakEvenPct.toFixed(0)}% covered</span>
+      </div>
+      <div class="break-even-bar"><div class="break-even-fill" style="width:${breakEvenPct.toFixed(1)}%;background:${breakEvenPct>=100?'var(--grn)':'var(--amb)'}"></div></div>
+      ${target?`<div style="display:flex;justify-content:space-between;font-size:6.5px;color:var(--txt-d);margin-top:6px;margin-bottom:3px"><span>Target: $${target.toFixed(0)}</span><span>${targetPct.toFixed(0)}% reached</span></div>
+      <div class="break-even-bar"><div class="break-even-fill" style="width:${targetPct.toFixed(1)}%;background:var(--pur)"></div></div>`:''}
+    </div>
+    ${topSellers.length?`<div style="background:var(--surf);border:1px solid var(--bdr);border-radius:6px;padding:12px;margin-bottom:10px">
+      <div style="font-size:8px;font-weight:bold;color:var(--txt-b);margin-bottom:8px">🏆 Top Sellers</div>
+      ${topSellers.map(function(t,i){return `<div style="display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid var(--bdr2);font-size:7.5px"><span style="color:var(--txt-d);width:14px">#${i+1}</span><span style="flex:1">${esc(t[0])}</span><span style="color:var(--gold-b);font-family:Orbitron,monospace">${t[1]} sold</span></div>`;}).join('')}
+    </div>`:''}
+    ${Object.keys(methodBreakdown).length?`<div style="background:var(--surf);border:1px solid var(--bdr);border-radius:6px;padding:12px;margin-bottom:10px">
+      <div style="font-size:8px;font-weight:bold;color:var(--txt-b);margin-bottom:8px">💳 Payment Methods</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(100px,1fr));gap:6px">
+        ${Object.entries(methodBreakdown).map(function(m){return `<div style="text-align:center;background:var(--bg);border-radius:4px;padding:6px"><div style="font-size:12px;font-weight:bold;color:var(--cyn);font-family:Orbitron,monospace">$${m[1].toFixed(0)}</div><div style="font-size:6px;color:var(--txt-d);text-transform:capitalize">${m[0]}</div></div>`;}).join('')}
+      </div>
+    </div>`:''}
+    <div style="background:var(--surf);border:1px solid var(--bdr);border-radius:6px;padding:12px">
+      <div style="font-size:8px;font-weight:bold;color:var(--txt-b);margin-bottom:8px">Quick Actions</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+        <button class="btn btn-pur btn-sm" onclick="setEvtSection('packlist')">📦 Pack List (${(c.inPersonCatalog||[]).length} items)</button>
+        <button class="btn btn-ghost btn-sm" onclick="setEvtSection('checklist')">✅ Checklist (${checkDone}/${checkTotal})</button>
+        <button class="btn btn-grn btn-sm" onclick="setEvtSection('sales')">💰 Record Sale</button>
+        <button class="btn btn-ghost btn-sm" onclick="setEvtSection('qr')">🏷 Price Tags</button>
+      </div>
+    </div>`;
+}
+
+// ── Pack List ──
+function renderPackList(){
+  const c=getEvt();if(!c)return;
+  const items=c.inPersonCatalog||[];
+  const totalValue=items.reduce(function(a,i){return a+(i.qtyBring||0)*(i.price||0);},0);
+  document.getElementById('em-pack-value').textContent=items.length+' products · $'+totalValue.toFixed(0)+' table value';
+  if(!items.length){
+    document.getElementById('em-pack-grid').innerHTML='<div style="grid-column:1/-1;text-align:center;color:var(--txt-d);font-size:8px;padding:20px">No items added yet — click "+ Add from Catalog"</div>';
+    return;
+  }
+  document.getElementById('em-pack-grid').innerHTML=items.map(function(item){
+    const soldQty=(c.daySales||[]).filter(function(s){return s.catalogItemId===item.catalogItemId;}).reduce(function(a,s){return a+parseInt(s.qty||1);},0);
+    const remaining=Math.max(0,(item.qtyBring||0)-soldQty);
+    return `<div class="pack-card">
+      ${item.photo?`<img class="pack-card-img" src="${esc(item.photo)}" alt="" onerror="this.outerHTML='<div class=pack-card-img>🖼</div>'">`:`<div class="pack-card-img">🏷</div>`}
+      <div class="pack-card-body">
+        <div class="pack-card-name">${esc(item.name)}</div>
+        <div class="pack-card-price">$${parseFloat(item.price||0).toFixed(2)}</div>
+        <div style="font-size:6px;color:var(--txt-d);margin-bottom:4px">${soldQty?soldQty+' sold · '+remaining+' left':'Not sold yet'}</div>
+        <div class="pack-qty-row">
+          <button class="pack-qty-btn" onclick="updatePackQty('${item.catalogItemId}',-1)">−</button>
+          <span class="pack-qty-val">${item.qtyBring||0}</span>
+          <button class="pack-qty-btn" onclick="updatePackQty('${item.catalogItemId}',1)">+</button>
+        </div>
+        <button class="btn btn-xs" style="width:100%;margin-top:5px;background:var(--red-d);border:1px solid var(--red-d);color:var(--red-b)" onclick="removeFromPackList('${item.catalogItemId}')">Remove</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function openCatalogPicker(){
+  document.getElementById('em-pack-picker').style.display='';
+  document.getElementById('em-picker-search').value='';
+  renderCatalogPicker();
+}
+function closeCatalogPicker(){document.getElementById('em-pack-picker').style.display='none';}
+function renderCatalogPicker(){
+  const q=(document.getElementById('em-picker-search')?.value||'').toLowerCase();
+  const c=getEvt();
+  const alreadyIn=new Set((c.inPersonCatalog||[]).map(function(i){return i.catalogItemId;}));
+  const items=catalogItems.filter(function(i){return !q||i.name.toLowerCase().includes(q)||((i.category||'').toLowerCase().includes(q));});
+  document.getElementById('em-picker-grid').innerHTML=items.map(function(item){
+    const inList=alreadyIn.has(item.id);
+    return `<div style="background:var(--surf);border:1px solid ${inList?'var(--pur)':'var(--bdr)'};border-radius:5px;padding:7px;cursor:pointer;text-align:center" onclick="${inList?'removeFromPackList':'addToPackList'}('${item.id}')">
+      ${item.photo?`<img src="${esc(item.photo)}" style="width:100%;height:60px;object-fit:cover;border-radius:3px;margin-bottom:4px" onerror="this.style.display='none'">`:'<div style="height:40px;display:flex;align-items:center;justify-content:center;font-size:20px">🏷</div>'}
+      <div style="font-size:6.5px;color:${inList?'var(--pur-b)':'var(--txt-b)'};font-weight:bold;line-height:1.3;margin-bottom:2px">${esc(item.name)}</div>
+      <div style="font-size:6px;color:var(--grn-b)">$${parseFloat(item.price||0).toFixed(2)}</div>
+      <div style="font-size:6px;color:${inList?'var(--pur-b)':'var(--txt-d)'};margin-top:3px">${inList?'✓ Added':'+ Add'}</div>
+    </div>`;
+  }).join('');
+}
+function addToPackList(catalogItemId){
+  const c=getEvt();if(!c)return;
+  if((c.inPersonCatalog||[]).find(function(i){return i.catalogItemId===catalogItemId;})) return;
+  const catItem=catalogItems.find(function(i){return i.id===catalogItemId;});if(!catItem)return;
+  if(!c.inPersonCatalog) c.inPersonCatalog=[];
+  c.inPersonCatalog.push({catalogItemId,name:catItem.name,photo:catItem.photo||'',price:catItem.price||0,shopifyHandle:catItem.shopifyHandle||'',qtyBring:1});
+  saveEvt();
+  renderCatalogPicker();
+  renderPackList();
+  populateSaleDropdown();
+}
+function removeFromPackList(catalogItemId){
+  const c=getEvt();if(!c)return;
+  c.inPersonCatalog=(c.inPersonCatalog||[]).filter(function(i){return i.catalogItemId!==catalogItemId;});
+  saveEvt();
+  renderCatalogPicker();
+  renderPackList();
+  populateSaleDropdown();
+}
+function updatePackQty(catalogItemId,delta){
+  const c=getEvt();if(!c)return;
+  const item=(c.inPersonCatalog||[]).find(function(i){return i.catalogItemId===catalogItemId;});
+  if(!item)return;
+  item.qtyBring=Math.max(0,(item.qtyBring||0)+delta);
+  saveEvt();
+  renderPackList();
+}
+
+// ── Checklist ──
+function renderChecklist(){
+  const c=getEvt();if(!c)return;
+  const items=c.checklist||[];
+  const done=items.filter(function(x){return x.done;}).length;
+  document.getElementById('em-check-progress').textContent=done+'/'+items.length+' done';
+  document.getElementById('em-checklist').innerHTML=items.map(function(item){
+    return `<div class="checklist-item">
+      <input type="checkbox" class="checklist-cb" id="chk-${item.id}" ${item.done?'checked':''} onchange="toggleChecklistItem('${item.id}',this.checked)"/>
+      <label class="checklist-lbl${item.done?' done':''}" for="chk-${item.id}">${esc(item.text)}</label>
+      <button onclick="removeChecklistItem('${item.id}')" style="background:none;border:none;color:var(--txt-d);font-size:10px;cursor:pointer;padding:2px 4px">✕</button>
+    </div>`;
+  }).join('');
+}
+function toggleChecklistItem(id,checked){
+  const c=getEvt();if(!c)return;
+  const item=(c.checklist||[]).find(function(x){return x.id===id;});
+  if(item){item.done=checked;saveEvt();renderChecklist();}
+}
+function removeChecklistItem(id){
+  const c=getEvt();if(!c)return;
+  c.checklist=(c.checklist||[]).filter(function(x){return x.id!==id;});
+  saveEvt();renderChecklist();
+}
+function addChecklistItem(){
+  const inp=document.getElementById('em-check-new');
+  const text=(inp?.value||'').trim();if(!text)return;
+  const c=getEvt();if(!c)return;
+  if(!c.checklist) c.checklist=[];
+  c.checklist.push({id:uid(),text,done:false});
+  saveEvt();inp.value='';renderChecklist();
+}
+function resetChecklist(){
+  const c=getEvt();if(!c)return;
+  (c.checklist||[]).forEach(function(x){x.done=false;});
+  saveEvt();renderChecklist();
+}
+
+// ── Day Sales ──
+function populateSaleDropdown(){
+  const c=getEvt();if(!c)return;
+  const sel=document.getElementById('em-sale-item');if(!sel)return;
+  const items=c.inPersonCatalog||[];
+  sel.innerHTML=items.length
+    ?items.map(function(i){return `<option value="${esc(i.catalogItemId)}" data-price="${i.price||0}">${esc(i.name)} — $${parseFloat(i.price||0).toFixed(2)}</option>`;}).join('')
+    +'<option value="__custom" data-price="0">Custom / unlisted item…</option>'
+    :'<option value="__custom" data-price="0">Custom / unlisted item…</option>';
+}
+function fillSalePrice(){
+  const sel=document.getElementById('em-sale-item');
+  const price=sel?.selectedOptions[0]?.dataset?.price||0;
+  document.getElementById('em-sale-price').value=parseFloat(price).toFixed(2);
+}
+function setSaleMethod(btn){
+  evtSaleMethod=btn.dataset.m;
+  document.querySelectorAll('#em-method-btns .sale-method').forEach(function(b){b.classList.toggle('active',b===btn);});
+}
+function renderRunningTotal(){
+  const c=getEvt();if(!c)return;
+  const sales=c.daySales||[];
+  const total=sales.reduce(function(a,s){return a+parseFloat(s.price||0)*parseInt(s.qty||1);},0);
+  const cost=c.cost||0;
+  const pct=cost>0?Math.min(100,total/cost*100):100;
+  document.getElementById('em-running-total').innerHTML=`
+    <div style="font-size:28px;font-weight:bold;color:var(--grn-b);font-family:Orbitron,monospace">$${total.toFixed(2)}</div>
+    <div style="font-size:7px;color:var(--txt-d);margin:4px 0">${sales.length} transaction${sales.length!==1?'s':''} · Break-even: $${cost.toFixed(0)}</div>
+    <div class="break-even-bar" style="max-width:280px;margin:0 auto">
+      <div class="break-even-fill" style="width:${pct.toFixed(1)}%;background:${total>=cost?'var(--grn)':'var(--amb)'}"></div>
+    </div>
+    <div style="font-size:6.5px;color:var(--txt-d);margin-top:4px">${pct>=100?'✓ Break-even reached!':'$'+(cost-total).toFixed(2)+' to break-even'}</div>`;
+}
+function renderDaySales(){
+  const c=getEvt();if(!c)return;
+  populateSaleDropdown();
+  fillSalePrice();
+  renderRunningTotal();
+  const sales=[...c.daySales||[]].reverse();
+  const methodIcons={cash:'💵',card:'💳',venmo:'📱',other:'💰'};
+  document.getElementById('em-sales-list').innerHTML=sales.length
+    ?sales.map(function(s){
+        return `<div class="sale-row">
+          <span style="color:var(--txt-d);font-size:10px">${methodIcons[s.method]||'💰'}</span>
+          <span style="flex:1;color:var(--txt)">${esc(s.itemName)}</span>
+          <span style="color:var(--txt-d)">×${s.qty}</span>
+          <span style="color:var(--grn-b);font-family:Orbitron,monospace;min-width:50px;text-align:right">$${(parseFloat(s.price||0)*parseInt(s.qty||1)).toFixed(2)}</span>
+          <button onclick="deleteSale('${s.id}')" style="background:none;border:none;color:var(--txt-d);font-size:10px;cursor:pointer;padding:2px 4px">✕</button>
+        </div>`;
+    }).join('')
+    :'<div style="text-align:center;color:var(--txt-d);font-size:8px;padding:20px">No sales recorded yet</div>';
+}
+function recordSale(){
+  const c=getEvt();if(!c)return;
+  const sel=document.getElementById('em-sale-item');
+  const catalogItemId=sel?.value||'__custom';
+  const itemName=catalogItemId==='__custom'
+    ?prompt('Item name:')||'Custom Item'
+    :(c.inPersonCatalog||[]).find(function(i){return i.catalogItemId===catalogItemId;})?.name||'Item';
+  const qty=parseInt(document.getElementById('em-sale-qty')?.value||1)||1;
+  const price=parseFloat(document.getElementById('em-sale-price')?.value||0)||0;
+  if(!price){toast('Enter a price','','warning');return;}
+  const sale={id:uid(),timestamp:Date.now(),itemName,catalogItemId,qty,price,method:evtSaleMethod};
+  if(!c.daySales) c.daySales=[];
+  c.daySales.push(sale);
+  // Reset qty input
+  const qtyEl=document.getElementById('em-sale-qty');if(qtyEl)qtyEl.value=1;
+  saveEvt();
+  renderDaySales();
+  toast('Sale Recorded',itemName+' × '+qty+' — $'+(price*qty).toFixed(2),'success');
+}
+function deleteSale(saleId){
+  const c=getEvt();if(!c)return;
+  c.daySales=(c.daySales||[]).filter(function(s){return s.id!==saleId;});
+  saveEvt();renderDaySales();
+}
+
+// ── Reconcile ──
+function renderReconcile(){
+  const c=getEvt();if(!c)return;
+  const items=c.inPersonCatalog||[];
+  if(!items.length){
+    document.getElementById('em-reconcile-list').innerHTML='<div style="text-align:center;color:var(--txt-d);font-size:8px;padding:20px">Add items to your Pack List first</div>';
+    return;
+  }
+  document.getElementById('em-reconcile-list').innerHTML=items.map(function(item){
+    const soldFromSales=(c.daySales||[]).filter(function(s){return s.catalogItemId===item.catalogItemId;}).reduce(function(a,s){return a+parseInt(s.qty||1);},0);
+    const returnedQty=item.qtyReturn!=null?item.qtyReturn:(item.qtyBring||0)-soldFromSales;
+    const soldQty=item.qtySold!=null?item.qtySold:soldFromSales;
+    return `<div style="background:var(--surf);border:1px solid var(--bdr);border-radius:5px;padding:10px;margin-bottom:8px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+        ${item.photo?`<img src="${esc(item.photo)}" style="width:36px;height:36px;object-fit:cover;border-radius:3px" onerror="this.style.display='none'">`:'<div style="width:36px;height:36px;background:var(--bg);border-radius:3px;display:flex;align-items:center;justify-content:center;font-size:16px">🏷</div>'}
+        <div style="flex:1"><div style="font-size:8px;font-weight:bold">${esc(item.name)}</div><div style="font-size:6.5px;color:var(--txt-d)">Brought: ${item.qtyBring||0} · Day-sales recorded: ${soldFromSales}</div></div>
+      </div>
+      <div class="fr2">
+        <div class="field"><div class="fl">Qty Actually Sold</div><input type="number" min="0" value="${soldQty}" style="font-size:9px" onchange="setReconcileField('${item.catalogItemId}','qtySold',this.value)"/></div>
+        <div class="field"><div class="fl">Qty Returning</div><input type="number" min="0" value="${returnedQty}" style="font-size:9px" onchange="setReconcileField('${item.catalogItemId}','qtyReturn',this.value)"/></div>
+      </div>
+    </div>`;
+  }).join('');
+  renderReconcileSummary();
+}
+function setReconcileField(catalogItemId,field,value){
+  const c=getEvt();if(!c)return;
+  const item=(c.inPersonCatalog||[]).find(function(i){return i.catalogItemId===catalogItemId;});
+  if(item){item[field]=parseInt(value)||0;saveEvt();renderReconcileSummary();}
+}
+function renderReconcileSummary(){
+  const c=getEvt();if(!c)return;
+  const items=c.inPersonCatalog||[];
+  const totalSold=items.reduce(function(a,i){return a+(i.qtySold!=null?i.qtySold:0);},0);
+  const totalRev=items.reduce(function(a,i){return a+(i.qtySold!=null?i.qtySold:0)*(i.price||0);},0);
+  const totalReturn=items.reduce(function(a,i){return a+(i.qtyReturn!=null?i.qtyReturn:0);},0);
+  document.getElementById('em-reconcile-summary').innerHTML=`
+    <div style="background:var(--surf);border:1px solid var(--grn-d);border-radius:6px;padding:12px">
+      <div style="font-size:8px;font-weight:bold;color:var(--txt-b);margin-bottom:8px">Reconciliation Summary</div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:10px">
+        <div style="text-align:center"><div style="font-size:16px;font-weight:bold;color:var(--grn-b);font-family:Orbitron,monospace">${totalSold}</div><div style="font-size:6px;color:var(--txt-d)">SOLD</div></div>
+        <div style="text-align:center"><div style="font-size:16px;font-weight:bold;color:var(--cyn);font-family:Orbitron,monospace">${totalReturn}</div><div style="font-size:6px;color:var(--txt-d)">RETURNING</div></div>
+        <div style="text-align:center"><div style="font-size:16px;font-weight:bold;color:var(--gold-b);font-family:Orbitron,monospace">$${totalRev.toFixed(0)}</div><div style="font-size:6px;color:var(--txt-d)">REVENUE</div></div>
+      </div>
+      <button class="btn btn-grn" style="width:100%;padding:8px" onclick="finalizeReconcile()">✓ Finalize &amp; Update Revenue</button>
+    </div>`;
+}
+function finalizeReconcile(){
+  const c=getEvt();if(!c)return;
+  const totalRev=(c.inPersonCatalog||[]).reduce(function(a,i){return a+(i.qtySold!=null?i.qtySold:0)*(i.price||0);},0);
+  c.revenue=totalRev;
+  c.reconciled=true;
+  saveEvt();
+  toast('Reconciliation Saved','Revenue updated to $'+totalRev.toFixed(2),'success');
+  renderReconcile();
+  renderEvtOverview();
+}
+
+// ── QR Tags ──
+function renderQRTags(){
+  const c=getEvt();if(!c)return;
+  const items=c.inPersonCatalog||[];
+  const domain=shopifyCfg?.domain?.replace('(DEMO)','').trim()||'';
+  if(!items.length){
+    document.getElementById('em-qr-grid').innerHTML='<div style="text-align:center;color:var(--txt-d);font-size:8px;padding:20px;grid-column:1/-1">Add items to your Pack List to generate QR codes</div>';
+    return;
+  }
+  document.getElementById('em-qr-grid').innerHTML=items.map(function(item){
+    var productUrl;
+    if(domain&&item.shopifyHandle){
+      productUrl='https://'+domain+'/products/'+encodeURIComponent(item.shopifyHandle);
+    }else if(domain&&item.name){
+      productUrl='https://'+domain+'/search?q='+encodeURIComponent(item.name);
+    }else{
+      productUrl=window.location.origin;
+    }
+    const qrUrl='https://api.qrserver.com/v1/create-qr-code/?size=200x200&color=000000&bgcolor=ffffff&data='+encodeURIComponent(productUrl);
+    return `<div class="qr-card">
+      <img src="${qrUrl}" alt="QR code for ${esc(item.name)}" loading="lazy"/>
+      <div class="qr-card-name">${esc(item.name)}</div>
+      <div class="qr-card-price">$${parseFloat(item.price||0).toFixed(2)}</div>
+      ${domain?`<div style="font-size:5.5px;color:var(--txt-d);margin-top:4px;word-break:break-all">${productUrl}</div>`:'<div style="font-size:6px;color:var(--amb);margin-top:4px">Connect Shopify for real product URL</div>'}
+    </div>`;
+  }).join('');
+}
+function printQRTags(){
+  const c=getEvt();if(!c)return;
+  const items=c.inPersonCatalog||[];
+  const domain=shopifyCfg?.domain?.replace('(DEMO)','').trim()||'';
+  const html='<!DOCTYPE html><html><head><title>Price Tags — '+esc(c.name)+'</title><style>body{font-family:Arial,sans-serif;margin:0;padding:10px;background:#fff;}'+
+    '.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;}.tag{border:2px solid #222;border-radius:8px;padding:12px;text-align:center;page-break-inside:avoid;}'+
+    '.tag img{width:110px;height:110px;}.tag .name{font-size:12px;font-weight:bold;margin:8px 0 4px;}.tag .price{font-size:18px;font-weight:bold;color:#1a7a1a;}'+
+    '@media print{@page{size:A4;margin:10mm;}}</style></head><body>'+
+    '<h2 style="text-align:center;margin-bottom:12px">'+esc(c.name)+' — Price Tags</h2>'+
+    '<div class="grid">'+items.map(function(item){
+      var productUrl=domain&&item.shopifyHandle?'https://'+domain+'/products/'+encodeURIComponent(item.shopifyHandle):domain&&item.name?'https://'+domain+'/search?q='+encodeURIComponent(item.name):window.location.origin;
+      var qrUrl='https://api.qrserver.com/v1/create-qr-code/?size=200x200&color=000000&bgcolor=ffffff&data='+encodeURIComponent(productUrl);
+      return '<div class="tag"><img src="'+qrUrl+'"><div class="name">'+esc(item.name)+'</div><div class="price">$'+parseFloat(item.price||0).toFixed(2)+'</div></div>';
+    }).join('')+'</div></body></html>';
+  const win=window.open('','_blank');
+  win.document.write(html);
+  win.document.close();
+  setTimeout(function(){win.print();},600);
+}
 
 // ── FILAMENT DRY TIME SCHEDULER ──
 function runDryingCheck(){render();}
