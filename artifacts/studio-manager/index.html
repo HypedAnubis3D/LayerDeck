@@ -7149,7 +7149,11 @@ function initSupabase(){
         updateSyncIndicator('connected');
         updateCloudPanel();
         addSyncLog('Signed in as '+currentUser.email,'ok');
-        if(event==='SIGNED_IN'){await pullFromCloud();render();}
+        if(event==='SIGNED_IN'||event==='INITIAL_SESSION'){
+          await new Promise(r=>setTimeout(r,1200));
+          await pullFromCloud();
+          render();
+        }
         startAutoSync();
       }else{
         currentUser=null;
@@ -7231,7 +7235,7 @@ async function processSyncQueue(){
           if(error)throw new Error(error.message);
           syncQueue=syncQueue.filter(q=>q.timestamp!==item.timestamp);
           success++;
-        }catch(e){failed++;addSyncLog('Sync failed for '+item.collection+': '+e.message,'err');}
+        }catch(e){failed++;addSyncLog('Sync failed for '+item.collection+': '+sbErrMsg(e),'err');}
       }
       totalSuccess+=success;totalFailed+=failed;
       if(failed>0)break;
@@ -7250,6 +7254,11 @@ function sbWithTimeout(queryBuilder,ms=15000){
     queryBuilder,
     new Promise((_,reject)=>setTimeout(()=>reject(new Error('Sync timed out after '+ms/1000+'s — check your Supabase project is active')),ms))
   ]);
+}
+function sbErrMsg(e){
+  if(!e)return 'Unknown error';
+  if(typeof e==='string')return e;
+  return e.message||e.error_description||e.msg||e.code||JSON.stringify(e);
 }
 
 async function pullFromCloud(silent=false){
@@ -7280,11 +7289,12 @@ async function pullFromCloud(silent=false){
     if(!silent)toast('Data Pulled','Your data is up to date','success');
     render();
   }catch(e){
-    console.error('pullFromCloud error:',e);
+    const msg=sbErrMsg(e);
+    console.error('pullFromCloud error:',msg,e);
     updateSyncIndicator('error');
-    addSyncLog('Pull failed: '+e.message,'err');
-    if(!silent)toast('Sync Error',e.message,'error');
-    else toast('Sync Error',e.message,'error',5000);
+    addSyncLog('Pull failed: '+msg,'err');
+    if(!silent)toast('Sync Error',msg,'error');
+    else toast('Sync Error',msg,'error',5000);
   }
 }
 
