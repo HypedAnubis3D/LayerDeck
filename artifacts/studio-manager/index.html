@@ -3231,22 +3231,24 @@ async function parse3mfFile(file){
     // ── Print time + per-color grams ──
     let filamentGramsPerColor=[];
 
-    // SOURCE 1: slice_info.config (Bambu's primary metadata file — has per-color weights)
+    // SOURCE 1: slice_info.config (Bambu XML metadata — has per-color weights + print time)
     if(sliceRaw){
       try{
-        const si=JSON.parse(sliceRaw);
-        const plates=si.plate||si.plates||[];
-        // Combine weights from all plates
-        for(const plate of plates){
-          // Print time from prediction (seconds)
-          if(!hrs&&plate.prediction){hrs=parseFloat(plate.prediction)/3600;}
-          // Per-color filament weights
-          const fw=plate.filament_weight||plate.filament||[];
-          if(fw.length&&!filamentGramsPerColor.length){
-            filamentGramsPerColor=fw.map(f=>parseFloat((f.used_g??f.weight??f.g??0).toFixed(2))).filter(v=>v>0);
-          }
+        const siDoc=new DOMParser().parseFromString(sliceRaw,'application/xml');
+        // Print time: <metadata key="prediction" value="24908"/> (seconds)
+        if(!hrs){
+          const predEl=siDoc.querySelector('metadata[key="prediction"]');
+          if(predEl){const sec=parseInt(predEl.getAttribute('value'));if(sec>0)hrs=sec/3600;}
         }
-      }catch(ex){console.warn('slice_info parse:',ex);}
+        // Per-color weights: <filament id="0" used_g="42.50" .../>
+        const filEls=[...siDoc.querySelectorAll('filament')];
+        if(filEls.length&&!filamentGramsPerColor.length){
+          filamentGramsPerColor=filEls
+            .map(f=>parseFloat(f.getAttribute('used_g')||f.getAttribute('weight')||'0'))
+            .filter(v=>v>0)
+            .map(v=>parseFloat(v.toFixed(2)));
+        }
+      }catch(ex){console.warn('slice_info parse fail:',ex,sliceRaw?sliceRaw.slice(0,300):'(empty)');}
     }
 
     // SOURCE 2: gcode files (text .gcode — older Bambu Studio / PrusaSlicer)
@@ -3294,6 +3296,8 @@ async function parse3mfFile(file){
         if(Array.isArray(fw)&&fw.length)filamentGramsPerColor=fw.map(v=>parseFloat(parseFloat(v).toFixed(2))).filter(v=>v>0);
       }catch(ex){}
     }
+
+    console.log('[3MF debug] grams found:',filamentGramsPerColor,'hrs:',hrs,'colors:',filamentColors);
 
     // Fallback title from filename
     if(!title)title=file.name.replace(/\.3mf$/i,'').replace(/_/g,' ');
