@@ -7543,15 +7543,10 @@ function saveTmfs(){ss(KEYS.tmfs,tmfLib);queueSync('tmfLib',tmfLib);}
 function renderSync(){
   const el=document.getElementById('sync-tab-content');
   if(!el)return;
-  const shopifyPanel=renderIntegrationPanel('shopify');
-  const etsyPanel=renderIntegrationPanel('etsy');
-  const integrationsHtml='<div class="sync-integrations-grid">'+shopifyPanel+etsyPanel+'</div>'
-    +'<div id="unified-orders" style="display:none;margin-bottom:18px"><div style="font-size:7px;color:var(--txt-d);letter-spacing:2px;text-transform:uppercase;margin-bottom:7px">Recent Integration Orders</div><div id="unified-orders-list"></div></div>'
-    +'<div style="border-top:1px solid var(--bdr);margin-bottom:18px"></div>'
-    +'<div style="font-family:\'Orbitron\',monospace;font-size:8px;color:var(--txt-d);letter-spacing:2px;text-transform:uppercase;margin-bottom:12px">☁ Cloud Account</div>';
+  const cloudHeader='<div style="font-family:\'Orbitron\',monospace;font-size:8px;color:var(--txt-d);letter-spacing:2px;text-transform:uppercase;margin-bottom:12px">☁ Cloud Account</div>';
 
   if(!currentUser){
-    el.innerHTML=integrationsHtml
+    el.innerHTML=cloudHeader
       +'<div style="background:var(--surf2);border:1px solid var(--bdr2);border-radius:6px;padding:20px;text-align:center">'
       +'<div style="font-size:24px;margin-bottom:10px">🔐</div>'
       +'<div style="font-size:10px;font-weight:bold;color:var(--txt-b);margin-bottom:6px">Sign in to sync your data</div>'
@@ -7563,7 +7558,7 @@ function renderSync(){
     const lastSync=lastSyncTime?new Date(lastSyncTime).toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',second:'2-digit'}):'Never';
     const email=currentUser.email||'';
     const sqlText='create table if not exists ha3d_user_data (\n  user_id uuid not null references auth.users(id) on delete cascade,\n  collection text not null,\n  payload text not null default \'[]\',\n  updated_at timestamptz default now(),\n  primary key (user_id, collection)\n);\nalter table ha3d_user_data enable row level security;\ndrop policy if exists "Users own their data" on ha3d_user_data;\ncreate policy "Users own their data" on ha3d_user_data\n  for all using (auth.uid() = user_id)\n  with check (auth.uid() = user_id);';
-    el.innerHTML=integrationsHtml
+    el.innerHTML=cloudHeader
       +'<div class="sync-status-panel">'
       +'<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">'
       +'<div class="sync-dot connected" style="width:10px;height:10px"></div>'
@@ -7599,15 +7594,6 @@ function renderSync(){
       +'</div>';
   }
 
-  const allIntOrders=orders.filter(o=>o.fromShopify||o.fromEtsy);
-  const unifiedEl=el.querySelector('#unified-orders');
-  const unifiedList=el.querySelector('#unified-orders-list');
-  if(unifiedEl&&unifiedList&&allIntOrders.length){
-    unifiedEl.style.display='block';
-    unifiedList.innerHTML=allIntOrders.slice().reverse().slice(0,10).map(o=>
-      '<div class="uorder-row"><span class="uorder-platform '+(o.fromShopify?'up-shopify':'up-etsy')+'">'+(o.fromShopify?'Shopify':'Etsy')+'</span><span style="font-family:Orbitron,monospace;font-size:8px;color:var(--cyn)">'+esc(o.orderId)+'</span><span style="flex:1;color:var(--txt-b)">'+esc(o.customer)+'</span><span style="color:var(--grn)">$'+(o.items||[]).reduce((a,i)=>a+parseFloat(i.price||0)*parseInt(i.qty||1),0).toFixed(2)+'</span></div>'
-    ).join('');
-  }
 }
 
 function copySQL(){
