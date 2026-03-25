@@ -7110,16 +7110,21 @@ async function signInGoogle(){
     if(error)setAuthError(error.message);
   }catch(e){setAuthError(e.message||'Google sign-in failed');}
 }
-async function signOutUser(){
-  try{await supabaseClient.auth.signOut();}catch(e){}
+let signingOut=false;
+function signOutUser(){
+  signingOut=true;
   currentUser=null;
   syncCfg.enabled=false;
   stopAutoSync();
-  Object.keys(localStorage).filter(k=>k.startsWith('sb-')).forEach(k=>localStorage.removeItem(k));
+  Object.keys(localStorage).forEach(k=>{if(k.startsWith('sb-'))localStorage.removeItem(k);});
+  Object.keys(sessionStorage||{}).forEach(k=>{if(k.startsWith('sb-'))sessionStorage.removeItem(k);});
   updateSyncIndicator('disconnected');
   updateCloudPanel();
   showAuthScreen();
   render();
+  if(supabaseClient){supabaseClient.auth.signOut().catch(()=>{});}
+  setTimeout(()=>{signingOut=false;},3000);
+  toast('Signed out','See you next time!','success',3000);
 }
 async function showForgotPassword(){
   const email=prompt('Enter your email:');
@@ -7139,6 +7144,7 @@ function initSupabase(){
     supabaseClient=supabase.createClient(url,key);
     // Auth state listener — fires on login, logout, token refresh
     supabaseClient.auth.onAuthStateChange(async(event,session)=>{
+      if(signingOut)return;
       if(session&&session.user){
         currentUser=session.user;
         syncCfg.enabled=true;
