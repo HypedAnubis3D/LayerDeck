@@ -7543,6 +7543,14 @@ function sbErrMsg(e){
 
 async function pullFromCloud(silent=false){
   if(!supabaseClient||!currentUser){if(!silent)toast('Not signed in','Please sign in first','error');return;}
+  // If a sync is already in-flight, wait for it to finish before pulling
+  // (prevents Supabase auth-token lock contention)
+  if(isSyncing){
+    let waited=0;
+    await new Promise(r=>{const t=setInterval(()=>{waited+=100;if(!isSyncing||waited>10000){clearInterval(t);r();}},100);});
+  }
+  if(isSyncing){if(!silent)toast('Sync busy','Please try again in a moment','warning');return;}
+  isSyncing=true;
   updateSyncIndicator('syncing');
   addSyncLog('Pulling data from cloud…','info');
   try{
@@ -7590,6 +7598,9 @@ async function pullFromCloud(silent=false){
     updateSyncIndicator('error');
     addSyncLog('Pull failed: '+msg,'err');
     if(!silent)toast('Sync Error',msg,'error');
+  }finally{
+    isSyncing=false;
+    lastSyncTime=Date.now();
   }
 }
 
