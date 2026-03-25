@@ -19,15 +19,22 @@ const basePath = process.env.BASE_PATH || "/";
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
+  const supabaseUrl = env.SUPABASE_URL || process.env.SUPABASE_URL || "";
+  const supabaseAnonKey = env.SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || "";
+
+  const htmlEnvPlugin = {
+    name: "html-env-inject",
+    transformIndexHtml(html: string) {
+      return html
+        .replace(/__SUPABASE_URL__/g, JSON.stringify(supabaseUrl))
+        .replace(/__SUPABASE_ANON_KEY__/g, JSON.stringify(supabaseAnonKey));
+    },
+  };
 
   return {
     base: basePath,
-    plugins: [],
+    plugins: [htmlEnvPlugin],
     root: path.resolve(import.meta.dirname),
-    define: {
-      __SUPABASE_URL__: JSON.stringify(env.SUPABASE_URL || ""),
-      __SUPABASE_ANON_KEY__: JSON.stringify(env.SUPABASE_ANON_KEY || ""),
-    },
     build: {
       outDir: path.resolve(import.meta.dirname, "dist/public"),
       emptyOutDir: true,

@@ -114,7 +114,7 @@ Generated React Query hooks and fetch client from the OpenAPI spec (e.g. `useHea
 
 ### `artifacts/studio-manager` — HypedAnubis3D Studio Manager
 
-Single-file HTML PWA for managing a Bambu Lab 3D printing collectibles business (hypedanubis3d-2.myshopify.com). All code is in `index.html` (~9,600+ lines). No frameworks — vanilla JS with JSZip (CDN) for 3MF parsing.
+Single-file HTML PWA for managing a Bambu Lab 3D printing collectibles business (hypedanubis3d-2.myshopify.com). All code is in `index.html` (~9,650+ lines). No frameworks — vanilla JS with JSZip (CDN) for 3MF parsing.
 
 **UI state (v19+):**
 - Dark theme: gold (#c9a227), purple (#7c3aed), near-black (#09070a); Share Tech Mono + Orbitron fonts
@@ -132,11 +132,26 @@ Single-file HTML PWA for managing a Bambu Lab 3D printing collectibles business 
 
 `navTo()` has a `MERGED_TABS` map: `{nozzle:'maint', waste:'failrate', shop:'restock', tax:'revenue', power:'revenue'}`. Old tab divs kept as empty shells to avoid ALL_TABS issues.
 
+**Supabase Auth + Sync (v19.5+):**
+- Auth is fully handled by Supabase Auth — no manual credential entry UI
+- `SUPABASE_URL` and `SUPABASE_ANON_KEY` injected into HTML via custom `transformIndexHtml` Vite plugin (NOT Vite `define` — that only works for module-bundled JS, not inline scripts)
+- Boot sequence: `loadSyncCfg()` → `initSupabase()` at end of boot chain. `initSupabase()` creates the Supabase client and registers `onAuthStateChange` listener
+- `onAuthStateChange`: signed-in → `hideAuthScreen()` + `pullFromCloud()` + `render()`; signed-out → `showAuthScreen()`
+- Auth screen overlay (`#auth-screen`): always rendered in HTML body, hidden/shown via `display:none`/`display:flex`
+- Single unified table: `ha3d_user_data (user_id uuid, collection text, payload text, updated_at timestamptz, PRIMARY KEY (user_id, collection))` with RLS `using (auth.uid() = user_id)` — replaces old 12-table design
+- `queueSync(collection, data)` — guards on `currentUser` being set; upserts to `ha3d_user_data`
+- `processSyncQueue()` — syncs all queued collections to `ha3d_user_data` table, scoped by `currentUser.id`
+- `pullFromCloud()` — fetches all collections for `currentUser.id`, overrides localStorage + in-memory arrays
+- `signOutUser()` — shows confirm dialog, calls `supabaseClient.auth.signOut()`, clears state
+- SQL for new table is shown in the Sync tab when signed in, with a "Copy SQL" button
+- Old `connectSupabase()`/`disconnectSupabase()` functions removed; old manual credential UI removed from Sync tab
+
 **Key patterns:**
 - Use `showConfirm()` not `confirm()`; use `toast()` for notifications
 - No nested backtick template literals
 - No `const _orig = fn; function fn()` override pattern — use `window.fn = ...`
 - OAuth override script re-injected before `</body>` for Shopify/Etsy
+- Never use `syncCfg.url` or `syncCfg.anonKey` — those fields are removed; use `__SUPABASE_URL__` / `__SUPABASE_ANON_KEY__` globals directly for edge function calls
 
 ### `scripts` (`@workspace/scripts`)
 

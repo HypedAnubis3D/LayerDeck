@@ -1366,6 +1366,50 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
 <!-- TOAST CONTAINER -->
 <div class="toast-container" id="toast-container"></div>
 
+<!-- AUTH SCREEN -->
+<div id="auth-screen" style="display:none;position:fixed;inset:0;z-index:9000;background:var(--bg);align-items:center;justify-content:center;padding:24px;overflow-y:auto">
+  <div style="width:100%;max-width:340px;margin:auto">
+    <div style="text-align:center;margin-bottom:28px">
+      <div style="font-family:'Orbitron',monospace;font-size:15px;font-weight:900;color:var(--gold-b);letter-spacing:3px;margin-bottom:4px">HYPEDANUBIS3D</div>
+      <div style="font-family:'Orbitron',monospace;font-size:7px;color:var(--txt-d);letter-spacing:3px">STUDIO MANAGER</div>
+    </div>
+    <div style="display:flex;border:1px solid var(--bdr2);border-radius:6px;overflow:hidden;margin-bottom:20px">
+      <button id="auth-tab-login" onclick="switchAuthTab('login')" style="flex:1;padding:9px;background:var(--gold);color:#000;font-family:'Orbitron',monospace;font-size:8px;font-weight:700;border:none;cursor:pointer;letter-spacing:1px">SIGN IN</button>
+      <button id="auth-tab-signup" onclick="switchAuthTab('signup')" style="flex:1;padding:9px;background:var(--surf2);color:var(--txt-d);font-family:'Orbitron',monospace;font-size:8px;font-weight:700;border:none;cursor:pointer;letter-spacing:1px">CREATE ACCOUNT</button>
+    </div>
+    <div id="auth-form-login">
+      <div style="margin-bottom:12px">
+        <div style="font-size:7px;color:var(--txt-d);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:4px">Email</div>
+        <input type="email" id="auth-email" placeholder="you@email.com" autocomplete="email" style="width:100%;background:var(--surf2);border:1px solid var(--bdr2);color:var(--txt-b);padding:9px 12px;font-family:'Share Tech Mono',monospace;font-size:11px;border-radius:4px"/>
+      </div>
+      <div style="margin-bottom:16px">
+        <div style="font-size:7px;color:var(--txt-d);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:4px">Password</div>
+        <input type="password" id="auth-pass" placeholder="••••••••" autocomplete="current-password" style="width:100%;background:var(--surf2);border:1px solid var(--bdr2);color:var(--txt-b);padding:9px 12px;font-family:'Share Tech Mono',monospace;font-size:11px;border-radius:4px" onkeydown="if(event.key==='Enter')authSubmit()"/>
+      </div>
+      <div id="auth-error" style="display:none;background:var(--red-d);border:1px solid var(--red);border-radius:4px;padding:8px 10px;font-size:8px;color:var(--red-b);margin-bottom:12px"></div>
+      <button onclick="authSubmit()" style="width:100%;padding:11px;background:var(--gold);border:none;color:#000;font-family:'Orbitron',monospace;font-size:9px;font-weight:700;letter-spacing:2px;border-radius:4px;cursor:pointer;margin-bottom:10px">SIGN IN</button>
+      <button onclick="signInGoogle()" style="width:100%;padding:10px;background:var(--surf2);border:1px solid var(--bdr2);color:var(--txt-b);font-family:'Share Tech Mono',monospace;font-size:9px;border-radius:4px;cursor:pointer;margin-bottom:14px">Continue with Google</button>
+      <button onclick="showForgotPassword()" style="display:block;width:100%;text-align:center;background:none;border:none;color:var(--txt-d);font-size:8px;cursor:pointer;font-family:'Share Tech Mono',monospace">Forgot password?</button>
+    </div>
+    <div id="auth-form-signup" style="display:none">
+      <div style="margin-bottom:12px">
+        <div style="font-size:7px;color:var(--txt-d);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:4px">Email</div>
+        <input type="email" id="auth-su-email" placeholder="you@email.com" autocomplete="email" style="width:100%;background:var(--surf2);border:1px solid var(--bdr2);color:var(--txt-b);padding:9px 12px;font-family:'Share Tech Mono',monospace;font-size:11px;border-radius:4px"/>
+      </div>
+      <div style="margin-bottom:16px">
+        <div style="font-size:7px;color:var(--txt-d);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:4px">Password (min 6 chars)</div>
+        <input type="password" id="auth-su-pass" placeholder="••••••••" autocomplete="new-password" style="width:100%;background:var(--surf2);border:1px solid var(--bdr2);color:var(--txt-b);padding:9px 12px;font-family:'Share Tech Mono',monospace;font-size:11px;border-radius:4px" onkeydown="if(event.key==='Enter')authSubmit()"/>
+      </div>
+      <div id="auth-su-error" style="display:none;background:var(--red-d);border:1px solid var(--red);border-radius:4px;padding:8px 10px;font-size:8px;color:var(--red-b);margin-bottom:12px"></div>
+      <button onclick="authSubmit()" style="width:100%;padding:11px;background:var(--pur);border:none;color:#fff;font-family:'Orbitron',monospace;font-size:9px;font-weight:700;letter-spacing:2px;border-radius:4px;cursor:pointer;margin-bottom:10px">CREATE ACCOUNT</button>
+      <button onclick="signInGoogle()" style="width:100%;padding:10px;background:var(--surf2);border:1px solid var(--bdr2);color:var(--txt-b);font-family:'Share Tech Mono',monospace;font-size:9px;border-radius:4px;cursor:pointer">Continue with Google</button>
+    </div>
+    <div id="auth-loading" style="display:none;text-align:center;padding:30px">
+      <div style="font-family:'Orbitron',monospace;font-size:9px;color:var(--gold-b);letter-spacing:2px">AUTHENTICATING…</div>
+    </div>
+  </div>
+</div>
+
 <!-- KEYBOARD SHORTCUT GUIDE -->
 <div class="kb-overlay" id="kb-overlay" onclick="if(event.target.id==='kb-overlay')closeKbGuide()">
   <div class="kb-modal">
@@ -6987,74 +7031,156 @@ function skipOnboarding(){
 }
 
 // ════════════════════════════════════════
-// SUPABASE SYNC ENGINE
+// SUPABASE AUTH + SYNC ENGINE
 // ════════════════════════════════════════
-Object.assign(KEYS,{syncCfg:'ha3d_sync_v1',syncQueue:'ha3d_syncqueue_v1'});
+Object.assign(KEYS,{syncQueue:'ha3d_syncqueue_v1'});
 Object.assign(TAB_NAMES,{sync:'Sync'});
 ALL_TABS.push('sync');
 
 let supabaseClient=null;
-let syncCfg={url:'',anonKey:'',enabled:false};
-let syncQueue=[];   // offline queue [{table,operation,data,timestamp}]
-let syncLog=[];     // display log entries
+let currentUser=null;
+let authMode='login';
+let syncCfg={enabled:false};
+let syncQueue=[];
+let syncLog=[];
 let isSyncing=false;
 let lastSyncTime=null;
-let syncPendingCount=0;
 let isOnline=navigator.onLine;
 
-const SYNC_TABLES={
-  spools:'ha3d_spools',prints:'ha3d_prints',queueItems:'ha3d_queue',
-  orders:'ha3d_orders',sales:'ha3d_sales',usageHist:'ha3d_usage_hist',
-  shinyRolls:'ha3d_shiny',maintLog:'ha3d_maint',wasteLog:'ha3d_waste',
-  printerRecords:'ha3d_printers',tmfLib:'ha3d_tmf',
-  catalog:'ha3d_catalog',catalogItems:'ha3d_catalog',
-  fulfillmentData:'ha3d_fulfillment',printSettingsMap:'ha3d_print_settings',
-};
-
-function loadSyncCfg(){
-  try{
-    const sc=JSON.parse(localStorage.getItem(KEYS.syncCfg)||'null');
-    if(sc)syncCfg={...syncCfg,...sc};
-  }catch(e){}
-  try{
-    const sq=JSON.parse(localStorage.getItem(KEYS.syncQueue)||'null');
-    if(sq)syncQueue=sq;
-  }catch(e){}
-  if(syncCfg.enabled&&syncCfg.url&&syncCfg.anonKey){
-    initSupabase();
-  }
-  updateSyncIndicator();
+// ── AUTH SCREEN CONTROL ──
+function showAuthScreen(){
+  const el=document.getElementById('auth-screen');
+  if(el){el.style.display='flex';}
 }
-function saveSyncCfg(){localStorage.setItem(KEYS.syncCfg,JSON.stringify(syncCfg));}
-function saveSyncQueue(){localStorage.setItem(KEYS.syncQueue,JSON.stringify(syncQueue));}
+function hideAuthScreen(){
+  const el=document.getElementById('auth-screen');
+  if(el){el.style.display='none';}
+}
+function switchAuthTab(tab){
+  authMode=tab;
+  const isLogin=tab==='login';
+  document.getElementById('auth-form-login').style.display=isLogin?'block':'none';
+  document.getElementById('auth-form-signup').style.display=isLogin?'none':'block';
+  document.getElementById('auth-loading').style.display='none';
+  const tl=document.getElementById('auth-tab-login');
+  const ts=document.getElementById('auth-tab-signup');
+  if(tl){tl.style.background=isLogin?'var(--gold)':'var(--surf2)';tl.style.color=isLogin?'#000':'var(--txt-d)';}
+  if(ts){ts.style.background=isLogin?'var(--surf2)':'var(--pur)';ts.style.color=isLogin?'var(--txt-d)':'#fff';}
+}
+function setAuthError(msg){
+  const el=document.getElementById(authMode==='login'?'auth-error':'auth-su-error');
+  if(!el)return;
+  el.textContent=msg||'';
+  el.style.display=msg?'block':'none';
+}
+function showAuthLoading(show){
+  const ld=document.getElementById('auth-loading');
+  const fl=document.getElementById('auth-form-login');
+  const fs=document.getElementById('auth-form-signup');
+  if(ld)ld.style.display=show?'block':'none';
+  if(fl)fl.style.display=show?'none':(authMode==='login'?'block':'none');
+  if(fs)fs.style.display=show?'none':(authMode==='signup'?'block':'none');
+}
+async function authSubmit(){
+  const isLogin=authMode==='login';
+  const email=((document.getElementById(isLogin?'auth-email':'auth-su-email')||{}).value||'').trim();
+  const pass=((document.getElementById(isLogin?'auth-pass':'auth-su-pass')||{}).value||'');
+  if(!email||!pass){setAuthError('Please fill in all fields.');return;}
+  setAuthError('');
+  showAuthLoading(true);
+  try{
+    const result=isLogin
+      ?await supabaseClient.auth.signInWithPassword({email,password:pass})
+      :await supabaseClient.auth.signUp({email,password:pass});
+    if(result.error){showAuthLoading(false);setAuthError(result.error.message);}
+    else if(!isLogin&&result.data&&!result.data.session){
+      showAuthLoading(false);
+      setAuthError('');
+      toast('Check your email','A confirmation link has been sent to '+email,'success',6000);
+    }
+  }catch(e){showAuthLoading(false);setAuthError(e.message||'An error occurred');}
+}
+async function signInGoogle(){
+  if(!supabaseClient)return;
+  try{
+    const{error}=await supabaseClient.auth.signInWithOAuth({
+      provider:'google',
+      options:{redirectTo:window.location.href}
+    });
+    if(error)setAuthError(error.message);
+  }catch(e){setAuthError(e.message||'Google sign-in failed');}
+}
+async function signOutUser(){
+  showConfirm('Sign out?','You can sign back in anytime.',async()=>{
+    await supabaseClient.auth.signOut();
+    currentUser=null;
+    syncCfg.enabled=false;
+    updateSyncIndicator('disconnected');
+    showAuthScreen();
+    render();
+  },'Sign Out','btn-red');
+}
+async function showForgotPassword(){
+  const email=prompt('Enter your email:');
+  if(!email)return;
+  const{error}=await supabaseClient.auth.resetPasswordForEmail(email);
+  if(error)toast('Error',error.message,'error');
+  else toast('Email Sent','Check your inbox for a reset link','success');
+}
 
+// ── INIT SUPABASE (auto from env vars) ──
 function initSupabase(){
   try{
-    if(typeof supabase==='undefined'){addSyncLog('Supabase library not loaded — check internet connection','err');return;}
-    supabaseClient=supabase.createClient(syncCfg.url,syncCfg.anonKey);
-    syncCfg.enabled=true;saveSyncCfg();
-    updateSyncIndicator('connected');
-    addSyncLog('Connected to Supabase','ok');
-    // Process any queued changes
-    processSyncQueue();
+    if(typeof supabase==='undefined'){console.warn('Supabase SDK not loaded');return;}
+    const url=typeof __SUPABASE_URL__!=='undefined'?__SUPABASE_URL__:'';
+    const key=typeof __SUPABASE_ANON_KEY__!=='undefined'?__SUPABASE_ANON_KEY__:'';
+    if(!url||!key){console.warn('Supabase credentials missing from env');showAuthScreen();return;}
+    supabaseClient=supabase.createClient(url,key);
+    // Auth state listener — fires on login, logout, token refresh
+    supabaseClient.auth.onAuthStateChange(async(event,session)=>{
+      if(session&&session.user){
+        currentUser=session.user;
+        syncCfg.enabled=true;
+        hideAuthScreen();
+        updateSyncIndicator('connected');
+        addSyncLog('Signed in as '+currentUser.email,'ok');
+        if(event==='SIGNED_IN'){await pullFromCloud();render();}
+      }else{
+        currentUser=null;
+        syncCfg.enabled=false;
+        updateSyncIndicator('disconnected');
+        showAuthScreen();
+      }
+    });
+    // Check for existing session on page load
+    supabaseClient.auth.getSession().then(({data:{session}})=>{
+      if(!session){showAuthScreen();}
+    });
   }catch(e){
-    updateSyncIndicator('error');
-    addSyncLog('Connection failed: '+e.message,'err');
+    console.warn('Supabase init error:',e.message);
+    showAuthScreen();
   }
 }
+
+function loadSyncCfg(){
+  try{const sq=JSON.parse(localStorage.getItem(KEYS.syncQueue)||'null');if(sq)syncQueue=sq;}catch(e){}
+  updateSyncIndicator();
+}
+function saveSyncCfg(){/* config comes from env vars — nothing to save */}
+function saveSyncQueue(){localStorage.setItem(KEYS.syncQueue,JSON.stringify(syncQueue));}
 
 function updateSyncIndicator(state){
   const dot=document.getElementById('sync-dot');
   const lbl=document.getElementById('sync-label');
   if(!dot||!lbl)return;
-  const s=state||(syncCfg.enabled?'connected':'disconnected');
+  const s=state||(currentUser&&syncCfg.enabled?'connected':'disconnected');
   dot.className='sync-dot '+s;
-  const labels={connected:'Synced',syncing:'Syncing…',offline:'Offline',error:'Error',disconnected:'Sync'};
+  const labels={connected:'Synced',syncing:'Syncing…',offline:'Offline',error:'Error',disconnected:'Sign In'};
   const colors={connected:'var(--grn-b)',syncing:'var(--gold-b)',offline:'var(--txt-d)',error:'var(--red-b)',disconnected:'var(--txt-d)'};
   lbl.textContent=labels[s]||'Sync';
   lbl.style.color=colors[s]||'var(--txt-d)';
   if(syncQueue.length>0&&s==='connected'){
-    lbl.textContent=`${syncQueue.length} pending`;
+    lbl.textContent=syncQueue.length+' pending';
     lbl.style.color='var(--gold-b)';
   }
 }
@@ -7067,8 +7193,7 @@ function addSyncLog(msg,type='info'){
 
 // ── QUEUE A SYNC OPERATION ──
 function queueSync(collection,data){
-  if(!syncCfg.enabled)return;
-  // Replace any pending sync for same collection (latest wins)
+  if(!syncCfg.enabled||!currentUser)return;
   syncQueue=syncQueue.filter(q=>q.collection!==collection);
   syncQueue.push({collection,data:JSON.stringify(data),timestamp:Date.now()});
   saveSyncQueue();
@@ -7077,57 +7202,59 @@ function queueSync(collection,data){
 }
 
 async function processSyncQueue(){
-  if(isSyncing||!supabaseClient||syncQueue.length===0)return;
+  if(isSyncing||!supabaseClient||!currentUser||syncQueue.length===0)return;
   isSyncing=true;
   updateSyncIndicator('syncing');
   const queue=[...syncQueue];
   let success=0,failed=0;
   for(const item of queue){
     try{
-      const tableName=SYNC_TABLES[item.collection]||('ha3d_'+item.collection);
-      const data=JSON.parse(item.data);
-      const {error}=await supabaseClient
-        .from(tableName)
-        .upsert({id:'singleton',payload:JSON.stringify(data),updated_at:new Date().toISOString()});
+      const{error}=await supabaseClient
+        .from('ha3d_user_data')
+        .upsert({user_id:currentUser.id,collection:item.collection,payload:item.data,updated_at:new Date().toISOString()});
       if(error)throw new Error(error.message);
       syncQueue=syncQueue.filter(q=>q.timestamp!==item.timestamp);
       success++;
-    }catch(e){failed++;addSyncLog(`Sync failed for ${item.collection}: ${e.message}`,'err');}
+    }catch(e){failed++;addSyncLog('Sync failed for '+item.collection+': '+e.message,'err');}
   }
   saveSyncQueue();
   isSyncing=false;
   lastSyncTime=Date.now();
-  if(failed===0){updateSyncIndicator('connected');if(success>0)addSyncLog(`Synced ${success} collection${success!==1?'s':''}  ✓`,'ok');}
+  if(failed===0){updateSyncIndicator('connected');if(success>0)addSyncLog('Synced '+success+' collection'+(success!==1?'s':'')+' ✓','ok');}
   else{updateSyncIndicator('error');}
 }
 
 async function pullFromCloud(){
-  if(!supabaseClient){toast('Not connected','Connect Supabase first','error');return;}
+  if(!supabaseClient||!currentUser){toast('Not signed in','Please sign in first','error');return;}
   updateSyncIndicator('syncing');
   addSyncLog('Pulling data from cloud…','info');
-  let pulled=0;
-  const collectionMap={
-    spools:'ha3d_spools',prints:'ha3d_prints',queueItems:'ha3d_queue',
-    orders:'ha3d_orders',sales:'ha3d_sales',usageHist:'ha3d_usage_hist',
-    shinyRolls:'ha3d_shiny',maintLog:'ha3d_maint',wasteLog:'ha3d_waste',
-    printerRecords:'ha3d_printers',tmfLib:'ha3d_tmf',catalogItems:'ha3d_catalog',
-  };
-  for(const[col,table]of Object.entries(collectionMap)){
-    try{
-      const{data,error}=await supabaseClient.from(table).select('payload').eq('id','singleton').single();
-      if(error||!data)continue;
-      const parsed=JSON.parse(data.payload);
-      if(Array.isArray(parsed)){
-        eval(`${col}=parsed`);
-        ss(KEYS[col]||('ha3d_'+col+'_v1'),parsed);
-        pulled++;
-      }
-    }catch(e){}
+  try{
+    const{data,error}=await supabaseClient
+      .from('ha3d_user_data')
+      .select('collection,payload')
+      .eq('user_id',currentUser.id);
+    if(error)throw new Error(error.message);
+    let pulled=0;
+    const knownCollections={spools:1,prints:1,queueItems:1,orders:1,sales:1,usageHist:1,shinyRolls:1,maintLog:1,wasteLog:1,printerRecords:1,tmfLib:1,catalogItems:1};
+    for(const row of(data||[])){
+      if(!knownCollections[row.collection])continue;
+      try{
+        const parsed=JSON.parse(row.payload);
+        if(Array.isArray(parsed)){
+          eval(row.collection+'=parsed');
+          ss(KEYS[row.collection]||('ha3d_'+row.collection+'_v1'),parsed);
+          pulled++;
+        }
+      }catch(e){}
+    }
+    updateSyncIndicator('connected');
+    addSyncLog('Pulled '+pulled+' collections ✓','ok');
+    toast('Data Pulled','Your data is up to date','success');
+  }catch(e){
+    updateSyncIndicator('error');
+    addSyncLog('Pull failed: '+e.message,'err');
+    toast('Sync Error',e.message,'error');
   }
-  updateSyncIndicator('connected');
-  addSyncLog(`Pulled ${pulled} collections from cloud ✓`,'ok');
-  render();
-  toast('Data Pulled','Your data is up to date','success');
 }
 
 function toggleCloudPanel(){
@@ -7153,22 +7280,19 @@ function pullAll(){
   toast('Pulling...','Fetching latest from all sources','info',2000);
 }
 async function pushAllToCloud(){
-  if(!supabaseClient){toast('Not connected','Connect Supabase first','error');return;}
+  if(!supabaseClient||!currentUser){toast('Not signed in','Please sign in first','error');return;}
   addSyncLog('Pushing all data to cloud…','info');
-  const collections={spools,prints,queueItems,orders,sales,usageHist,shinyRolls,maintLog,wasteLog,printerRecords,tmfLib,catalog:catalogItems};
-  for(const[col,data]of Object.entries(collections)){
-    queueSync(col,data);
-  }
+  const collections={spools,prints,queueItems,orders,sales,usageHist,shinyRolls,maintLog,wasteLog,printerRecords,tmfLib,catalogItems};
+  for(const[col,data]of Object.entries(collections)){queueSync(col,data);}
   await processSyncQueue();
   toast('All Data Pushed','Cloud is up to date ✓','success');
 }
 
-// Online/offline detection
 window.addEventListener('online',()=>{
   isOnline=true;
   addSyncLog('Back online — processing queue','info');
-  processSyncQueue();
-  updateSyncIndicator();
+  if(supabaseClient&&currentUser)processSyncQueue();
+  updateSyncIndicator(currentUser?'connected':'disconnected');
 });
 window.addEventListener('offline',()=>{
   isOnline=false;
@@ -7195,215 +7319,66 @@ function saveTmfs(){ss(KEYS.tmfs,tmfLib);queueSync('tmfLib',tmfLib);}
 
 // ── RENDER SYNC TAB ──
 function renderSync(){
-  const connected=syncCfg.enabled&&supabaseClient;
   const el=document.getElementById('sync-tab-content');
   if(!el)return;
-
-  // Always show Shopify + Etsy at top
   const shopifyPanel=renderIntegrationPanel('shopify');
   const etsyPanel=renderIntegrationPanel('etsy');
-  const integrationsHtml=`
-    <div class="sync-integrations-grid">
-      ${shopifyPanel}${etsyPanel}
-    </div>
-    <div id="unified-orders" style="display:none;margin-bottom:18px">
-      <div style="font-size:7px;color:var(--txt-d);letter-spacing:2px;text-transform:uppercase;margin-bottom:7px">Recent Integration Orders</div>
-      <div id="unified-orders-list"></div>
-    </div>
-    <div style="border-top:1px solid var(--bdr);margin-bottom:18px"></div>
-    <div style="font-family:'Orbitron',monospace;font-size:8px;color:var(--txt-d);letter-spacing:2px;text-transform:uppercase;margin-bottom:12px">☁ Supabase Cloud Sync</div>`;
+  const integrationsHtml='<div class="sync-integrations-grid">'+shopifyPanel+etsyPanel+'</div>'
+    +'<div id="unified-orders" style="display:none;margin-bottom:18px"><div style="font-size:7px;color:var(--txt-d);letter-spacing:2px;text-transform:uppercase;margin-bottom:7px">Recent Integration Orders</div><div id="unified-orders-list"></div></div>'
+    +'<div style="border-top:1px solid var(--bdr);margin-bottom:18px"></div>'
+    +'<div style="font-family:\'Orbitron\',monospace;font-size:8px;color:var(--txt-d);letter-spacing:2px;text-transform:uppercase;margin-bottom:12px">☁ Cloud Account</div>';
 
-  if(!connected){
-    el.innerHTML=integrationsHtml+`
-    <div class="sync-setup">
-      <div style="font-size:9px;color:var(--txt-d);margin-bottom:16px;line-height:1.8">Sync your data across all devices using your free Supabase account. Once connected, every save automatically pushes to the cloud.</div>
-
-      <div class="sync-steps-panel">
-        <div style="font-size:7px;color:var(--txt-d);letter-spacing:2px;text-transform:uppercase;margin-bottom:14px">Step-by-step setup</div>
-
-        <div class="sync-step-row">
-          <div class="sync-step-num">1</div>
-          <div class="sync-step-text">Go to <b>supabase.com</b> → click <b>Start your project</b> → sign up free (no credit card)</div>
-        </div>
-        <div class="sync-step-row">
-          <div class="sync-step-num">2</div>
-          <div class="sync-step-text">Click <b>New project</b> → name it <b>HypedAnubis3D</b> → pick a region → set a password → <b>Create new project</b> → wait ~2 min</div>
-        </div>
-        <div class="sync-step-row">
-          <div class="sync-step-num">3</div>
-          <div class="sync-step-text">
-            Click <b>SQL Editor</b> in the left sidebar → <b>New query</b> → paste the SQL below → click <b>Run</b>
-            <div style="margin-top:10px;position:relative">
-              <button class="btn btn-gold btn-sm" onclick="copySQL()" style="margin-bottom:8px;width:100%;padding:8px;font-size:8px">📋 Copy SQL to Clipboard</button>
-              <pre class="sync-sql-pre">create table if not exists ha3d_spools (id text primary key, payload text, updated_at timestamptz);
-create table if not exists ha3d_prints (id text primary key, payload text, updated_at timestamptz);
-create table if not exists ha3d_queue (id text primary key, payload text, updated_at timestamptz);
-create table if not exists ha3d_orders (id text primary key, payload text, updated_at timestamptz);
-create table if not exists ha3d_sales (id text primary key, payload text, updated_at timestamptz);
-create table if not exists ha3d_usage_hist (id text primary key, payload text, updated_at timestamptz);
-create table if not exists ha3d_shiny (id text primary key, payload text, updated_at timestamptz);
-create table if not exists ha3d_maint (id text primary key, payload text, updated_at timestamptz);
-create table if not exists ha3d_waste (id text primary key, payload text, updated_at timestamptz);
-create table if not exists ha3d_printers (id text primary key, payload text, updated_at timestamptz);
-create table if not exists ha3d_tmf (id text primary key, payload text, updated_at timestamptz);
-create table if not exists ha3d_catalog (id text primary key, payload text, updated_at timestamptz);
-alter table ha3d_spools enable row level security;
-drop policy if exists "Allow all" on ha3d_spools;
-create policy "Allow all" on ha3d_spools for all using (true) with check (true);
-alter table ha3d_prints enable row level security;
-drop policy if exists "Allow all" on ha3d_prints;
-create policy "Allow all" on ha3d_prints for all using (true) with check (true);
-alter table ha3d_queue enable row level security;
-drop policy if exists "Allow all" on ha3d_queue;
-create policy "Allow all" on ha3d_queue for all using (true) with check (true);
-alter table ha3d_orders enable row level security;
-drop policy if exists "Allow all" on ha3d_orders;
-create policy "Allow all" on ha3d_orders for all using (true) with check (true);
-alter table ha3d_sales enable row level security;
-drop policy if exists "Allow all" on ha3d_sales;
-create policy "Allow all" on ha3d_sales for all using (true) with check (true);
-alter table ha3d_usage_hist enable row level security;
-drop policy if exists "Allow all" on ha3d_usage_hist;
-create policy "Allow all" on ha3d_usage_hist for all using (true) with check (true);
-alter table ha3d_shiny enable row level security;
-drop policy if exists "Allow all" on ha3d_shiny;
-create policy "Allow all" on ha3d_shiny for all using (true) with check (true);
-alter table ha3d_maint enable row level security;
-drop policy if exists "Allow all" on ha3d_maint;
-create policy "Allow all" on ha3d_maint for all using (true) with check (true);
-alter table ha3d_waste enable row level security;
-drop policy if exists "Allow all" on ha3d_waste;
-create policy "Allow all" on ha3d_waste for all using (true) with check (true);
-alter table ha3d_printers enable row level security;
-drop policy if exists "Allow all" on ha3d_printers;
-create policy "Allow all" on ha3d_printers for all using (true) with check (true);
-alter table ha3d_tmf enable row level security;
-drop policy if exists "Allow all" on ha3d_tmf;
-create policy "Allow all" on ha3d_tmf for all using (true) with check (true);
-alter table ha3d_catalog enable row level security;
-drop policy if exists "Allow all" on ha3d_catalog;
-create policy "Allow all" on ha3d_catalog for all using (true) with check (true);</pre>
-            </div>
-          </div>
-        </div>
-        <div class="sync-step-row">
-          <div class="sync-step-num">4</div>
-          <div class="sync-step-text">Go to <b>Project Settings</b> (gear icon, bottom left) → <b>API</b> → copy your <b>Project URL</b> and <b>anon public</b> key</div>
-        </div>
-        <div class="sync-step-row">
-          <div class="sync-step-num">5</div>
-          <div class="sync-step-text">Paste both below and tap <b>Connect & Sync</b></div>
-        </div>
-      </div>
-
-      <div class="sync-connect-panel">
-        <div style="font-size:7px;color:var(--txt-d);letter-spacing:2px;text-transform:uppercase;margin-bottom:12px">Your Supabase Credentials</div>
-        <div class="field"><div class="fl">Project URL</div>
-          <input type="text" id="sb-url" placeholder="https://xxxxxxxxxxx.supabase.co" value="${syncCfg.url||''}"/>
-        </div>
-        <div class="field"><div class="fl">Anon Public Key</div>
-          <input type="text" id="sb-key" placeholder="eyJhbGci..." value="${syncCfg.anonKey||''}"/>
-          <div class="hint">Stored locally on this device only — never shared except to connect to your own Supabase project</div>
-        </div>
-        <button class="btn btn-gold" style="width:100%;padding:9px;margin-top:6px" onclick="connectSupabase()">☁ Connect & Sync</button>
-        <div id="sync-connect-result" style="margin-top:8px;font-size:8px;display:none"></div>
-      </div>
-    </div>`;
+  if(!currentUser){
+    el.innerHTML=integrationsHtml
+      +'<div style="background:var(--surf2);border:1px solid var(--bdr2);border-radius:6px;padding:20px;text-align:center">'
+      +'<div style="font-size:24px;margin-bottom:10px">🔐</div>'
+      +'<div style="font-size:10px;font-weight:bold;color:var(--txt-b);margin-bottom:6px">Sign in to sync your data</div>'
+      +'<div style="font-size:8px;color:var(--txt-d);margin-bottom:16px;line-height:1.8">Your data will automatically sync across all your devices once signed in.</div>'
+      +'<button class="btn btn-gold" style="width:100%;padding:10px" onclick="showAuthScreen()">Sign In / Create Account</button>'
+      +'</div>';
   }else{
     const pendingCount=syncQueue.length;
     const lastSync=lastSyncTime?new Date(lastSyncTime).toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',second:'2-digit'}):'Never';
-    el.innerHTML=integrationsHtml+`
-      <div class="sync-status-panel">
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
-          <div class="sync-dot connected" style="width:10px;height:10px"></div>
-          <div>
-            <div style="font-size:10px;color:var(--grn-b);font-weight:bold">Connected</div>
-            <div style="font-size:7px;color:var(--txt-d);margin-top:1px">${esc(syncCfg.url)}</div>
-          </div>
-        </div>
-        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">
-          <button class="btn btn-grn btn-sm" style="flex:1;min-width:90px" onclick="pushAllToCloud()">⬆ Push All</button>
-          <button class="btn btn-cyn btn-sm" style="flex:1;min-width:90px" onclick="pullFromCloud()">⬇ Pull Latest</button>
-          <button class="btn btn-red btn-sm" style="flex:1;min-width:90px" onclick="disconnectSupabase()">Disconnect</button>
-        </div>
-        <div class="sync-stat-grid">
-          <div class="sync-stat"><div class="sync-stat-n" style="color:${pendingCount>0?'var(--gold-b)':'var(--grn-b)'}">${pendingCount}</div><div class="sync-stat-l">Pending</div></div>
-          <div class="sync-stat"><div class="sync-stat-n" style="color:var(--txt-b);font-size:10px">${lastSync}</div><div class="sync-stat-l">Last Sync</div></div>
-          <div class="sync-stat"><div class="sync-stat-n" style="color:var(--cyn)">${spools.length+prints.length+orders.length}</div><div class="sync-stat-l">Records</div></div>
-        </div>
-        ${pendingCount>0?'<div style="background:var(--gold-d);border:1px solid var(--gold-dim);border-radius:4px;padding:8px 10px;font-size:8px;color:var(--gold-b);margin-bottom:10px">⏳ '+pendingCount+' change'+(pendingCount!==1?'s':'')+' waiting — <button class="btn btn-amb btn-xs" onclick="processSyncQueue()">Sync Now</button></div>':''}
-      </div>
-      <details style="margin-bottom:14px">
-        <summary style="font-size:7px;color:var(--txt-d);letter-spacing:2px;text-transform:uppercase;cursor:pointer;padding:6px 0;list-style:none">▸ Add new tables / re-run SQL setup</summary>
-        <div style="margin-top:8px">
-          <button class="btn btn-gold btn-sm" style="width:100%;margin-bottom:8px" onclick="copySQL()">📋 Copy SQL to Clipboard</button>
-          <pre class="sync-sql-pre" style="max-height:200px;overflow-y:auto">create table if not exists ha3d_catalog (id text primary key, payload text, updated_at timestamptz);
-drop policy if exists "Allow all" on ha3d_catalog;
-create policy "Allow all" on ha3d_catalog for all using (true) with check (true);</pre>
-          <div style="font-size:7px;color:var(--txt-d);margin-top:6px">Paste into Supabase → SQL Editor → Run</div>
-        </div>
-      </details>
-      <div style="font-size:7px;color:var(--txt-d);letter-spacing:2px;text-transform:uppercase;margin-bottom:7px">Sync Log</div>
-      <div class="sync-log">
-        ${syncLog.length?syncLog.map(e=>'<div class="sync-log-entry"><span class="sync-log-time">'+e.t+'</span><span class="sync-log-msg '+e.type+'">'+esc(e.msg)+'</span></div>').join(''):'<div style="font-size:7px;color:var(--bdr2);padding:8px;text-align:center;letter-spacing:1px">No sync activity yet</div>'}
-      </div>`;
+    const email=currentUser.email||'';
+    const sqlText='create table if not exists ha3d_user_data (\n  user_id uuid not null references auth.users(id) on delete cascade,\n  collection text not null,\n  payload text not null default \'[]\',\n  updated_at timestamptz default now(),\n  primary key (user_id, collection)\n);\nalter table ha3d_user_data enable row level security;\ndrop policy if exists "Users own their data" on ha3d_user_data;\ncreate policy "Users own their data" on ha3d_user_data\n  for all using (auth.uid() = user_id)\n  with check (auth.uid() = user_id);';
+    el.innerHTML=integrationsHtml
+      +'<div class="sync-status-panel">'
+      +'<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">'
+      +'<div class="sync-dot connected" style="width:10px;height:10px"></div>'
+      +'<div style="flex:1"><div style="font-size:10px;color:var(--grn-b);font-weight:bold">Signed In</div>'
+      +'<div style="font-size:7px;color:var(--txt-d);margin-top:1px">'+esc(email)+'</div></div>'
+      +'<button class="btn btn-ghost btn-xs" onclick="signOutUser()">Sign Out</button>'
+      +'</div>'
+      +'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">'
+      +'<button class="btn btn-grn btn-sm" style="flex:1;min-width:90px" onclick="pushAllToCloud()">⬆ Push All</button>'
+      +'<button class="btn btn-cyn btn-sm" style="flex:1;min-width:90px" onclick="pullFromCloud()">⬇ Pull Latest</button>'
+      +'</div>'
+      +'<div class="sync-stat-grid">'
+      +'<div class="sync-stat"><div class="sync-stat-n" style="color:'+(pendingCount>0?'var(--gold-b)':'var(--grn-b)')+'">'+pendingCount+'</div><div class="sync-stat-l">Pending</div></div>'
+      +'<div class="sync-stat"><div class="sync-stat-n" style="color:var(--txt-b);font-size:10px">'+lastSync+'</div><div class="sync-stat-l">Last Sync</div></div>'
+      +'<div class="sync-stat"><div class="sync-stat-n" style="color:var(--cyn)">'+(spools.length+prints.length+orders.length)+'</div><div class="sync-stat-l">Records</div></div>'
+      +'</div>'
+      +(pendingCount>0?'<div style="background:var(--gold-d);border:1px solid var(--gold-dim);border-radius:4px;padding:8px 10px;font-size:8px;color:var(--gold-b);margin-bottom:10px">⏳ '+pendingCount+' change'+(pendingCount!==1?'s':'')+' waiting — <button class="btn btn-amb btn-xs" onclick="processSyncQueue()">Sync Now</button></div>':'')
+      +'</div>'
+      +'<details style="margin-bottom:14px"><summary style="font-size:7px;color:var(--txt-d);letter-spacing:2px;text-transform:uppercase;cursor:pointer;padding:6px 0;list-style:none">▸ Database setup SQL</summary>'
+      +'<div style="margin-top:8px"><button class="btn btn-gold btn-sm" style="width:100%;margin-bottom:8px" onclick="copySQL()">📋 Copy SQL to Clipboard</button>'
+      +'<pre class="sync-sql-pre" style="max-height:200px;overflow-y:auto">'+esc(sqlText)+'</pre>'
+      +'<div style="font-size:7px;color:var(--txt-d);margin-top:6px">Run once in Supabase → SQL Editor to enable cloud sync</div></div></details>'
+      +'<div style="font-size:7px;color:var(--txt-d);letter-spacing:2px;text-transform:uppercase;margin-bottom:7px">Sync Log</div>'
+      +'<div class="sync-log">'
+      +(syncLog.length?syncLog.map(e=>'<div class="sync-log-entry"><span class="sync-log-time">'+e.t+'</span><span class="sync-log-msg '+e.type+'">'+esc(e.msg)+'</span></div>').join(''):'<div style="font-size:7px;color:var(--bdr2);padding:8px;text-align:center;letter-spacing:1px">No sync activity yet</div>')
+      +'</div>';
   }
 
-  // Populate unified orders feed
   const allIntOrders=orders.filter(o=>o.fromShopify||o.fromEtsy);
   const unifiedEl=el.querySelector('#unified-orders');
   const unifiedList=el.querySelector('#unified-orders-list');
-  if(unifiedEl&&unifiedList){
-    if(allIntOrders.length){
-      unifiedEl.style.display='block';
-      unifiedList.innerHTML=allIntOrders.slice().reverse().slice(0,10).map(o=>
-        '<div class="uorder-row"><span class="uorder-platform '+(o.fromShopify?'up-shopify':'up-etsy')+'">'+( o.fromShopify?'Shopify':'Etsy')+'</span><span style="font-family:Orbitron,monospace;font-size:8px;color:var(--cyn)">'+esc(o.orderId)+'</span><span style="flex:1;color:var(--txt-b)">'+esc(o.customer)+'</span><span style="color:var(--grn)">$'+(o.items||[]).reduce((a,i)=>a+parseFloat(i.price||0)*parseInt(i.qty||1),0).toFixed(2)+'</span></div>'
-      ).join('');
-    }
+  if(unifiedEl&&unifiedList&&allIntOrders.length){
+    unifiedEl.style.display='block';
+    unifiedList.innerHTML=allIntOrders.slice().reverse().slice(0,10).map(o=>
+      '<div class="uorder-row"><span class="uorder-platform '+(o.fromShopify?'up-shopify':'up-etsy')+'">'+(o.fromShopify?'Shopify':'Etsy')+'</span><span style="font-family:Orbitron,monospace;font-size:8px;color:var(--cyn)">'+esc(o.orderId)+'</span><span style="flex:1;color:var(--txt-b)">'+esc(o.customer)+'</span><span style="color:var(--grn)">$'+(o.items||[]).reduce((a,i)=>a+parseFloat(i.price||0)*parseInt(i.qty||1),0).toFixed(2)+'</span></div>'
+    ).join('');
   }
-}
-
-async function connectSupabase(){
-  const url=document.getElementById('sb-url')?.value?.trim();
-  const key=document.getElementById('sb-key')?.value?.trim();
-  const res=document.getElementById('sync-connect-result');
-  if(!url||!key){
-    if(res){res.style.display='block';res.style.color='var(--red-b)';res.textContent='Please enter both your Project URL and anon key.';}
-    return;
-  }
-  if(!url.includes('supabase.co')){
-    if(res){res.style.display='block';res.style.color='var(--red-b)';res.textContent='URL should end in .supabase.co — check your Project Settings → API page.';}
-    return;
-  }
-  syncCfg.url=url;syncCfg.anonKey=key;
-  if(res){res.style.display='block';res.style.color='var(--gold-b)';res.textContent='Connecting…';}
-  initSupabase();
-  // Test the connection
-  setTimeout(async()=>{
-    if(!supabaseClient){if(res){res.style.color='var(--red-b)';res.textContent='Connection failed — check your credentials and try again.';}return;}
-    try{
-      const{error}=await supabaseClient.from('ha3d_spools').select('id').limit(1);
-      if(error&&error.code!=='PGRST116'){
-        if(res){res.style.color='var(--red-b)';res.textContent='Connected but table not found — make sure you ran the SQL setup.';}
-        return;
-      }
-      toast('Sync Connected!','Your data will now sync across all devices','success',5000);
-      addSyncLog('Connection verified ✓','ok');
-      // Push all existing data to cloud on first connect
-      await pushAllToCloud();
-      render();
-    }catch(e){
-      if(res){res.style.color='var(--red-b)';res.textContent='Error: '+e.message;}
-    }
-  },800);
-}
-
-function disconnectSupabase(){
-  showConfirm('Disconnect sync?','Your local data will remain intact.',()=>{
-    syncCfg={url:'',anonKey:'',enabled:false};supabaseClient=null;
-    saveSyncCfg();updateSyncIndicator('disconnected');
-    toast('Sync Disconnected','Data is still saved locally','warning');render();
-  },'Disconnect','btn-red');
 }
 
 function copySQL(){
@@ -7411,15 +7386,14 @@ function copySQL(){
   const sql=pre?pre.textContent.trim():'';
   if(!sql){toast('Nothing to copy','','warning');return;}
   navigator.clipboard.writeText(sql)
-    .then(()=>toast('SQL Copied!','Paste it into the Supabase SQL Editor and click Run','success'))
+    .then(()=>toast('SQL Copied!','Paste into Supabase → SQL Editor → Run','success'))
     .catch(()=>{
-      // Fallback for browsers that block clipboard
       const ta=document.createElement('textarea');
       ta.value=sql;ta.style.position='fixed';ta.style.opacity='0';
       document.body.appendChild(ta);ta.select();
       document.execCommand('copy');
       document.body.removeChild(ta);
-      toast('SQL Copied!','Paste it into the Supabase SQL Editor and click Run','success');
+      toast('SQL Copied!','Paste into Supabase → SQL Editor → Run','success');
     });
 }
 
@@ -7934,13 +7908,14 @@ async function importShopifyCatalog(){
   const statusEl=document.getElementById('shopify-import-status');
   const setStatus=(html)=>{if(statusEl)statusEl.innerHTML=html;};
 
-  // Always route through Supabase proxy — no token needed in the UI
-  if(!syncCfg||!syncCfg.url||!syncCfg.anonKey){
-    setStatus('<span style="color:var(--amb)">Connect Supabase first (Sync tab) — the proxy runs through your Supabase project.</span>');
+  const sbUrl=typeof __SUPABASE_URL__!=='undefined'?__SUPABASE_URL__:'';
+  const sbKey=typeof __SUPABASE_ANON_KEY__!=='undefined'?__SUPABASE_ANON_KEY__:'';
+  if(!sbUrl||!sbKey){
+    setStatus('<span style="color:var(--amb)">Supabase not configured — contact admin.</span>');
     return;
   }
 
-  const proxyUrl=syncCfg.url.replace(/\/$/,'')+'/functions/v1/shopify-catalog';
+  const proxyUrl=sbUrl.replace(/\/$/,'')+'/functions/v1/shopify-catalog';
   setStatus('<span style="color:var(--txt-d)">Fetching your Shopify catalog…</span>');
 
   try{
@@ -7948,8 +7923,8 @@ async function importShopifyCatalog(){
       method:'POST',
       headers:{
         'Content-Type':'application/json',
-        'Authorization':'Bearer '+syncCfg.anonKey,
-        'apikey':syncCfg.anonKey
+        'Authorization':'Bearer '+sbKey,
+        'apikey':sbKey
       },
       body:JSON.stringify({})
     });
@@ -8190,12 +8165,12 @@ function parseCSVLine(line){
 // CATALOG REFRESH + 3-DAY AUTO-SYNC
 // ════════════════════════════════════════
 function refreshCatalogFromShopify(){
-  // Try proxy first, fall back to instructing user
-  if(syncCfg&&syncCfg.url&&syncCfg.anonKey){
+  const sbUrl=typeof __SUPABASE_URL__!=='undefined'?__SUPABASE_URL__:'';
+  if(sbUrl){
     toast('Refreshing catalog…','Checking for new products','info',2000);
     importShopifyCatalog();
-  } else {
-    toast('Supabase not connected','Connect Supabase + deploy Edge Function to enable auto-refresh','warning',4000);
+  }else{
+    toast('Supabase not configured','Edge Function requires Supabase credentials','warning',4000);
   }
 }
 
@@ -8215,7 +8190,7 @@ function checkCatalogAutoRefresh(){
   const ts=parseInt(localStorage.getItem('ha3d_catalog_synced')||'0');
   if(!ts)return; // Never synced — don't auto-refresh
   const daysSince=Math.floor((Date.now()-ts)/86400000);
-  if(daysSince>=3&&syncCfg&&syncCfg.url&&syncCfg.anonKey){
+  if(daysSince>=3&&typeof __SUPABASE_URL__!=='undefined'&&__SUPABASE_URL__){
     console.log('Catalog auto-refresh: '+daysSince+' days since last sync');
     importShopifyCatalog().then(()=>{
       localStorage.setItem('ha3d_catalog_synced',Date.now().toString());
@@ -9400,6 +9375,7 @@ loadV15();
 loadMystery();
 setInitialNav();
 if(typeof updateMysteryBadge==='function')updateMysteryBadge();
+initSupabase();
 
 // ── AUTO-REFRESH ──
 let autoRefreshInterval=null;
@@ -9408,7 +9384,7 @@ function startAutoRefresh(){
   const mins=parseInt(localStorage.getItem('ha3d_autorefresh')||'10');
   if(mins<=0)return;
   autoRefreshInterval=setInterval(()=>{
-    if(syncCfg.enabled&&supabaseClient)processSyncQueue();
+    if(supabaseClient&&currentUser)processSyncQueue();
     if(shopifyCfg.connected)pollShopifyOrders();
     if(etsyCfg.connected)pollEtsyOrders();
     updateMysteryBadge();
