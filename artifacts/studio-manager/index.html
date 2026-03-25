@@ -7278,6 +7278,7 @@ async function pullFromCloud(silent=false){
     updateSyncIndicator('connected');
     addSyncLog('Pulled '+pulled+' collections ✓','ok');
     if(!silent)toast('Data Pulled','Your data is up to date','success');
+    render();
   }catch(e){
     console.error('pullFromCloud error:',e);
     updateSyncIndicator('error');
