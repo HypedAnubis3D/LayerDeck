@@ -7552,6 +7552,10 @@ async function pullFromCloud(silent=false){
     addSyncLog('Pulled '+pulled+' collections ✓','ok');
     if(!silent)toast('Data Pulled','Your data is up to date','success');
     render();
+    // Re-merge Shopify products after a cloud pull — cloud may have a stale catalog
+    if(typeof syncShopifyToCatalog==='function'&&shopifyCfg&&shopifyCfg.connected&&!shopifyCfg.domain.includes('DEMO')){
+      syncShopifyToCatalog();
+    }
   }catch(e){
     const msg=sbErrMsg(e);
     console.error('pullFromCloud error:',msg,e);
