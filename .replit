@@ -28,3 +28,6 @@ timeoutMs = 20000
 [userenv]
 
 [userenv.shared]
+VAPID_PUBLIC_KEY = "BPzlfDuf6yrePYnq8mbXN75nGsgKqGU5jfOGZn5uGZIKBpwsoT4f4GLUlm-6xowQqB5xzdgsHBmFt_qiPcPdVtc"
+VAPID_PRIVATE_KEY = "UxhuEgFukDbXHKYGpzP6cRKV3Lfz0V1ucfPKScFwQ3I"
+VAPID_EMAIL = "mailto:admin@hypedanubis3d.com"

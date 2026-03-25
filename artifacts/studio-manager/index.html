@@ -1928,6 +1928,24 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
     </div>
   </div>
 
+  <!-- PUSH NOTIFICATIONS -->
+  <div class="export-panel" style="margin-top:10px">
+    <div class="export-title">🔔 Push Notifications</div>
+    <div class="export-desc">Get notified when prints finish, when orders stay pending too long, and reminders before conventions — even when the app is in the background or minimized.</div>
+    <div id="notif-status" style="font-size:8px;color:var(--txt-d);margin-bottom:10px;letter-spacing:1px">Checking status…</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn btn-cyn btn-sm" id="notif-enable-btn" onclick="enablePushNotifications()">Enable Notifications</button>
+      <button class="btn btn-ghost btn-sm" id="notif-disable-btn" style="display:none" onclick="disablePushNotifications()">Disable</button>
+      <button class="btn btn-ghost btn-sm" id="notif-test-btn" style="display:none" onclick="testPushNotification()">🔔 Send Test</button>
+    </div>
+    <div style="margin-top:12px;font-size:7px;color:var(--txt-d);letter-spacing:1.5px;border-top:1px solid var(--bor);padding-top:10px">WHAT YOU'LL GET:</div>
+    <div style="font-size:8px;color:var(--txt-d);margin-top:5px;line-height:1.9">
+      🖨 Print timer alerts (done + 25% overdue warnings)<br>
+      🎪 Convention reminders (18 h and 1 h before start)<br>
+      📦 Aging order alerts (pending 3+ days)
+    </div>
+  </div>
+
   <!-- RESET SECTION -->
   <div class="reset-section">
     <div class="reset-title">⚠ Reset App</div>
@@ -3755,6 +3773,20 @@ function moveQueue(id,stage){
   }
   queueItems=queueItems.map(q=>q.id===id?{...q,stage}:q);
   saveQueue();
+
+  // Notify server to watch this print for timer-based push notification
+  if(stage==='inprogress'){
+    const qi=queueItems.find(q=>q.id===id);
+    if(qi&&qi.hrs){
+      fetch('/api/push/watch-print',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({id,name:qi.name,printer:qi.printer||'',startedAt:qi.startedAt||Date.now(),hrs:qi.hrs})
+      }).catch(()=>{});
+    }
+  }
+  // Remove from watch list when done or cancelled
+  if(stage==='done'){
+    fetch('/api/push/watch-print/'+id,{method:'DELETE'}).catch(()=>{});
+  }
 
   // Queued → In Progress: auto-create print record if none exists
   if(stage==='inprogress'){
@@ -11401,11 +11433,101 @@ function updateConventionBadge(){
 <!-- PTR indicator uses position:fixed which still works fine for overlays -->
 
 <script>
+// ── Push Notifications ──
+function _urlBase64ToUint8Array(b64){
+  const pad='='.repeat((4-b64.length%4)%4);
+  const raw=atob((b64+pad).replace(/-/g,'+').replace(/_/g,'/'));
+  return Uint8Array.from(raw,c=>c.charCodeAt(0));
+}
+function _setPushStatus(msg,enabled){
+  const el=document.getElementById('notif-status');
+  if(el)el.textContent=msg;
+  const enBtn=document.getElementById('notif-enable-btn');
+  const disBtn=document.getElementById('notif-disable-btn');
+  const testBtn=document.getElementById('notif-test-btn');
+  if(enBtn)enBtn.style.display=enabled?'none':'';
+  if(disBtn)disBtn.style.display=enabled?'':'none';
+  if(testBtn)testBtn.style.display=enabled?'':'none';
+}
+async function initPushNotifications(){
+  if(!('serviceWorker' in navigator)||!('PushManager' in window)){
+    _setPushStatus('Not supported in this browser');return;
+  }
+  try{
+    const reg=await navigator.serviceWorker.register('/sw.js');
+    window._swReg=reg;
+    await reg.update();
+    const sub=await reg.pushManager.getSubscription();
+    if(sub){_setPushStatus('Enabled ✓',true);}
+    else if(Notification.permission==='denied'){_setPushStatus('Blocked — allow in browser settings');}
+    else{_setPushStatus('Not enabled');}
+    // Listen for SW→page messages
+    navigator.serviceWorker.addEventListener('message',function(e){
+      if(!e.data||e.data.type!=='push-nav')return;
+      const t=e.data.tab||'';
+      if(t.includes('convention'))navTo('convention',document.getElementById('nav-convention'));
+      else if(t.includes('order'))navTo('orders',document.getElementById('nav-orders'));
+    });
+  }catch(e){_setPushStatus('SW error: '+e.message);}
+}
+async function enablePushNotifications(){
+  try{
+    const perm=await Notification.requestPermission();
+    if(perm!=='granted'){_setPushStatus('Permission denied — allow in browser settings');return;}
+    const reg=window._swReg||(await navigator.serviceWorker.register('/sw.js'));
+    window._swReg=reg;
+    const keyResp=await fetch('/api/push/vapid-key');
+    const {publicKey}=await keyResp.json();
+    if(!publicKey){_setPushStatus('Server not configured');return;}
+    const sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:_urlBase64ToUint8Array(publicKey)});
+    await fetch('/api/push/subscribe',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(sub)});
+    _setPushStatus('Enabled ✓',true);
+    toast('Notifications','Push notifications enabled 🔔','success');
+  }catch(e){_setPushStatus('Error: '+e.message);toast('Error',e.message,'error');}
+}
+async function disablePushNotifications(){
+  try{
+    const reg=window._swReg||(await navigator.serviceWorker.getRegistration('/sw.js'));
+    if(reg){
+      const sub=await reg.pushManager.getSubscription();
+      if(sub){
+        await fetch('/api/push/unsubscribe',{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({endpoint:sub.endpoint})});
+        await sub.unsubscribe();
+      }
+    }
+    _setPushStatus('Not enabled');
+    toast('Notifications','Push notifications disabled','info');
+  }catch(e){_setPushStatus('Error: '+e.message);}
+}
+async function testPushNotification(){
+  try{
+    const r=await fetch('/api/push/test',{method:'POST'});
+    const d=await r.json();
+    if(!r.ok)toast('Error',d.error||'Failed','error');
+    else toast('Test Sent','Check your notifications! 🔔','success');
+  }catch(e){toast('Error',e.message,'error');}
+}
+</script>
+
+<script>
 // ── Check for OAuth redirect params on page load ──
 function _onReady(){
   setTimeout(checkShopifyOAuthCallback,700);
   setTimeout(checkEtsyOAuthCallback,750);
   setTimeout(checkEtsyConfig,1500);
+  // Service worker + push notifications
+  setTimeout(initPushNotifications,1000);
+  // Handle push notification action from URL
+  const _sp=new URLSearchParams(window.location.search);
+  if(_sp.get('push-action')==='confirm-print'){
+    const _pid=_sp.get('id');
+    if(_pid){
+      queueItems=queueItems.map(q=>q.id===_pid?{...q,stage:'done'}:q);
+      saveQueue();render();
+      toast('Print Confirmed','Marked as done ✓','success');
+      window.history.replaceState({},'',window.location.pathname);
+    }
+  }
 }
 if(document.readyState==='loading'){
   document.addEventListener('DOMContentLoaded',_onReady);
