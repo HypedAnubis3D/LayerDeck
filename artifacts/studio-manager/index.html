@@ -7111,14 +7111,15 @@ async function signInGoogle(){
   }catch(e){setAuthError(e.message||'Google sign-in failed');}
 }
 async function signOutUser(){
-  showConfirm('Sign out?','You can sign back in anytime.',async()=>{
-    await supabaseClient.auth.signOut();
-    currentUser=null;
-    syncCfg.enabled=false;
-    updateSyncIndicator('disconnected');
-    showAuthScreen();
-    render();
-  },'Sign Out','btn-red');
+  try{await supabaseClient.auth.signOut();}catch(e){}
+  currentUser=null;
+  syncCfg.enabled=false;
+  stopAutoSync();
+  Object.keys(localStorage).filter(k=>k.startsWith('sb-')).forEach(k=>localStorage.removeItem(k));
+  updateSyncIndicator('disconnected');
+  updateCloudPanel();
+  showAuthScreen();
+  render();
 }
 async function showForgotPassword(){
   const email=prompt('Enter your email:');
@@ -7143,6 +7144,7 @@ function initSupabase(){
         syncCfg.enabled=true;
         hideAuthScreen();
         updateSyncIndicator('connected');
+        updateCloudPanel();
         addSyncLog('Signed in as '+currentUser.email,'ok');
         if(event==='SIGNED_IN'){await pullFromCloud();render();}
         startAutoSync();
@@ -7151,6 +7153,7 @@ function initSupabase(){
         syncCfg.enabled=false;
         stopAutoSync();
         updateSyncIndicator('disconnected');
+        updateCloudPanel();
         showAuthScreen();
       }
     });
@@ -7259,10 +7262,24 @@ async function pullFromCloud(silent=false){
   }
 }
 
+function updateCloudPanel(){
+  const p=document.getElementById('cloud-panel');
+  if(!p)return;
+  const email=currentUser?currentUser.email:'';
+  const short=email.length>22?email.slice(0,20)+'…':email;
+  p.innerHTML=(currentUser
+    ?'<div style="font-size:7px;color:var(--txt-d);letter-spacing:1px;padding:2px 4px 6px;border-bottom:1px solid var(--bdr);margin-bottom:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="'+esc(email)+'">'+esc(short)+'</div>'
+     +'<button class="btn btn-sm" style="width:100%;background:var(--grn-d);border:1px solid var(--grn);color:var(--grn-b);padding:5px 10px;font-size:7px;margin-bottom:4px" onclick="syncAll();toggleCloudPanel()" title="Push all local changes to cloud">⬆ Push to Cloud</button>'
+     +'<button class="btn btn-sm" style="width:100%;background:var(--cyn-d,rgba(34,170,204,.1));border:1px solid var(--cyn);color:var(--cyn);padding:5px 10px;font-size:7px;margin-bottom:4px" onclick="pullAll();toggleCloudPanel()" title="Pull latest from cloud">⬇ Pull from Cloud</button>'
+     +'<button class="btn btn-sm" style="width:100%;background:rgba(220,50,50,.12);border:1px solid var(--red);color:var(--red-b);padding:5px 10px;font-size:7px" onclick="signOutUser();toggleCloudPanel()" title="Sign out">⏏ Sign Out</button>'
+    :'<div style="font-size:7px;color:var(--txt-d);padding:2px 4px 8px">Not signed in</div>'
+     +'<button class="btn btn-sm" style="width:100%;background:var(--gold-d);border:1px solid var(--gold);color:var(--gold-b);padding:5px 10px;font-size:7px" onclick="showAuthScreen();toggleCloudPanel()" title="Sign in">🔐 Sign In</button>');
+}
 function toggleCloudPanel(){
   const p=document.getElementById('cloud-panel');
   if(!p)return;
   const open=p.style.display==='none';
+  if(open)updateCloudPanel();
   p.style.display=open?'block':'none';
   if(open){
     const close=(e)=>{if(!document.getElementById('cloud-btn').contains(e.target)&&!p.contains(e.target)){p.style.display='none';document.removeEventListener('click',close,true);}};
