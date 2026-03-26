@@ -1713,16 +1713,17 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
 
 <!-- SPOOLS -->
 <div id="tab-spools">
-  <div style="display:flex;flex-direction:column;gap:7px;margin-bottom:10px">
-    <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
-      <button class="btn btn-cyn" onclick="openAddSpool()">+ Add Spool</button>
+  <div style="background:var(--surf);border:1px solid var(--bdr);border-radius:8px;padding:12px;margin-bottom:12px">
+    <div style="display:flex;gap:6px;align-items:center;margin-bottom:10px">
+      <button class="btn btn-cyn btn-sm" style="flex:1" onclick="openAddSpool()">+ Add Spool</button>
       <button class="btn btn-gold btn-sm" onclick="openBarcodeScanner()" title="Scan the barcode on a spool box to add it automatically">📷 Scan Box</button>
       <button class="btn btn-ghost btn-sm" onclick="enterSelectMode('spools')">☑ Select</button>
       <button class="btn btn-grn btn-sm" onclick="openDryScanner()" title="Scan a spool QR code to mark it as dried right now">🔥 Dry by QR</button>
     </div>
-    <div style="display:flex;gap:6px;align-items:center">
-      <input class="srch" id="sp-s" placeholder="Search spools…" oninput="render()" style="flex:1;min-width:0"/>
-      <span class="cnt" id="sp-cnt" style="white-space:nowrap;flex-shrink:0"></span>
+    <div style="height:1px;background:var(--bdr);margin-bottom:10px"></div>
+    <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px">
+      <input class="srch" id="sp-s" placeholder="Search spools…" oninput="render()" style="flex:1;min-width:0;margin:0"/>
+      <span class="cnt" id="sp-cnt" style="white-space:nowrap;flex-shrink:0;font-size:7px"></span>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">
       <select class="flt" id="sp-m" onchange="render()">
