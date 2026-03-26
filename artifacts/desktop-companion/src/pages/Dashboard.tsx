@@ -200,25 +200,25 @@ export default function Dashboard() {
                         <Library className="h-4 w-4 text-primary/70" />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="font-medium text-sm text-foreground truncate" title={item.modelName}>
-                          {item.modelName || item.filename}
+                        <p className="font-medium text-sm text-foreground truncate" title={item.name}>
+                          {item.name || item.filename}
                         </p>
                         <p className="text-xs text-muted-foreground font-mono truncate" title={item.filename}>
                           {item.filename}
                         </p>
                         <div className="mt-1.5 flex items-center gap-3 text-xs text-muted-foreground/60">
-                          {item.objectsCount > 0 && (
+                          {item.objects > 0 && (
                             <span className="flex items-center gap-1">
-                              <Box className="h-3 w-3" />{item.objectsCount} obj
+                              <Box className="h-3 w-3" />{item.objects} obj
                             </span>
                           )}
-                          {item.printTimeEstimate && (
+                          {item.hrs && (
                             <span className="flex items-center gap-1">
-                              <Clock className="h-3 w-3" />~{item.printTimeEstimate}
+                              <Clock className="h-3 w-3" />~{item.hrs}h
                             </span>
                           )}
                           <span className="ml-auto">
-                            {new Date(item.addedAt).toLocaleDateString()}
+                            {new Date(item.uploadedAt).toLocaleDateString()}
                           </span>
                         </div>
                       </div>

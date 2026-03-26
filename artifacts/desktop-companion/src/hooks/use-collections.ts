@@ -41,7 +41,7 @@ export function useDashboardMetrics() {
         if (row.collection === 'catalog') {
           const catalog = safeParse<any[]>(row.payload, []);
           metrics.catalogCount = catalog.length;
-        } else if (row.collection === 'library3mf') {
+        } else if (row.collection === 'tmfLib') {
           const library = safeParse<any[]>(row.payload, []);
           metrics.libraryCount = library.length;
         } else if (row.collection === 'orders') {
@@ -65,12 +65,14 @@ export function useDashboardMetrics() {
   });
 }
 
+const TMF_COLLECTION = 'tmfLib';
+
 async function fetchLibrary(userId: string): Promise<any[]> {
   const { data, error } = await supabase
     .from('ha3d_user_data')
     .select('payload')
     .eq('user_id', userId)
-    .eq('collection', 'library3mf')
+    .eq('collection', TMF_COLLECTION)
     .maybeSingle();
 
   if (error && error.code !== 'PGRST116') throw error;
@@ -82,7 +84,7 @@ async function saveLibrary(userId: string, items: any[]): Promise<void> {
     .from('ha3d_user_data')
     .upsert({
       user_id: userId,
-      collection: 'library3mf',
+      collection: TMF_COLLECTION,
       payload: JSON.stringify(items),
       updated_at: new Date().toISOString()
     }, { onConflict: 'user_id,collection' });
@@ -112,13 +114,21 @@ export function useAddToLibrary() {
       const alreadyIn = existing.some((e: any) => e.filename === file.filename);
       if (alreadyIn) return;
 
+      const hrs = file.printTimeEstimate
+        ? (() => {
+            const m = file.printTimeEstimate.match(/(\d+)h\s*(\d+)m/);
+            return m ? parseFloat((parseInt(m[1]) + parseInt(m[2]) / 60).toFixed(2)) : null;
+          })()
+        : null;
+
       const newItem = {
         id: crypto.randomUUID(),
         filename: file.filename,
-        modelName: file.modelName,
-        objectsCount: file.objectsCount,
-        printTimeEstimate: file.printTimeEstimate ?? null,
-        addedAt: new Date().toISOString(),
+        name: file.modelName || file.filename.replace(/\.3mf$/i, ''),
+        objects: file.objectsCount,
+        hrs,
+        hasGcode: !!hrs,
+        uploadedAt: Date.now(),
       };
 
       await saveLibrary(user.id, [...existing, newItem]);
@@ -144,14 +154,23 @@ export function useAddAllToLibrary() {
 
       const newItems = files
         .filter(f => f.status === 'ready' && !existingNames.has(f.filename))
-        .map(f => ({
-          id: crypto.randomUUID(),
-          filename: f.filename,
-          modelName: f.modelName,
-          objectsCount: f.objectsCount,
-          printTimeEstimate: f.printTimeEstimate ?? null,
-          addedAt: new Date().toISOString(),
-        }));
+        .map(f => {
+          const hrs = f.printTimeEstimate
+            ? (() => {
+                const m = f.printTimeEstimate!.match(/(\d+)h\s*(\d+)m/);
+                return m ? parseFloat((parseInt(m[1]) + parseInt(m[2]) / 60).toFixed(2)) : null;
+              })()
+            : null;
+          return {
+            id: crypto.randomUUID(),
+            filename: f.filename,
+            name: f.modelName || f.filename.replace(/\.3mf$/i, ''),
+            objects: f.objectsCount,
+            hrs,
+            hasGcode: !!hrs,
+            uploadedAt: Date.now(),
+          };
+        });
 
       if (newItems.length === 0) return { added: 0 };
 
