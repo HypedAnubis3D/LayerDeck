@@ -2541,11 +2541,11 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
     </div>
   </div>
   <div class="sdiv">Purchase Details</div>
-  <div class="fr3">
+  <div class="fr2">
     <div class="field"><div class="fl">Price Paid ($)</div><input type="number" id="ep3-price" min="0" step="0.01" placeholder="13.99"/></div>
-    <div class="field"><div class="fl">Spool Weight (g)</div><input type="number" id="ep3-weight" min="1" value="1000"/></div>
     <div class="field"><div class="fl">Qty Spools</div><input type="number" id="ep3-qty" min="1" value="1"/></div>
   </div>
+  <div class="field"><div class="fl">Spool Weight (g)</div><input type="number" id="ep3-weight" min="1" value="1000"/></div>
   <div class="fr2">
     <div class="field"><div class="fl">Retailer</div><input type="text" id="ep3-retailer" placeholder="Bambu Lab Store"/></div>
     <div class="field"><div class="fl">Purchase Date</div><input type="date" id="ep3-date"/></div>
@@ -2664,11 +2664,11 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
     <div class="field"><div class="fl">Start Date</div><input type="date" id="conv-start"/></div>
     <div class="field"><div class="fl">End Date</div><input type="date" id="conv-end"/></div>
   </div>
-  <div class="fr3">
+  <div class="fr2">
     <div class="field"><div class="fl">Table / Booth Cost ($)</div><input type="number" id="conv-cost" min="0" placeholder="150"/></div>
     <div class="field"><div class="fl">Revenue Target ($)</div><input type="number" id="conv-target" min="0" placeholder="500"/></div>
-    <div class="field"><div class="fl">Actual Revenue ($)</div><input type="number" id="conv-revenue" min="0" placeholder="0"/></div>
   </div>
+  <div class="field"><div class="fl">Actual Revenue ($)</div><input type="number" id="conv-revenue" min="0" placeholder="0"/></div>
   <div class="field"><div class="fl">Notes</div><textarea id="conv-notes" rows="2" placeholder="What worked, what to bring next time…"></textarea></div>
   <div class="macts">
     <button class="btn btn-pur" onclick="saveConvention()">Save Event</button>
@@ -3367,18 +3367,18 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
     <div class="field"><div class="fl">Model</div><input type="text" id="ep2-model" placeholder="Bambu Lab X1C"/></div>
   </div>
   <div class="sdiv">Power & Capacity</div>
-  <div class="fr3">
+  <div class="fr2">
     <div class="field"><div class="fl">Wattage (W)</div><input type="number" id="ep2-watts" min="1" placeholder="350"/></div>
     <div class="field"><div class="fl">Electricity ($/kWh)</div><input type="number" id="ep2-kwh" min="0" step="0.01" placeholder="0.13"/></div>
-    <div class="field"><div class="fl">AMS Units</div>
-      <select id="ep2-ams"><option value="0">None (no AMS)</option><option value="1">1 AMS (4 slots)</option><option value="2">2 AMS (8 slots)</option><option value="3">3 AMS (12 slots)</option><option value="4">4 AMS (16 slots)</option></select>
-    </div>
+  </div>
+  <div class="field"><div class="fl">AMS Units</div>
+    <select id="ep2-ams"><option value="0">None (no AMS)</option><option value="1">1 AMS (4 slots)</option><option value="2">2 AMS (8 slots)</option><option value="3">3 AMS (12 slots)</option><option value="4">4 AMS (16 slots)</option></select>
   </div>
   <div class="sdiv">Pricing Defaults</div>
   <div class="fr3">
     <div class="field"><div class="fl">Labor ($/hr)</div><input type="number" id="ep2-labor" min="0" step="0.5" placeholder="0"/></div>
     <div class="field"><div class="fl">Markup %</div><input type="number" id="ep2-markup" min="0" step="5" placeholder="30"/></div>
-    <div class="field"><div class="fl">Nozzle Size (mm)</div><input type="text" id="ep2-nozzle" placeholder="0.4"/></div>
+    <div class="field"><div class="fl">Nozzle (mm)</div><input type="text" id="ep2-nozzle" placeholder="0.4"/></div>
   </div>
   <div class="sdiv">Specifications</div>
   <div class="fr2">
