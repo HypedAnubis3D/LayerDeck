@@ -2087,7 +2087,15 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
       <option value="active">Active (incomplete)</option>
       <option value="complete">Completed</option>
     </select>
+    <button class="btn btn-ghost btn-sm" id="fc-select-btn" onclick="toggleFcSelectMode()">Select</button>
     <span class="cnt" id="fulfillment-cnt"></span>
+  </div>
+  <div id="fc-bulk-bar" style="display:none;background:var(--surf2);border:1px solid var(--bdr2);border-radius:6px;padding:8px 12px;margin-bottom:10px;align-items:center;gap:10px;flex-wrap:wrap">
+    <span id="fc-sel-count" style="font-size:8px;color:var(--txt-d);letter-spacing:1px">0 selected</span>
+    <button class="btn btn-sm" style="background:none;border:1px solid var(--bdr2);color:var(--txt-d);padding:4px 10px;font-size:7px" onclick="fcSelectAll()">Select All</button>
+    <button class="btn btn-sm" style="background:none;border:1px solid var(--bdr2);color:var(--txt-d);padding:4px 10px;font-size:7px" onclick="fcSelectNone()">None</button>
+    <button class="btn btn-red btn-sm" style="margin-left:auto;padding:5px 12px;font-size:7px" onclick="bulkDeleteFulfillment()" id="fc-bulk-del-btn">🗑 Delete Selected</button>
+    <button class="btn btn-ghost btn-sm" style="padding:5px 10px;font-size:7px" onclick="toggleFcSelectMode()">Cancel</button>
   </div>
   <div class="fulfillment-grid" id="fulfillment-grid"></div>
 </div>
@@ -6666,6 +6674,7 @@ function setInitialNav(){
 // ════════════════════════════════════════
 Object.assign(KEYS,{printers:'ha3d_printers_v1',fulfillment:'ha3d_fulfillment_v1',printSettings:'ha3d_printsettings_v1',pokemonMap:'ha3d_pokemon_v1'});
 let printerRecords=[],fulfillmentData={},printSettingsMap={},pokemonMap={};
+let fcSelectMode=false;const fcSelected=new Set();
 
 function loadV9(){
   printerRecords=gs(KEYS.printers);
@@ -7138,21 +7147,28 @@ function renderFulfillment(){
   document.getElementById('fulfillment-cnt').textContent=items.length+' orders';
   const g=document.getElementById('fulfillment-grid');
   if(!items.length){g.innerHTML=emptyState('✅','No Orders Yet','Orders will appear here automatically when created',`<button class="btn btn-teal" onclick="navTo('orders')">Go to Orders</button>`);return;}
+  const selBtn=document.getElementById('fc-select-btn');
+  if(selBtn)selBtn.textContent=fcSelectMode?'Done':'Select';
+  const bulkBar=document.getElementById('fc-bulk-bar');
+  if(bulkBar)bulkBar.style.display=fcSelectMode?'flex':'none';
   g.innerHTML=items.map(item=>{
     const doneCount=FC_STEPS.filter(s=>item.steps[s.key]).length;
     const allDone=doneCount===FC_STEPS.length;
     const pct2=Math.round((doneCount/FC_STEPS.length)*100);
     const itemList=(item.items||[]).map(i=>`${esc(i.name||i)}${i.qty>1?' ×'+i.qty:''}`).join(', ');
-    return `<div class="fc-order-card${allDone?' fc-complete':''}">
+    const isSelected=fcSelected.has(item.key);
+    const selBorder=fcSelectMode&&isSelected?';border-color:var(--red);box-shadow:0 0 0 2px rgba(220,50,50,.25)':'';
+    return `<div class="fc-order-card${allDone?' fc-complete':''}" style="${selBorder?'outline:none'+selBorder:''}">
       <div class="fc-order-header">
-        <div style="flex:1;min-width:0">
+        ${fcSelectMode?`<div onclick="toggleFcSelect('${item.key}')" style="display:flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:4px;border:2px solid ${isSelected?'var(--red)':'var(--bdr2)'};background:${isSelected?'var(--red-d)':'transparent'};cursor:pointer;flex-shrink:0;margin-right:8px;font-size:11px;color:var(--red-b)">${isSelected?'✓':''}</div>`:''}
+        <div style="flex:1;min-width:0" ${fcSelectMode?`onclick="toggleFcSelect('${item.key}')" style="flex:1;min-width:0;cursor:pointer"`:'style="flex:1;min-width:0"'}>
           <div class="fc-order-id">${esc(item.orderId||item.printId||item.key)}</div>
           <div class="fc-order-customer">${esc(item.customer||item.printName||'—')}</div>
           <div class="fc-order-meta">${itemList?esc(itemList.slice(0,50)):'—'}</div>
         </div>
         <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
           ${allDone?'<span class="fc-complete-badge">✓ Complete</span>':'<span style="font-family:\'Orbitron\',monospace;font-size:10px;color:var(--gold)">'+(doneCount)+'/'+FC_STEPS.length+'</span>'}
-          <button onclick="deleteFulfillment('${item.key}')" title="Delete record" style="background:none;border:none;color:var(--red-b);cursor:pointer;font-size:13px;padding:2px 4px;opacity:.6;line-height:1" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=.6">✕</button>
+          ${fcSelectMode?'':`<button onclick="deleteFulfillment('${item.key}')" title="Delete record" style="background:none;border:none;color:var(--red-b);cursor:pointer;font-size:13px;padding:2px 4px;opacity:.6;line-height:1" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=.6">✕</button>`}
         </div>
       </div>
       <div class="fc-progress"><div class="fc-progress-fill" style="width:${pct2}%"></div></div>
@@ -7177,6 +7193,40 @@ function deleteFulfillment(key){
     saveFulfillment();
     render();
     toast('Deleted','Fulfillment record removed','success',2000);
+  });
+}
+function toggleFcSelectMode(){
+  fcSelectMode=!fcSelectMode;
+  fcSelected.clear();
+  renderFulfillment();
+}
+function toggleFcSelect(key){
+  if(fcSelected.has(key))fcSelected.delete(key);else fcSelected.add(key);
+  const cnt=document.getElementById('fc-sel-count');
+  if(cnt)cnt.textContent=fcSelected.size+' selected';
+  renderFulfillment();
+}
+function fcSelectAll(){
+  Object.keys(fulfillmentData).forEach(k=>fcSelected.add(k));
+  const cnt=document.getElementById('fc-sel-count');
+  if(cnt)cnt.textContent=fcSelected.size+' selected';
+  renderFulfillment();
+}
+function fcSelectNone(){
+  fcSelected.clear();
+  const cnt=document.getElementById('fc-sel-count');
+  if(cnt)cnt.textContent='0 selected';
+  renderFulfillment();
+}
+function bulkDeleteFulfillment(){
+  if(!fcSelected.size){toast('Nothing selected','Tap cards to select them','warning');return;}
+  showConfirm('Delete '+fcSelected.size+' fulfillment record'+(fcSelected.size!==1?'s':'')+' permanently?',function(){
+    fcSelected.forEach(k=>{delete fulfillmentData[k];});
+    saveFulfillment();
+    fcSelected.clear();
+    fcSelectMode=false;
+    render();
+    toast('Deleted','Fulfillment records removed','success',2500);
   });
 }
 
