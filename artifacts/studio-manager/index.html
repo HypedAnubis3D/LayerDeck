@@ -7188,7 +7188,7 @@ function deleteFulfillment(key){
   const item=fulfillmentData[key];
   if(!item)return;
   const label=item.orderId||item.printId||key;
-  showConfirm('Delete fulfillment record for '+label+'? This cannot be undone.',function(){
+  showConfirm('Delete Record','Remove fulfillment record for '+label+'? This cannot be undone.',function(){
     delete fulfillmentData[key];
     saveFulfillment();
     render();
@@ -7220,13 +7220,14 @@ function fcSelectNone(){
 }
 function bulkDeleteFulfillment(){
   if(!fcSelected.size){toast('Nothing selected','Tap cards to select them','warning');return;}
-  showConfirm('Delete '+fcSelected.size+' fulfillment record'+(fcSelected.size!==1?'s':'')+' permanently?',function(){
+  const n=fcSelected.size;
+  showConfirm('Delete '+n+' Record'+(n!==1?'s':''),'Permanently remove '+n+' fulfillment record'+(n!==1?'s':'')+'. This cannot be undone.',function(){
     fcSelected.forEach(k=>{delete fulfillmentData[k];});
     saveFulfillment();
     fcSelected.clear();
     fcSelectMode=false;
     render();
-    toast('Deleted','Fulfillment records removed','success',2500);
+    toast('Deleted',n+' fulfillment record'+(n!==1?'s':'')+' removed','success',2500);
   });
 }
 
