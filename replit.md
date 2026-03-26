@@ -50,7 +50,7 @@ Every package extends `tsconfig.base.json` which sets `composite: true`. The roo
 
 ## Artifacts
 
-### `artifacts/studio-manager` (HypedAnubis3D Studio Manager)
+### `artifacts/studio-manager` (LayerStack)
 
 - Vanilla JS single-page app served by Vite as a static HTML entry point; no React or Tailwind — Vite plugins stripped to avoid CSS transform conflicts with inline `<style>` blocks
 - All Shopify logic lives directly in `index.html` — no IIFE overrides
@@ -114,7 +114,7 @@ Generated Zod schemas from the OpenAPI spec (e.g. `HealthCheckResponse`). Used b
 
 Generated React Query hooks and fetch client from the OpenAPI spec (e.g. `useHealthCheck`, `healthCheck`).
 
-### `artifacts/studio-manager` — HypedAnubis3D Studio Manager
+### `artifacts/studio-manager` — LayerStack
 
 Single-file HTML PWA for managing a Bambu Lab 3D printing collectibles business (hypedanubis3d-2.myshopify.com). All code is in `index.html` (~9,650+ lines). No frameworks — vanilla JS with JSZip (CDN) for 3MF parsing.
 
