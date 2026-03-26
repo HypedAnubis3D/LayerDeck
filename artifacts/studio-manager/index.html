@@ -1965,11 +1965,10 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
 <!-- SHINY TRACKER -->
 <div id="tab-shiny" style="display:none">
   <div class="ctrl">
-    <button class="btn btn-amb" onclick="openRollModal()">🎲 Roll for Order</button>
-    <span style="font-size:7px;color:var(--txt-d);letter-spacing:1px">1-in-5 random roll per order · Each order gets one chance</span>
     <span class="cnt" id="shiny-cnt"></span>
   </div>
   <div class="shiny-stats-bar" style="grid-template-columns:repeat(4,1fr);margin-bottom:14px" id="shiny-global-stats"></div>
+  <div id="shiny-order-pool" style="margin-bottom:14px"></div>
   <div class="shiny-grid" id="shiny-grid"></div>
 </div>
 
@@ -3198,27 +3197,21 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
 </div>
 </div>
 <div class="modal narrow" style="text-align:center">
-  <div class="mtitle" style="justify-content:center">🎲 Shiny Roll</div>
-  <div style="font-size:8px;color:var(--txt-d);margin-bottom:14px">Link this roll to an order</div>
-  <div class="field" style="text-align:left"><div class="fl">Order</div>
-    <select id="roll-order" style="width:100%;background:var(--bg);border:1px solid var(--bdr2);color:var(--txt);padding:7px 8px;font-family:'Share Tech Mono',monospace;font-size:9px;border-radius:3px;">
-      <option value="">— Select Order —</option>
-    </select>
+  <div class="mtitle" style="justify-content:center">✨ Roll For Shiny</div>
+  <div id="roll-pre" style="margin-bottom:14px">
+    <div style="font-size:8px;color:var(--txt-d);margin-bottom:10px" id="roll-summary-text">Rolling for selected orders…</div>
+    <div id="roll-candidates" style="text-align:left;max-height:160px;overflow-y:auto;background:var(--bg);border:1px solid var(--bdr);border-radius:4px;padding:6px 8px;margin-bottom:10px"></div>
+    <div class="macts" id="roll-btn-wrap">
+      <button class="btn btn-amb" style="flex:1;padding:9px" onclick="executeRoll()">🎲 Roll!</button>
+      <button class="btn btn-ghost" onclick="closeRoll()" style="flex:1;padding:9px">Cancel</button>
+    </div>
   </div>
-  <div class="field" style="text-align:left"><div class="fl">Product</div>
-    <input type="text" id="roll-product" placeholder="e.g. Anubis Figurine" style="width:100%;background:var(--bg);border:1px solid var(--bdr2);color:var(--txt);padding:7px 8px;font-family:'Share Tech Mono',monospace;font-size:9px;border-radius:3px;"/>
-  </div>
-  <div id="roll-result" style="display:none;margin:14px 0;">
-    <div id="roll-result-icon" style="font-size:48px;margin-bottom:8px;animation:shiny-pop .5s ease"></div>
-    <div id="roll-result-text" style="font-size:13px;font-weight:bold;margin-bottom:4px"></div>
+  <div id="roll-result" style="display:none;margin:4px 0 14px">
+    <div id="roll-result-icon" style="font-size:48px;margin-bottom:8px"></div>
+    <div id="roll-result-text" style="font-size:14px;font-weight:bold;margin-bottom:6px"></div>
+    <div id="roll-result-winner" style="background:var(--bg);border:1px solid var(--gold-dim);border-radius:6px;padding:10px;margin-bottom:8px;text-align:left"></div>
     <div id="roll-result-sub" style="font-size:8px;color:var(--txt-d)"></div>
-  </div>
-  <div class="macts" id="roll-btn-wrap">
-    <button class="btn btn-amb" style="flex:1;padding:9px" onclick="executeRoll()">🎲 Roll!</button>
-    <button class="btn btn-ghost" onclick="closeRoll()" style="flex:1;padding:9px">Cancel</button>
-  </div>
-  <div id="roll-done-btns" style="display:none">
-    <button class="btn btn-ghost" style="width:100%;padding:8px;margin-top:4px" onclick="closeRoll()">Done</button>
+    <button class="btn btn-ghost" style="width:100%;padding:8px;margin-top:10px" onclick="closeRoll()">Done</button>
   </div>
 </div>
 </div>
@@ -5510,8 +5503,35 @@ function renderShiny(){
     <div class="shiny-stat"><div class="shiny-stat-n" style="color:var(--txt-d)">${normalCount}</div><div class="shiny-stat-l">Normal</div></div>
     <div class="shiny-stat"><div class="shiny-stat-n" style="color:var(--amb)">${rate}%</div><div class="shiny-stat-l">Shiny Rate</div></div>
     <div class="shiny-stat"><div class="shiny-stat-n" style="color:var(--cyn)">${total}</div><div class="shiny-stat-l">Total Rolls</div></div>`;
+  // ── Order selection pool ──
+  const rolledOrderIds=new Set(shinyRolls.map(r=>r.rolledOrderId).filter(Boolean));
+  const eligible=orders.filter(o=>o.status!=='cancelled'&&o.status!=='shipped');
+  const pool=document.getElementById('shiny-order-pool');
+  if(eligible.length){
+    pool.innerHTML=`
+      <div style="font-size:7px;letter-spacing:1.5px;color:var(--txt-d);margin-bottom:8px">SELECT ORDERS TO ROLL</div>
+      <div style="background:var(--surf);border:1px solid var(--bdr);border-radius:6px;overflow:hidden;margin-bottom:10px">
+        ${eligible.map(o=>{
+          const items=(o.items||[]).map(i=>esc(i.name)+(i.qty>1?' ×'+i.qty:'')).join(', ');
+          const alreadyRolled=rolledOrderIds.has(o.id);
+          return `<label style="display:flex;align-items:center;gap:10px;padding:9px 12px;border-bottom:1px solid var(--bdr);cursor:pointer;${alreadyRolled?'opacity:.45;':''}">
+            <input type="checkbox" class="shiny-order-check" data-id="${o.id}" ${alreadyRolled?'disabled':''} onchange="updateShinyRollBtn()" style="accent-color:var(--gold);width:14px;height:14px;flex-shrink:0"/>
+            <div style="flex:1;min-width:0">
+              <div style="font-size:9px;font-family:'Orbitron',monospace;color:var(--amb)">${esc(o.orderId)}</div>
+              <div style="font-size:8px;color:var(--txt)">${esc(o.customer)}</div>
+              <div style="font-size:7px;color:var(--txt-d);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${items||'—'}</div>
+            </div>
+            ${alreadyRolled?'<span style="font-size:7px;color:var(--grn)">✓ Rolled</span>':''}
+          </label>`;
+        }).join('')}
+      </div>
+      <button class="btn btn-amb" id="shiny-roll-btn" onclick="openRollModal()" style="width:100%;padding:10px;font-size:10px" disabled>✨ Roll For Shiny (select orders above)</button>`;
+  }else{
+    pool.innerHTML=`<div class="empty" style="padding:16px 0">No active orders to roll — orders appear here when they come in</div>`;
+  }
+  // ── Roll history ──
   const g=document.getElementById('shiny-grid');
-  if(!shinyRolls.length){g.innerHTML='<div class="empty" style="grid-column:1/-1">No rolls yet — click Roll for Order to get started</div>';return;}
+  if(!shinyRolls.length){g.innerHTML='<div class="empty" style="grid-column:1/-1;margin-top:6px">No rolls yet — select orders above and hit Roll For Shiny</div>';return;}
   g.innerHTML=[...shinyRolls].reverse().map(r=>{
     const isShiny=r.result==='shiny';
     const d=new Date(r.timestamp);
@@ -5519,39 +5539,58 @@ function renderShiny(){
       <div class="shiny-order-id">${esc(r.orderId||'—')}</div>
       <div class="shiny-customer">${esc(r.customer||'—')}</div>
       <div class="shiny-meta">${esc(r.product||'—')} · ${d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}</div>
-      ${isShiny
-        ?`<div class="shiny-badge-big">✨ SHINY VARIANT!</div>`
-        :`<div class="shiny-normal-badge">Normal Print</div>`}
-      <div style="font-size:7px;color:var(--txt-d)">Roll: ${(r.roll*100).toFixed(0)}/100 · Threshold: 20</div>
+      ${isShiny?`<div class="shiny-badge-big">✨ SHINY VARIANT!</div>`:`<div class="shiny-normal-badge">Normal Print</div>`}
     </div>`;
   }).join('');
 }
+function updateShinyRollBtn(){
+  const checks=[...document.querySelectorAll('.shiny-order-check:not(:disabled):checked')];
+  const btn=document.getElementById('shiny-roll-btn');
+  if(!btn)return;
+  if(checks.length===0){btn.disabled=true;btn.textContent='✨ Roll For Shiny (select orders above)';}
+  else{btn.disabled=false;btn.textContent='✨ Roll For Shiny ('+checks.length+' selected)';btn.style.opacity='1';}
+}
 
 function openRollModal(){
-  const sel=document.getElementById('roll-order');
-  sel.innerHTML='<option value="">— Select Order —</option>'+[...orders].reverse().filter(o=>o.status!=='cancelled').map(o=>`<option value="${o.id}">${esc(o.orderId)} — ${esc(o.customer)}</option>`).join('');
-  document.getElementById('roll-product').value='';
+  const checks=[...document.querySelectorAll('.shiny-order-check:not(:disabled):checked')];
+  if(!checks.length)return;
+  window._shinyRollCandidates=checks.map(cb=>{
+    const o=orders.find(x=>x.id===cb.dataset.id);
+    return o||null;
+  }).filter(Boolean);
+  const cands=window._shinyRollCandidates;
+  document.getElementById('roll-summary-text').textContent=cands.length+' order'+(cands.length!==1?'s':'')+' in the pool — one lucky winner gets the shiny variant!';
+  document.getElementById('roll-candidates').innerHTML=cands.map(o=>{
+    const items=(o.items||[]).map(i=>esc(i.name)+(i.qty>1?' ×'+i.qty:'')).join(', ');
+    return `<div style="padding:5px 0;border-bottom:1px solid var(--bdr);font-size:8px"><span style="color:var(--amb);font-family:'Orbitron',monospace">${esc(o.orderId)}</span> · <span style="color:var(--txt)">${esc(o.customer)}</span><br><span style="color:var(--txt-d)">${items}</span></div>`;
+  }).join('');
   document.getElementById('roll-result').style.display='none';
-  document.getElementById('roll-btn-wrap').style.display='flex';
-  document.getElementById('roll-done-btns').style.display='none';
+  document.getElementById('roll-pre').style.display='block';
   document.getElementById('mod-roll').style.display='flex';
 }
 function executeRoll(){
-  const orderId=document.getElementById('roll-order').value;
-  const product=document.getElementById('roll-product').value.trim();
-  const order=orders.find(o=>o.id===orderId);
-  const roll=Math.random();
-  const isShiny=roll<0.2;
-  const rec={id:uid(),orderId:order?order.orderId:orderId||'Manual',customer:order?order.customer:'—',product:product||'Unknown',roll,result:isShiny?'shiny':'normal',timestamp:Date.now()};
+  const cands=window._shinyRollCandidates||[];
+  if(!cands.length){closeRoll();return;}
+  // Randomly pick one winner from the pool
+  const winner=cands[Math.floor(Math.random()*cands.length)];
+  const product=(winner.items||[]).map(i=>i.name+(i.qty>1?' ×'+i.qty:'')).join(', ');
+  const rec={id:uid(),orderId:winner.orderId,customer:winner.customer,product,rolledOrderId:winner.id,result:'shiny',timestamp:Date.now()};
   shinyRolls.push(rec);saveShiny();
-  document.getElementById('roll-result-icon').textContent=isShiny?'✨':'📦';
-  document.getElementById('roll-result-text').textContent=isShiny?'🎉 SHINY VARIANT!':'Normal Print';
-  document.getElementById('roll-result-text').style.color=isShiny?'gold':'var(--txt-d)';
-  document.getElementById('roll-result-sub').textContent=isShiny?`Roll: ${(roll*100).toFixed(0)}/100 — Under 20! This one gets the shiny treatment!`:`Roll: ${(roll*100).toFixed(0)}/100 — Over 20. Standard print this time.`;
+  document.getElementById('roll-pre').style.display='none';
+  document.getElementById('roll-result-icon').textContent='✨';
+  document.getElementById('roll-result-text').textContent='🎉 SHINY WINNER!';
+  document.getElementById('roll-result-text').style.color='gold';
+  document.getElementById('roll-result-winner').innerHTML=`
+    <div style="font-size:9px;color:var(--txt-d);margin-bottom:4px">Winner selected from ${cands.length} order${cands.length!==1?'s':''}</div>
+    <div style="font-family:'Orbitron',monospace;font-size:11px;color:var(--amb);margin-bottom:2px">${esc(winner.orderId)}</div>
+    <div style="font-size:10px;color:var(--txt);font-weight:600;margin-bottom:3px">${esc(winner.customer)}</div>
+    <div style="font-size:8px;color:var(--txt-d)">${esc(product)}</div>`;
+  document.getElementById('roll-result-sub').textContent='Print a shiny variant for this order!';
   document.getElementById('roll-result').style.display='block';
-  document.getElementById('roll-btn-wrap').style.display='none';
-  document.getElementById('roll-done-btns').style.display='block';
-  if(isShiny)launchConfetti();
+  launchConfetti();
+  toast('✨ Shiny Winner!',winner.customer+' — '+product,'shiny',6000);
+  const tags=printSettingsMap[product]?.tags||[];
+  if(product)setTimeout(()=>detectAndApplyPokemon(product,tags,true),600);
   render();
 }
 function closeRoll(){document.getElementById('mod-roll').style.display='none';}
@@ -6490,9 +6529,15 @@ function ingestShopifyOrder(o){
     const matchTmf=resolvedTmfId?tmfLib.find(t=>t.id===resolvedTmfId):null;
     const queueLabel=it.variantTitle?(it.name+' — '+it.variantTitle):it.name;
     const newPrintId=uid();
-    // Shopify orders → start in QUEUED (move to In Progress after QR scan/ignore)
-    queueItems.push({id:uid(),name:queueLabel,category:catalogItem?catalogItem.category:'Other',printer:printerRecords[0]?.name||'X1C',hrs:matchTmf?matchTmf.hrs||0:0,qty:it.qty,priority:'high',orderId,stage:'queued',fromShopify:true,noTmf:!matchTmf,tmfId:matchTmf?matchTmf.id:null,printId:newPrintId,notes:matchTmf?'3MF: '+matchTmf.name+(it.variantTitle?' ['+it.variantTitle+']':''):'⚠ No 3MF on file',timestamp:Date.now()});
-    if(matchTmf){prints.push({id:newPrintId,name:queueLabel,category:catalogItem?catalogItem.category:'Other',printer:printerRecords[0]?.name||'X1C',hrs:matchTmf.hrs||0,qty:it.qty,filaments:matchTmf.filamentGrams.map(g=>({spoolId:spools[0]?.id||'',grams:g})),notes:'Auto from Shopify '+orderId,tmfName:matchTmf.name,timestamp:Date.now(),status:'printing'});}
+    // Dedup: skip if queue/print already exists for this order + product (prevents duplication on re-poll)
+    const alreadyQueued=queueItems.some(q=>q.fromShopifyOrder===orderId&&q.name===queueLabel);
+    if(!alreadyQueued){
+      queueItems.push({id:uid(),name:queueLabel,category:catalogItem?catalogItem.category:'Other',printer:printerRecords[0]?.name||'X1C',hrs:matchTmf?matchTmf.hrs||0:0,qty:it.qty,priority:'high',orderId,stage:'queued',fromShopify:true,noTmf:!matchTmf,tmfId:matchTmf?matchTmf.id:null,printId:newPrintId,fromShopifyOrder:orderId,notes:matchTmf?'3MF: '+matchTmf.name+(it.variantTitle?' ['+it.variantTitle+']':''):'⚠ No 3MF on file',timestamp:Date.now()});
+      if(matchTmf){
+        const alreadyPrinted=prints.some(p=>p.fromShopifyOrder===orderId&&p.name===queueLabel);
+        if(!alreadyPrinted){prints.push({id:newPrintId,name:queueLabel,category:catalogItem?catalogItem.category:'Other',printer:printerRecords[0]?.name||'X1C',hrs:matchTmf.hrs||0,qty:it.qty,filaments:matchTmf.filamentGrams.map(g=>({spoolId:spools[0]?.id||'',grams:g})),notes:'Auto from Shopify '+orderId,fromShopifyOrder:orderId,tmfName:matchTmf.name,timestamp:Date.now(),status:'printing'});}
+      }
+    }
   });
   // All items processed successfully — now commit everything atomically
   orders.push(order);
@@ -6507,34 +6552,7 @@ function ingestShopifyOrder(o){
   const ob=document.getElementById('nav-badge-orders');if(ob)ob.classList.add('show');
 }
 
-// Override shiny roll to toast
-const _origExecRoll=executeRoll;
-function executeRoll(){
-  const orderId=document.getElementById('roll-order').value;
-  const product=document.getElementById('roll-product').value.trim();
-  const order=orders.find(o=>o.id===orderId);
-  const roll=Math.random();
-  const isShiny=roll<0.2;
-  const rec={id:uid(),orderId:order?order.orderId:orderId||'Manual',customer:order?order.customer:'—',product:product||'Unknown',roll,result:isShiny?'shiny':'normal',timestamp:Date.now()};
-  shinyRolls.push(rec);saveShiny();
-  document.getElementById('roll-result-icon').textContent=isShiny?'✨':'📦';
-  document.getElementById('roll-result-text').textContent=isShiny?'🎉 SHINY VARIANT!':'Normal Print';
-  document.getElementById('roll-result-text').style.color=isShiny?'var(--gold-b)':'var(--txt-d)';
-  document.getElementById('roll-result-sub').textContent=isShiny?`Roll: ${(roll*100).toFixed(0)}/100 — Under 20! Shiny treatment!`:`Roll: ${(roll*100).toFixed(0)}/100 — Over 20. Standard print.`;
-  document.getElementById('roll-result').style.display='block';
-  document.getElementById('roll-btn-wrap').style.display='none';
-  document.getElementById('roll-done-btns').style.display='block';
-  if(isShiny){
-    launchConfetti();
-    toast('✨ Shiny!',`${product||'Product'} for ${order?order.customer:'customer'} gets the shiny treatment!`,'shiny',6000);
-    // Trigger Pokémon detection for shiny rolls
-    if(product){
-      const tags=printSettingsMap[product]?.tags||[];
-      setTimeout(()=>detectAndApplyPokemon(product,tags,true),600);
-    }
-  }
-  render();
-}
+// (executeRoll is defined above with the new multi-select pool mechanic)
 
 // Fix navTo active state on initial load
 function setInitialNav(){
