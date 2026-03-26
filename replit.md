@@ -128,14 +128,19 @@ Single-file HTML PWA for managing a Bambu Lab 3D printing collectibles business 
 - `hmr: false` in vite.config.ts — manual reload required after code changes
 - `fmtDried(dateStr)` utility: formats ISO dates to "Feb 10" style for dried badges
 
-**Recent updates (brainstorm batch):**
+**Recent updates (brainstorm batch + settings refactor):**
 - Logo in header is clickable → goes to Dashboard
-- "⚙ Settings" button in header shortcuts directly to the Sync/Settings tab
+- Old cloud sync button + separate sync-dot replaced with unified "⚙ Settings" button (with embedded sync dot). `toggleSettingsPanel()` / `updateSettingsPanel()` / `closeSettingsPanel()`. Legacy `toggleCloudPanel()` / `updateCloudPanel()` are aliases.
+- Settings dropdown shows: email, sync state (coloured), Settings & Sync link, Push to Cloud, Pull from Cloud, Sign Out / Sign In
+- `#settings-wrap`, `#settings-btn`, `#settings-panel` are the canonical HTML ids
 - Push Notifications panel moved from Backup tab → top of Sync tab (static HTML so `_setPushStatus` always finds elements)
+- Backup & Restore section added as a collapsible `<details>` block at the bottom of Sync tab (`#sync-backup-details`)
+- Labels nav item moved from System group → Business group in sidebar (more logical location)
 - Reviews tab nav item removed (tab still exists for data safety, just not accessible via nav)
 - Shiny roll history cards now have a ✕ delete button; `deleteShinyRoll(idOrTs)` calls `saveShiny()`
 - Labels tab has a paper size/printer selector dropdown with 5 presets; selection persists in localStorage; `applyLabelSize(size)` sets `--lbl-cols` CSS variable
-- Convention tab has "🔍 Find Events" button → opens `mod-event-finder` modal with city/type inputs and curated links (Eventbrite, Google, Facebook Events, Craft Fairs, ShowClix)
+- Event finder now AI-powered: `searchEvents()` is async, calls `POST /api/events/search` (api-server → Anthropic claude-haiku-4-5). Returns structured JSON (name, date, venue, type, attendance, boothCost, website, notes) rendered as cards inside the modal. Anthropic provisioned via `AI_INTEGRATIONS_ANTHROPIC_BASE_URL` + `AI_INTEGRATIONS_ANTHROPIC_API_KEY`.
+- New order push notification: `ingestShopifyOrder` fires `POST /api/push/notify-order` after ingesting a Shopify order → server calls `sendPushToAll` with order ID, customer, item summary
 - `sbWithTimeout` timeout increased 15s → 30s; message softened to "may be waking up, will retry"
 - `pullFromCloud` catch block: auto-retries once after 5s on timeout (Supabase cold-start recovery)
 - `visibilitychange` listener added: only triggers `pullFromCloud(silent)` if > 2 minutes since last sync

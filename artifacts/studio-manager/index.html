@@ -1593,6 +1593,7 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
         <button class="nav-item" id="nav-catalog" onclick="navTo('catalog',this)"><span class="nav-icon">🏪</span><span class="nav-label">Product Catalog</span></button>
         <button class="nav-item" id="nav-convention" onclick="navTo('convention',this)"><span class="nav-icon">🎪</span><span class="nav-label">Conventions</span><span class="nav-badge" id="nav-badge-convention"></span></button>
         <button class="nav-item" id="nav-priceengine" onclick="navTo('priceengine',this)"><span class="nav-icon">🤖</span><span class="nav-label">Price AI</span></button>
+        <button class="nav-item" id="nav-labels" onclick="navTo('labels',this)"><span class="nav-icon">🏷</span><span class="nav-label">Labels</span></button>
       </div>
     </div>
 
@@ -1641,7 +1642,6 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
         <button class="nav-item" id="nav-history" onclick="navTo('history',this)"><span class="nav-icon">📜</span><span class="nav-label">History</span></button>
         <button class="nav-item" id="nav-stats" onclick="navTo('stats',this)"><span class="nav-icon">📊</span><span class="nav-label">Stats</span></button>
         <button class="nav-item" id="nav-backup" onclick="navTo('backup',this)"><span class="nav-icon">💾</span><span class="nav-label">Backup</span></button>
-        <button class="nav-item" id="nav-labels" onclick="navTo('labels',this)"><span class="nav-icon">🏷</span><span class="nav-label">Labels</span></button>
       </div>
     </div>
 
@@ -2155,6 +2155,40 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
     <div style="font-size:8px;color:var(--txt-d);margin-top:5px;line-height:1.8">Push notifications are delivered by the server even when the app is closed. For the most reliable experience on Android, add this app to your home screen and keep it installed. iOS (Safari) supports notifications only when added to the home screen.</div>
   </div>
   <div id="sync-tab-content"></div>
+
+  <!-- BACKUP SECTION embedded in Sync tab -->
+  <details style="margin-top:16px" id="sync-backup-details">
+    <summary style="cursor:pointer;font-family:'Orbitron',monospace;font-size:8px;font-weight:700;letter-spacing:1.5px;color:var(--txt-d);padding:10px 0;border-top:1px solid var(--bdr);list-style:none;display:flex;align-items:center;gap:8px">
+      <span>💾</span><span>BACKUP &amp; RESTORE</span><span style="margin-left:auto;font-size:9px">▾</span>
+    </summary>
+    <div style="padding-top:10px">
+      <div id="backup-reminder-banner-sync" class="backup-reminder" style="display:none">
+        <span style="font-size:18px">💾</span>
+        <div class="backup-reminder-text">
+          <div class="backup-reminder-title">Time to back up!</div>
+          It's been over 30 days since your last backup.
+        </div>
+        <button class="btn btn-grn btn-sm" onclick="exportData();document.getElementById('backup-reminder-banner-sync').style.display='none'">Back Up Now</button>
+      </div>
+      <div class="export-grid">
+        <div class="export-panel">
+          <div class="export-title">Export / Backup</div>
+          <div class="export-desc">Download all your data as a single JSON file. Contains your spools, prints, orders, sales, history, 3MF library, and settings.</div>
+          <div class="data-summary" id="backup-summary-sync"></div>
+          <button class="btn btn-grn" style="width:100%;padding:9px" onclick="exportData()">⬇ Download Backup JSON</button>
+        </div>
+        <div class="export-panel">
+          <div class="export-title">Import / Restore</div>
+          <div class="export-desc">Restore from a previous backup. Merges with existing data — no duplicates.</div>
+          <div class="import-drop" id="import-drop-sync" onclick="document.getElementById('import-file-sync').click()">
+            <input type="file" id="import-file-sync" accept=".json" style="display:none" onchange="importData(event)"/>
+            <div style="font-size:24px;margin-bottom:8px">📂</div>
+            <div style="font-size:9px;color:var(--txt-d);letter-spacing:1px">Drop backup JSON here or click to select</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </details>
 </div>
 
 <!-- WASTE TRACKER -->
@@ -2624,7 +2658,7 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
 <div class="overlay" id="mod-event-finder" style="display:none" onclick="if(event.target.id==='mod-event-finder')closeEventFinder()">
 <div class="modal" style="max-width:500px;width:96vw">
   <div class="mtitle">🔍 Find Events Near You</div>
-  <div style="font-size:8px;color:var(--txt-d);margin-bottom:14px;line-height:1.8">Find conventions, maker fairs, and craft markets where you could sell. Enter your city and we'll open the best event directories for you.</div>
+  <div style="font-size:8px;color:var(--txt-d);margin-bottom:14px;line-height:1.8">AI-powered event discovery — find conventions, maker fairs, and craft markets near you. Results appear right here in the app with dates, venue, typical booth costs, and website links.</div>
   <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px">
     <div>
       <div style="font-size:7px;color:var(--txt-d);letter-spacing:1px;margin-bottom:4px">YOUR CITY / REGION</div>
@@ -2642,7 +2676,7 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
       </select>
     </div>
   </div>
-  <button class="btn btn-pur" style="width:100%;padding:9px;margin-bottom:14px" onclick="searchEvents()">🔍 Search Event Directories</button>
+  <button class="btn btn-pur" style="width:100%;padding:9px;margin-bottom:14px" onclick="searchEvents()">✨ Find Events with AI</button>
   <div id="evf-results"></div>
   <div class="macts">
     <button class="btn btn-ghost" onclick="closeEventFinder()">Close</button>
@@ -6610,6 +6644,7 @@ function ingestShopifyOrder(o){
   if(prevOrders.length>0)toast(`⭐ Returning Customer!`,`${customer} has ordered ${prevOrders.length} time${prevOrders.length!==1?'s':''} before`,'shiny',7000);
   const summary=items.map(i=>`${i.name} ×${i.qty}`).join(', ');
   showNotification('New Order '+orderId,`${customer} · ${summary}`,order.id);
+  fetch('/api/push/notify-order',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({orderId,customer,summary,itemCount:items.length})}).catch(()=>{});
   const qb=document.getElementById('nav-badge-queue');if(qb)qb.classList.add('show');
   const ob=document.getElementById('nav-badge-orders');if(ob)ob.classList.add('show');
   // Auto-trigger mystery print if order used a qualifying discount code
@@ -12043,45 +12078,54 @@ function openEventFinder(){
 function closeEventFinder(){
   document.getElementById('mod-event-finder').style.display='none';
 }
-function searchEvents(){
+async function searchEvents(){
   const city=(document.getElementById('evf-city').value||'').trim();
   const type=document.getElementById('evf-type').value||'3D printing collectibles maker';
   const res=document.getElementById('evf-results');
+  const btn=document.querySelector('#mod-event-finder .btn-pur');
   if(!city){toast('Enter a location','Type your city or region','warning');return;}
-  const q=encodeURIComponent(type+' convention market fair booth vendor '+city+' 2025 2026');
-  const ebQ=encodeURIComponent(type+' '+city);
-  res.innerHTML=`
-    <div style="font-size:8px;color:var(--txt-d);letter-spacing:1px;margin-bottom:8px;text-transform:uppercase">Search results for: ${esc(city)}</div>
-    <div style="display:flex;flex-direction:column;gap:8px">
-      <a href="https://www.eventbrite.com/d/online/${ebQ}/" target="_blank" rel="noopener" style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--surf2);border:1px solid var(--bdr2);border-radius:6px;text-decoration:none;color:var(--txt-b)">
-        <span style="font-size:20px">🎟</span>
-        <div><div style="font-size:10px;font-weight:bold">Eventbrite</div><div style="font-size:7px;color:var(--txt-d)">Find local fairs, markets &amp; conventions</div></div>
-        <span style="margin-left:auto;font-size:8px;color:var(--cyn)">Open →</span>
-      </a>
-      <a href="https://www.google.com/search?q=${q}" target="_blank" rel="noopener" style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--surf2);border:1px solid var(--bdr2);border-radius:6px;text-decoration:none;color:var(--txt-b)">
-        <span style="font-size:20px">🔍</span>
-        <div><div style="font-size:10px;font-weight:bold">Google Search</div><div style="font-size:7px;color:var(--txt-d)">Broad search for upcoming events</div></div>
-        <span style="margin-left:auto;font-size:8px;color:var(--cyn)">Open →</span>
-      </a>
-      <a href="https://www.facebook.com/events/search/?q=${encodeURIComponent(type+' '+city)}" target="_blank" rel="noopener" style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--surf2);border:1px solid var(--bdr2);border-radius:6px;text-decoration:none;color:var(--txt-b)">
-        <span style="font-size:20px">📘</span>
-        <div><div style="font-size:10px;font-weight:bold">Facebook Events</div><div style="font-size:7px;color:var(--txt-d)">Local events &amp; community markets</div></div>
-        <span style="margin-left:auto;font-size:8px;color:var(--cyn)">Open →</span>
-      </a>
-      <a href="https://www.craftfairs.com/search?q=${encodeURIComponent(city)}" target="_blank" rel="noopener" style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--surf2);border:1px solid var(--bdr2);border-radius:6px;text-decoration:none;color:var(--txt-b)">
-        <span style="font-size:20px">🧵</span>
-        <div><div style="font-size:10px;font-weight:bold">Craft Fairs</div><div style="font-size:7px;color:var(--txt-d)">Craft fairs &amp; artisan markets near you</div></div>
-        <span style="margin-left:auto;font-size:8px;color:var(--cyn)">Open →</span>
-      </a>
-      <a href="https://www.showclix.com/search?q=${encodeURIComponent(type+' '+city)}" target="_blank" rel="noopener" style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--surf2);border:1px solid var(--bdr2);border-radius:6px;text-decoration:none;color:var(--txt-b)">
-        <span style="font-size:20px">🎪</span>
-        <div><div style="font-size:10px;font-weight:bold">ShowClix</div><div style="font-size:7px;color:var(--txt-d)">Conventions, comic cons &amp; pop culture events</div></div>
-        <span style="margin-left:auto;font-size:8px;color:var(--cyn)">Open →</span>
-      </a>
-    </div>
-    <div style="margin-top:10px;font-size:7px;color:var(--txt-d);line-height:1.8;border-top:1px solid var(--bdr);padding-top:8px">
-      💡 Found an event? Click <b style="color:var(--pur-b)">+ Add Event</b> on the Convention page and fill in the details to track your booth cost, sales target, and checklist.
-    </div>`;
+  res.innerHTML='<div style="text-align:center;padding:20px;font-size:8px;color:var(--txt-d);letter-spacing:1px">✨ Searching with AI… this takes a moment</div>';
+  if(btn){btn.disabled=true;btn.textContent='Searching…';}
+  try{
+    const r=await fetch('/api/events/search',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({city,type})});
+    const data=await r.json();
+    if(!r.ok||!data.events){throw new Error(data.error||'Search failed');}
+    const events=data.events;
+    if(!events.length){
+      res.innerHTML='<div style="font-size:8px;color:var(--txt-d);padding:12px 0">No events found for that location and type. Try a broader city or different event type.</div>';
+    }else{
+      const typeIcons={Convention:'🎪','Craft Fair':'🧵','Maker Market':'⚙','Pop-up Market':'🛍','Anime/Comic Con':'🎌','Gaming Con':'🎮','Artisan Market':'🎨'};
+      res.innerHTML='<div style="font-size:7px;color:var(--txt-d);letter-spacing:1px;margin-bottom:10px;text-transform:uppercase">'+events.length+' events near '+esc(city)+'</div>'
+        +'<div style="display:flex;flex-direction:column;gap:10px">'
+        +events.map(function(ev){
+          const icon=typeIcons[ev.type]||'🎪';
+          const hasUrl=ev.website&&ev.website.startsWith('http');
+          return '<div style="background:var(--surf2);border:1px solid var(--bdr2);border-radius:8px;padding:12px">'
+            +'<div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:8px">'
+            +'<span style="font-size:20px;flex-shrink:0">'+icon+'</span>'
+            +'<div style="flex:1;min-width:0">'
+            +'<div style="font-size:10px;font-weight:bold;color:var(--txt-b);margin-bottom:2px">'+esc(ev.name||'')+'</div>'
+            +'<div style="font-size:7px;color:var(--gold-b);letter-spacing:.5px">'+esc(ev.type||'')+'</div>'
+            +'</div>'
+            +(hasUrl?'<a href="'+esc(ev.website)+'" target="_blank" rel="noopener" style="font-size:7px;color:var(--cyn);flex-shrink:0;text-decoration:none">Site →</a>':'')
+            +'</div>'
+            +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-bottom:8px">'
+            +'<div style="font-size:7px;color:var(--txt-d)">📅 <span style="color:var(--txt-b)">'+esc(ev.date||'TBD')+'</span></div>'
+            +'<div style="font-size:7px;color:var(--txt-d)">📍 <span style="color:var(--txt-b)">'+esc(ev.venue||'')+'</span></div>'
+            +'<div style="font-size:7px;color:var(--txt-d)">👥 <span style="color:var(--txt-b)">'+esc(ev.attendance||'Unknown')+'</span></div>'
+            +'<div style="font-size:7px;color:var(--txt-d)">💰 <span style="color:var(--grn-b)">'+esc(ev.boothCost||'Unknown')+'</span></div>'
+            +'</div>'
+            +(ev.notes?'<div style="font-size:7px;color:var(--txt-d);line-height:1.7;padding-top:6px;border-top:1px solid var(--bdr)">'+esc(ev.notes)+'</div>':'')
+            +'</div>';
+        }).join('')
+        +'</div>'
+        +'<div style="margin-top:12px;font-size:7px;color:var(--txt-d);line-height:1.8;border-top:1px solid var(--bdr);padding-top:8px">💡 AI results are based on known recurring events — always verify dates on the official website. Found one you want to track? Click <b style="color:var(--pur-b)">+ Add Event</b> on the Conventions page.</div>';
+    }
+  }catch(err){
+    res.innerHTML='<div style="font-size:8px;color:var(--red-b);padding:10px 0">Search failed: '+(err.message||'Network error')+'</div>';
+  }finally{
+    if(btn){btn.disabled=false;btn.textContent='✨ Find Events with AI';}
+  }
 }
 
 // ── VISIBILITY CHANGE — only sync if been > 2 min since last sync ──

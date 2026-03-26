@@ -115,4 +115,21 @@ router.post("/test", async (_req, res) => {
   }
 });
 
+router.post("/notify-order", async (req, res) => {
+  const { orderId, customer, summary, itemCount } = req.body ?? {};
+  const subs = getSubscriptions();
+  if (!subs.length) { res.json({ ok: true, skipped: true }); return; }
+  try {
+    const itemLabel = itemCount === 1 ? "1 item" : `${itemCount} items`;
+    await sendPushToAll({
+      type: "new-order",
+      title: `🛍 New Order ${orderId ?? ""}`,
+      body: `${customer ?? "Customer"} · ${itemLabel}${summary ? " — " + summary.slice(0, 60) : ""}`,
+    });
+    res.json({ ok: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 export default router;
