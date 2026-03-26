@@ -3532,11 +3532,13 @@ function renderPrints(){
       :`<span class="status-pill sp-printing">⟳ Printing</span>`;
     const cc=st==='done'?'card-done':st==='failed'?'card-failed':'';
     const d=new Date(p.timestamp);
+    const finD=p.finishedAt?new Date(p.finishedAt):null;
+    const finLabel=finD?` · ✓ ${finD.toLocaleDateString('en-US',{month:'short',day:'numeric'})} ${finD.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})}` :'';
     return `<div class="print-card ${cc}">
       <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:5px;margin-bottom:2px">
         <div class="pname">${esc(p.name)}${p.qty>1?' ×'+p.qty:''}</div>${pill}
       </div>
-      <div class="pcat">${esc(p.category)} · ${esc(p.printer)} · <span class="print-time-display" style="display:inline-flex;font-size:8px;padding:2px 6px">${formatHms(p.hrs)||'—'}</span> · ${d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}${p.tmfName?` · 📦 ${esc(p.tmfName)}`:''}</div>
+      <div class="pcat">${esc(p.category)} · ${esc(p.printer)} · <span class="print-time-display" style="display:inline-flex;font-size:8px;padding:2px 6px">${formatHms(p.hrs)||'—'}</span> · ${d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}${p.tmfName?` · 📦 ${esc(p.tmfName)}`:''}${(st==='done'||st==='failed')?`<span style="color:var(--txt-d)">${finLabel}</span>`:''}</div>
       ${chips?`<div class="pc-colors">${chips}</div>`:''}
       <div class="cost-box">
         <div class="cb-title">Cost Breakdown</div>
@@ -3910,6 +3912,18 @@ function renderQueue(){
 }
 
 function moveQueue(id,stage){
+  // Moving to Done with a linked print → open finish modal (handles outcome, filament, timestamp)
+  if(stage==='done'){
+    const qi=queueItems.find(q=>q.id===id);
+    if(qi?.printId){
+      const linkedPrint=prints.find(p=>p.id===qi.printId&&p.status==='printing');
+      if(linkedPrint){
+        fetch('/api/push/watch-print/'+id,{method:'DELETE'}).catch(()=>{});
+        openFinish(qi.printId);
+        return;
+      }
+    }
+  }
   // Record startedAt when moving to In Progress
   if(stage==='inprogress'){
     const qi=queueItems.find(q=>q.id===id);
@@ -4734,8 +4748,9 @@ function confirmFinish(){
   const id=document.getElementById('fin-id').value;
   const p=prints.find(x=>x.id===id);if(!p)return;
   const failNote=document.getElementById('fin-note').value.trim();
+  const finishedAt=Date.now();
   if(finOutcome==='done'){
-    prints=prints.map(x=>x.id===id?{...x,status:'done'}:x);
+    prints=prints.map(x=>x.id===id?{...x,status:'done',finishedAt}:x);
     try{
       const inv=gs(KEYS.inv);
       if(!inv.find(i=>i.name===p.name)){
@@ -4757,14 +4772,18 @@ function confirmFinish(){
       }
       return{...f,actualGrams:actual};
     });
-    prints=prints.map(x=>x.id===id?{...x,status:'failed',failNote,failPct:pv,filaments:upd}:x);
+    prints=prints.map(x=>x.id===id?{...x,status:'failed',failNote,failPct:pv,filaments:upd,finishedAt}:x);
     saveSpools();saveHist();
   }
-  // ── Move linked queue item to Done ──
+  // ── Move linked queue item to Done + clean up push watch ──
   const finishedPrint=prints.find(x=>x.id===id);
   if(finishedPrint){
     const qi=queueItems.find(q=>q.printId===id||(q.name===finishedPrint.name&&(q.stage==='inprogress'||q.stage==='queued')));
-    if(qi){queueItems=queueItems.map(q=>q.id===qi.id?{...q,stage:'done'}:q);saveQueue();}
+    if(qi){
+      queueItems=queueItems.map(q=>q.id===qi.id?{...q,stage:'done',finishedAt}:q);
+      saveQueue();
+      fetch('/api/push/watch-print/'+qi.id,{method:'DELETE'}).catch(()=>{});
+    }
   }
   savePrints();closeFinish();
   toast(finOutcome==='done'?'✓ Print Complete':'✕ Print Failed',finishedPrint?.name||'',finOutcome==='done'?'success':'error');
@@ -8129,7 +8148,7 @@ async function processSyncQueue(){
   if(isSyncing||!supabaseClient||!currentUser||syncQueue.length===0)return;
   isSyncing=true;
   updateSyncIndicator('syncing');
-  let totalSuccess=0,totalFailed=0;
+  let totalSuccess=0,totalFailed=0,lockContention=false;
   try{
     while(syncQueue.length>0){
       const queue=[...syncQueue];
@@ -8145,29 +8164,31 @@ async function processSyncQueue(){
           success++;
         }catch(e){
           const emsg=sbErrMsg(e);
-          // Retry once on token-refresh lock contention
           if(emsg&&emsg.toLowerCase().includes('lock')&&emsg.toLowerCase().includes('stole')){
-            await new Promise(r=>setTimeout(r,1500));
-            try{
-              const r2=await sbWithTimeout(
-                supabaseClient.from('ha3d_user_data').upsert({user_id:currentUser.id,collection:item.collection,payload:item.data,updated_at:new Date().toISOString()})
-              );
-              if(r2.error)throw new Error(r2.error.message);
-              syncQueue=syncQueue.filter(q=>q.timestamp!==item.timestamp);
-              success++;
-            }catch(e2){failed++;addSyncLog('Sync failed for '+item.collection+': '+sbErrMsg(e2),'err');}
-          }else{failed++;addSyncLog('Sync failed for '+item.collection+': '+emsg,'err');}
+            lockContention=true;
+            break; // abort entire batch — retry after token refresh settles
+          }
+          failed++;
+          addSyncLog('Sync failed for '+item.collection+': '+emsg,'err');
         }
+        if(lockContention)break;
       }
       totalSuccess+=success;totalFailed+=failed;
-      if(failed>0)break;
+      if(failed>0||lockContention)break;
     }
   }finally{
     saveSyncQueue();
     isSyncing=false;
     lastSyncTime=Date.now();
-    if(totalFailed===0){updateSyncIndicator('connected');if(totalSuccess>0)addSyncLog('Synced '+totalSuccess+' collection'+(totalSuccess!==1?'s':'')+' ✓','ok');}
-    else{updateSyncIndicator('error');}
+    if(lockContention){
+      updateSyncIndicator('syncing');
+      setTimeout(()=>processSyncQueue(),3000); // retry whole batch once token lock clears
+    }else if(totalFailed===0){
+      updateSyncIndicator('connected');
+      if(totalSuccess>0)addSyncLog('Synced '+totalSuccess+' collection'+(totalSuccess!==1?'s':'')+' ✓','ok');
+    }else{
+      updateSyncIndicator('error');
+    }
   }
 }
 
