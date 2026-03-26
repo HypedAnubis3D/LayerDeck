@@ -4131,7 +4131,17 @@ function renderOrders(){
   const STATUS_COLOR={pending:'var(--amb)',printing:'var(--cyn)',shipped:'var(--grn)',cancelled:'var(--red)'};
   grid.innerHTML=list.map(function(o){
     var total=(o.items||[]).reduce(function(s,i){return s+(parseFloat(i.price)||0)*(parseInt(i.qty)||1);},0)+(parseFloat(o.shipping)||0);
-    var itemsText=(o.items||[]).map(function(i){return esc(i.name)+(i.qty>1?' ×'+i.qty:'');}).join(', ');
+    var itemRows=(o.items||[]).map(function(it,idx){
+      var lbl=it.variantTitle?esc(it.name)+' — '+esc(it.variantTitle):esc(it.name);
+      var qLbl=it.variantTitle?it.name+' — '+it.variantTitle:it.name;
+      var inQ=queueItems.some(function(q){return q.orderId===o.orderId&&q.name===qLbl;});
+      return '<div class="order-item-row">'
+        +'<span style="flex:1;font-size:7px;color:var(--txt-d)">'+lbl+(it.qty>1?' ×'+it.qty:'')+'</span>'
+        +(inQ
+          ?'<span style="font-size:6px;color:var(--grn);white-space:nowrap">✓ Queued</span>'
+          :'<button class="btn btn-cyn btn-xs" style="padding:1px 6px;font-size:7px;white-space:nowrap" onclick="event.stopPropagation();queueOrderItem(\''+o.id+'\','+idx+')">→ Queue</button>')
+        +'</div>';
+    }).join('');
     var statusColor=STATUS_COLOR[o.status]||'var(--txt-d)';
     var sel=selectedIds.includes(o.id);
     var shopify=isShopify(o), etsy=isEtsy(o);
@@ -4153,7 +4163,7 @@ function renderOrders(){
           +'<span style="font-size:9px;font-weight:bold;font-family:Orbitron,monospace">$'+total.toFixed(2)+'</span>'
         +'</div>'
       +'</div>'
-      +(itemsText?'<div style="font-size:7px;color:var(--txt-d);margin-bottom:6px">'+itemsText+'</div>':'')
+      +(itemRows?'<div style="margin-bottom:6px">'+itemRows+'</div>':'')
       +(o.discountCode?'<div style="margin-bottom:6px;display:flex;gap:4px;flex-wrap:wrap"><span style="font-size:6px;background:var(--pur-d);color:var(--pur-b);padding:2px 7px;border-radius:8px;letter-spacing:.5px">🏷 '+esc(o.discountCode)+'</span>'+(isMysteryOrder&&isMysteryOrder(o)?'<span style="font-size:6px;background:rgba(80,30,120,.3);color:var(--pur-b);padding:2px 7px;border-radius:8px">🎁 Mystery Eligible</span>':'')+'</div>':'')
       +(o.notes?'<div style="font-size:7px;color:var(--txt-d);font-style:italic;margin-bottom:6px">'+esc(o.notes)+'</div>':'')
       +'<div style="display:flex;gap:4px;flex-wrap:wrap">'
@@ -5157,6 +5167,20 @@ function autoQueueOrderItems(order){
     queued++;
   });
   if(queued>0){saveQueue();toast('Sent to Queue',''+queued+' item'+(queued>1?'s':'')+' queued for printing','success');}
+}
+function queueOrderItem(oid,itemIdx){
+  const o=orders.find(function(x){return x.id===oid;});
+  if(!o)return;
+  const it=(o.items||[])[itemIdx];
+  if(!it)return;
+  const qLbl=it.variantTitle?it.name+' — '+it.variantTitle:it.name;
+  const already=queueItems.some(function(q){return q.orderId===o.orderId&&q.name===qLbl;});
+  if(already){toast('Already Queued',qLbl+' is already in the print queue','info');return;}
+  const cat=catalogItems.find(function(c){return c.name&&(c.name.toLowerCase()===it.name.toLowerCase()||it.name.toLowerCase().includes(c.name.toLowerCase())||c.name.toLowerCase().includes(it.name.toLowerCase()));});
+  const tmf=cat&&cat.tmfId?tmfLib.find(function(t){return t.id===cat.tmfId;}):null;
+  queueItems.push({id:uid(),name:qLbl,category:cat?cat.category:'Other',printer:printerRecords[0]?.name||'X1C',hrs:tmf?tmf.hrs||0:0,qty:it.qty||1,priority:'high',orderId:o.orderId,stage:'queued',tmfId:tmf?tmf.id:null,notes:tmf?'3MF: '+tmf.name+(it.variantTitle?' ['+it.variantTitle+']':''):'',fromOrder:oid,timestamp:Date.now()});
+  saveQueue();render();
+  toast('→ Queued',qLbl+' added to print queue','success');
 }
 // Close catalog search results when clicking outside
 document.addEventListener('click',function(e){
