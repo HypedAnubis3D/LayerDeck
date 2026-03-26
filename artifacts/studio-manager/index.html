@@ -10744,6 +10744,22 @@ function updateAutoSyncCountdown(){
 }
 startAutoSync();
 
+// ════════ DASHBOARD WIDGET PINNING ════════
+// Must be defined before initial render() so DASH_WIDGET_LABELS is not in TDZ
+const DASH_WIDGET_LABELS={
+  'dw-stats':'Stat Cards',
+  'dw-printers':'Printer Status',
+  'dw-alerts':'Alerts & Orders',
+  'dw-activity':'Recent Activity',
+};
+function saveDashHidden(){ss(KEYS.dashHidden,dashHidden);}
+function toggleDashWidget(id){
+  if(dashHidden.includes(id)){dashHidden=dashHidden.filter(function(x){return x!==id;});}
+  else{dashHidden.push(id);}
+  saveDashHidden();
+  renderDashboard();
+}
+
 curTab='dashboard';
 ALL_TABS.forEach(t=>{const el=document.getElementById('tab-'+t);if(el)el.style.display=t==='dashboard'?'':'none';});
 render();
@@ -10944,21 +10960,6 @@ function addToOrderFromCatalog(id){
     var eoPlatform=document.getElementById('eo-platform');
     if(eoPlatform)eoPlatform.value='Direct';
   },50);
-}
-
-// ════════ DASHBOARD WIDGET PINNING ════════
-const DASH_WIDGET_LABELS={
-  'dw-stats':'Stat Cards',
-  'dw-printers':'Printer Status',
-  'dw-alerts':'Alerts & Orders',
-  'dw-activity':'Recent Activity',
-};
-function saveDashHidden(){ss(KEYS.dashHidden,dashHidden);}
-function toggleDashWidget(id){
-  if(dashHidden.includes(id)){dashHidden=dashHidden.filter(function(x){return x!==id;});}
-  else{dashHidden.push(id);}
-  saveDashHidden();
-  renderDashboard();
 }
 
 // ════════ QUICK ORDER ADD ════════
