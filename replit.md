@@ -118,8 +118,12 @@ Generated React Query hooks and fetch client from the OpenAPI spec (e.g. `useHea
 
 Single-file HTML PWA for managing a Bambu Lab 3D printing collectibles business (hypedanubis3d-2.myshopify.com). All code is in `index.html` (~9,650+ lines). No frameworks — vanilla JS with JSZip (CDN) for 3MF parsing.
 
-**UI state (v19+):**
-- Dark theme: gold (#c9a227), purple (#7c3aed), near-black (#09070a); Share Tech Mono + Orbitron fonts
+**UI state (v20+):**
+- Deep navy palette: `--bg:#07090f`, `--surf:#0d1120`, `--txt:#c8d8f0` (cool blue-white), `--gold:#f0b429`; Inter (body) + Orbitron (numbers/headings) + Share Tech Mono (code) fonts
+- All cards: 12px border-radius, larger fonts (10-13px), hover shadows; buttons 8px radius with glow; modals 14px radius with blur backdrop
+- Status pills, badges, tags: rounded pill style (border-radius:20px), min 9px font
+- Etsy CSV import: orange badge, filter pill, deduplication via etsyId
+- Dashboard widget pinning, push notifications, convention management, Shopify sync all functional
 - Sidebar with collapsible section groups; bottom nav bar (5 items)
 - `hmr: false` in vite.config.ts — manual reload required after code changes
 - `fmtDried(dateStr)` utility: formats ISO dates to "Feb 10" style for dried badges
