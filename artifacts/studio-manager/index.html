@@ -4457,7 +4457,7 @@ async function pollShopifyOrders(silent=true){
     addSyncLog('Shopify orders synced ('+rawOrders.length+' orders)','ok');
     shopifyCfg.lastPoll=Date.now();
     saveShopify();
-    if(changed){saveOrders();render();}
+    if(changed){saveOrders();render();}else if(!silent){renderShopify();}
     if(!silent){
       const summary=newCount===0&&updatedCount===0
         ?'up to date'
