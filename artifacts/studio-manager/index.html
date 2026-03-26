@@ -4316,7 +4316,15 @@ async function pollShopifyOrders(){
   if(!shopifyCfg.connected||shopifyCfg.domain.includes('DEMO'))return;
   try{
     const resp=await fetch('/api/shopify/orders/sync');
-    if(!resp.ok)return;
+    if(!resp.ok){
+      if(resp.status===403||resp.status===401){
+        addSyncLog('Shopify orders: permission denied ('+resp.status+') — disconnect & reconnect Shopify to refresh your access token','err');
+        toast('Shopify Orders','Permission denied. Disconnect & reconnect Shopify in the Integrations tab to get a fresh token.','error');
+      }else{
+        addSyncLog('Shopify orders sync failed: HTTP '+resp.status,'err');
+      }
+      return;
+    }
     const data=await resp.json();
     const rawOrders=data.orders||[];
     let changed=false;
@@ -4334,10 +4342,14 @@ async function pollShopifyOrders(){
         }
       }
     });
+    addSyncLog('Shopify orders synced ('+rawOrders.length+' orders)','ok');
     shopifyCfg.lastPoll=Date.now();
     saveShopify();
     if(changed){saveOrders();render();}
-  }catch(e){console.warn('[Shopify] poll failed:',e.message);}
+  }catch(e){
+    addSyncLog('Shopify orders poll failed: '+e.message,'err');
+    console.warn('[Shopify] poll failed:',e.message);
+  }
 }
 function shopifyStatusMap(o){
   if(o.fulfillment_status==='fulfilled')return 'shipped';
