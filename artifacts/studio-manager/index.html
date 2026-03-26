@@ -1713,28 +1713,34 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
 
 <!-- SPOOLS -->
 <div id="tab-spools">
-  <div class="ctrl">
-    <button class="btn btn-cyn" onclick="openAddSpool()">+ Add Spool</button>
-    <button class="btn btn-gold btn-sm" onclick="openBarcodeScanner()" title="Scan the barcode on a spool box to add it automatically">📷 Scan Box</button>
-    <button class="btn btn-ghost btn-sm" onclick="enterSelectMode('spools')">☑ Select</button>
-    <button class="btn btn-grn btn-sm" onclick="openDryScanner()" title="Scan a spool QR code to mark it as dried right now">🔥 Dry by QR</button>
-    <input class="srch" id="sp-s" placeholder="Search spools…" oninput="render()"/>
-    <select class="flt" id="sp-m" onchange="render()">
-      <option value="">All Materials</option>
-      <option>PLA Basic</option><option>PLA Matte</option><option>PLA Silk</option>
-      <option>PLA+</option><option>PLA-CF</option><option>PETG Basic</option>
-      <option>PETG-CF</option><option>ABS</option><option>ASA</option>
-      <option>TPU 95A</option><option>PA</option><option>PC</option><option>Support</option>
-    </select>
-    <select class="flt" id="sp-p" onchange="render()">
-      <option value="">All Printers</option>
-      <option>X1C</option><option>X1E</option><option>P1S</option><option>P1P</option>
-      <option>A1</option><option>A1 Mini</option><option>H2D</option><option>Unloaded</option>
-    </select>
-    <select class="flt" id="sp-a" onchange="render()">
-      <option value="">All Stock</option><option value="low">Low / Reorder</option>
-    </select>
-    <span class="cnt" id="sp-cnt"></span>
+  <div style="display:flex;flex-direction:column;gap:7px;margin-bottom:10px">
+    <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+      <button class="btn btn-cyn" onclick="openAddSpool()">+ Add Spool</button>
+      <button class="btn btn-gold btn-sm" onclick="openBarcodeScanner()" title="Scan the barcode on a spool box to add it automatically">📷 Scan Box</button>
+      <button class="btn btn-ghost btn-sm" onclick="enterSelectMode('spools')">☑ Select</button>
+      <button class="btn btn-grn btn-sm" onclick="openDryScanner()" title="Scan a spool QR code to mark it as dried right now">🔥 Dry by QR</button>
+    </div>
+    <div style="display:flex;gap:6px;align-items:center">
+      <input class="srch" id="sp-s" placeholder="Search spools…" oninput="render()" style="flex:1;min-width:0"/>
+      <span class="cnt" id="sp-cnt" style="white-space:nowrap;flex-shrink:0"></span>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">
+      <select class="flt" id="sp-m" onchange="render()">
+        <option value="">All Materials</option>
+        <option>PLA Basic</option><option>PLA Matte</option><option>PLA Silk</option>
+        <option>PLA+</option><option>PLA-CF</option><option>PETG Basic</option>
+        <option>PETG-CF</option><option>ABS</option><option>ASA</option>
+        <option>TPU 95A</option><option>PA</option><option>PC</option><option>Support</option>
+      </select>
+      <select class="flt" id="sp-p" onchange="render()">
+        <option value="">All Printers</option>
+        <option>X1C</option><option>X1E</option><option>P1S</option><option>P1P</option>
+        <option>A1</option><option>A1 Mini</option><option>H2D</option><option>Unloaded</option>
+      </select>
+      <select class="flt" id="sp-a" onchange="render()">
+        <option value="">All Stock</option><option value="low">Low / Reorder</option>
+      </select>
+    </div>
   </div>
   <div class="grid" id="spool-grid"></div>
   <!-- DRY SCHEDULE — merged from Dry Scheduler tab -->
@@ -2525,13 +2531,16 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
 <!-- FILAMENT PURCHASE MODAL -->
 <div class="overlay" id="mod-purchase" style="display:none" onclick="if(event.target.id==='mod-purchase')closePurchase()">
 <div class="modal">
-  <div class="mtitle">Log Filament Purchase</div>
+  <div class="mtitle">🧵 Log Filament Purchase</div>
+  <div style="height:2px;background:linear-gradient(90deg,var(--cyn),transparent);margin:-6px 0 14px;border-radius:1px"></div>
+  <div class="sdiv" style="margin-top:0">Filament</div>
   <div class="fr2">
-    <div class="field"><div class="fl">Filament Name / Color</div><input type="text" id="ep3-name" placeholder="Bambu Matte Black PLA"/></div>
+    <div class="field"><div class="fl">Name / Color</div><input type="text" id="ep3-name" placeholder="Bambu Matte Black PLA"/></div>
     <div class="field"><div class="fl">Material</div>
       <select id="ep3-mat"><option>PLA Basic</option><option>PLA Matte</option><option>PLA Silk</option><option>PLA+</option><option>PLA-CF</option><option>PETG Basic</option><option>PETG-CF</option><option>ABS</option><option>ASA</option><option>TPU 95A</option><option>Other</option></select>
     </div>
   </div>
+  <div class="sdiv">Purchase Details</div>
   <div class="fr3">
     <div class="field"><div class="fl">Price Paid ($)</div><input type="number" id="ep3-price" min="0" step="0.01" placeholder="13.99"/></div>
     <div class="field"><div class="fl">Spool Weight (g)</div><input type="number" id="ep3-weight" min="1" value="1000"/></div>
@@ -2541,10 +2550,10 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
     <div class="field"><div class="fl">Retailer</div><input type="text" id="ep3-retailer" placeholder="Bambu Lab Store"/></div>
     <div class="field"><div class="fl">Purchase Date</div><input type="date" id="ep3-date"/></div>
   </div>
-  <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
-    <input type="checkbox" id="ep3-sale" style="accent-color:var(--red);width:13px;height:13px;cursor:pointer;"/>
-    <label for="ep3-sale" style="font-size:8px;color:var(--txt-d);cursor:pointer">Was on sale / discount</label>
-  </div>
+  <label style="display:flex;align-items:center;gap:10px;padding:9px 12px;background:rgba(255,70,70,.06);border:1px solid rgba(255,70,70,.15);border-radius:5px;cursor:pointer;margin-bottom:12px">
+    <input type="checkbox" id="ep3-sale" style="accent-color:var(--red);width:14px;height:14px;cursor:pointer;flex-shrink:0"/>
+    <span style="font-size:8px;color:var(--txt-d)">🏷 Was on sale / discount</span>
+  </label>
   <div class="field"><div class="fl">Notes / Receipt #</div><input type="text" id="ep3-notes" placeholder="Optional…"/></div>
   <div class="macts">
     <button class="btn btn-cyn" onclick="savePurchase()">Log Purchase</button>
@@ -3349,12 +3358,15 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
 <!-- PRINTER ADD/EDIT MODAL -->
 <div class="overlay" id="mod-printer" style="display:none" onclick="if(event.target.id==='mod-printer')closePrinterModal()">
 <div class="modal">
-  <div class="mtitle" id="printer-modal-title">Add Printer</div>
+  <div class="mtitle" id="printer-modal-title">🖨 Add Printer</div>
+  <div style="height:2px;background:linear-gradient(90deg,var(--org),transparent);margin:-6px 0 14px;border-radius:1px"></div>
   <input type="hidden" id="ep2-id"/>
+  <div class="sdiv" style="margin-top:0">Identity</div>
   <div class="fr2">
     <div class="field"><div class="fl">Printer Name</div><input type="text" id="ep2-name" placeholder="My X1C"/></div>
     <div class="field"><div class="fl">Model</div><input type="text" id="ep2-model" placeholder="Bambu Lab X1C"/></div>
   </div>
+  <div class="sdiv">Power & Capacity</div>
   <div class="fr3">
     <div class="field"><div class="fl">Wattage (W)</div><input type="number" id="ep2-watts" min="1" placeholder="350"/></div>
     <div class="field"><div class="fl">Electricity ($/kWh)</div><input type="number" id="ep2-kwh" min="0" step="0.01" placeholder="0.13"/></div>
@@ -3362,11 +3374,13 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
       <select id="ep2-ams"><option value="0">None (no AMS)</option><option value="1">1 AMS (4 slots)</option><option value="2">2 AMS (8 slots)</option><option value="3">3 AMS (12 slots)</option><option value="4">4 AMS (16 slots)</option></select>
     </div>
   </div>
+  <div class="sdiv">Pricing Defaults</div>
   <div class="fr3">
     <div class="field"><div class="fl">Labor ($/hr)</div><input type="number" id="ep2-labor" min="0" step="0.5" placeholder="0"/></div>
     <div class="field"><div class="fl">Markup %</div><input type="number" id="ep2-markup" min="0" step="5" placeholder="30"/></div>
     <div class="field"><div class="fl">Nozzle Size (mm)</div><input type="text" id="ep2-nozzle" placeholder="0.4"/></div>
   </div>
+  <div class="sdiv">Specifications</div>
   <div class="fr2">
     <div class="field"><div class="fl">Bed Size (mm)</div><input type="text" id="ep2-bed" placeholder="256x256"/></div>
     <div class="field"><div class="fl">Max Speed (mm/s)</div><input type="number" id="ep2-speed" placeholder="500"/></div>
@@ -7059,7 +7073,7 @@ function togglePrinterCard(id){
 }
 
 function openAddPrinter(){
-  document.getElementById('printer-modal-title').textContent='Add Printer';
+  document.getElementById('printer-modal-title').textContent='🖨 Add Printer';
   ['ep2-id','ep2-name','ep2-model','ep2-nozzle','ep2-bed','ep2-speed','ep2-notes'].forEach(i=>document.getElementById(i).value='');
   document.getElementById('ep2-watts').value='350';
   document.getElementById('ep2-kwh').value='0.13';
@@ -7070,7 +7084,7 @@ function openAddPrinter(){
 }
 function openEditPrinter(id){
   const p=printerRecords.find(x=>x.id===id);if(!p)return;
-  document.getElementById('printer-modal-title').textContent='Edit Printer';
+  document.getElementById('printer-modal-title').textContent='🖨 Edit Printer';
   document.getElementById('ep2-id').value=id;
   document.getElementById('ep2-name').value=p.name;
   document.getElementById('ep2-model').value=p.model||'';
