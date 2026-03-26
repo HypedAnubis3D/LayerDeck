@@ -2479,6 +2479,7 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
     </div>
   </div>
   <div class="field"><div class="fl">Linked 3MF File (product default)</div>
+    <input type="text" id="ec-tmf-search" placeholder="🔍 Search 3MF files…" oninput="filterEcTmfSearch(this.value)" style="width:100%;background:var(--bg);border:1px solid var(--bdr2);color:var(--txt);padding:4px 9px;font-family:'Share Tech Mono',monospace;font-size:9px;border-radius:3px;margin-bottom:4px;box-sizing:border-box"/>
     <select id="ec-tmf" style="width:100%;background:var(--bg);border:1px solid var(--bdr2);color:var(--txt);padding:7px 9px;font-family:'Share Tech Mono',monospace;font-size:9px;border-radius:3px;">
       <option value="">— None —</option>
     </select>
@@ -2917,6 +2918,7 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
   <!-- 3MF SELECTOR -->
   <div class="tmf-selector">
     <div class="tmf-sel-title">📦 Auto-fill from 3MF Library</div>
+    <input type="text" id="ep-tmf-search" placeholder="🔍 Search 3MF files…" oninput="filterEpTmfSearch(this.value)" style="width:100%;background:var(--bg);border:1px solid var(--bdr2);color:var(--txt);padding:4px 8px;font-family:'Share Tech Mono',monospace;font-size:9px;border-radius:3px;margin-bottom:4px;box-sizing:border-box"/>
     <select id="ep-tmf-select" onchange="applyTmfToPrint()" style="width:100%;background:var(--bg);border:1px solid var(--bdr2);color:var(--txt);padding:6px 8px;font-family:'Share Tech Mono',monospace;font-size:9px;border-radius:3px;">
       <option value="">— Manual Entry —</option>
     </select>
@@ -4739,8 +4741,33 @@ function buildSpoolOpts(selId=''){
   return `<option value="">— Select Spool —</option>`+spools.map(s=>`<option value="${s.id}"${s.id===selId?' selected':''}>${esc(s.name)} — ${s.remaining}g (${pct(s)}%)</option>`).join('');
 }
 function populateTmfDropdown(){
+  const inp=document.getElementById('ep-tmf-search');
+  if(inp)inp.value='';
   const sel=document.getElementById('ep-tmf-select');
   sel.innerHTML=`<option value="">— Manual Entry —</option>`+tmfLib.map(t=>`<option value="${t.id}">${esc(t.name)}${t.hrs?' ('+t.hrs+'h)':''}</option>`).join('');
+}
+function filterEpTmfSearch(q){
+  const sel=document.getElementById('ep-tmf-select');
+  if(!sel)return;
+  const query=q.toLowerCase().trim();
+  const curVal=sel.value;
+  sel.innerHTML='<option value="">— Manual Entry —</option>'+
+    tmfLib
+      .filter(function(t){return !query||t.name.toLowerCase().includes(query)||(t.printer||'').toLowerCase().includes(query)||(t.filamentType||'').toLowerCase().includes(query);})
+      .map(function(t){return '<option value="'+t.id+'"'+(t.id===curVal?' selected':'')+'>'+esc(t.name)+(t.hrs?' ('+formatHms(t.hrs)+')':'')+'</option>';})
+      .join('');
+}
+function filterEcTmfSearch(q){
+  const sel=document.getElementById('ec-tmf');
+  if(!sel)return;
+  const query=q.toLowerCase().trim();
+  const curVal=sel.value;
+  sel.innerHTML='<option value="">— None —</option>'+
+    tmfLib
+      .filter(function(t){return !query||t.name.toLowerCase().includes(query)||(t.printer||'').toLowerCase().includes(query)||(t.filamentType||'').toLowerCase().includes(query);})
+      .map(function(t){return '<option value="'+t.id+'"'+(t.id===curVal?' selected':'')+'>'+esc(t.name)+(t.hrs?' ('+formatHms(t.hrs)+')':'')+'</option>';})
+      .join('');
+  updateTmfInfo();
 }
 function addFilRow(spoolId='',grams=''){
   const id='fr-'+Date.now()+'-'+(filRowCount++);
@@ -9984,6 +10011,8 @@ function openAddCatalogItem(){
   document.getElementById('ec-stock').value='';
   document.getElementById('ec-lowstock').value='3';
   // 3MF dropdown
+  const ecTmfSrch=document.getElementById('ec-tmf-search');
+  if(ecTmfSrch)ecTmfSrch.value='';
   const tmfSel=document.getElementById('ec-tmf');
   tmfSel.innerHTML='<option value="">— None —</option>'+tmfLib.map(t=>'<option value="'+t.id+'">'+esc(t.name)+(t.hrs?' ('+formatHms(t.hrs)+')':'')+'</option>').join('');
   tmfSel.value='';
@@ -10009,6 +10038,8 @@ function openEditCatalogItem(id){
   document.getElementById('ec-photo').value=item.photo||'';
   updateModalPhotoPreview();
   // 3MF dropdown
+  const ecSrch=document.getElementById('ec-tmf-search');
+  if(ecSrch)ecSrch.value='';
   const tmfSel=document.getElementById('ec-tmf');
   tmfSel.innerHTML='<option value="">— None —</option>'+tmfLib.map(t=>'<option value="'+t.id+'"'+(t.id===item.tmfId?' selected':'')+'>'+esc(t.name)+(t.hrs?' ('+formatHms(t.hrs)+')':'')+'</option>').join('');
   tmfSel.onchange=()=>updateTmfInfo();
