@@ -11752,7 +11752,12 @@ async function initPushNotifications(){
     window._swReg=reg;
     await reg.update();
     const sub=await reg.pushManager.getSubscription();
-    if(sub){_setPushStatus('Enabled ✓',true);}
+    if(sub){
+      _setPushStatus('Enabled ✓',true);
+      // Re-POST subscription to server on every load so it survives server restarts/redeploys
+      // (server-side push-subscriptions.json is wiped on each deploy; this self-heals it)
+      fetch('/api/push/subscribe',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(sub)}).catch(()=>{});
+    }
     else if(Notification.permission==='denied'){_setPushStatus('Blocked — allow in browser settings');}
     else{_setPushStatus('Not enabled');}
     // Listen for SW→page messages
