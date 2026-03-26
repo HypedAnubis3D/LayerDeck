@@ -4343,7 +4343,8 @@ async function pollShopifyOrders(){
     const rawOrders=data.orders||[];
     let changed=false;
     rawOrders.forEach(function(o){
-      const existing=orders.find(function(ex){return ex.shopifyId===String(o.id);});
+      const oOrderId=o.name||('#'+o.id);
+      const existing=orders.find(function(ex){return ex.shopifyId===String(o.id)||ex.orderId===oOrderId;});
       if(!existing){
         ingestShopifyOrder(o);
         changed=true;
@@ -6460,7 +6461,9 @@ function ingestShopifyOrder(o){
   const orderId=o.name||('#'+o.id);
   const status=shopifyStatusMap(o);
   const order={id:uid(),shopifyId:String(o.id),orderId,customer,platform:'Shopify',date:o.created_at?o.created_at.split('T')[0]:new Date().toISOString().split('T')[0],items,status,shipping:0,notes:'',timestamp:Date.now(),fromShopify:true};
-  orders.push(order);saveOrders();
+  // NOTE: order is pushed to the array AFTER items are processed so that if the
+  // forEach throws, no orphaned order record is left in storage (which would cause
+  // the dedup check to skip this order on every future poll, losing the queue items).
   items.forEach(it=>{
     // 1. Look up catalog item by name
     const catalogItem=catalogItems.find(function(c){
@@ -6491,7 +6494,9 @@ function ingestShopifyOrder(o){
     queueItems.push({id:uid(),name:queueLabel,category:catalogItem?catalogItem.category:'Other',printer:printerRecords[0]?.name||'X1C',hrs:matchTmf?matchTmf.hrs||0:0,qty:it.qty,priority:'high',orderId,stage:'queued',fromShopify:true,noTmf:!matchTmf,tmfId:matchTmf?matchTmf.id:null,printId:newPrintId,notes:matchTmf?'3MF: '+matchTmf.name+(it.variantTitle?' ['+it.variantTitle+']':''):'⚠ No 3MF on file',timestamp:Date.now()});
     if(matchTmf){prints.push({id:newPrintId,name:queueLabel,category:catalogItem?catalogItem.category:'Other',printer:printerRecords[0]?.name||'X1C',hrs:matchTmf.hrs||0,qty:it.qty,filaments:matchTmf.filamentGrams.map(g=>({spoolId:spools[0]?.id||'',grams:g})),notes:'Auto from Shopify '+orderId,tmfName:matchTmf.name,timestamp:Date.now(),status:'printing'});}
   });
-  savePrints();saveQueue();
+  // All items processed successfully — now commit everything atomically
+  orders.push(order);
+  saveOrders();savePrints();saveQueue();
   initFulfillmentForOrder(orderId,customer,items);saveFulfillment();
   // Check repeat customer
   const prevOrders=orders.filter(x=>x.customer&&x.customer===customer&&x.shopifyId!==String(o.id));
