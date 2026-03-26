@@ -1064,8 +1064,10 @@ body.light-mode ::-webkit-scrollbar-thumb{background:var(--bdr2);}
 .cat-filter-active{background:var(--gold-d)!important;border-color:var(--gold)!important;color:var(--gold-b)!important;}
 
 /* ── SEGMENTED FILTER CONTROL ── */
-.seg-ctrl{display:inline-flex;background:var(--surf2);border:1px solid var(--bdr2);border-radius:12px;padding:3px;gap:2px;flex-wrap:wrap;}
-.seg-btn{background:none;border:none;padding:6px 14px;border-radius:9px;font-size:11px;font-weight:500;cursor:pointer;transition:all .2s;color:var(--txt-d);white-space:nowrap;font-family:'Inter',sans-serif;line-height:1;}
+.seg-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;padding:2px 0 4px;margin-bottom:8px;}
+.seg-scroll::-webkit-scrollbar{display:none;}
+.seg-ctrl{display:inline-flex;background:var(--surf2);border:1px solid var(--bdr2);border-radius:12px;padding:3px;gap:2px;flex-wrap:nowrap;min-width:max-content;}
+.seg-btn{background:none;border:none;padding:6px 14px;border-radius:9px;font-size:11px;font-weight:500;cursor:pointer;transition:all .2s;color:var(--txt-d);white-space:nowrap;font-family:'Inter',sans-serif;line-height:1;flex-shrink:0;}
 .seg-btn:hover{color:var(--txt);background:rgba(255,255,255,.06);}
 .seg-btn.seg-active{box-shadow:0 1px 6px rgba(0,0,0,.45);}
 .seg-btn.seg-all.seg-active{color:var(--gold-b);background:rgba(240,180,41,.15);}
@@ -1075,7 +1077,7 @@ body.light-mode ::-webkit-scrollbar-thumb{background:var(--bdr2);}
 .seg-btn.seg-manual.seg-active{color:var(--cyn);background:rgba(56,189,248,.1);}
 
 /* ── OVERFLOW ⋯ MENU ── */
-.overflow-wrap{position:relative;display:inline-block;}
+.overflow-wrap{position:relative;display:inline-block;flex-shrink:0;}
 .overflow-menu{position:absolute;top:calc(100% + 6px);right:0;background:var(--surf2);border:1px solid var(--bdr2);border-radius:12px;padding:5px;min-width:170px;z-index:90;box-shadow:0 12px 36px rgba(0,0,0,.6);display:none;flex-direction:column;gap:2px;}
 .overflow-menu.open{display:flex;}
 .ov-item{background:none;border:none;color:var(--txt);font-family:'Inter',sans-serif;font-size:11px;font-weight:500;padding:9px 13px;border-radius:8px;cursor:pointer;text-align:left;transition:background .15s;white-space:nowrap;width:100%;}
@@ -1747,20 +1749,13 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
 
 <!-- ORDERS -->
 <div id="tab-orders" style="display:none">
-  <div class="ctrl">
-    <button class="btn btn-teal" onclick="openAddOrder()">+ New Order</button>
-    <button class="btn btn-gold btn-sm" onclick="toggleQuickOrderBar()">⚡ Quick Add</button>
-    <input class="srch" id="or-s" placeholder="Search customer, order ID…" oninput="render()" style="flex:1;min-width:140px"/>
-    <select class="flt" id="or-st" onchange="render()">
-      <option value="">All Status</option>
-      <option value="pending">Pending</option>
-      <option value="printing">Printing</option>
-      <option value="shipped">Shipped</option>
-      <option value="cancelled">Cancelled</option>
-    </select>
-    <span class="cnt" id="or-cnt"></span>
-    <input type="file" id="etsy-csv-input" accept=".csv" style="display:none" onchange="importEtsyCSV(this)"/>
-    <div class="overflow-wrap" id="orders-ov-wrap">
+  <input type="file" id="etsy-csv-input" accept=".csv" style="display:none" onchange="importEtsyCSV(this)"/>
+  <!-- Row 1: primary actions + overflow — no wrapping -->
+  <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px;flex-wrap:nowrap">
+    <button class="btn btn-teal" onclick="openAddOrder()" style="flex-shrink:0">+ New Order</button>
+    <button class="btn btn-gold btn-sm" onclick="toggleQuickOrderBar()" style="flex-shrink:0">⚡ Quick Add</button>
+    <span class="cnt" id="or-cnt" style="flex-shrink:0;white-space:nowrap"></span>
+    <div class="overflow-wrap" style="margin-left:auto" id="orders-ov-wrap">
       <button class="btn btn-ghost btn-sm" onclick="toggleOverflow('orders-ov')" title="More actions">⋯ More</button>
       <div class="overflow-menu" id="orders-ov">
         <button class="ov-item" onclick="exportOrdersCSV();closeOverflow('orders-ov')">⬇ Export CSV</button>
@@ -1769,6 +1764,17 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
         <button class="ov-item" onclick="enterSelectMode('orders');closeOverflow('orders-ov')">☑ Select</button>
       </div>
     </div>
+  </div>
+  <!-- Row 2: search + status filter -->
+  <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px;flex-wrap:nowrap">
+    <input class="srch" id="or-s" placeholder="Search customer, order ID…" oninput="render()" style="flex:1;min-width:0;margin:0"/>
+    <select class="flt" id="or-st" onchange="render()" style="flex-shrink:0">
+      <option value="">All Status</option>
+      <option value="pending">Pending</option>
+      <option value="printing">Printing</option>
+      <option value="shipped">Shipped</option>
+      <option value="cancelled">Cancelled</option>
+    </select>
   </div>
   <!-- QUICK ADD BAR -->
   <div id="quick-order-bar" style="display:none;background:var(--surf);border:1px solid var(--bdr2);border-radius:6px;padding:10px;margin-bottom:10px;gap:8px;flex-wrap:wrap;align-items:flex-end">
@@ -1788,7 +1794,8 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
     </div>
     <button onclick="document.getElementById('quick-order-bar').style.display='none'" style="background:none;border:none;color:var(--txt-d);font-size:14px;cursor:pointer;align-self:flex-start;padding:2px">✕</button>
   </div>
-  <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;align-items:center">
+  <!-- Row 3: scrollable segmented filter -->
+  <div class="seg-scroll">
     <div class="seg-ctrl">
       <button id="orf-all"        class="seg-btn seg-all seg-active"   onclick="setOrderFilter('all')">All</button>
       <button id="orf-shopify"    class="seg-btn seg-shopify"           onclick="setOrderFilter('shopify')">🛍 Shopify</button>
@@ -2084,13 +2091,13 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
 
 <!-- PRODUCT CATALOG -->
 <div id="tab-catalog" style="display:none">
-  <div class="ctrl" style="flex-wrap:wrap;gap:6px">
-    <button class="btn btn-gold" onclick="openAddCatalogItem()">+ Add Product</button>
-    <input class="srch" id="cat-s" placeholder="Search products…" oninput="render()" style="flex:1;min-width:140px"/>
-    <span class="cnt" id="catalog-cnt"></span>
-    <span id="catalog-last-sync" style="font-size:9px;color:var(--txt-d)"></span>
-    <input type="file" id="csv-import-input" accept=".csv" style="display:none" onchange="importShopifyCSV(this)"/>
-    <div class="overflow-wrap" id="catalog-ov-wrap">
+  <input type="file" id="csv-import-input" accept=".csv" style="display:none" onchange="importShopifyCSV(this)"/>
+  <!-- Row 1: primary action + overflow — no wrapping -->
+  <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px;flex-wrap:nowrap">
+    <button class="btn btn-gold" onclick="openAddCatalogItem()" style="flex-shrink:0">+ Add Product</button>
+    <span class="cnt" id="catalog-cnt" style="flex-shrink:0;white-space:nowrap"></span>
+    <span id="catalog-last-sync" style="font-size:9px;color:var(--txt-d);flex-shrink:0"></span>
+    <div class="overflow-wrap" style="margin-left:auto" id="catalog-ov-wrap">
       <button class="btn btn-ghost btn-sm" onclick="toggleOverflow('catalog-ov')" title="More actions">⋯ More</button>
       <div class="overflow-menu" id="catalog-ov">
         <button class="ov-item" onclick="document.getElementById('csv-import-input').click();closeOverflow('catalog-ov')">📂 Import CSV</button>
@@ -2101,7 +2108,12 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
       </div>
     </div>
   </div>
-  <div style="display:flex;gap:5px;margin-bottom:8px;flex-wrap:wrap;align-items:center">
+  <!-- Row 2: search — full width -->
+  <div style="display:flex;gap:6px;align-items:center;margin-bottom:6px">
+    <input class="srch" id="cat-s" placeholder="Search products…" oninput="render()" style="flex:1;min-width:0;margin:0"/>
+  </div>
+  <!-- Row 3: scrollable segmented filter -->
+  <div class="seg-scroll">
     <div class="seg-ctrl">
       <button id="catf-all" class="seg-btn seg-all seg-active" onclick="setCatalogFilter('all')">All</button>
       <button id="catf-shopify" class="seg-btn seg-shopify" onclick="setCatalogFilter('shopify')">🛍 Shopify</button>
