@@ -1719,6 +1719,8 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
     <button class="btn btn-teal" onclick="openAddOrder()">+ New Order</button>
     <button class="btn btn-gold btn-sm" onclick="toggleQuickOrderBar()">⚡ Quick Add</button>
     <button class="btn btn-ghost btn-sm" onclick="exportOrdersCSV()">⬇ Export CSV</button>
+    <button class="btn btn-ghost btn-sm" onclick="document.getElementById('etsy-csv-input').click()" style="border-color:rgba(224,120,40,.4);color:#e07828">🟠 Import Etsy CSV</button>
+    <input type="file" id="etsy-csv-input" accept=".csv" style="display:none" onchange="importEtsyCSV(this)"/>
     <button class="btn btn-ghost btn-sm" onclick="enterSelectMode('orders')">☑ Select</button>
     <input class="srch" id="or-s" placeholder="Search customer, order ID…" oninput="render()"/>
     <select class="flt" id="or-st" onchange="render()">
@@ -1751,6 +1753,7 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
   <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;align-items:center">
     <button id="orf-all"        class="btn btn-sm cat-filter-active" onclick="setOrderFilter('all')">All</button>
     <button id="orf-shopify"    class="btn btn-sm" onclick="setOrderFilter('shopify')"    style="border-color:rgba(149,191,71,.4);color:#95BF47">🛍 Shopify</button>
+    <button id="orf-etsy"       class="btn btn-sm" onclick="setOrderFilter('etsy')"       style="border-color:rgba(224,120,40,.4);color:#e07828">🟠 Etsy</button>
     <button id="orf-convention" class="btn btn-sm" onclick="setOrderFilter('convention')" style="border-color:rgba(168,85,247,.4);color:#c084fc">🎪 Convention</button>
     <button id="orf-manual"     class="btn btn-sm" onclick="setOrderFilter('manual')"     style="border-color:var(--bdr2);color:var(--txt-d)">✏ Manual</button>
   </div>
@@ -3835,6 +3838,7 @@ function renderOrders(){
   const isEtsy=function(o){return o.fromEtsy||(o.platform||'').toLowerCase()==='etsy';};
   const isConvention=function(o){return (o.platform||'').toLowerCase()==='convention'||!!o.fromConvention;};
   if(orderFilter==='shopify') list=list.filter(isShopify);
+  else if(orderFilter==='etsy') list=list.filter(isEtsy);
   else if(orderFilter==='convention') list=list.filter(isConvention);
   else if(orderFilter==='manual') list=list.filter(function(o){return !isShopify(o)&&!isEtsy(o)&&!isConvention(o);});
   list.sort(function(a,b){return (b.timestamp||0)-(a.timestamp||0);});
@@ -11062,6 +11066,137 @@ function recordSaleAsOrder(saleId){
       +(allDone?'<div style="text-align:center;margin-top:8px"><button class="btn btn-ghost btn-xs" onclick="dismissObChecklist()">Dismiss</button></div>':'');
   };
 })();
+
+// ════════ ETSY CSV IMPORT ════════
+function _parseCSV(text){
+  // RFC-4180 compliant parser: handles quoted fields with commas/newlines
+  var rows=[];
+  var row=[];
+  var field='';
+  var inQ=false;
+  var i=0;
+  while(i<text.length){
+    var ch=text[i];
+    if(inQ){
+      if(ch==='"'&&text[i+1]==='"'){field+='"';i+=2;continue;}
+      if(ch==='"'){inQ=false;i++;continue;}
+      field+=ch;i++;
+    }else{
+      if(ch==='"'){inQ=true;i++;continue;}
+      if(ch===','){row.push(field.trim());field='';i++;continue;}
+      if(ch==='\r'&&text[i+1]==='\n'){rows.push(row);row=[];field='';i+=2;continue;}
+      if(ch==='\n'||ch==='\r'){rows.push(row);row=[];field='';i++;continue;}
+      field+=ch;i++;
+    }
+  }
+  if(field||row.length){row.push(field.trim());rows.push(row);}
+  return rows;
+}
+function _etsyStatus(raw){
+  var s=(raw||'').toLowerCase();
+  if(s.includes('ship')||s.includes('complete'))return 'shipped';
+  if(s.includes('cancel'))return 'cancelled';
+  return 'pending';
+}
+function importEtsyCSV(input){
+  var file=input.files[0];
+  if(!file)return;
+  var reader=new FileReader();
+  reader.onload=function(e){
+    try{
+      var rows=_parseCSV(e.target.result);
+      if(!rows.length){toast('Import','No data found in file','warning');return;}
+      // Build header→index map (case-insensitive, trim)
+      var headers=rows[0].map(function(h){return h.toLowerCase().replace(/[^a-z0-9]/g,'');});
+      var col=function(name){
+        var key=name.toLowerCase().replace(/[^a-z0-9]/g,'');
+        var idx=headers.indexOf(key);
+        return function(r){return idx>=0?(r[idx]||'').trim():'';};
+      };
+      var getOrderId  =col('Order ID');
+      var getSaleDate =col('Sale Date');
+      var getBuyer    =col('Buyers Name');
+      var getShipName =col('Ship Name');
+      var getTitle    =col('Title');
+      var getQty      =col('Quantity');
+      var getPrice    =col('Price');
+      var getShipping =col('Order Shipping');
+      var getStatus   =col('Status');
+      var getAddr1    =col('Ship Address1');
+      var getCity     =col('Ship City');
+      var getState    =col('Ship State');
+      var getZip      =col('Ship Zipcode');
+      var getCountry  =col('Ship Country');
+      var getEmail    =col('Buyers Email');
+      var getNote     =col('Buyer Note');
+      // Group rows by Order ID (Etsy puts one line per item)
+      var grouped={};
+      var order_keys=[];
+      for(var ri=1;ri<rows.length;ri++){
+        var r=rows[ri];
+        if(!r.length||!getOrderId(r))continue;
+        var oid=getOrderId(r);
+        if(!grouped[oid]){grouped[oid]=[];order_keys.push(oid);}
+        grouped[oid].push(r);
+      }
+      if(!order_keys.length){toast('Import','No valid orders found in CSV','warning');return;}
+      var added=0,skipped=0;
+      order_keys.forEach(function(oid){
+        // Skip if already imported
+        if(orders.find(function(o){return o.etsyId===oid;})){skipped++;return;}
+        var rows_for=grouped[oid];
+        var first=rows_for[0];
+        var buyer=getBuyer(first)||getShipName(first)||'Etsy Customer';
+        var dateRaw=getSaleDate(first);
+        var date=dateRaw?new Date(dateRaw).toISOString().split('T')[0]:new Date().toISOString().split('T')[0];
+        var items=rows_for.map(function(r){
+          return {
+            name:getTitle(r)||'Etsy Item',
+            qty:parseInt(getQty(r))||1,
+            price:parseFloat(getPrice(r).replace(/[^0-9.]/g,''))||0
+          };
+        });
+        var shipping=parseFloat(getShipping(first).replace(/[^0-9.]/g,''))||0;
+        var statusRaw=getStatus(first);
+        var status=_etsyStatus(statusRaw);
+        // Build address note
+        var addrParts=[getAddr1(first),getCity(first),getState(first),getZip(first),getCountry(first)].filter(Boolean);
+        var addrNote=addrParts.join(', ');
+        var buyerNote=getNote(first);
+        var notes=[addrNote,buyerNote].filter(Boolean).join(' | ');
+        var order={
+          id:uid(),
+          etsyId:oid,
+          orderId:'ETY-'+oid,
+          customer:buyer,
+          email:getEmail(first),
+          platform:'Etsy',
+          fromEtsy:true,
+          date:date,
+          timestamp:new Date(dateRaw||Date.now()).getTime()||Date.now(),
+          items:items,
+          shipping:shipping,
+          status:status,
+          notes:notes
+        };
+        orders.push(order);
+        added++;
+      });
+      saveOrders();
+      render();
+      // Auto-switch to Etsy filter to show imported orders
+      if(added>0)setOrderFilter('etsy');
+      // Reset input so same file can be re-imported (e.g. updated export)
+      input.value='';
+      var msg=added+' order'+(added!==1?'s':'')+' imported'+(skipped?' ('+skipped+' already existed)':'')+'.'
+      toast('Etsy Import',msg,added>0?'success':'info');
+    }catch(err){
+      toast('Import Error',err.message,'error');
+      input.value='';
+    }
+  };
+  reader.readAsText(file);
+}
 
 // ════════ CONVENTION BADGE ════════
 function updateConventionBadge(){
