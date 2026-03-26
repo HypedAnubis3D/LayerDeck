@@ -333,7 +333,7 @@ router.get(
       url.searchParams.set("limit", "100");
       url.searchParams.set(
         "fields",
-        "id,name,customer,line_items,created_at,financial_status,fulfillment_status,discount_codes"
+        "id,name,email,phone,customer,line_items,created_at,financial_status,fulfillment_status,discount_codes,shipping_address,shipping_lines,fulfillments"
       );
 
       const shopifyResp = await fetch(url.toString(), {

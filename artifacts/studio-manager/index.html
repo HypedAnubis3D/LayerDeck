@@ -6869,6 +6869,13 @@ function ingestShopifyOrder(o){
   orders.push(order);
   saveOrders();savePrints();saveQueue();
   initFulfillmentForOrder(orderId,customer,items);saveFulfillment();
+  // Auto-create shipping log entry if this order has a shipping charge or address
+  if((shipping>0||shippingAddress)&&!shippingLog.some(function(s){return s.orderId===orderId;})){
+    const slCarrier=(o.shipping_lines&&o.shipping_lines[0]&&o.shipping_lines[0].title?o.shipping_lines[0].title:'Shipping');
+    const slTracking=(o.fulfillments&&o.fulfillments[0]&&o.fulfillments[0].tracking_number?o.fulfillments[0].tracking_number:'');
+    shippingLog.push({id:uid(),orderId,charged:shipping,actual:0,carrier:slCarrier,date:order.date,tracking:slTracking,fromShopify:true,timestamp:Date.now()});
+    saveShippingLog();
+  }
   // Check repeat customer
   const prevOrders=orders.filter(x=>x.customer&&x.customer===customer&&x.shopifyId!==String(o.id));
   if(prevOrders.length>0)toast(`⭐ Returning Customer!`,`${customer} has ordered ${prevOrders.length} time${prevOrders.length!==1?'s':''} before`,'shiny',7000);
@@ -10273,8 +10280,10 @@ function renderShipping(){
     const order=orders.find(o=>o.id===s.orderId||o.orderId===s.orderId);
     return `<div class="shipping-row">
       <div style="flex:1">
-        <div style="color:var(--txt-b);font-weight:bold">${esc(order?.customer||s.orderId||'—')}</div>
-        <div style="font-size:6px;color:var(--txt-d)">${esc(s.carrier||'—')} · ${s.date||'—'}${s.tracking?' · '+esc(s.tracking):''}</div>
+        <div style="color:var(--txt-b);font-weight:bold">${esc(order?.customer||s.orderId||'—')}<span style="font-size:6px;color:var(--txt-d);font-weight:400;margin-left:6px">${esc(s.orderId||'')}</span></div>
+        ${order?.shippingAddress?`<div style="font-size:7px;color:var(--cyn);margin-bottom:1px">📍 ${esc(order.shippingAddress)}</div>`:''}
+        <div style="font-size:6px;color:var(--txt-d)">${esc(s.carrier||'—')} · ${s.date||'—'}${s.tracking?' · 📦 '+esc(s.tracking):''}</div>
+        ${s.actual===0&&s.fromShopify?`<div style="font-size:6px;color:var(--amb)">⚠ Actual cost not yet entered</div>`:''}
       </div>
       <div style="text-align:right">
         <div style="font-size:8px;color:var(--txt-d)">Charged: $${(s.charged||0).toFixed(2)} · Actual: $${(s.actual||0).toFixed(2)}</div>
