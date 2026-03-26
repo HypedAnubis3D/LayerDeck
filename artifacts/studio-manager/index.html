@@ -1458,7 +1458,7 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
 @media print{
   header,.ctrl,.sbar,main>*:not(#tab-labels){display:none!important;}
   #tab-labels{display:block!important;}
-  .labels-grid{grid-template-columns:repeat(4,1fr);}
+  .labels-grid{grid-template-columns:var(--lbl-cols,repeat(4,1fr));}
   .lbl-card{break-inside:avoid;border:1px solid #ddd;}
 }
 
@@ -1577,7 +1577,6 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
         <button class="nav-item" id="nav-orders" onclick="navTo('orders',this)"><span class="nav-icon">📬</span><span class="nav-label">Orders</span><span class="nav-badge" id="nav-badge-orders">!</span></button>
         <button class="nav-item" id="nav-customers" onclick="navTo('customers',this)"><span class="nav-icon">👥</span><span class="nav-label">Customers</span></button>
         <button class="nav-item" id="nav-mystery" onclick="navTo('mystery',this)"><span class="nav-icon">🎁</span><span class="nav-label">Mystery Prints</span><span class="nav-badge" id="nav-badge-mystery"></span></button>
-        <button class="nav-item" id="nav-reviews" onclick="navTo('reviews',this)"><span class="nav-icon">🌟</span><span class="nav-label">Reviews</span></button>
         <button class="nav-item" id="nav-shiny" onclick="navTo('shiny',this)"><span class="nav-icon">✨</span><span class="nav-label">Shiny Tracker</span></button>
       </div>
     </div>
@@ -1675,7 +1674,7 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
   <button class="hamburger" id="hamburger-btn" onclick="toggleSidebar()">
     <span></span><span></span><span></span>
   </button>
-  <div style="display:flex;align-items:center;gap:10px;flex-shrink:0;">
+  <div style="display:flex;align-items:center;gap:10px;flex-shrink:0;cursor:pointer" onclick="navTo('dashboard',document.getElementById('nav-dashboard'))" title="Go to Dashboard">
     <img src="/layerstack-logo.png" alt="LayerStack" style="height:72px;width:auto;filter:drop-shadow(0 0 10px rgba(201,162,39,.55));"/>
     <div style="display:flex;flex-direction:column;line-height:1.1;">
       <span id="ls-brand-name" style="font-family:'Orbitron',monospace;font-size:15px;font-weight:900;color:var(--gold-b);letter-spacing:2px;">LAYERSTACK</span>
@@ -1692,6 +1691,7 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
       <div id="cloud-panel" style="display:none;position:absolute;right:0;top:calc(100% + 4px);background:var(--surf);border:1px solid var(--bdr2);border-radius:6px;padding:6px;z-index:200;min-width:140px;box-shadow:0 4px 16px rgba(0,0,0,.4)">
       </div>
     </div>
+    <button class="btn btn-sm" id="header-sync-btn" onclick="navTo('sync',document.getElementById('nav-sync'))" title="Sync &amp; Settings" style="background:var(--surf);border:1px solid var(--bdr2);color:var(--txt-d);padding:4px 10px;font-size:7px;gap:5px;display:flex;align-items:center">⚙ Settings</button>
     <button class="theme-toggle" id="theme-toggle-btn" onclick="toggleTheme()" title="Toggle light/dark mode">🌙</button>
   </div>
 </header>
@@ -1951,8 +1951,16 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
 
 <!-- LABELS -->
 <div id="tab-labels" style="display:none">
-  <div class="ctrl">
+  <div class="ctrl" style="flex-wrap:wrap;gap:6px">
     <button class="btn btn-ghost btn-sm" onclick="window.print()">🖨 Print Labels</button>
+    <select id="label-size-select" onchange="applyLabelSize(this.value)" style="background:var(--surf);border:1px solid var(--bdr2);color:var(--txt-b);font-family:'Share Tech Mono',monospace;font-size:9px;padding:4px 8px;border-radius:3px;cursor:pointer">
+      <option value="standard">Standard 4×4 (4 cols)</option>
+      <option value="avery-2x4">Avery 2×4 (3 cols)</option>
+      <option value="thermal-4x6">Thermal 4×6 (2 cols)</option>
+      <option value="sheet-a4">A4 Sheet (5 cols)</option>
+      <option value="sheet-letter">Letter Sheet (4 cols)</option>
+    </select>
+    <span style="font-size:7px;color:var(--txt-d)">Paper size</span>
   </div>
   <div class="labels-grid" id="labels-grid"></div>
 </div>
@@ -2031,23 +2039,6 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
     </div>
   </div>
 
-  <!-- PUSH NOTIFICATIONS -->
-  <div class="export-panel" style="margin-top:10px">
-    <div class="export-title">🔔 Push Notifications</div>
-    <div class="export-desc">Get notified when prints finish, when orders stay pending too long, and reminders before conventions — even when the app is in the background or minimized.</div>
-    <div id="notif-status" style="font-size:8px;color:var(--txt-d);margin-bottom:10px;letter-spacing:1px">Checking status…</div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap">
-      <button class="btn btn-cyn btn-sm" id="notif-enable-btn" onclick="enablePushNotifications()">Enable Notifications</button>
-      <button class="btn btn-ghost btn-sm" id="notif-disable-btn" style="display:none" onclick="disablePushNotifications()">Disable</button>
-      <button class="btn btn-ghost btn-sm" id="notif-test-btn" style="display:none" onclick="testPushNotification()">🔔 Send Test</button>
-    </div>
-    <div style="margin-top:12px;font-size:7px;color:var(--txt-d);letter-spacing:1.5px;border-top:1px solid var(--bor);padding-top:10px">WHAT YOU'LL GET:</div>
-    <div style="font-size:8px;color:var(--txt-d);margin-top:5px;line-height:1.9">
-      🖨 Print timer alerts (done + 25% overdue warnings)<br>
-      🎪 Convention reminders (18 h and 1 h before start)<br>
-      📦 Aging order alerts (pending 3+ days)
-    </div>
-  </div>
 
   <!-- RESET SECTION -->
   <div class="reset-section">
@@ -2146,6 +2137,25 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
 
 <!-- SYNC TAB -->
 <div id="tab-sync" style="display:none">
+  <!-- PUSH NOTIFICATIONS — static so _setPushStatus always finds the elements -->
+  <div class="export-panel" style="margin-bottom:12px">
+    <div class="export-title">🔔 Push Notifications</div>
+    <div class="export-desc">Get notified when prints finish, when orders stay pending too long, and reminders before conventions — even when the app is in the background or minimized.</div>
+    <div id="notif-status" style="font-size:8px;color:var(--txt-d);margin-bottom:10px;letter-spacing:1px">Checking status…</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn btn-cyn btn-sm" id="notif-enable-btn" onclick="enablePushNotifications()">Enable Notifications</button>
+      <button class="btn btn-ghost btn-sm" id="notif-disable-btn" style="display:none" onclick="disablePushNotifications()">Disable</button>
+      <button class="btn btn-ghost btn-sm" id="notif-test-btn" style="display:none" onclick="testPushNotification()">🔔 Send Test</button>
+    </div>
+    <div style="margin-top:12px;font-size:7px;color:var(--txt-d);letter-spacing:1.5px;border-top:1px solid var(--bdr);padding-top:10px">WHAT YOU'LL GET:</div>
+    <div style="font-size:8px;color:var(--txt-d);margin-top:5px;line-height:1.9">
+      🖨 Print timer alerts (done + 25% overdue warnings)<br>
+      🎪 Convention reminders (18 h and 1 h before start)<br>
+      📦 Aging order alerts (pending 3+ days)
+    </div>
+    <div style="margin-top:10px;font-size:7px;color:var(--txt-d);letter-spacing:1.5px;border-top:1px solid var(--bdr);padding-top:10px">BACKGROUND BEHAVIOUR:</div>
+    <div style="font-size:8px;color:var(--txt-d);margin-top:5px;line-height:1.8">Push notifications are delivered by the server even when the app is closed. For the most reliable experience on Android, add this app to your home screen and keep it installed. iOS (Safari) supports notifications only when added to the home screen.</div>
+  </div>
   <div id="sync-tab-content"></div>
 </div>
 
@@ -2288,6 +2298,7 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
   <div class="ctrl">
     <button class="btn btn-pur" onclick="openAddConvention()">+ Add Event</button>
     <button class="btn btn-ghost btn-sm" onclick="openEventCompare()" id="btn-compare-events" style="display:none">📊 Compare Events</button>
+    <button class="btn btn-ghost btn-sm" onclick="openEventFinder()">🔍 Find Events</button>
     <span class="cnt" id="convention-cnt"></span>
   </div>
   <div id="convention-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:10px"></div>
@@ -2607,6 +2618,36 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
   <div id="event-compare-body" style="overflow-x:auto"></div>
   <div class="macts">
     <button class="btn btn-ghost" onclick="closeEventCompare()">Close</button>
+  </div>
+</div>
+</div>
+
+<!-- EVENT FINDER MODAL -->
+<div class="overlay" id="mod-event-finder" style="display:none" onclick="if(event.target.id==='mod-event-finder')closeEventFinder()">
+<div class="modal" style="max-width:500px;width:96vw">
+  <div class="mtitle">🔍 Find Events Near You</div>
+  <div style="font-size:8px;color:var(--txt-d);margin-bottom:14px;line-height:1.8">Find conventions, maker fairs, and craft markets where you could sell. Enter your city and we'll open the best event directories for you.</div>
+  <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px">
+    <div>
+      <div style="font-size:7px;color:var(--txt-d);letter-spacing:1px;margin-bottom:4px">YOUR CITY / REGION</div>
+      <input id="evf-city" type="text" placeholder="e.g. Toronto, ON or Chicago" class="modal-input" style="width:100%;box-sizing:border-box" onkeydown="if(event.key==='Enter')searchEvents()"/>
+    </div>
+    <div>
+      <div style="font-size:7px;color:var(--txt-d);letter-spacing:1px;margin-bottom:4px">EVENT TYPE</div>
+      <select id="evf-type" style="width:100%;background:var(--surf);border:1px solid var(--bdr2);color:var(--txt-b);font-family:'Share Tech Mono',monospace;font-size:9px;padding:7px 8px;border-radius:4px;box-sizing:border-box">
+        <option value="3D printing collectibles maker">3D Printing &amp; Collectibles (default)</option>
+        <option value="anime comic con pop culture vendor">Anime / Comic Con</option>
+        <option value="craft fair artisan market vendor">Craft Fair / Artisan Market</option>
+        <option value="maker faire maker market">Maker Fair</option>
+        <option value="gaming tabletop convention vendor">Gaming / Tabletop Convention</option>
+        <option value="pop up market local vendor">Pop-up Market</option>
+      </select>
+    </div>
+  </div>
+  <button class="btn btn-pur" style="width:100%;padding:9px;margin-bottom:14px" onclick="searchEvents()">🔍 Search Event Directories</button>
+  <div id="evf-results"></div>
+  <div class="macts">
+    <button class="btn btn-ghost" onclick="closeEventFinder()">Close</button>
   </div>
 </div>
 </div>
@@ -5556,6 +5597,7 @@ function renderShiny(){
     const isShiny=r.result==='shiny';
     const d=new Date(r.timestamp);
     return `<div class="shiny-card${isShiny?' is-shiny':''}">
+      <button onclick="deleteShinyRoll('${r.id||r.timestamp}')" title="Delete this roll" style="position:absolute;top:6px;right:6px;background:none;border:none;color:var(--txt-d);font-size:11px;cursor:pointer;padding:2px 5px;border-radius:3px;opacity:.5;line-height:1" onmouseover="this.style.opacity=1;this.style.color='var(--red-b)'" onmouseout="this.style.opacity=.5;this.style.color='var(--txt-d)'">✕</button>
       <div class="shiny-order-id">${esc(r.orderId||'—')}</div>
       <div class="shiny-customer">${esc(r.customer||'—')}</div>
       <div class="shiny-meta">${esc(r.product||'—')} · ${d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}</div>
@@ -8239,10 +8281,10 @@ async function processSyncQueue(){
   }
 }
 
-function sbWithTimeout(queryBuilder,ms=15000){
+function sbWithTimeout(queryBuilder,ms=30000){
   return Promise.race([
     queryBuilder,
-    new Promise((_,reject)=>setTimeout(()=>reject(new Error('Sync timed out after '+ms/1000+'s — check your Supabase project is active')),ms))
+    new Promise((_,reject)=>setTimeout(()=>reject(new Error('Sync timed out — Supabase may be waking up, will retry automatically')),ms))
   ]);
 }
 function sbErrMsg(e){
@@ -8310,6 +8352,14 @@ async function pullFromCloud(silent=false,_lockRetry=false){
       addSyncLog('Token lock contention — retrying pull…','info');
       await new Promise(r=>setTimeout(r,1500));
       return pullFromCloud(silent,true);
+    }
+    // Auto-retry once on timeout (Supabase free-tier cold start)
+    if(msg&&msg.includes('timed out')&&!_lockRetry){
+      isSyncing=false;
+      addSyncLog('Sync timed out — retrying in 5s…','info');
+      if(!silent)toast('Sync Retrying','Supabase is waking up — retrying in 5s…','warning');
+      setTimeout(()=>pullFromCloud(silent,true),5000);
+      return;
     }
     console.error('pullFromCloud error:',msg,e);
     updateSyncIndicator('error');
@@ -11276,8 +11326,10 @@ function toggleSelect(id){
 function updateBulkBar(){
   const bar=document.getElementById('bulk-bar');
   const count=document.getElementById('bulk-count');
+  const toOrderBtn=document.getElementById('bulk-to-order-btn');
   if(bar)bar.classList.toggle('show',selectedIds.length>0);
   if(count)count.textContent=selectedIds.length+' selected';
+  if(toOrderBtn)toOrderBtn.style.display=(selectMode==='catalog'&&selectedIds.length>0)?'':'none';
 }
 function clearSelection(){
   selectedIds=[];selectMode='';
@@ -11575,11 +11627,25 @@ function addToOrderFromCatalog(id){
   if(!item)return;
   openAddOrder();
   setTimeout(function(){
-    var eoItems=document.getElementById('eo-items');
-    if(eoItems)eoItems.value=item.name+' · 1 · $'+parseFloat(item.price||0).toFixed(2);
+    clearOrderItemRows();
+    addOrderItemRow('catalog',{name:item.name,price:item.price,qty:1,_catalogId:item.id});
     var eoPlatform=document.getElementById('eo-platform');
     if(eoPlatform)eoPlatform.value='Direct';
-  },50);
+  },60);
+}
+function bulkCatalogToOrder(){
+  var items=selectedIds.map(function(id){return catalogItems.find(function(c){return c.id===id;});}).filter(Boolean);
+  if(!items.length)return;
+  clearSelection();
+  openAddOrder();
+  setTimeout(function(){
+    clearOrderItemRows();
+    items.forEach(function(item){
+      addOrderItemRow('catalog',{name:item.name,price:item.price,qty:1,_catalogId:item.id});
+    });
+    var eoPlatform=document.getElementById('eo-platform');
+    if(eoPlatform)eoPlatform.value='Direct';
+  },60);
 }
 
 // ════════ QUICK ORDER ADD ════════
@@ -11839,6 +11905,7 @@ function updateConventionBadge(){
 <!-- BULK ACTION BAR -->
 <div class="bulk-bar" id="bulk-bar">
   <span class="bulk-bar-count" id="bulk-count">0 selected</span>
+  <button class="btn btn-teal btn-sm" id="bulk-to-order-btn" style="display:none" onclick="bulkCatalogToOrder()">→ Add to Order</button>
   <button class="btn btn-red btn-sm" onclick="bulkDelete()">🗑 Delete</button>
   <button class="btn btn-ghost btn-sm" onclick="clearSelection()">✕ Cancel</button>
 </div>
@@ -11925,6 +11992,107 @@ async function testPushNotification(){
     else toast('Test Sent','Check your notifications! 🔔','success');
   }catch(e){toast('Error',e.message,'error');}
 }
+
+// ── SHINY ROLL DELETE ──
+function deleteShinyRoll(idOrTs){
+  showConfirm('Delete Roll','Remove this roll from history?',function(){
+    shinyRolls=shinyRolls.filter(function(r){return (r.id||r.timestamp)!=idOrTs&&String(r.id||r.timestamp)!==String(idOrTs);});
+    saveShiny();
+    renderShiny();
+    toast('Deleted','Roll removed','info');
+  },'Delete','btn-red');
+}
+
+// ── LABEL SIZE PICKER ──
+function applyLabelSize(size){
+  const map={
+    'standard':'repeat(4,1fr)',
+    'avery-2x4':'repeat(3,1fr)',
+    'thermal-4x6':'repeat(2,1fr)',
+    'sheet-a4':'repeat(5,1fr)',
+    'sheet-letter':'repeat(4,1fr)'
+  };
+  const cols=map[size]||'repeat(4,1fr)';
+  document.documentElement.style.setProperty('--lbl-cols',cols);
+  const grid=document.getElementById('labels-grid');
+  if(grid)grid.style.gridTemplateColumns=cols;
+  localStorage.setItem('ha3d_label_size',size);
+}
+(function(){
+  const saved=localStorage.getItem('ha3d_label_size');
+  if(saved){
+    const sel=document.getElementById('label-size-select');
+    if(sel)sel.value=saved;
+    applyLabelSize(saved);
+  }
+})();
+
+// ── CONVENTION EVENT FINDER ──
+function openEventFinder(){
+  document.getElementById('mod-event-finder').style.display='flex';
+  document.getElementById('evf-results').innerHTML='';
+  document.getElementById('evf-city').value='';
+}
+function closeEventFinder(){
+  document.getElementById('mod-event-finder').style.display='none';
+}
+function searchEvents(){
+  const city=(document.getElementById('evf-city').value||'').trim();
+  const type=document.getElementById('evf-type').value||'3D printing collectibles maker';
+  const res=document.getElementById('evf-results');
+  if(!city){toast('Enter a location','Type your city or region','warning');return;}
+  const q=encodeURIComponent(type+' convention market fair booth vendor '+city+' 2025 2026');
+  const ebQ=encodeURIComponent(type+' '+city);
+  res.innerHTML=`
+    <div style="font-size:8px;color:var(--txt-d);letter-spacing:1px;margin-bottom:8px;text-transform:uppercase">Search results for: ${esc(city)}</div>
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <a href="https://www.eventbrite.com/d/online/${ebQ}/" target="_blank" rel="noopener" style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--surf2);border:1px solid var(--bdr2);border-radius:6px;text-decoration:none;color:var(--txt-b)">
+        <span style="font-size:20px">🎟</span>
+        <div><div style="font-size:10px;font-weight:bold">Eventbrite</div><div style="font-size:7px;color:var(--txt-d)">Find local fairs, markets &amp; conventions</div></div>
+        <span style="margin-left:auto;font-size:8px;color:var(--cyn)">Open →</span>
+      </a>
+      <a href="https://www.google.com/search?q=${q}" target="_blank" rel="noopener" style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--surf2);border:1px solid var(--bdr2);border-radius:6px;text-decoration:none;color:var(--txt-b)">
+        <span style="font-size:20px">🔍</span>
+        <div><div style="font-size:10px;font-weight:bold">Google Search</div><div style="font-size:7px;color:var(--txt-d)">Broad search for upcoming events</div></div>
+        <span style="margin-left:auto;font-size:8px;color:var(--cyn)">Open →</span>
+      </a>
+      <a href="https://www.facebook.com/events/search/?q=${encodeURIComponent(type+' '+city)}" target="_blank" rel="noopener" style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--surf2);border:1px solid var(--bdr2);border-radius:6px;text-decoration:none;color:var(--txt-b)">
+        <span style="font-size:20px">📘</span>
+        <div><div style="font-size:10px;font-weight:bold">Facebook Events</div><div style="font-size:7px;color:var(--txt-d)">Local events &amp; community markets</div></div>
+        <span style="margin-left:auto;font-size:8px;color:var(--cyn)">Open →</span>
+      </a>
+      <a href="https://www.craftfairs.com/search?q=${encodeURIComponent(city)}" target="_blank" rel="noopener" style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--surf2);border:1px solid var(--bdr2);border-radius:6px;text-decoration:none;color:var(--txt-b)">
+        <span style="font-size:20px">🧵</span>
+        <div><div style="font-size:10px;font-weight:bold">Craft Fairs</div><div style="font-size:7px;color:var(--txt-d)">Craft fairs &amp; artisan markets near you</div></div>
+        <span style="margin-left:auto;font-size:8px;color:var(--cyn)">Open →</span>
+      </a>
+      <a href="https://www.showclix.com/search?q=${encodeURIComponent(type+' '+city)}" target="_blank" rel="noopener" style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--surf2);border:1px solid var(--bdr2);border-radius:6px;text-decoration:none;color:var(--txt-b)">
+        <span style="font-size:20px">🎪</span>
+        <div><div style="font-size:10px;font-weight:bold">ShowClix</div><div style="font-size:7px;color:var(--txt-d)">Conventions, comic cons &amp; pop culture events</div></div>
+        <span style="margin-left:auto;font-size:8px;color:var(--cyn)">Open →</span>
+      </a>
+    </div>
+    <div style="margin-top:10px;font-size:7px;color:var(--txt-d);line-height:1.8;border-top:1px solid var(--bdr);padding-top:8px">
+      💡 Found an event? Click <b style="color:var(--pur-b)">+ Add Event</b> on the Convention page and fill in the details to track your booth cost, sales target, and checklist.
+    </div>`;
+}
+
+// ── VISIBILITY CHANGE — only sync if been > 2 min since last sync ──
+document.addEventListener('visibilitychange',function(){
+  if(document.visibilityState==='visible'&&currentUser&&isOnline){
+    const minGap=2*60*1000;
+    if(!lastSyncTime||Date.now()-lastSyncTime>minGap){
+      pullFromCloud(true);
+    }
+  }
+});
+
+// ── SERVICE WORKER KEEP-ALIVE PING ──
+setInterval(function(){
+  if('serviceWorker' in navigator&&navigator.serviceWorker.controller){
+    navigator.serviceWorker.controller.postMessage({type:'keepalive'});
+  }
+},25000);
 </script>
 
 <script>

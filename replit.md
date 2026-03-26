@@ -128,6 +128,21 @@ Single-file HTML PWA for managing a Bambu Lab 3D printing collectibles business 
 - `hmr: false` in vite.config.ts — manual reload required after code changes
 - `fmtDried(dateStr)` utility: formats ISO dates to "Feb 10" style for dried badges
 
+**Recent updates (brainstorm batch):**
+- Logo in header is clickable → goes to Dashboard
+- "⚙ Settings" button in header shortcuts directly to the Sync/Settings tab
+- Push Notifications panel moved from Backup tab → top of Sync tab (static HTML so `_setPushStatus` always finds elements)
+- Reviews tab nav item removed (tab still exists for data safety, just not accessible via nav)
+- Shiny roll history cards now have a ✕ delete button; `deleteShinyRoll(idOrTs)` calls `saveShiny()`
+- Labels tab has a paper size/printer selector dropdown with 5 presets; selection persists in localStorage; `applyLabelSize(size)` sets `--lbl-cols` CSS variable
+- Convention tab has "🔍 Find Events" button → opens `mod-event-finder` modal with city/type inputs and curated links (Eventbrite, Google, Facebook Events, Craft Fairs, ShowClix)
+- `sbWithTimeout` timeout increased 15s → 30s; message softened to "may be waking up, will retry"
+- `pullFromCloud` catch block: auto-retries once after 5s on timeout (Supabase cold-start recovery)
+- `visibilitychange` listener added: only triggers `pullFromCloud(silent)` if > 2 minutes since last sync
+- Service worker keep-alive ping: `setInterval` every 25s posts `{type:'keepalive'}` to SW controller
+- `addToOrderFromCatalog(id)` now uses `addOrderItemRow('catalog', {...})` instead of textarea hack
+- Catalog select mode now shows "→ Add to Order" button in bulk bar; `bulkCatalogToOrder()` opens order modal with all selected items pre-filled via `addOrderItemRow`
+
 **Tab merges applied:**
 | Merged Into | Includes (via navTo redirect) | Sidebar Label |
 |---|---|---|
