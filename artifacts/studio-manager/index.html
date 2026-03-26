@@ -916,8 +916,11 @@ body.light-mode ::-webkit-scrollbar-thumb{background:var(--bdr2);}
   /* Kanban columns stacked */
   .kanban{gap:8px;}
   /* Header */
-  header{padding:9px 12px;gap:8px;}
+  header{padding:9px 12px;gap:8px;flex-wrap:nowrap;}
   .header-tab-name{display:none;}
+  .header-right{flex-wrap:nowrap;}
+  #ls-header-sub{display:none;}
+  header img{height:54px!important;}
   /* Main padding */
   main{padding:10px 12px;}
   /* Buttons full width in modal */
@@ -1670,7 +1673,7 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
     <img src="/layerstack-logo.png" alt="LayerStack" style="height:72px;width:auto;filter:drop-shadow(0 0 10px rgba(201,162,39,.55));"/>
     <div style="display:flex;flex-direction:column;line-height:1.1;">
       <span style="font-family:'Orbitron',monospace;font-size:15px;font-weight:900;color:var(--gold-b);letter-spacing:2px;">LAYERSTACK</span>
-      <span style="font-family:'Orbitron',monospace;font-size:7px;color:var(--txt-d);letter-spacing:2.5px;margin-top:2px;">STUDIO MANAGER</span>
+      <span id="ls-header-sub" style="font-family:'Orbitron',monospace;font-size:7px;color:var(--txt-d);letter-spacing:2.5px;margin-top:2px;">STUDIO MANAGER</span>
     </div>
   </div>
   <span class="header-tab-name" id="header-tab-name">Dashboard</span>
