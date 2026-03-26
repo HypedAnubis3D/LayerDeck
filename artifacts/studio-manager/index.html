@@ -4341,6 +4341,7 @@ async function pollShopifyOrders(){
       const oOrderId=o.name||('#'+o.id);
       const existing=orders.find(function(ex){return ex.shopifyId===String(o.id)||ex.orderId===oOrderId;});
       if(!existing){
+        if(shopifyStatusMap(o)==='cancelled')return; // don't import already-cancelled orders
         ingestShopifyOrder(o);
         changed=true;
       }else{
