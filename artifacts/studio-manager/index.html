@@ -11494,6 +11494,11 @@ function recordSaleAsOrder(saleId){
         }).join(''))
       +(allDone?'<div style="text-align:center;margin-top:8px"><button class="btn btn-ghost btn-xs" onclick="dismissObChecklist()">Dismiss</button></div>':'');
   };
+  // Immediately populate the widget if it's already in the DOM
+  // (happens because renderDashboard runs before this IIFE at page load)
+  if(document.getElementById('ob-checklist-widget')){
+    window.renderObChecklist();
+  }
 })();
 
 // ════════ ETSY CSV IMPORT ════════
