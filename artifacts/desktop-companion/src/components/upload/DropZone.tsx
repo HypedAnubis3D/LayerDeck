@@ -10,9 +10,12 @@ interface DropZoneProps {
 export function DropZone({ onFilesAccepted }: DropZoneProps) {
   const [isHovering, setIsHovering] = useState(false);
 
-  const onDrop = useCallback((acceptedFiles: File[]) => {
-    if (acceptedFiles.length > 0) {
-      onFilesAccepted(acceptedFiles);
+  const onDrop = useCallback((acceptedFiles: File[], rejectedFiles: any[]) => {
+    // Accept any file ending in .3mf regardless of MIME type
+    const allDropped = [...acceptedFiles, ...rejectedFiles.map(r => r.file)];
+    const threeMfFiles = allDropped.filter(f => f.name.toLowerCase().endsWith('.3mf'));
+    if (threeMfFiles.length > 0) {
+      onFilesAccepted(threeMfFiles);
     }
     setIsHovering(false);
   }, [onFilesAccepted]);
@@ -21,7 +24,15 @@ export function DropZone({ onFilesAccepted }: DropZoneProps) {
     onDrop,
     accept: {
       'application/vnd.ms-3mfdocument': ['.3mf'],
-      'application/zip': ['.3mf'] // Fallback since some systems see 3mf as zip
+      'application/zip': ['.3mf'],
+      'application/octet-stream': ['.3mf'],
+      'model/3mf': ['.3mf'],
+    },
+    validator: (file) => {
+      if (!file.name.toLowerCase().endsWith('.3mf')) {
+        return { code: 'not-3mf', message: 'Only .3mf files are accepted' };
+      }
+      return null;
     },
     onDragEnter: () => setIsHovering(true),
     onDragLeave: () => setIsHovering(false),
@@ -80,7 +91,7 @@ export function DropZone({ onFilesAccepted }: DropZoneProps) {
                   Upload 3MF Files
                 </h3>
                 <p className="text-lg text-muted-foreground">
-                  Drag & drop your <span className="font-mono text-primary/80">.3mf</span> slice files here
+                  Drag & drop your <span className="font-mono text-primary/80">.3mf</span> files here
                 </p>
                 <p className="text-sm text-muted-foreground/60">
                   Or click to browse your computer
@@ -92,7 +103,7 @@ export function DropZone({ onFilesAccepted }: DropZoneProps) {
                   <CheckCircle2 className="h-4 w-4 text-primary/50" /> Auto-extracts metadata
                 </div>
                 <div className="flex items-center gap-2">
-                  <CheckCircle2 className="h-4 w-4 text-primary/50" /> Syncs to catalog
+                  <CheckCircle2 className="h-4 w-4 text-primary/50" /> Syncs to 3MF Library
                 </div>
               </div>
             </motion.div>

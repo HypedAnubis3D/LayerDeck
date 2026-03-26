@@ -1,8 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from './use-auth';
+import { Parsed3MF } from '@/lib/3mf-parser';
 
-// Helper to safely parse JSON
 function safeParse<T>(jsonStr: string, fallback: T): T {
   try {
     return jsonStr ? JSON.parse(jsonStr) : fallback;
@@ -12,7 +12,6 @@ function safeParse<T>(jsonStr: string, fallback: T): T {
   }
 }
 
-// Hook to get all key metrics for the dashboard
 export function useDashboardMetrics() {
   const { user } = useAuth();
 
@@ -27,13 +26,13 @@ export function useDashboardMetrics() {
 
       if (error) throw error;
 
-      // Initialize default metrics
       const metrics = {
         catalogCount: 0,
         openOrdersCount: 0,
         activePrintJobs: 0,
         spoolCount: 0,
-        upcomingConventions: 0
+        upcomingConventions: 0,
+        libraryCount: 0,
       };
 
       if (!data) return metrics;
@@ -42,20 +41,19 @@ export function useDashboardMetrics() {
         if (row.collection === 'catalog') {
           const catalog = safeParse<any[]>(row.payload, []);
           metrics.catalogCount = catalog.length;
-        } 
-        else if (row.collection === 'orders') {
+        } else if (row.collection === 'library3mf') {
+          const library = safeParse<any[]>(row.payload, []);
+          metrics.libraryCount = library.length;
+        } else if (row.collection === 'orders') {
           const orders = safeParse<any[]>(row.payload, []);
           metrics.openOrdersCount = orders.filter(o => o.status !== 'complete' && o.status !== 'cancelled').length;
-        }
-        else if (row.collection === 'printQueue') {
+        } else if (row.collection === 'printQueue') {
           const queue = safeParse<any[]>(row.payload, []);
           metrics.activePrintJobs = queue.filter(q => q.status === 'printing' || q.status === 'queued').length;
-        }
-        else if (row.collection === 'spools') {
+        } else if (row.collection === 'spools') {
           const spools = safeParse<any[]>(row.payload, []);
           metrics.spoolCount = spools.length;
-        }
-        else if (row.collection === 'conventions') {
+        } else if (row.collection === 'conventions') {
           const conventions = safeParse<any[]>(row.payload, []);
           const today = new Date().toISOString().split('T')[0];
           metrics.upcomingConventions = conventions.filter(c => c.date >= today).length;
@@ -67,54 +65,133 @@ export function useDashboardMetrics() {
   });
 }
 
-// Hook to add a new item to the catalog collection
-export function useAddToCatalog() {
+async function fetchLibrary(userId: string): Promise<any[]> {
+  const { data, error } = await supabase
+    .from('ha3d_user_data')
+    .select('payload')
+    .eq('user_id', userId)
+    .eq('collection', 'library3mf')
+    .maybeSingle();
+
+  if (error && error.code !== 'PGRST116') throw error;
+  return safeParse(data?.payload ?? '[]', []);
+}
+
+async function saveLibrary(userId: string, items: any[]): Promise<void> {
+  const { error } = await supabase
+    .from('ha3d_user_data')
+    .upsert({
+      user_id: userId,
+      collection: 'library3mf',
+      payload: JSON.stringify(items),
+      updated_at: new Date().toISOString()
+    }, { onConflict: 'user_id,collection' });
+
+  if (error) throw error;
+}
+
+export function useLibrary() {
+  const { user } = useAuth();
+
+  return useQuery({
+    queryKey: ['library3mf', user?.id],
+    enabled: !!user?.id,
+    queryFn: () => fetchLibrary(user!.id),
+  });
+}
+
+export function useAddToLibrary() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (newItem: { name: string, file3mf: string, sku?: string, description?: string }) => {
+    mutationFn: async (file: Parsed3MF) => {
       if (!user) throw new Error("Not authenticated");
 
-      // 1. Fetch current catalog
-      const { data: existingData, error: fetchError } = await supabase
-        .from('ha3d_user_data')
-        .select('payload')
-        .eq('user_id', user.id)
-        .eq('collection', 'catalog')
-        .maybeSingle();
+      const existing = await fetchLibrary(user.id);
+      const alreadyIn = existing.some((e: any) => e.filename === file.filename);
+      if (alreadyIn) return;
 
-      if (fetchError && fetchError.code !== 'PGRST116') throw fetchError;
-
-      let catalogArray: any[] = [];
-      if (existingData?.payload) {
-        catalogArray = safeParse(existingData.payload, []);
-      }
-
-      // 2. Append new item
-      const itemToInsert = {
+      const newItem = {
         id: crypto.randomUUID(),
-        ...newItem,
-        dateAdded: new Date().toISOString()
+        filename: file.filename,
+        modelName: file.modelName,
+        objectsCount: file.objectsCount,
+        printTimeEstimate: file.printTimeEstimate ?? null,
+        addedAt: new Date().toISOString(),
       };
-      
-      catalogArray.push(itemToInsert);
 
-      // 3. Upsert back to database
-      const { error: upsertError } = await supabase
-        .from('ha3d_user_data')
-        .upsert({
-          user_id: user.id,
-          collection: 'catalog',
-          payload: JSON.stringify(catalogArray),
-          updated_at: new Date().toISOString()
-        }, { onConflict: 'user_id,collection' });
-
-      if (upsertError) throw upsertError;
-      
-      return itemToInsert;
+      await saveLibrary(user.id, [...existing, newItem]);
+      return newItem;
     },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['library3mf'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-metrics'] });
+    }
+  });
+}
+
+export function useAddAllToLibrary() {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (files: Parsed3MF[]) => {
+      if (!user) throw new Error("Not authenticated");
+
+      const existing = await fetchLibrary(user.id);
+      const existingNames = new Set(existing.map((e: any) => e.filename));
+
+      const newItems = files
+        .filter(f => f.status === 'ready' && !existingNames.has(f.filename))
+        .map(f => ({
+          id: crypto.randomUUID(),
+          filename: f.filename,
+          modelName: f.modelName,
+          objectsCount: f.objectsCount,
+          printTimeEstimate: f.printTimeEstimate ?? null,
+          addedAt: new Date().toISOString(),
+        }));
+
+      if (newItems.length === 0) return { added: 0 };
+
+      await saveLibrary(user.id, [...existing, ...newItems]);
+      return { added: newItems.length };
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['library3mf'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-metrics'] });
+    }
+  });
+}
+
+export function usePullLibrary() {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async () => {
+      if (!user) throw new Error("Not authenticated");
+      return fetchLibrary(user.id);
+    },
+    onSuccess: (data) => {
+      queryClient.setQueryData(['library3mf', user?.id], data);
+      queryClient.invalidateQueries({ queryKey: ['dashboard-metrics'] });
+    }
+  });
+}
+
+export function usePushLibrary() {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (items: any[]) => {
+      if (!user) throw new Error("Not authenticated");
+      await saveLibrary(user.id, items);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['library3mf'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard-metrics'] });
     }
   });

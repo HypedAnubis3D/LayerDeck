@@ -1,7 +1,7 @@
 import { Parsed3MF } from '@/lib/3mf-parser';
-import { useAddToCatalog } from '@/hooks/use-collections';
+import { useAddToLibrary, useAddAllToLibrary } from '@/hooks/use-collections';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Box, FileBox, CheckCircle, Clock, Loader2, AlertCircle, Plus } from 'lucide-react';
+import { Box, FileBox, CheckCircle, Clock, Loader2, AlertCircle, Plus, Library } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 
@@ -11,44 +11,64 @@ interface PreviewListProps {
 }
 
 export function PreviewList({ files, onFileUpdated }: PreviewListProps) {
-  const { mutate: addToCatalog, isPending } = useAddToCatalog();
+  const { mutate: addToLibrary, isPending: isAddingOne } = useAddToLibrary();
+  const { mutate: addAll, isPending: isAddingAll } = useAddAllToLibrary();
   const { toast } = useToast();
 
+  const readyFiles = files.filter(f => f.status === 'ready');
+
   const handleAdd = (file: Parsed3MF) => {
-    addToCatalog(
-      {
-        name: file.modelName || file.filename,
-        file3mf: file.filename,
-        description: `Imported via Desktop Companion. Contains ${file.objectsCount} objects.`
+    addToLibrary(file, {
+      onSuccess: () => {
+        onFileUpdated(file.id, { status: 'added' });
+        toast({ title: "Added to 3MF Library", description: file.modelName });
       },
-      {
-        onSuccess: () => {
-          onFileUpdated(file.id, { status: 'added' });
-          toast({
-            title: "Added to Catalog",
-            description: `${file.filename} is now synced.`,
-          });
-        },
-        onError: (err) => {
-          toast({
-            title: "Failed to add",
-            description: err.message,
-            variant: "destructive",
-          });
-        }
+      onError: (err) => {
+        toast({ title: "Failed to add", description: err.message, variant: "destructive" });
       }
-    );
+    });
+  };
+
+  const handleSyncAll = () => {
+    addAll(files, {
+      onSuccess: (result) => {
+        if (!result) return;
+        files.filter(f => f.status === 'ready').forEach(f => onFileUpdated(f.id, { status: 'added' }));
+        toast({
+          title: `Synced ${result.added} file${result.added !== 1 ? 's' : ''} to 3MF Library`,
+          description: result.added === 0 ? "All files were already in the library." : undefined,
+        });
+      },
+      onError: (err) => {
+        toast({ title: "Sync failed", description: err.message, variant: "destructive" });
+      }
+    });
   };
 
   if (files.length === 0) return null;
 
   return (
     <div className="mt-8 space-y-4">
-      <h3 className="font-display text-lg font-semibold tracking-wide text-foreground/80 flex items-center gap-2">
-        <FileBox className="h-5 w-5 text-primary" />
-        Processing Queue
-      </h3>
-      
+      <div className="flex items-center justify-between">
+        <h3 className="font-display text-lg font-semibold tracking-wide text-foreground/80 flex items-center gap-2">
+          <FileBox className="h-5 w-5 text-primary" />
+          Parsed Files ({files.length})
+        </h3>
+        {readyFiles.length > 0 && (
+          <Button
+            onClick={handleSyncAll}
+            disabled={isAddingAll}
+            className="bg-primary text-primary-foreground hover:bg-primary/90 gap-2"
+          >
+            {isAddingAll
+              ? <Loader2 className="h-4 w-4 animate-spin" />
+              : <Library className="h-4 w-4" />
+            }
+            Sync All to Library ({readyFiles.length})
+          </Button>
+        )}
+      </div>
+
       <div className="grid gap-4 sm:grid-cols-1 md:grid-cols-2">
         <AnimatePresence>
           {files.map((file, idx) => (
@@ -65,14 +85,13 @@ export function PreviewList({ files, onFileUpdated }: PreviewListProps) {
                 ${file.status === 'error' ? 'border-destructive/30 bg-destructive/5' : ''}
               `}
             >
-              {/* Status indicator line */}
               <div className={`absolute left-0 top-0 h-full w-1 
                 ${file.status === 'ready' ? 'bg-accent' : ''}
                 ${file.status === 'added' ? 'bg-primary' : ''}
                 ${file.status === 'error' ? 'bg-destructive' : ''}
                 ${file.status === 'parsing' ? 'bg-muted' : ''}
               `} />
-              
+
               <div className="flex items-start justify-between gap-4 pl-2">
                 <div className="flex-1 space-y-1 min-w-0">
                   <div className="flex items-center gap-2">
@@ -81,14 +100,14 @@ export function PreviewList({ files, onFileUpdated }: PreviewListProps) {
                     </h4>
                     {file.status === 'added' && (
                       <span className="flex items-center rounded-full bg-primary/20 px-2 py-0.5 text-[10px] font-bold tracking-wider text-primary uppercase">
-                        Synced
+                        In Library
                       </span>
                     )}
                   </div>
                   <p className="text-xs text-muted-foreground truncate font-mono" title={file.filename}>
                     {file.filename}
                   </p>
-                  
+
                   <div className="mt-3 flex items-center gap-4 text-xs font-medium text-muted-foreground/80">
                     <div className="flex items-center gap-1.5">
                       <Box className="h-3.5 w-3.5" />
@@ -116,14 +135,14 @@ export function PreviewList({ files, onFileUpdated }: PreviewListProps) {
                     </div>
                   )}
                   {file.status === 'ready' && (
-                    <Button 
-                      size="sm" 
+                    <Button
+                      size="sm"
                       onClick={() => handleAdd(file)}
-                      disabled={isPending}
+                      disabled={isAddingOne}
                       className="bg-accent text-accent-foreground hover:bg-accent/90 shadow-lg shadow-accent/20 transition-all hover:scale-105 active:scale-95"
                     >
-                      {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="mr-1 h-4 w-4" />}
-                      Add Catalog
+                      {isAddingOne ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="mr-1 h-4 w-4" />}
+                      Add to Library
                     </Button>
                   )}
                 </div>
