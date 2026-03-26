@@ -4321,7 +4321,7 @@ function renderShopify(){
       +'<div style="background:var(--surf);border:1px solid var(--bdr);border-radius:5px;padding:12px;text-align:center">'
         +'<div style="font-size:22px;font-weight:bold;color:var(--teal);font-family:Orbitron,monospace">'+shopifyOrders.length+'</div>'
         +'<div style="font-size:7px;color:var(--txt-d);letter-spacing:1px;margin-bottom:8px">ORDERS SYNCED</div>'
-        +'<button class="btn btn-teal btn-sm" style="width:100%" onclick="pollShopifyOrders(false).then(()=>render())">↻ Sync Orders</button>'
+        +'<button class="btn btn-teal btn-sm" style="width:100%" onclick="pollShopifyOrders(false)">↻ Sync Orders</button>'
         +'<div id="shopify-orders-status" style="font-size:7px;color:var(--txt-d);min-height:14px;margin-top:4px"></div>'
       +'</div>'
       +'<div style="background:var(--surf);border:1px solid var(--bdr);border-radius:5px;padding:12px;text-align:center">'
@@ -4420,8 +4420,7 @@ function previewShopifyDemo(){
 }
 async function pollShopifyOrders(silent=true){
   if(!shopifyCfg.connected||shopifyCfg.domain.includes('DEMO'))return;
-  const statusEl=document.getElementById('shopify-orders-status');
-  function setOrderStatus(msg){if(statusEl)statusEl.innerHTML=msg;}
+  function setOrderStatus(msg){const el=document.getElementById('shopify-orders-status');if(el)el.innerHTML=msg;}
   if(!silent)setOrderStatus('Fetching orders from Shopify…');
   try{
     const resp=await fetch('/api/shopify/orders/sync');
