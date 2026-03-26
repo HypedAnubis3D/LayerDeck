@@ -181,6 +181,15 @@ Single-file HTML PWA for managing a Bambu Lab 3D printing collectibles business 
 - OAuth override script re-injected before `</body>` for Shopify/Etsy
 - Never use `syncCfg.url` or `syncCfg.anonKey` — those fields are removed; use `__SUPABASE_URL__` / `__SUPABASE_ANON_KEY__` globals directly for edge function calls
 
+### `artifacts/desktop-companion` — LayerStack Desktop Companion
+
+React + Vite companion app at `/companion/`. Focused tool for 3MF file management and quick-glance business dashboard.
+
+- **Auth**: Supabase email/password (same account as Studio Manager). SUPABASE_URL + SUPABASE_ANON_KEY injected via Vite `define` in vite.config.ts.
+- **3MF Upload**: Drag-and-drop zone using react-dropzone + JSZip to unzip and parse .3mf files locally. Extracts model name and settings from XML inside the ZIP. Adds parsed items to Supabase `ha3d_user_data` catalog collection.
+- **Dashboard**: Reads all `ha3d_user_data` collections (catalog, orders, printQueue, spools, conventions) and shows key stat cards.
+- Stack: React, Vite, Tailwind, @supabase/supabase-js, jszip, react-dropzone, framer-motion, lucide-react
+
 ### `scripts` (`@workspace/scripts`)
 
 Utility scripts package. Each script is a `.ts` file in `src/` with a corresponding npm script in `package.json`. Run scripts via `pnpm --filter @workspace/scripts run <script>`. Scripts can import any workspace package (e.g., `@workspace/db`) by adding it as a dependency in `scripts/package.json`.

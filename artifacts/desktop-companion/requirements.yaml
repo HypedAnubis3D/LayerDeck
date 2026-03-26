@@ -1,0 +1,11 @@
+packages:
+  "@supabase/supabase-js": "For authentication and data synchronization with the main app"
+  "jszip": "For parsing and reading inside .3mf files locally"
+  "react-dropzone": "For the drag and drop 3MF file upload zone"
+  "framer-motion": "For premium micro-interactions and entry animations"
+  "lucide-react": "For UI icons"
+
+notes:
+  - Expects VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to be set in the environment
+  - Assumes ha3d_user_data table exists with user_id, collection, and payload columns
+  - Assumes dark mode by default based on design requirements

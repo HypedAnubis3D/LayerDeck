@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/companion/"
+title = "LayerStack Desktop Companion"
+version = "1.0.0"
+id = "artifacts/desktop-companion"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/companion/" ]
+localPort = 22035
+
+[services.development]
+run = "pnpm --filter @workspace/desktop-companion run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/desktop-companion", "run", "build" ]
+publicDir = "artifacts/desktop-companion/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "22035"
+BASE_PATH = "/companion/"
