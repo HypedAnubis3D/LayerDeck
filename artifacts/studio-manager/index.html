@@ -4321,7 +4321,8 @@ function renderShopify(){
       +'<div style="background:var(--surf);border:1px solid var(--bdr);border-radius:5px;padding:12px;text-align:center">'
         +'<div style="font-size:22px;font-weight:bold;color:var(--teal);font-family:Orbitron,monospace">'+shopifyOrders.length+'</div>'
         +'<div style="font-size:7px;color:var(--txt-d);letter-spacing:1px;margin-bottom:8px">ORDERS SYNCED</div>'
-        +'<button class="btn btn-teal btn-sm" style="width:100%" onclick="pollShopifyOrders().then(()=>render())">↻ Sync Orders</button>'
+        +'<button class="btn btn-teal btn-sm" style="width:100%" onclick="pollShopifyOrders(false).then(()=>render())">↻ Sync Orders</button>'
+        +'<div id="shopify-orders-status" style="font-size:7px;color:var(--txt-d);min-height:14px;margin-top:4px"></div>'
       +'</div>'
       +'<div style="background:var(--surf);border:1px solid var(--bdr);border-radius:5px;padding:12px;text-align:center">'
         +'<div style="font-size:22px;font-weight:bold;color:var(--shopify);font-family:Orbitron,monospace">'+shopifyCatalog.length+'</div>'
@@ -4417,35 +4418,40 @@ function previewShopifyDemo(){
   // Show a demo notification
   setTimeout(()=>showNotification('Demo Order #1042','Sarah K. ordered: Anubis Figurine × 1, Rubber Duck Wizard × 2 · $54.97','demo-order'),1200);
 }
-async function pollShopifyOrders(){
+async function pollShopifyOrders(silent=true){
   if(!shopifyCfg.connected||shopifyCfg.domain.includes('DEMO'))return;
+  const statusEl=document.getElementById('shopify-orders-status');
+  function setOrderStatus(msg){if(statusEl)statusEl.innerHTML=msg;}
+  if(!silent)setOrderStatus('Fetching orders from Shopify…');
   try{
     const resp=await fetch('/api/shopify/orders/sync');
     if(!resp.ok){
       if(resp.status===403||resp.status===401){
         addSyncLog('Shopify orders: permission denied ('+resp.status+') — disconnect & reconnect Shopify to refresh your access token','err');
         toast('Shopify Orders','Permission denied. Disconnect & reconnect Shopify in the Integrations tab to get a fresh token.','error');
+        if(!silent)setOrderStatus('<span style="color:var(--red)">✗ Permission denied</span>');
       }else{
         addSyncLog('Shopify orders sync failed: HTTP '+resp.status,'err');
+        if(!silent)setOrderStatus('<span style="color:var(--red)">✗ HTTP '+resp.status+'</span>');
       }
       return;
     }
     const data=await resp.json();
     const rawOrders=data.orders||[];
-    let changed=false;
+    let newCount=0,updatedCount=0,changed=false;
     rawOrders.forEach(function(o){
       const oOrderId=o.name||('#'+o.id);
       const existing=orders.find(function(ex){return ex.shopifyId===String(o.id)||ex.orderId===oOrderId;});
       if(!existing){
         if(shopifyStatusMap(o)==='cancelled')return; // don't import already-cancelled orders
         ingestShopifyOrder(o);
-        changed=true;
+        newCount++;changed=true;
       }else{
         // Update status for existing orders
         const newStatus=shopifyStatusMap(o);
         if(existing.status!==newStatus){
           existing.status=newStatus;
-          changed=true;
+          updatedCount++;changed=true;
         }
       }
     });
@@ -4453,9 +4459,17 @@ async function pollShopifyOrders(){
     shopifyCfg.lastPoll=Date.now();
     saveShopify();
     if(changed){saveOrders();render();}
+    if(!silent){
+      const summary=newCount===0&&updatedCount===0
+        ?'up to date'
+        :newCount+' new · '+updatedCount+' updated';
+      setOrderStatus('<span style="color:var(--grn)">✓ '+newCount+' new, '+updatedCount+' updated</span>');
+      toast('Orders Synced',summary,'success');
+    }
   }catch(e){
     addSyncLog('Shopify orders poll failed: '+e.message,'err');
     console.warn('[Shopify] poll failed:',e.message);
+    if(!silent)setOrderStatus('<span style="color:var(--red)">✗ '+esc(e.message)+'</span>');
   }
 }
 function shopifyStatusMap(o){
@@ -5850,7 +5864,7 @@ function renderIntegrationPanel(type){
         </div>
         <div style="display:flex;gap:5px">
           <button class="btn btn-ghost btn-sm" style="flex:1" onclick="syncShopifyToCatalog()">↻ Sync Products</button>
-          <button class="btn btn-ghost btn-sm" style="flex:1" onclick="pollShopifyOrders()">↻ Sync Orders</button>
+          <button class="btn btn-ghost btn-sm" style="flex:1" onclick="pollShopifyOrders(false)">↻ Sync Orders</button>
         </div>
         <div style="font-size:6px;color:var(--txt-d);margin-top:6px">Last synced: ${cfg.lastPoll?new Date(cfg.lastPoll).toLocaleTimeString():'-'} · Auto-polls every 5 min</div>
       </div>
