@@ -4327,7 +4327,8 @@ function renderShopify(){
       +'<div style="background:var(--surf);border:1px solid var(--bdr);border-radius:5px;padding:12px;text-align:center">'
         +'<div style="font-size:22px;font-weight:bold;color:var(--shopify);font-family:Orbitron,monospace">'+shopifyCatalog.length+'</div>'
         +'<div style="font-size:7px;color:var(--txt-d);letter-spacing:1px;margin-bottom:8px">PRODUCTS IN CATALOG</div>'
-        +'<button class="btn btn-shopify btn-sm" style="width:100%" onclick="syncShopifyToCatalog()">↻ Sync Products</button>'
+        +'<button class="btn btn-shopify btn-sm" style="width:100%" onclick="syncShopifyToCatalog(false)">↻ Sync Products</button>'
+        +'<div id="shopify-catalog-status" style="font-size:7px;color:var(--txt-d);min-height:14px;margin-top:4px"></div>'
       +'</div>'
     +'</div>'
     +'<div style="display:flex;gap:8px;margin-bottom:14px">'
@@ -4483,17 +4484,16 @@ function startPolling(){
   pollInterval=setInterval(pollShopifyOrders,5*60*1000);
 }
 
-async function syncShopifyToCatalog(){
+async function syncShopifyToCatalog(silent=true){
   if(!shopifyCfg.connected||shopifyCfg.domain.includes('DEMO'))return;
-  const statusEl=document.getElementById('shopify-sync-status');
-  function setStatus(msg){if(statusEl)statusEl.innerHTML=msg;}
-  setStatus('Fetching products from Shopify…');
+  function setCatalogStatus(msg){const el=document.getElementById('shopify-catalog-status')||document.getElementById('shopify-sync-status');if(el)el.innerHTML=msg;}
+  if(!silent)setCatalogStatus('Fetching products from Shopify…');
   try{
     const resp=await fetch('/api/shopify/products');
     if(!resp.ok)throw new Error('HTTP '+resp.status);
     const data=await resp.json();
     const products=data.products||[];
-    if(!products.length){setStatus('<span style="color:var(--amb)">No products found in your Shopify store.</span>');return;}
+    if(!products.length){if(!silent)setCatalogStatus('<span style="color:var(--amb)">No products found in your Shopify store.</span>');return;}
     let added=0,updated=0;
     products.forEach(function(p){
       const shopifyId=String(p.id);
@@ -4542,10 +4542,13 @@ async function syncShopifyToCatalog(){
     });
     saveCatalog();
     render();
-    setStatus('<span style="color:var(--grn)">✓ '+added+' added, '+updated+' updated in Product Catalog</span>');
-    if(added>0||updated>0)toast('Products Synced',added+' new · '+updated+' updated in Product Catalog','success');
+    if(!silent){
+      const summary=added===0&&updated===0?'up to date':added+' new · '+updated+' updated in Product Catalog';
+      setCatalogStatus('<span style="color:var(--grn)">✓ '+added+' added, '+updated+' updated in Product Catalog</span>');
+      toast('Products Synced',summary,'success');
+    }
   }catch(e){
-    setStatus('<span style="color:var(--red)">✗ '+esc(e.message)+'</span>');
+    if(!silent)setCatalogStatus('<span style="color:var(--red)">✗ '+esc(e.message)+'</span>');
     console.warn('[Shopify] product sync failed:',e);
   }
 }
@@ -5862,7 +5865,7 @@ function renderIntegrationPanel(type){
           </div>
         </div>
         <div style="display:flex;gap:5px">
-          <button class="btn btn-ghost btn-sm" style="flex:1" onclick="syncShopifyToCatalog()">↻ Sync Products</button>
+          <button class="btn btn-ghost btn-sm" style="flex:1" onclick="syncShopifyToCatalog(false)">↻ Sync Products</button>
           <button class="btn btn-ghost btn-sm" style="flex:1" onclick="pollShopifyOrders(false)">↻ Sync Orders</button>
         </div>
         <div style="font-size:6px;color:var(--txt-d);margin-top:6px">Last synced: ${cfg.lastPoll?new Date(cfg.lastPoll).toLocaleTimeString():'-'} · Auto-polls every 5 min</div>
