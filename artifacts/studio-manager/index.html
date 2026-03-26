@@ -5557,6 +5557,7 @@ async function checkShopifyConfig(){
         pollShopifyOrders();
         syncShopifyToCatalog();
         if(curTab==='shopify')renderShopify();
+        if(typeof renderObChecklist==='function')renderObChecklist();
       }
     }
   }catch(e){/* network error or server offline — ignore silently */}
@@ -5580,6 +5581,7 @@ function checkShopifyOAuthCallback(){
       toast('Shopify Connected!','Store '+shop+' connected. Syncing now.','success');
       startPolling();pollShopifyOrders();
       if(curTab==='shopify')renderShopify();
+      if(typeof renderObChecklist==='function')renderObChecklist();
     },500);
   }else if(params.get('shopify_error')==='true'){
     var msg=params.get('error_message')||'Connection failed. Please try again.';
@@ -5604,6 +5606,7 @@ window.addEventListener('message',function(e){
     startPolling();
     pollShopifyOrders();
     syncShopifyToCatalog();
+    if(typeof renderObChecklist==='function')renderObChecklist();
   }else if(e.data.type==='shopify_oauth_error'){
     toast('Shopify Error',e.data.message||'Connection failed.','error');
     var btn=document.querySelector('.btn-shopify');
@@ -7723,8 +7726,15 @@ function initSupabase(){
     const url=typeof __SUPABASE_URL__!=='undefined'?__SUPABASE_URL__:'';
     const key=typeof __SUPABASE_ANON_KEY__!=='undefined'?__SUPABASE_ANON_KEY__:'';
     if(!url||!key){console.warn('Supabase credentials missing from env');showAuthScreen();return;}
-    supabaseClient=supabase.createClient(url,key);
-    // Auth state listener — fires on login, logout, token refresh
+    supabaseClient=supabase.createClient(url,key,{
+      auth:{
+        persistSession:true,
+        autoRefreshToken:true,
+        detectSessionInUrl:true,
+        storageKey:'ha3d_auth_token'
+      }
+    });
+    // Auth state listener — fires on login, logout, token refresh, and initial page load session restore
     supabaseClient.auth.onAuthStateChange(async(event,session)=>{
       if(signingOut)return;
       if(session&&session.user){
@@ -7733,15 +7743,17 @@ function initSupabase(){
         hideAuthScreen();
         updateSyncIndicator('connected');
         updateCloudPanel();
-        addSyncLog('Signed in as '+currentUser.email,'ok');
         if(event==='SIGNED_IN'||event==='INITIAL_SESSION'){
-          await new Promise(r=>setTimeout(r,1200));
+          addSyncLog('Signed in as '+currentUser.email,'ok');
+          await new Promise(r=>setTimeout(r,800));
           await pullFromCloud(true);
           render();
           checkShopifyConfig();
+        }else if(event==='TOKEN_REFRESHED'){
+          addSyncLog('Session refreshed','ok');
         }
         startAutoSync();
-      }else{
+      }else if(event==='SIGNED_OUT'){
         currentUser=null;
         syncCfg.enabled=false;
         stopAutoSync();
@@ -7749,11 +7761,10 @@ function initSupabase(){
         updateCloudPanel();
         showAuthScreen();
       }
+      // Ignore non-sign-out null-session events (e.g. transient states during refresh)
     });
-    // Check for existing session on page load
-    supabaseClient.auth.getSession().then(({data:{session}})=>{
-      if(!session){showAuthScreen();}
-    });
+    // Fallback: if onAuthStateChange never fires INITIAL_SESSION (e.g. no stored session), show login
+    setTimeout(()=>{if(!currentUser)showAuthScreen();},3000);
   }catch(e){
     console.warn('Supabase init error:',e.message);
     showAuthScreen();
@@ -11057,7 +11068,7 @@ function recordSaleAsOrder(saleId){
       {label:'Create your first print record',done:prints.length>0,tab:'prints'},
       {label:'Add a convention or event',done:conventions.length>0,tab:'convention'},
       {label:'Log a sale',done:sales.length>0,tab:'revenue'},
-      {label:'Link your Shopify store',done:!!(typeof shopifyCfg!=='undefined'&&shopifyCfg.shop&&shopifyCfg.accessToken),tab:'shopify'},
+      {label:'Link your Shopify store',done:!!(typeof shopifyCfg!=='undefined'&&shopifyCfg.connected&&shopifyCfg.domain&&!shopifyCfg.domain.includes('DEMO')),tab:'shopify'},
     ];
     var doneCount=steps.filter(function(s){return s.done;}).length;
     var allDone=doneCount===steps.length;
