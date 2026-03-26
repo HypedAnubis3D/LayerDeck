@@ -5776,11 +5776,14 @@ async function connectShopify(){
   }
 }
 function disconnectShopify(){
-  showConfirm('Disconnect Shopify?','Your local data will remain intact.',()=>{
+  showConfirm('Disconnect Shopify?','Your local data will remain intact.',async()=>{
+    try{
+      await fetch('/api/shopify/disconnect',{method:'DELETE'});
+    }catch(e){console.warn('Shopify disconnect API call failed:',e.message);}
     shopifyCfg={domain:'',connected:false,lastOrderId:null,lastPoll:null};
     saveShopify();if(pollInterval){clearInterval(pollInterval);pollInterval=null;}
     render();
-    toast('Shopify Disconnected','','warning');
+    toast('Shopify Disconnected','Reconnect to generate a fresh access token','warning');
   },'Disconnect','btn-red');
 }
 function previewShopifyDemo(){
