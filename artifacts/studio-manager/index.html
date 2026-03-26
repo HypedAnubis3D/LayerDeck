@@ -1062,6 +1062,27 @@ body.light-mode ::-webkit-scrollbar-thumb{background:var(--bdr2);}
 .catalog-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;align-items:start;}
 .catalogItems-card{background:var(--surf);border:1px solid var(--bdr);border-radius:6px;overflow:hidden;display:flex;flex-direction:column;position:relative;}
 .cat-filter-active{background:var(--gold-d)!important;border-color:var(--gold)!important;color:var(--gold-b)!important;}
+
+/* ── SEGMENTED FILTER CONTROL ── */
+.seg-ctrl{display:inline-flex;background:var(--surf2);border:1px solid var(--bdr2);border-radius:12px;padding:3px;gap:2px;flex-wrap:wrap;}
+.seg-btn{background:none;border:none;padding:6px 14px;border-radius:9px;font-size:11px;font-weight:500;cursor:pointer;transition:all .2s;color:var(--txt-d);white-space:nowrap;font-family:'Inter',sans-serif;line-height:1;}
+.seg-btn:hover{color:var(--txt);background:rgba(255,255,255,.06);}
+.seg-btn.seg-active{box-shadow:0 1px 6px rgba(0,0,0,.45);}
+.seg-btn.seg-all.seg-active{color:var(--gold-b);background:rgba(240,180,41,.15);}
+.seg-btn.seg-shopify.seg-active{color:#95BF47;background:rgba(149,191,71,.15);}
+.seg-btn.seg-etsy.seg-active{color:#f09a3e;background:rgba(224,120,40,.15);}
+.seg-btn.seg-convention.seg-active{color:#c084fc;background:rgba(168,85,247,.15);}
+.seg-btn.seg-manual.seg-active{color:var(--cyn);background:rgba(56,189,248,.1);}
+
+/* ── OVERFLOW ⋯ MENU ── */
+.overflow-wrap{position:relative;display:inline-block;}
+.overflow-menu{position:absolute;top:calc(100% + 6px);right:0;background:var(--surf2);border:1px solid var(--bdr2);border-radius:12px;padding:5px;min-width:170px;z-index:90;box-shadow:0 12px 36px rgba(0,0,0,.6);display:none;flex-direction:column;gap:2px;}
+.overflow-menu.open{display:flex;}
+.ov-item{background:none;border:none;color:var(--txt);font-family:'Inter',sans-serif;font-size:11px;font-weight:500;padding:9px 13px;border-radius:8px;cursor:pointer;text-align:left;transition:background .15s;white-space:nowrap;width:100%;}
+.ov-item:hover{background:rgba(255,255,255,.07);}
+.ov-item.ov-danger{color:var(--red-b);}
+.ov-item.ov-danger:hover{background:rgba(239,68,68,.1);}
+.ov-divider{height:1px;background:var(--bdr);margin:3px 4px;}
 /* ── EVENT MANAGER ── */
 .evt-manage-overlay{position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:1200;display:flex;flex-direction:column;overflow:hidden;}
 .evt-manage-header{background:var(--surf);border-bottom:1px solid var(--bdr);padding:10px 14px;display:flex;align-items:center;gap:10px;flex-shrink:0;}
@@ -1729,11 +1750,7 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
   <div class="ctrl">
     <button class="btn btn-teal" onclick="openAddOrder()">+ New Order</button>
     <button class="btn btn-gold btn-sm" onclick="toggleQuickOrderBar()">⚡ Quick Add</button>
-    <button class="btn btn-ghost btn-sm" onclick="exportOrdersCSV()">⬇ Export CSV</button>
-    <button class="btn btn-ghost btn-sm" onclick="document.getElementById('etsy-csv-input').click()" style="border-color:rgba(224,120,40,.4);color:#e07828">🟠 Import Etsy CSV</button>
-    <input type="file" id="etsy-csv-input" accept=".csv" style="display:none" onchange="importEtsyCSV(this)"/>
-    <button class="btn btn-ghost btn-sm" onclick="enterSelectMode('orders')">☑ Select</button>
-    <input class="srch" id="or-s" placeholder="Search customer, order ID…" oninput="render()"/>
+    <input class="srch" id="or-s" placeholder="Search customer, order ID…" oninput="render()" style="flex:1;min-width:140px"/>
     <select class="flt" id="or-st" onchange="render()">
       <option value="">All Status</option>
       <option value="pending">Pending</option>
@@ -1742,6 +1759,16 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
       <option value="cancelled">Cancelled</option>
     </select>
     <span class="cnt" id="or-cnt"></span>
+    <input type="file" id="etsy-csv-input" accept=".csv" style="display:none" onchange="importEtsyCSV(this)"/>
+    <div class="overflow-wrap" id="orders-ov-wrap">
+      <button class="btn btn-ghost btn-sm" onclick="toggleOverflow('orders-ov')" title="More actions">⋯ More</button>
+      <div class="overflow-menu" id="orders-ov">
+        <button class="ov-item" onclick="exportOrdersCSV();closeOverflow('orders-ov')">⬇ Export CSV</button>
+        <button class="ov-item" onclick="document.getElementById('etsy-csv-input').click();closeOverflow('orders-ov')">🟠 Import Etsy CSV</button>
+        <div class="ov-divider"></div>
+        <button class="ov-item" onclick="enterSelectMode('orders');closeOverflow('orders-ov')">☑ Select</button>
+      </div>
+    </div>
   </div>
   <!-- QUICK ADD BAR -->
   <div id="quick-order-bar" style="display:none;background:var(--surf);border:1px solid var(--bdr2);border-radius:6px;padding:10px;margin-bottom:10px;gap:8px;flex-wrap:wrap;align-items:flex-end">
@@ -1762,11 +1789,13 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
     <button onclick="document.getElementById('quick-order-bar').style.display='none'" style="background:none;border:none;color:var(--txt-d);font-size:14px;cursor:pointer;align-self:flex-start;padding:2px">✕</button>
   </div>
   <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;align-items:center">
-    <button id="orf-all"        class="btn btn-sm cat-filter-active" onclick="setOrderFilter('all')">All</button>
-    <button id="orf-shopify"    class="btn btn-sm" onclick="setOrderFilter('shopify')"    style="border-color:rgba(149,191,71,.4);color:#95BF47">🛍 Shopify</button>
-    <button id="orf-etsy"       class="btn btn-sm" onclick="setOrderFilter('etsy')"       style="border-color:rgba(224,120,40,.4);color:#e07828">🟠 Etsy</button>
-    <button id="orf-convention" class="btn btn-sm" onclick="setOrderFilter('convention')" style="border-color:rgba(168,85,247,.4);color:#c084fc">🎪 Convention</button>
-    <button id="orf-manual"     class="btn btn-sm" onclick="setOrderFilter('manual')"     style="border-color:var(--bdr2);color:var(--txt-d)">✏ Manual</button>
+    <div class="seg-ctrl">
+      <button id="orf-all"        class="seg-btn seg-all seg-active"   onclick="setOrderFilter('all')">All</button>
+      <button id="orf-shopify"    class="seg-btn seg-shopify"           onclick="setOrderFilter('shopify')">🛍 Shopify</button>
+      <button id="orf-etsy"       class="seg-btn seg-etsy"              onclick="setOrderFilter('etsy')">🟠 Etsy</button>
+      <button id="orf-convention" class="seg-btn seg-convention"        onclick="setOrderFilter('convention')">🎪 Convention</button>
+      <button id="orf-manual"     class="seg-btn seg-manual"            onclick="setOrderFilter('manual')">✏ Manual</button>
+    </div>
   </div>
   <div class="orders-grid" id="orders-grid"></div>
 </div>
@@ -2057,19 +2086,27 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
 <div id="tab-catalog" style="display:none">
   <div class="ctrl" style="flex-wrap:wrap;gap:6px">
     <button class="btn btn-gold" onclick="openAddCatalogItem()">+ Add Product</button>
-    <button class="btn btn-sm" style="background:rgba(34,170,204,.1);border:1px solid var(--cyn);color:var(--cyn)" onclick="document.getElementById('csv-import-input').click()" title="Import from Shopify CSV export">📂 Import CSV</button>
-    <input type="file" id="csv-import-input" accept=".csv" style="display:none" onchange="importShopifyCSV(this)"/>
-    <button class="btn btn-ghost btn-sm" onclick="exportCatalogCSV()">⬇ Export CSV</button>
-    <button class="btn btn-ghost btn-sm" onclick="enterSelectMode('catalog')">☑ Select</button>
-    <button class="btn btn-sm" style="background:var(--red-d);border:1px solid var(--red-d);color:var(--red-b)" onclick="deleteAllCatalog()">🗑 Delete All</button>
-    <input class="srch" id="cat-s" placeholder="Search products…" oninput="render()"/>
+    <input class="srch" id="cat-s" placeholder="Search products…" oninput="render()" style="flex:1;min-width:140px"/>
     <span class="cnt" id="catalog-cnt"></span>
-    <span id="catalog-last-sync" style="font-size:6px;color:var(--txt-d)"></span>
+    <span id="catalog-last-sync" style="font-size:9px;color:var(--txt-d)"></span>
+    <input type="file" id="csv-import-input" accept=".csv" style="display:none" onchange="importShopifyCSV(this)"/>
+    <div class="overflow-wrap" id="catalog-ov-wrap">
+      <button class="btn btn-ghost btn-sm" onclick="toggleOverflow('catalog-ov')" title="More actions">⋯ More</button>
+      <div class="overflow-menu" id="catalog-ov">
+        <button class="ov-item" onclick="document.getElementById('csv-import-input').click();closeOverflow('catalog-ov')">📂 Import CSV</button>
+        <button class="ov-item" onclick="exportCatalogCSV();closeOverflow('catalog-ov')">⬇ Export CSV</button>
+        <div class="ov-divider"></div>
+        <button class="ov-item" onclick="enterSelectMode('catalog');closeOverflow('catalog-ov')">☑ Select</button>
+        <button class="ov-item ov-danger" onclick="deleteAllCatalog();closeOverflow('catalog-ov')">🗑 Delete All</button>
+      </div>
+    </div>
   </div>
-  <div style="display:flex;gap:5px;margin-bottom:8px;flex-wrap:wrap">
-    <button id="catf-all" class="btn btn-sm cat-filter-active" onclick="setCatalogFilter('all')">All</button>
-    <button id="catf-shopify" class="btn btn-sm" onclick="setCatalogFilter('shopify')" style="border-color:rgba(149,191,71,.4);color:#95BF47">🛍 Shopify</button>
-    <button id="catf-manual" class="btn btn-sm" onclick="setCatalogFilter('manual')" style="border-color:var(--bdr2);color:var(--txt-d)">✏ Manual</button>
+  <div style="display:flex;gap:5px;margin-bottom:8px;flex-wrap:wrap;align-items:center">
+    <div class="seg-ctrl">
+      <button id="catf-all" class="seg-btn seg-all seg-active" onclick="setCatalogFilter('all')">All</button>
+      <button id="catf-shopify" class="seg-btn seg-shopify" onclick="setCatalogFilter('shopify')">🛍 Shopify</button>
+      <button id="catf-manual" class="seg-btn seg-manual" onclick="setCatalogFilter('manual')">✏ Manual</button>
+    </div>
   </div>
   <div id="shopify-import-panel" style="display:none;background:var(--surf);border:1px solid var(--bdr2);border-radius:6px;padding:14px;margin-bottom:12px">
     <div style="font-size:9px;color:var(--txt-b);font-weight:bold;margin-bottom:8px">Import from Shopify</div>
@@ -8534,12 +8571,32 @@ Object.assign(TAB_NAMES,{
 ALL_TABS.push('catalog','nozzle','splitter','purchases','shipping','tax');
 
 let catalogItems=[],nozzleLog=[],purchases=[],shippingLog=[];
+/* ── OVERFLOW MENU HELPERS ── */
+function toggleOverflow(id){
+  const el=document.getElementById(id);
+  if(!el)return;
+  const isOpen=el.classList.contains('open');
+  document.querySelectorAll('.overflow-menu.open').forEach(function(m){m.classList.remove('open');});
+  if(!isOpen)el.classList.add('open');
+}
+function closeOverflow(id){
+  const el=document.getElementById(id);
+  if(el)el.classList.remove('open');
+}
+document.addEventListener('click',function(e){
+  if(!e.target.closest('.overflow-wrap')){
+    document.querySelectorAll('.overflow-menu.open').forEach(function(m){m.classList.remove('open');});
+  }
+});
+
 let orderFilter='all';
 function setOrderFilter(f){
   orderFilter=f;
   ['all','shopify','etsy','convention','manual'].forEach(function(k){
     const btn=document.getElementById('orf-'+k);
-    if(btn) btn.classList.toggle('cat-filter-active',k===f);
+    if(!btn)return;
+    btn.classList.remove('seg-active');
+    if(k===f)btn.classList.add('seg-active');
   });
   renderOrders();
 }
@@ -8554,7 +8611,9 @@ function setCatalogFilter(f){
   catalogFilter=f;
   ['all','shopify','etsy','manual'].forEach(function(k){
     const btn=document.getElementById('catf-'+k);
-    if(btn){btn.classList.toggle('cat-filter-active',k===f);}
+    if(!btn)return;
+    btn.classList.remove('seg-active');
+    if(k===f)btn.classList.add('seg-active');
   });
   render();
 }
