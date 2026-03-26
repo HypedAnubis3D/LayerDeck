@@ -1683,15 +1683,13 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
   </div>
   <span class="header-tab-name" id="header-tab-name">Dashboard</span>
   <div class="header-right">
-    <div style="position:relative">
-      <button class="btn btn-sm" id="cloud-btn" style="background:var(--surf);border:1px solid var(--bdr2);color:var(--txt-d);padding:4px 10px;font-size:7px;gap:5px;display:flex;align-items:center" onclick="toggleCloudPanel()" title="Cloud sync">
-        <div class="sync-dot disconnected" id="sync-dot" style="width:7px;height:7px;flex-shrink:0"></div>
-        <span id="sync-label">Sign In</span>
+    <div style="position:relative" id="settings-wrap">
+      <button class="btn btn-sm" id="settings-btn" onclick="toggleSettingsPanel()" title="Settings &amp; Sync" style="background:var(--surf);border:1px solid var(--bdr2);color:var(--txt-d);padding:4px 10px;font-size:7px;gap:6px;display:flex;align-items:center">
+        <div class="sync-dot disconnected" id="sync-dot" style="width:8px;height:8px;flex-shrink:0"></div>
+        <span style="font-size:7px;letter-spacing:.5px">⚙ Settings</span>
       </button>
-      <div id="cloud-panel" style="display:none;position:absolute;right:0;top:calc(100% + 4px);background:var(--surf);border:1px solid var(--bdr2);border-radius:6px;padding:6px;z-index:200;min-width:140px;box-shadow:0 4px 16px rgba(0,0,0,.4)">
-      </div>
+      <div id="settings-panel" style="display:none;position:absolute;right:0;top:calc(100% + 4px);background:var(--surf);border:1px solid var(--bdr2);border-radius:6px;padding:6px;z-index:200;min-width:170px;box-shadow:0 4px 16px rgba(0,0,0,.4)"></div>
     </div>
-    <button class="btn btn-sm" id="header-sync-btn" onclick="navTo('sync',document.getElementById('nav-sync'))" title="Sync &amp; Settings" style="background:var(--surf);border:1px solid var(--bdr2);color:var(--txt-d);padding:4px 10px;font-size:7px;gap:5px;display:flex;align-items:center">⚙ Settings</button>
     <button class="theme-toggle" id="theme-toggle-btn" onclick="toggleTheme()" title="Toggle light/dark mode">🌙</button>
   </div>
 </header>
@@ -8199,22 +8197,17 @@ function saveSyncQueue(){localStorage.setItem(KEYS.syncQueue,JSON.stringify(sync
 
 function updateSyncIndicator(state){
   const dot=document.getElementById('sync-dot');
-  const lbl=document.getElementById('sync-label');
-  const btn=document.getElementById('cloud-btn');
-  if(!dot||!lbl)return;
+  const btn=document.getElementById('settings-btn');
+  if(!dot)return;
   const s=state||(currentUser&&syncCfg.enabled?'connected':'disconnected');
   dot.className='sync-dot '+s;
-  const labels={connected:'Synced',syncing:'Syncing…',offline:'Offline',error:'Error',disconnected:'Sign In'};
-  const colors={connected:'var(--grn-b)',syncing:'var(--gold-b)',offline:'var(--txt-d)',error:'var(--red-b)',disconnected:'var(--txt-d)'};
   const borders={connected:'var(--grn)',syncing:'var(--gold)',offline:'var(--bdr2)',error:'var(--red)',disconnected:'var(--bdr2)'};
-  lbl.textContent=labels[s]||'Cloud';
-  lbl.style.color=colors[s]||'var(--txt-d)';
-  if(btn)btn.style.borderColor=borders[s]||'var(--bdr2)';
-  if(syncQueue.length>0&&s==='connected'){
-    lbl.textContent=syncQueue.length+' pending';
-    lbl.style.color='var(--gold-b)';
-    if(btn)btn.style.borderColor='var(--gold)';
-  }
+  const pending=syncQueue.length>0&&s==='connected';
+  if(btn)btn.style.borderColor=pending?'var(--gold)':borders[s]||'var(--bdr2)';
+  if(pending)dot.className='sync-dot syncing';
+  // keep settings panel in sync if open
+  const panel=document.getElementById('settings-panel');
+  if(panel&&panel.style.display!=='none')updateSettingsPanel();
 }
 
 function addSyncLog(msg,type='info'){
@@ -8371,30 +8364,44 @@ async function pullFromCloud(silent=false,_lockRetry=false){
   }
 }
 
-function updateCloudPanel(){
-  const p=document.getElementById('cloud-panel');
+function updateSettingsPanel(){
+  const p=document.getElementById('settings-panel');
   if(!p)return;
   const email=currentUser?currentUser.email:'';
-  const short=email.length>22?email.slice(0,20)+'…':email;
+  const short=email.length>24?email.slice(0,22)+'…':email;
+  const stateDot=document.getElementById('sync-dot');
+  const state=stateDot?(stateDot.className.replace('sync-dot','').trim()||'disconnected'):'disconnected';
+  const stateLabels={connected:'✓ Synced',syncing:'↻ Syncing…',offline:'Offline',error:'⚠ Error',disconnected:'Not signed in'};
+  const stateColors={connected:'var(--grn-b)',syncing:'var(--gold-b)',offline:'var(--txt-d)',error:'var(--red-b)',disconnected:'var(--txt-d)'};
   p.innerHTML=(currentUser
-    ?'<div style="font-size:7px;color:var(--txt-d);letter-spacing:1px;padding:2px 4px 6px;border-bottom:1px solid var(--bdr);margin-bottom:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="'+esc(email)+'">'+esc(short)+'</div>'
-     +'<button class="btn btn-sm" style="width:100%;background:var(--grn-d);border:1px solid var(--grn);color:var(--grn-b);padding:5px 10px;font-size:7px;margin-bottom:4px" onclick="syncAll();toggleCloudPanel()" title="Push all local changes to cloud">⬆ Push to Cloud</button>'
-     +'<button class="btn btn-sm" style="width:100%;background:var(--cyn-d,rgba(34,170,204,.1));border:1px solid var(--cyn);color:var(--cyn);padding:5px 10px;font-size:7px;margin-bottom:4px" onclick="pullAll();toggleCloudPanel()" title="Pull latest from cloud">⬇ Pull from Cloud</button>'
-     +'<button class="btn btn-sm" style="width:100%;background:rgba(220,50,50,.12);border:1px solid var(--red);color:var(--red-b);padding:5px 10px;font-size:7px" onclick="signOutUser();toggleCloudPanel()" title="Sign out">⏏ Sign Out</button>'
-    :'<div style="font-size:7px;color:var(--txt-d);padding:2px 4px 8px">Not signed in</div>'
-     +'<button class="btn btn-sm" style="width:100%;background:var(--gold-d);border:1px solid var(--gold);color:var(--gold-b);padding:5px 10px;font-size:7px" onclick="showAuthScreen();toggleCloudPanel()" title="Sign in">🔐 Sign In</button>');
+    ?'<div style="font-size:7px;color:var(--txt-d);letter-spacing:1px;padding:2px 4px 5px;border-bottom:1px solid var(--bdr);margin-bottom:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="'+esc(email)+'">'+esc(short)+'</div>'
+     +'<div style="font-size:7px;color:'+stateColors[state]+';padding:2px 4px 7px;border-bottom:1px solid var(--bdr);margin-bottom:6px">'+stateLabels[state]+'</div>'
+     +'<button class="btn btn-sm" style="width:100%;text-align:left;padding:6px 8px;font-size:8px;margin-bottom:3px" onclick="navTo(\'sync\',document.getElementById(\'nav-sync\'));closeSettingsPanel()">⚙ Settings &amp; Sync</button>'
+     +'<button class="btn btn-sm" style="width:100%;background:var(--grn-d);border:1px solid var(--grn);color:var(--grn-b);padding:5px 8px;font-size:7px;text-align:left;margin-bottom:3px" onclick="syncAll();closeSettingsPanel()">⬆ Push to Cloud</button>'
+     +'<button class="btn btn-sm" style="width:100%;background:rgba(34,170,204,.1);border:1px solid var(--cyn);color:var(--cyn);padding:5px 8px;font-size:7px;text-align:left;margin-bottom:6px" onclick="pullAll();closeSettingsPanel()">⬇ Pull from Cloud</button>'
+     +'<button class="btn btn-sm" style="width:100%;background:rgba(220,50,50,.12);border:1px solid var(--red);color:var(--red-b);padding:5px 8px;font-size:7px;text-align:left" onclick="signOutUser();closeSettingsPanel()">⏏ Sign Out</button>'
+    :'<div style="font-size:7px;color:var(--txt-d);padding:2px 4px 7px;border-bottom:1px solid var(--bdr);margin-bottom:6px">Not signed in</div>'
+     +'<button class="btn btn-sm" style="width:100%;text-align:left;padding:6px 8px;font-size:8px;margin-bottom:6px" onclick="navTo(\'sync\',document.getElementById(\'nav-sync\'));closeSettingsPanel()">⚙ Settings &amp; Sync</button>'
+     +'<button class="btn btn-sm" style="width:100%;background:var(--gold-d);border:1px solid var(--gold);color:var(--gold-b);padding:5px 8px;font-size:7px;text-align:left" onclick="showAuthScreen();closeSettingsPanel()">🔐 Sign In</button>');
 }
-function toggleCloudPanel(){
-  const p=document.getElementById('cloud-panel');
+function toggleSettingsPanel(){
+  const p=document.getElementById('settings-panel');
   if(!p)return;
   const open=p.style.display==='none';
-  if(open)updateCloudPanel();
+  if(open)updateSettingsPanel();
   p.style.display=open?'block':'none';
   if(open){
-    const close=(e)=>{if(!document.getElementById('cloud-btn').contains(e.target)&&!p.contains(e.target)){p.style.display='none';document.removeEventListener('click',close,true);}};
+    const close=(e)=>{const wrap=document.getElementById('settings-wrap');if(wrap&&!wrap.contains(e.target)){p.style.display='none';document.removeEventListener('click',close,true);}};
     setTimeout(()=>document.addEventListener('click',close,true),50);
   }
 }
+function closeSettingsPanel(){
+  const p=document.getElementById('settings-panel');
+  if(p)p.style.display='none';
+}
+// keep legacy refs alive so existing code doesn't break
+function updateCloudPanel(){updateSettingsPanel();}
+function toggleCloudPanel(){toggleSettingsPanel();}
 function syncAll(){
   pushAllToCloud();
   if(shopifyCfg&&shopifyCfg.connected)pollShopifyOrders();
