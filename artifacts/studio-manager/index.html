@@ -1594,6 +1594,8 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
         <button class="nav-item" id="nav-convention" onclick="navTo('convention',this)"><span class="nav-icon">🎪</span><span class="nav-label">Conventions</span><span class="nav-badge" id="nav-badge-convention"></span></button>
         <button class="nav-item" id="nav-priceengine" onclick="navTo('priceengine',this)"><span class="nav-icon">🤖</span><span class="nav-label">Price AI</span></button>
         <button class="nav-item" id="nav-labels" onclick="navTo('labels',this)"><span class="nav-icon">🏷</span><span class="nav-label">Labels</span></button>
+        <button class="nav-item" id="nav-fulfillment" onclick="navTo('fulfillment',this)"><span class="nav-icon">✅</span><span class="nav-label">Fulfillment</span></button>
+        <button class="nav-item" id="nav-failrate" onclick="navTo('failrate',this)"><span class="nav-icon">📉</span><span class="nav-label">Fail Rates & Waste</span></button>
       </div>
     </div>
 
@@ -1636,12 +1638,9 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
         <span class="sb-group-chevron">▾</span>
       </div>
       <div class="sb-group-body">
-        <button class="nav-item" id="nav-fulfillment" onclick="navTo('fulfillment',this)"><span class="nav-icon">✅</span><span class="nav-label">Fulfillment</span></button>
-        <button class="nav-item" id="nav-failrate" onclick="navTo('failrate',this)"><span class="nav-icon">📉</span><span class="nav-label">Fail Rates & Waste</span></button>
-        <button class="nav-item" id="nav-sync" onclick="navTo('sync',this)"><span class="nav-icon">☁</span><span class="nav-label">Sync</span></button>
+        <button class="nav-item" id="nav-sync" onclick="navTo('sync',this)"><span class="nav-icon">☁</span><span class="nav-label">Sync &amp; Settings</span></button>
         <button class="nav-item" id="nav-history" onclick="navTo('history',this)"><span class="nav-icon">📜</span><span class="nav-label">History</span></button>
         <button class="nav-item" id="nav-stats" onclick="navTo('stats',this)"><span class="nav-icon">📊</span><span class="nav-label">Stats</span></button>
-        <button class="nav-item" id="nav-backup" onclick="navTo('backup',this)"><span class="nav-icon">💾</span><span class="nav-label">Backup</span></button>
       </div>
     </div>
 
@@ -7124,8 +7123,9 @@ function toggleFcStep(key,stepKey){
 
 function renderFulfillment(){
   const filter=document.getElementById('fc-filter').value;
-  // Build fulfillment items from orders
+  // Build fulfillment items from orders — skip any order without a valid unique orderId
   orders.forEach(o=>{
+    if(!o.orderId)return;
     const key='order-'+o.orderId;
     if(!fulfillmentData[key]){
       fulfillmentData[key]={orderId:o.orderId,customer:o.customer,items:o.items,steps:{},createdAt:o.timestamp||Date.now()};
@@ -7145,12 +7145,15 @@ function renderFulfillment(){
     const itemList=(item.items||[]).map(i=>`${esc(i.name||i)}${i.qty>1?' ×'+i.qty:''}`).join(', ');
     return `<div class="fc-order-card${allDone?' fc-complete':''}">
       <div class="fc-order-header">
-        <div>
+        <div style="flex:1;min-width:0">
           <div class="fc-order-id">${esc(item.orderId||item.printId||item.key)}</div>
           <div class="fc-order-customer">${esc(item.customer||item.printName||'—')}</div>
           <div class="fc-order-meta">${itemList?esc(itemList.slice(0,50)):'—'}</div>
         </div>
-        ${allDone?'<span class="fc-complete-badge">✓ Complete</span>':'<span style="font-family:\'Orbitron\',monospace;font-size:10px;color:var(--gold)">'+(doneCount)+'/'+FC_STEPS.length+'</span>'}
+        <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
+          ${allDone?'<span class="fc-complete-badge">✓ Complete</span>':'<span style="font-family:\'Orbitron\',monospace;font-size:10px;color:var(--gold)">'+(doneCount)+'/'+FC_STEPS.length+'</span>'}
+          <button onclick="deleteFulfillment('${item.key}')" title="Delete record" style="background:none;border:none;color:var(--red-b);cursor:pointer;font-size:13px;padding:2px 4px;opacity:.6;line-height:1" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=.6">✕</button>
+        </div>
       </div>
       <div class="fc-progress"><div class="fc-progress-fill" style="width:${pct2}%"></div></div>
       <div class="fc-steps">
@@ -7165,6 +7168,17 @@ function renderFulfillment(){
   }).join('');
 }
 function isAllDone(item){return FC_STEPS.every(s=>item.steps[s.key]);}
+function deleteFulfillment(key){
+  const item=fulfillmentData[key];
+  if(!item)return;
+  const label=item.orderId||item.printId||key;
+  showConfirm('Delete fulfillment record for '+label+'? This cannot be undone.',function(){
+    delete fulfillmentData[key];
+    saveFulfillment();
+    render();
+    toast('Deleted','Fulfillment record removed','success',2000);
+  });
+}
 
 // ════════════════════════════════════════
 // RESTOCK SUGGESTIONS
