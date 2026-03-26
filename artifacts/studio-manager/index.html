@@ -444,6 +444,13 @@ input.srch::placeholder{color:var(--txt-d);}
 .ams-dash-dot{width:16px;height:16px;border-radius:50%;margin:0 auto 4px;transition:all .2s;}
 .ams-dash-label{font-size:8px;color:var(--txt-b);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:'Inter',sans-serif;}
 .ams-dash-pct{font-size:8px;font-family:'Orbitron',monospace;margin-top:1px;}
+/* ── ORDER ITEM ROWS ── */
+.oi-row{display:grid;grid-template-columns:1fr 46px 60px 26px;gap:4px;margin-bottom:5px;align-items:center;}
+.oi-row select,.oi-row input[type=text],.oi-row input[type=number]{background:var(--bg);border:1px solid var(--bdr2);color:var(--txt);padding:5px 6px;border-radius:5px;font-family:'Inter',sans-serif;font-size:10px;width:100%;min-width:0;box-sizing:border-box;}
+.oi-row select{font-size:9px;}
+.oi-rm{background:transparent;border:1px solid var(--bdr);color:var(--txt-d);border-radius:5px;cursor:pointer;padding:0;width:26px;height:26px;display:flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0;line-height:1;}
+.oi-rm:hover{background:var(--red);color:#fff;border-color:var(--red);}
+.oi-col-lbl{font-size:8px;color:var(--txt-d);text-align:center;}
 .activity-item{display:flex;align-items:center;gap:9px;padding:6px 0;border-bottom:1px solid var(--bdr);font-size:10px;}
 .activity-item:last-child{border-bottom:none;}
 .activity-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
@@ -2940,8 +2947,25 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
     <div class="field"><div class="fl">Customer Name</div><input type="text" id="eo-cust" placeholder="Jane Smith" oninput="checkRepeatCustomer()"/></div>
     <div class="field"><div class="fl">Order Date</div><input type="date" id="eo-date"/></div>
   </div>
-  <div class="field"><div class="fl">Items (one per line: Name · Qty · Price)</div>
-    <textarea id="eo-items" rows="4" placeholder="Anubis Figurine · 1 · $24.99&#10;Rubber Duck Wizard · 2 · $14.99"></textarea>
+  <div class="field">
+    <div class="fl" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">
+      <span>Items</span>
+      <span id="eo-items-total" style="font-family:'Orbitron',monospace;font-size:11px;color:var(--grn);font-weight:700"></span>
+    </div>
+    <!-- column headers -->
+    <div class="oi-row" style="margin-bottom:3px">
+      <div class="oi-col-lbl" style="text-align:left">Product / Name</div>
+      <div class="oi-col-lbl">Qty</div>
+      <div class="oi-col-lbl">Price $</div>
+      <div></div>
+    </div>
+    <!-- item rows injected by JS -->
+    <div id="eo-item-rows"></div>
+    <!-- add buttons -->
+    <div style="display:flex;gap:6px;margin-top:4px">
+      <button type="button" class="btn btn-ghost" style="flex:1;font-size:10px;padding:6px 4px" onclick="addOrderItemRow('catalog')">📦 From Catalog</button>
+      <button type="button" class="btn btn-ghost" style="flex:1;font-size:10px;padding:6px 4px" onclick="addOrderItemRow('manual')">✏️ Manual</button>
+    </div>
   </div>
   <div class="fr2">
     <div class="field"><div class="fl">Status</div>
@@ -4792,39 +4816,132 @@ function saveQueueItem(){
 }
 function closeQueue(){document.getElementById('mod-queue').style.display='none';}
 
+// ── ORDER ITEM ROW HELPERS ──
+function clearOrderItemRows(){
+  const c=document.getElementById('eo-item-rows');
+  if(c)c.innerHTML='';
+  const el=document.getElementById('eo-items-total');
+  if(el)el.textContent='';
+}
+function addOrderItemRow(type,item){
+  const id=uid();
+  const container=document.getElementById('eo-item-rows');
+  if(!container)return;
+  const row=document.createElement('div');
+  row.className='oi-row';row.id='oir-'+id;
+  const qty=item?(item.qty||1):1;
+  const price=item?(parseFloat(item.price)||0):'';
+  const priceVal=price!==''?parseFloat(price).toFixed(2):'';
+  if(type==='catalog'){
+    const opts='<option value="">— select —</option>'+catalogItems.slice().sort(function(a,b){return(a.name||'').localeCompare(b.name||'');}).map(function(c){return '<option value="'+c.id+'"'+(item&&item._catalogId===c.id?' selected':'')+'>'+esc(c.name)+' — $'+parseFloat(c.price||0).toFixed(2)+'</option>';}).join('');
+    row.innerHTML='<select class="oir-name" onchange="onOrderCatalogChange(\''+id+'\')">'+opts+'</select>'
+      +'<input class="oir-qty" type="number" min="1" value="'+qty+'" oninput="updateOrderItemsTotal()">'
+      +'<input class="oir-price" type="number" min="0" step="0.01" value="'+priceVal+'" placeholder="0.00" oninput="updateOrderItemsTotal()">'
+      +'<button class="oi-rm" onclick="removeOrderItemRow(\''+id+'\')">✕</button>';
+    if(item&&item._catalogId){
+      const cat=catalogItems.find(function(c){return c.id===item._catalogId;});
+      if(cat){
+        const sel=row.querySelector('.oir-name');
+        if(sel)sel.value=item._catalogId;
+      }
+    }
+  }else{
+    row.innerHTML='<input class="oir-name" type="text" placeholder="Item name…" value="'+esc(item?item.name:'')+'">'
+      +'<input class="oir-qty" type="number" min="1" value="'+qty+'" oninput="updateOrderItemsTotal()">'
+      +'<input class="oir-price" type="number" min="0" step="0.01" value="'+priceVal+'" placeholder="0.00" oninput="updateOrderItemsTotal()">'
+      +'<button class="oi-rm" onclick="removeOrderItemRow(\''+id+'\')">✕</button>';
+  }
+  container.appendChild(row);
+  updateOrderItemsTotal();
+}
+function onOrderCatalogChange(rowId){
+  const row=document.getElementById('oir-'+rowId);
+  if(!row)return;
+  const selVal=row.querySelector('.oir-name').value;
+  const priceInput=row.querySelector('.oir-price');
+  const cat=catalogItems.find(function(c){return c.id===selVal;});
+  if(cat&&priceInput)priceInput.value=parseFloat(cat.price||0).toFixed(2);
+  updateOrderItemsTotal();
+}
+function removeOrderItemRow(rowId){
+  const row=document.getElementById('oir-'+rowId);
+  if(row)row.remove();
+  updateOrderItemsTotal();
+}
+function updateOrderItemsTotal(){
+  const rows=document.querySelectorAll('#eo-item-rows .oi-row');
+  let total=0;
+  rows.forEach(function(row){
+    const qty=parseInt(row.querySelector('.oir-qty').value)||1;
+    const price=parseFloat(row.querySelector('.oir-price').value)||0;
+    total+=qty*price;
+  });
+  const el=document.getElementById('eo-items-total');
+  if(el)el.textContent=total>0?'$'+total.toFixed(2):'';
+}
+function getOrderItems(){
+  const rows=document.querySelectorAll('#eo-item-rows .oi-row');
+  const items=[];
+  rows.forEach(function(row){
+    const nameEl=row.querySelector('.oir-name');
+    let name='';
+    if(nameEl.tagName==='SELECT'){
+      const cat=catalogItems.find(function(c){return c.id===nameEl.value;});
+      name=cat?cat.name:'';
+    }else{
+      name=nameEl.value.trim();
+    }
+    if(!name)return;
+    const qty=parseInt(row.querySelector('.oir-qty').value)||1;
+    const price=parseFloat(row.querySelector('.oir-price').value)||0;
+    items.push({name:name,qty:qty,price:price});
+  });
+  return items;
+}
+
 function openAddOrder(){
   document.getElementById('order-modal-title').textContent='New Order';
-  ['eo-id','eo-oid','eo-cust','eo-items','eo-notes','eo-code'].forEach(i=>document.getElementById(i).value='');
-  document.getElementById('eo-platform').value='Etsy';document.getElementById('eo-status').value='pending';
+  ['eo-id','eo-oid','eo-cust','eo-notes','eo-code'].forEach(function(i){document.getElementById(i).value='';});
+  document.getElementById('eo-platform').value='Etsy';
+  document.getElementById('eo-status').value='pending';
   document.getElementById('eo-ship').value='';
   document.getElementById('eo-mystery').checked=false;
   document.getElementById('eo-date').value=new Date().toISOString().split('T')[0];
+  clearOrderItemRows();
+  addOrderItemRow('manual');
   document.getElementById('mod-order').style.display='flex';
 }
 function openEditOrder(id){
-  const o=orders.find(x=>x.id===id);if(!o)return;
+  const o=orders.find(function(x){return x.id===id;});if(!o)return;
   document.getElementById('order-modal-title').textContent='Edit Order';
-  document.getElementById('eo-id').value=id;document.getElementById('eo-oid').value=o.orderId||'';
-  document.getElementById('eo-cust').value=o.customer||'';document.getElementById('eo-platform').value=o.platform||'Etsy';
+  document.getElementById('eo-id').value=id;
+  document.getElementById('eo-oid').value=o.orderId||'';
+  document.getElementById('eo-cust').value=o.customer||'';
+  document.getElementById('eo-platform').value=o.platform||'Etsy';
   document.getElementById('eo-date').value=o.date||'';
-  document.getElementById('eo-items').value=(o.items||[]).map(i=>`${i.name} · ${i.qty} · $${i.price}`).join('\n');
-  document.getElementById('eo-status').value=o.status||'pending';document.getElementById('eo-ship').value=o.shipping||'';
+  document.getElementById('eo-status').value=o.status||'pending';
+  document.getElementById('eo-ship').value=o.shipping||'';
   document.getElementById('eo-notes').value=o.notes||'';
   document.getElementById('eo-code').value=o.discountCode||'';
-  document.getElementById('eo-mystery').checked=!!(o.discountCode&&typeof isMysteryOrder==='function'&&isMysteryOrder(o));
+  document.getElementById('eo-mystery').checked=!!(o.mystery||false);
+  clearOrderItemRows();
+  (o.items||[]).forEach(function(item){
+    const cat=catalogItems.find(function(c){return c.name===item.name;});
+    if(cat){addOrderItemRow('catalog',{_catalogId:cat.id,qty:item.qty,price:item.price});}
+    else{addOrderItemRow('manual',item);}
+  });
+  if(!(o.items||[]).length)addOrderItemRow('manual');
   document.getElementById('mod-order').style.display='flex';
 }
 function saveOrder(){
-  const customer=document.getElementById('eo-cust').value.trim();if(!customer){document.getElementById('eo-cust').focus();return;}
+  const customer=document.getElementById('eo-cust').value.trim();
+  if(!customer){document.getElementById('eo-cust').focus();return;}
   const id=document.getElementById('eo-id').value;
   const code=(document.getElementById('eo-code').value||'').trim().toUpperCase()||undefined;
-  const items=document.getElementById('eo-items').value.trim().split('\n').filter(Boolean).map(l=>{
-    const pts=l.split('·').map(p=>p.trim());
-    return{name:pts[0]||'Item',qty:parseInt(pts[1])||1,price:parseFloat((pts[2]||'0').replace('$',''))||0};
-  });
-  const order={id:id||uid(),customer,orderId:document.getElementById('eo-oid').value.trim()||'ORD-'+Date.now().toString().slice(-4),platform:document.getElementById('eo-platform').value,date:document.getElementById('eo-date').value,items,status:document.getElementById('eo-status').value,shipping:parseFloat(document.getElementById('eo-ship').value)||0,notes:document.getElementById('eo-notes').value.trim(),discountCode:code,timestamp:id?(orders.find(o=>o.id===id)||{}).timestamp||Date.now():Date.now()};
-  if(id){orders=orders.map(o=>o.id===id?order:o);}else{orders.push(order);}
-  // Auto-flag as mystery if code matches or checkbox ticked
+  const items=getOrderItems();
+  if(!items.length){toast('No Items','Add at least one item to the order','warning');return;}
+  const order={id:id||uid(),customer,orderId:document.getElementById('eo-oid').value.trim()||'ORD-'+Date.now().toString().slice(-4),platform:document.getElementById('eo-platform').value,date:document.getElementById('eo-date').value,items,status:document.getElementById('eo-status').value,shipping:parseFloat(document.getElementById('eo-ship').value)||0,notes:document.getElementById('eo-notes').value.trim(),discountCode:code,timestamp:id?(orders.find(function(o){return o.id===id;})||{}).timestamp||Date.now():Date.now()};
+  if(id){orders=orders.map(function(o){return o.id===id?order:o;});}else{orders.push(order);}
   const flagMystery=document.getElementById('eo-mystery').checked;
   if((flagMystery||isMysteryOrder(order))&&typeof checkMysteryTrigger==='function'){
     checkMysteryTrigger(order);
