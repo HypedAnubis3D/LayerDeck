@@ -11581,8 +11581,23 @@ function saveMystery(){
   };
   if(id){mysteryOrders=mysteryOrders.map(m=>m.id===id?obj:m);}
   else{mysteryOrders.push(obj);}
+  // If status set to queued and a print is assigned, push to queue if not already there
+  let queueCreated=false;
+  if(obj.status==='queued'&&obj.print){
+    const already=queueItems.some(q=>q.mysteryId===obj.id);
+    if(!already){
+      queueItems.push({id:uid(),name:obj.print+' 🎁',category:'Mystery',printer:printerRecords[0]?.name||'X1C',hrs:0,qty:1,priority:'normal',orderId:obj.orderId,stage:'queued',notes:'Mystery gift · '+obj.customer+' · '+obj.code,fromMystery:true,mysteryId:obj.id,timestamp:Date.now()});
+      saveQueue();
+      queueCreated=true;
+    }
+  }
   saveMysteryOrders();closeMystery();render();updateMysteryBadge();
-  toast('Mystery Print Saved',orderId,'success');
+  if(queueCreated){
+    toast('🎁 Mystery Queued',obj.print+' added to Print Queue for '+orderId,'success');
+    navTo('queue',document.getElementById('nav-queue'));
+  }else{
+    toast('Mystery Print Saved',orderId,'success');
+  }
 }
 function deleteMystery(id){
   showConfirm('Remove mystery print order?','',()=>{
