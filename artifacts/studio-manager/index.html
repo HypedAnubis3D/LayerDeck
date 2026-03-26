@@ -195,7 +195,7 @@ input.srch::placeholder{color:var(--txt-d);}
 .kcard{background:var(--surf2);border:1px solid var(--bdr2);border-radius:4px;padding:9px;cursor:pointer;transition:border-color .15s;position:relative;}
 .kcard:hover{border-color:var(--bdr2);}
 .kcard.kc-shopify{border-left:2px solid var(--shopify);}
-.kcard.kc-etsy{border-left:2px solid #e07828;}
+
 .kcard.kc-warn{border-left:2px solid var(--amb);}
 .kcard-name{font-size:9px;color:var(--txt-b);font-weight:bold;margin-bottom:2px;}
 .kcard-meta{font-size:6px;color:var(--txt-d);line-height:1.6;}
@@ -1107,7 +1107,7 @@ body.light-mode ::-webkit-scrollbar-thumb{background:var(--bdr2);}
 .plat-badges{display:flex;gap:3px;flex-wrap:wrap;margin-bottom:5px;}
 .plat-badge{display:inline-flex;align-items:center;gap:2px;border-radius:3px;padding:2px 5px;font-size:5.5px;font-weight:bold;letter-spacing:.3px;}
 .plat-shopify{background:rgba(149,191,71,.12);color:#95BF47;border:1px solid rgba(149,191,71,.3);}
-.plat-etsy{background:rgba(241,112,34,.12);color:#F17022;border:1px solid rgba(241,112,34,.3);}
+
 .catalog-card{background:var(--surf);border:1px solid var(--bdr);border-radius:8px;overflow:hidden;transition:transform .2s,box-shadow .2s;}
 .catalog-card:hover{transform:translateY(-3px);box-shadow:0 10px 28px rgba(0,0,0,.5);}
 .catalog-photo{width:100%;height:150px;object-fit:cover;background:var(--bg);display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;}
@@ -1188,10 +1188,6 @@ body.light-mode ::-webkit-scrollbar-thumb{background:var(--bdr2);}
 .tax-row.highlight{background:rgba(201,162,39,.06);margin:0 -8px;padding:6px 8px;border-radius:3px;}
 .tax-rate-input{background:var(--bg);border:1px solid var(--bdr2);color:var(--txt);padding:4px 7px;font-family:'Share Tech Mono',monospace;font-size:9px;border-radius:3px;width:60px;text-align:center;}
 
-/* ══════════════════════════════════════
-   ETSY FEE CALCULATOR (in sales/revenue)
-══════════════════════════════════════ */
-.etsy-fee-badge{display:inline-flex;align-items:center;gap:4px;background:#3d1808;border:1px solid #7a3010;color:#e07828;padding:2px 7px;border-radius:3px;font-size:7px;margin-left:6px;}
 .fee-breakdown{background:var(--bg);border:1px solid var(--bdr);border-radius:4px;padding:8px 10px;margin-top:6px;font-size:7px;}
 .fee-row{display:flex;justify-content:space-between;padding:2px 0;color:var(--txt-d);}
 .fee-row.net{color:var(--grn-b);font-weight:bold;padding-top:5px;border-top:1px solid var(--bdr);margin-top:3px;}
@@ -1558,7 +1554,6 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
       </div>
       <div class="sb-group-body">
         <button class="nav-item" id="nav-shopify" onclick="navTo('shopify',this)"><span class="nav-icon">🛍</span><span class="nav-label">Shopify</span></button>
-        <button class="nav-item" id="nav-etsy" onclick="navTo('etsy',this)"><span class="nav-icon">🟠</span><span class="nav-label">Etsy</span></button>
       </div>
     </div>
 
@@ -1756,7 +1751,6 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
   <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;align-items:center">
     <button id="orf-all"        class="btn btn-sm cat-filter-active" onclick="setOrderFilter('all')">All</button>
     <button id="orf-shopify"    class="btn btn-sm" onclick="setOrderFilter('shopify')"    style="border-color:rgba(149,191,71,.4);color:#95BF47">🛍 Shopify</button>
-    <button id="orf-etsy"       class="btn btn-sm" onclick="setOrderFilter('etsy')"       style="border-color:rgba(240,112,40,.4);color:#F17022">🟠 Etsy</button>
     <button id="orf-convention" class="btn btn-sm" onclick="setOrderFilter('convention')" style="border-color:rgba(168,85,247,.4);color:#c084fc">🎪 Convention</button>
     <button id="orf-manual"     class="btn btn-sm" onclick="setOrderFilter('manual')"     style="border-color:var(--bdr2);color:var(--txt-d)">✏ Manual</button>
   </div>
@@ -1819,10 +1813,6 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
   <div id="shopify-content"></div>
 </div>
 
-<!-- ETSY -->
-<div id="tab-etsy" style="display:none">
-  <div id="etsy-content"></div>
-</div>
 
 <!-- SHOP LIST -->
 <div id="tab-shop" style="display:none"></div>
@@ -1886,7 +1876,7 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
   <div class="price-engine">
     <div class="pe-intro">
       <div class="pe-title">⚡ AI Price Recommendation Engine</div>
-      <div class="pe-desc">Powered by Claude AI — analyzes your actual filament costs, print times, labor, electricity, historical sales data, and Shopify/Etsy pricing to recommend optimal sell prices per product. Hit Analyze to get fresh recommendations.</div>
+      <div class="pe-desc">Powered by Claude AI — analyzes your actual filament costs, print times, labor, electricity, and historical sales data to recommend optimal sell prices per product. Hit Analyze to get fresh recommendations.</div>
     </div>
     <div class="ctrl">
       <button class="btn btn-pur" onclick="runPriceAnalysis()">⚡ Analyze & Recommend Prices</button>
@@ -2065,7 +2055,6 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
   <div style="display:flex;gap:5px;margin-bottom:8px;flex-wrap:wrap">
     <button id="catf-all" class="btn btn-sm cat-filter-active" onclick="setCatalogFilter('all')">All</button>
     <button id="catf-shopify" class="btn btn-sm" onclick="setCatalogFilter('shopify')" style="border-color:rgba(149,191,71,.4);color:#95BF47">🛍 Shopify</button>
-    <button id="catf-etsy" class="btn btn-sm" onclick="setCatalogFilter('etsy')" style="border-color:rgba(240,112,40,.4);color:#F17022">🟠 Etsy</button>
     <button id="catf-manual" class="btn btn-sm" onclick="setCatalogFilter('manual')" style="border-color:var(--bdr2);color:var(--txt-d)">✏ Manual</button>
   </div>
   <div id="shopify-import-panel" style="display:none;background:var(--surf);border:1px solid var(--bdr2);border-radius:6px;padding:14px;margin-bottom:12px">
@@ -3271,7 +3260,6 @@ function render(){
   if(curTab==='maint')   renderMaint();
   if(curTab==='forecast')renderForecast();
   if(curTab==='shopify') renderShopify();
-  if(curTab==='etsy')    renderEtsy();
   if(curTab==='shop')    renderShop();
   if(curTab==='history') renderHistory();
   if(curTab==='stats')   renderStats();
@@ -3733,15 +3721,14 @@ function renderQueue(){
     const items=queueItems.filter(q=>(q.stage||'queued')===st.key);
     const cards=items.map(q=>{
       const isShopify=q.fromShopify;
-      const isEtsy=q.fromEtsy;
+
       const isWarn=q.noTmf;
       const prioIcon=q.priority==='high'?'🔴':q.priority==='low'?'🔵':'';
       const prevStage=st.key==='inprogress'?'queued':st.key==='done'?'inprogress':null;
       const nextStage=st.key==='queued'?'inprogress':st.key==='inprogress'?'done':null;
-      return `<div class="kcard${isShopify?' kc-shopify':''}${isEtsy&&!isShopify?' kc-etsy':''}${isWarn?' kc-warn':''}">
+      return `<div class="kcard${isShopify?' kc-shopify':''}${isWarn?' kc-warn':''}">
         ${prioIcon?`<div class="k-priority">${prioIcon}</div>`:''}
         ${isShopify?`<div style="font-size:6px;color:var(--shopify);letter-spacing:1px;margin-bottom:3px">🛍 SHOPIFY ORDER</div>`:''}
-        ${isEtsy&&!isShopify?`<div style="font-size:6px;color:#e07828;letter-spacing:1px;margin-bottom:3px">🟠 ETSY ORDER</div>`:''}
         ${isWarn?`<div style="font-size:6px;color:var(--amb);letter-spacing:1px;margin-bottom:3px">⚠ NO 3MF ON FILE</div>`:''}
         <div class="kcard-name">${esc(q.name)}${q.qty>1?' ×'+q.qty:''}</div>
         <div class="kcard-meta">${esc(q.printer||'?')} · ${q.hrs||'?'}h${q.orderId?' · '+esc(q.orderId):''}</div>
@@ -3848,7 +3835,6 @@ function renderOrders(){
   const isEtsy=function(o){return o.fromEtsy||(o.platform||'').toLowerCase()==='etsy';};
   const isConvention=function(o){return (o.platform||'').toLowerCase()==='convention'||!!o.fromConvention;};
   if(orderFilter==='shopify') list=list.filter(isShopify);
-  else if(orderFilter==='etsy') list=list.filter(isEtsy);
   else if(orderFilter==='convention') list=list.filter(isConvention);
   else if(orderFilter==='manual') list=list.filter(function(o){return !isShopify(o)&&!isEtsy(o)&&!isConvention(o);});
   list.sort(function(a,b){return (b.timestamp||0)-(a.timestamp||0);});
@@ -4149,123 +4135,15 @@ function renderShopify(){
   }
 }
 
-// ─── ETSY ───
-function renderEtsy(){
-  const el=document.getElementById('etsy-content');
-  if(!el)return;
-  if(etsyCfg.connected&&etsyCfg.domain&&!etsyCfg.domain.includes('DEMO')){
-    const etsyOrders=orders.filter(function(o){return o.fromEtsy;});
-    const etsyCatalog=catalogItems.filter(function(c){return c.etsyId||c.fromEtsy;});
-    el.innerHTML='<div class="shopify-status-bar">'
-      +'<div class="shopify-status-dot connected" style="background:#F17022"></div>'
-      +'<div style="flex:1">'
-        +'<div style="font-size:9px;color:#F17022;font-weight:bold">Connected to '+esc(etsyCfg.domain)+'</div>'
-        +'<div style="font-size:7px;color:var(--txt-d);margin-top:1px">Last synced: '+(etsyCfg.lastPoll?new Date(etsyCfg.lastPoll).toLocaleTimeString():'-')+' · Auto-polls every 5 min</div>'
-      +'</div>'
-      +'<button class="btn btn-red btn-sm" onclick="disconnectEtsy()">Disconnect</button>'
-    +'</div>'
-    +'<div class="shopify-preview-banner" style="background:rgba(241,112,34,.07);border-color:rgba(241,112,34,.2);color:#F17022">✓ Orders → Orders tab · Listings → Product Catalog · New orders auto-create Queue entries</div>'
-    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">'
-      +'<div style="background:var(--surf);border:1px solid var(--bdr);border-radius:5px;padding:12px;text-align:center">'
-        +'<div style="font-size:22px;font-weight:bold;color:var(--teal);font-family:Orbitron,monospace">'+etsyOrders.length+'</div>'
-        +'<div style="font-size:7px;color:var(--txt-d);letter-spacing:1px;margin-bottom:8px">ORDERS SYNCED</div>'
-        +'<button class="btn btn-teal btn-sm" style="width:100%" onclick="pollEtsyOrders().then(()=>render())">↻ Sync Orders</button>'
-      +'</div>'
-      +'<div style="background:var(--surf);border:1px solid var(--bdr);border-radius:5px;padding:12px;text-align:center">'
-        +'<div style="font-size:22px;font-weight:bold;color:#F17022;font-family:Orbitron,monospace">'+etsyCatalog.length+'</div>'
-        +'<div style="font-size:7px;color:var(--txt-d);letter-spacing:1px;margin-bottom:8px">LISTINGS IN CATALOG</div>'
-        +'<button class="btn btn-amb btn-sm" style="width:100%" onclick="syncEtsyToCatalog()">↻ Sync Listings</button>'
-      +'</div>'
-    +'</div>'
-    +'<div style="display:flex;gap:8px;margin-bottom:14px">'
-      +'<button class="btn btn-ghost btn-sm" style="flex:1" onclick="navTo(\'orders\',document.getElementById(\'nav-orders\'))">📬 View Orders</button>'
-      +'<button class="btn btn-ghost btn-sm" style="flex:1" onclick="navTo(\'catalog\',document.getElementById(\'nav-catalog\'))">🏪 View Catalog</button>'
-    +'</div>'
-    +'<div id="etsy-sync-status" style="font-size:7px;color:var(--txt-d);min-height:16px"></div>';
-  }else if(etsyCfg.connected){
-    // DEMO view
-    const demoListings=[
-      {title:'Anubis Figurine Standard',price:'24.99',tags:['3d print','figurine','anubis']},
-      {title:'Rubber Duck Wizard',price:'14.99',tags:['duck','wizard','cute']},
-      {title:'Poncho Fox Ball',price:'19.99',tags:['fox','ball','colorful']},
-      {title:'Cosplay Mask — Anubis',price:'34.99',tags:['cosplay','mask','wearable']},
-    ];
-    el.innerHTML='<div class="shopify-status-bar">'
-      +'<div class="shopify-status-dot connected" style="background:var(--txt-d)"></div>'
-      +'<div style="flex:1"><div style="font-size:9px;color:var(--txt-d);font-weight:bold">DEMO — '+esc(etsyCfg.domain)+'</div>'
-      +'<div style="font-size:7px;color:var(--txt-d)">Preview only — no real data</div></div>'
-      +'<button class="btn btn-ghost btn-sm" onclick="disconnectEtsy()">Exit Demo</button>'
-    +'</div>'
-    +'<div class="shopify-preview-banner" style="background:rgba(255,165,0,.1);border-color:var(--org)">⚠ Demo mode — connect a real Etsy shop to enable live listing + order sync</div>'
-    +'<div class="ctrl"><span style="font-size:8px;color:var(--txt-d);letter-spacing:1px">DEMO LISTINGS</span>'
-    +'<span class="cnt">4 listings (demo)</span></div>'
-    +'<div class="shopify-products-grid">'
-    +demoListings.map(function(l){
-      var hasTmf=tmfLib.find(function(t){return t.name&&t.name.toLowerCase().includes(l.title.split(' ')[0].toLowerCase());});
-      return '<div class="shopify-product-card" style="border-color:rgba(241,112,34,.15)">'
-        +'<div class="sp-title">'+esc(l.title)+'</div>'
-        +'<div class="sp-sub">'+l.tags.slice(0,3).map(function(t){return '#'+t;}).join(' ')+'</div>'
-        +'<div class="sp-inventory"><div class="sp-price">$'+l.price+'</div></div>'
-        +'<div style="margin-top:8px;font-size:6px;color:'+(hasTmf?'var(--grn)':'var(--amb)')+'">'+(hasTmf?'✓ 3MF on file':'⚠ No 3MF')+'</div>'
-      +'</div>';
-    }).join('')+'</div>';
-  }else{
-    el.innerHTML='<div class="shopify-connect">'
-      +'<div class="shopify-logo" style="color:#F17022">ETSY</div>'
-      +'<div class="shopify-tagline">Connect via Etsy Developer Portal (PKCE OAuth — no secret needed)</div>'
-      +'<div class="connect-steps">'
-        +'<div class="step-title">One-time setup in Etsy Developer Portal</div>'
-        +'<div class="step-row"><div class="step-num">1</div><div class="step-text"><a href="https://www.etsy.com/developers/register" target="_blank" rel="noopener" style="color:#F17022">Open etsy.com/developers</a> → sign in with your Etsy shop account → click <b>Create a New App</b></div></div>'
-        +'<div class="step-row"><div class="step-num">2</div><div class="step-text">Fill in app name (e.g. "Studio Manager") → set <b>Callback URLs</b> to:<br><code style="font-size:6px;word-break:break-all">'+window.location.origin+'/api/etsy/oauth/callback</code></div></div>'
-        +'<div class="step-row"><div class="step-num">3</div><div class="step-text">Under <b>Requested scopes</b> enable: <code>listings_r</code> and <code>transactions_r</code> → save the app</div></div>'
-        +'<div class="step-row"><div class="step-num">4</div><div class="step-text">Copy your <b>Keystring</b> (this is the Client ID) from the app page → paste it below</div></div>'
-        +'<div class="step-row"><div class="step-num">5</div><div class="step-text">Click <b>Connect with Etsy OAuth</b> → a new tab opens where you authorize the app → close it and return here</div></div>'
-      +'</div>'
-      +'<div class="connect-form">'
-        +'<div class="connect-form-title">Your Etsy App Credentials</div>'
-        +'<div class="field"><div class="fl">Etsy Client ID (Keystring)</div>'
-          +'<input type="text" id="etsy-page-client-id" placeholder="etsy_api_key_xxxxxxxxxxxx" autocomplete="off"/>'
-        +'</div>'
-        +'<div id="etsy-page-connect-status" style="font-size:8px;min-height:18px;color:var(--txt-d)"></div>'
-        +'<div style="display:flex;gap:8px;margin-top:4px">'
-          +'<button class="btn btn-amb" id="etsy-page-connect-btn" style="flex:1;padding:9px 0" onclick="connectEtsyPage()">🟠 Connect with Etsy OAuth</button>'
-          +'<button class="btn btn-ghost btn-sm" onclick="previewEtsyDemo()">👁 Demo</button>'
-        +'</div>'
-      +'</div>'
-      +'<div style="text-align:center;font-size:7px;color:var(--txt-d);line-height:2;margin-top:12px">'
-        +'🔒 PKCE OAuth — no secret stored · Redirects to Etsy for approval<br>'
-        +'Listings → Product Catalog · Orders → Queue + Orders tab · 5-minute auto-sync'
-      +'</div>'
-    +'</div>';
-  }
-}
-
-async function connectEtsyPage(){
-  const clientId=(document.getElementById('etsy-page-client-id')?.value||'').trim();
-  const statusEl=document.getElementById('etsy-page-connect-status');
-  const btn=document.getElementById('etsy-page-connect-btn');
-  if(!clientId){if(statusEl)statusEl.textContent='⚠ Enter your Etsy Client ID (Keystring).';return;}
-  if(statusEl)statusEl.textContent='Saving credentials and opening Etsy authorization…';
-  if(btn){btn.disabled=true;btn.textContent='Opening Etsy…';}
-  try{
-    const resp=await fetch('/api/etsy/oauth/credentials',{
-      method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({clientId})
-    });
-    const data=await resp.json();
-    if(!resp.ok){
-      if(statusEl)statusEl.textContent='✗ '+(data.error||'Failed to save credentials');
-      if(btn){btn.disabled=false;btn.textContent='🟠 Connect with Etsy OAuth';}
-      return;
-    }
-    if(statusEl)statusEl.textContent='✓ Etsy authorization opened — authorize in the new tab…';
-    var oauthWin=window.open(data.authUrl,'_blank');
-    if(!oauthWin){window.location.href=data.authUrl;}
-  }catch(e){
-    if(statusEl)statusEl.textContent='✗ Network error — is the API server running?';
-    if(btn){btn.disabled=false;btn.textContent='🟠 Connect with Etsy OAuth';}
-  }
-}
+function renderEtsy(){}
+function connectEtsyPage(){}
+function connectEtsy(){}
+function disconnectEtsy(){}
+function previewEtsyDemo(){}
+async function checkEtsyConfig(){}
+function checkEtsyOAuthCallback(){}
+async function syncEtsyToCatalog(){}
+async function pollEtsyOrders(){}
 
 function previewShopifyDemo(){
   shopifyCfg.connected=true;
@@ -5061,18 +4939,16 @@ function quickUse(id){
 
 // ════════ NEW DATA ════════
 // Add to KEYS
-Object.assign(KEYS,{shiny:'ha3d_shiny_v1',etsy:'ha3d_etsy_v1',batch:'ha3d_batch_v1'});
-let shinyRolls=[],etsyCfg={domain:'',connected:false,lastOrderId:null,lastPoll:null},batchPlate=[];
+Object.assign(KEYS,{shiny:'ha3d_shiny_v1',batch:'ha3d_batch_v1'});
+let shinyRolls=[],batchPlate=[];
 
 const _origLoad=load;
 // extend load
 function loadV7(){
   shinyRolls=gs(KEYS.shiny);
-  etsyCfg={...etsyCfg,...go(KEYS.etsy)};
   batchPlate=gs(KEYS.batch);
 }
 function saveShiny(){ss(KEYS.shiny,shinyRolls);}
-function saveEtsy(){ss(KEYS.etsy,etsyCfg);}
 function saveBatch(){ss(KEYS.batch,batchPlate);}
 
 // ════════ TAB SWITCH EXTENSION ════════
@@ -5438,15 +5314,14 @@ function sendBatchToQueue(){
 // ════════ INTEGRATIONS ════════
 function renderIntegrations(){
   const shopifyPanel=renderIntegrationPanel('shopify');
-  const etsyPanel=renderIntegrationPanel('etsy');
-  document.getElementById('integrations-grid').innerHTML=shopifyPanel+etsyPanel;
+  document.getElementById('integrations-grid').innerHTML=shopifyPanel;
   // Unified order feed
-  const allIntOrders=orders.filter(o=>o.fromShopify||o.fromEtsy);
+  const allIntOrders=orders.filter(o=>o.fromShopify);
   if(allIntOrders.length){
     document.getElementById('unified-orders').style.display='block';
     document.getElementById('unified-orders-list').innerHTML=allIntOrders.slice().reverse().slice(0,10).map(o=>`
       <div class="uorder-row">
-        <span class="uorder-platform ${o.fromShopify?'up-shopify':'up-etsy'}">${o.fromShopify?'Shopify':'Etsy'}</span>
+        <span class="uorder-platform up-shopify">Shopify</span>
         <span style="font-family:'Orbitron',monospace;font-size:8px;color:var(--cyn)">${esc(o.orderId)}</span>
         <span style="flex:1;color:var(--txt-b)">${esc(o.customer)}</span>
         <span style="color:var(--grn)">$${(o.items||[]).reduce((a,i)=>a+parseFloat(i.price||0)*parseInt(i.qty||1),0).toFixed(2)}</span>
@@ -5458,7 +5333,7 @@ function renderIntegrations(){
 }
 
 function renderIntegrationPanel(type){
-  const cfg=type==='shopify'?shopifyCfg:etsyCfg;
+  const cfg=shopifyCfg;
   const color=type==='shopify'?'var(--shopify)':'#e07828';
   const label=type==='shopify'?'SHOPIFY':'ETSY';
   const btnClass=type==='shopify'?'btn-shopify':'btn-amb';
@@ -5491,8 +5366,8 @@ function renderIntegrationPanel(type){
           </div>
         </div>
         <div style="display:flex;gap:5px">
-          <button class="btn btn-ghost btn-sm" style="flex:1" onclick="${type==='shopify'?'syncShopifyToCatalog':'syncEtsyToCatalog'}()">↻ Sync Products</button>
-          <button class="btn btn-ghost btn-sm" style="flex:1" onclick="${type==='shopify'?'pollShopifyOrders':'pollEtsyOrders'}()">↻ Sync Orders</button>
+          <button class="btn btn-ghost btn-sm" style="flex:1" onclick="syncShopifyToCatalog()">↻ Sync Products</button>
+          <button class="btn btn-ghost btn-sm" style="flex:1" onclick="pollShopifyOrders()">↻ Sync Orders</button>
         </div>
         <div style="font-size:6px;color:var(--txt-d);margin-top:6px">Last synced: ${cfg.lastPoll?new Date(cfg.lastPoll).toLocaleTimeString():'-'} · Auto-polls every 5 min</div>
       </div>
@@ -5718,218 +5593,8 @@ window.addEventListener('message',function(e){
     toast('Shopify Error',e.data.message||'Connection failed.','error');
     var btn=document.querySelector('.btn-shopify');
     if(btn){btn.disabled=false;btn.textContent='🛍 Connect with Shopify';}
-  }else if(e.data.type==='etsy_oauth_complete'){
-    var eshop=e.data.shop||'Etsy Shop';
-    etsyCfg.domain=eshop;etsyCfg.connected=true;etsyCfg.lastPoll=null;
-    saveEtsy();render();
-    toast('Etsy Connected!','Shop '+eshop+' connected. Syncing now.','success');
-    syncEtsyToCatalog();
-    pollEtsyOrders();
-  }else if(e.data.type==='etsy_oauth_error'){
-    toast('Etsy Error',e.data.message||'Connection failed.','error');
-    var ebtn=document.querySelector('.btn-amb');
-    if(ebtn){ebtn.disabled=false;ebtn.textContent='🟠 Connect with Etsy OAuth';}
   }
 });
-
-async function connectEtsy(){
-  const clientId=(document.getElementById('etsy-client-id-input')?.value||'').trim();
-  const statusEl=document.getElementById('etsy-connect-status');
-  if(!clientId){if(statusEl)statusEl.textContent='⚠ Enter your Etsy Client ID (Keystring).';return;}
-  if(statusEl)statusEl.textContent='Saving credentials and opening Etsy authorization…';
-  const btn=document.querySelector('.btn-amb');
-  if(btn){btn.disabled=true;btn.textContent='Opening Etsy…';}
-  try{
-    const resp=await fetch('/api/etsy/oauth/credentials',{
-      method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({clientId})
-    });
-    const data=await resp.json();
-    if(!resp.ok){
-      if(statusEl)statusEl.textContent='✗ '+(data.error||'Failed to save credentials');
-      if(btn){btn.disabled=false;btn.textContent='🟠 Connect with Etsy OAuth';}
-      return;
-    }
-    if(statusEl)statusEl.textContent='✓ Etsy authorization opened — authorize the app in the new tab…';
-    var oauthWin=window.open(data.authUrl,'_blank');
-    if(!oauthWin){window.location.href=data.authUrl;}
-  }catch(e){
-    if(statusEl)statusEl.textContent='✗ Network error — check connection';
-    if(btn){btn.disabled=false;btn.textContent='🟠 Connect with Etsy OAuth';}
-  }
-}
-function disconnectEtsy(){
-  showConfirm('Disconnect Etsy?','Your local data will remain intact.',async()=>{
-    try{await fetch('/api/etsy/disconnect',{method:'DELETE'});}catch(e){}
-    etsyCfg={domain:'',connected:false,lastOrderId:null,lastPoll:null};
-    saveEtsy();render();
-    toast('Etsy Disconnected','','warning');
-  },'Disconnect','btn-red');
-}
-function previewEtsyDemo(){
-  etsyCfg.connected=true;
-  etsyCfg.domain='HypedAnubis3D (DEMO)';
-  saveEtsy();
-  renderEtsy();
-  setTimeout(()=>showNotification('Demo Listing Sync','4 Etsy listings loaded · 5 orders synced (demo)','demo-etsy'),1200);
-}
-
-async function checkEtsyConfig(){
-  try{
-    const resp=await fetch('/api/etsy/config');
-    if(!resp.ok) return;
-    const data=await resp.json();
-    if(data.connected&&data.shop&&!etsyCfg.connected){
-      etsyCfg.connected=true;
-      etsyCfg.domain=data.shop;
-      saveEtsy();render();
-    }
-  }catch(e){}
-}
-
-function checkEtsyOAuthCallback(){
-  const params=new URLSearchParams(window.location.search);
-  if(params.get('etsy_connected')==='true'){
-    const shop=params.get('shop')||'Etsy Shop';
-    window.history.replaceState({},'',window.location.pathname);
-    if(window.opener&&!window.opener.closed){
-      window.opener.postMessage({type:'etsy_oauth_complete',shop:shop},'*');
-      setTimeout(function(){window.close();},300);
-      return;
-    }
-    etsyCfg.domain=shop;etsyCfg.connected=true;etsyCfg.lastPoll=null;
-    saveEtsy();
-    setTimeout(function(){
-      toast('Etsy Connected!','Shop '+shop+' connected. Syncing now.','success');
-      syncEtsyToCatalog();pollEtsyOrders();render();
-    },500);
-  }else if(params.get('etsy_error')==='true'){
-    var msg=params.get('error_message')||'Connection failed. Please try again.';
-    window.history.replaceState({},'',window.location.pathname);
-    if(window.opener&&!window.opener.closed){
-      window.opener.postMessage({type:'etsy_oauth_error',message:decodeURIComponent(msg.replace(/\+/g,' '))},'*');
-      setTimeout(function(){window.close();},300);
-      return;
-    }
-    setTimeout(function(){toast('Etsy Error',decodeURIComponent(msg.replace(/\+/g,' ')),'error');},400);
-  }
-}
-
-async function syncEtsyToCatalog(){
-  if(!etsyCfg.connected) return;
-  try{
-    toast('Etsy Sync','Fetching Etsy listings…','info');
-    const resp=await fetch('/api/etsy/listings');
-    if(!resp.ok){
-      const d=await resp.json().catch(()=>({}));
-      toast('Etsy Sync Error',d.error||'Failed to fetch listings','error');
-      return;
-    }
-    const data=await resp.json();
-    const listings=data.listings||[];
-    if(!listings.length){toast('Etsy Sync','No active listings found','warning');return;}
-    let added=0,updated=0;
-    listings.forEach(function(l){
-      const etsyId=String(l.listing_id);
-      const name=(l.title||'').trim();
-      const price=l.price?(parseFloat(l.price.amount)/Math.max(1,parseInt(l.price.divisor||100))):0;
-      const category=(l.taxonomy_path&&l.taxonomy_path[0])||'Etsy';
-      const photo=(l.MainImage&&(l.MainImage.url_fullxfull||l.MainImage.url_570xN))||
-                  (l.Images&&l.Images[0]&&(l.Images[0].url_fullxfull||l.Images[0].url_570xN))||'';
-      const tags=l.tags||[];
-      // Try to find existing item by etsyId first, then by name-match with Shopify
-      let existing=catalogItems.find(function(c){return c.etsyId===etsyId;});
-      if(!existing&&name){
-        const nameLower=name.toLowerCase();
-        existing=catalogItems.find(function(c){
-          return c.name&&c.name.toLowerCase()===nameLower;
-        });
-      }
-      if(existing){
-        existing.etsyId=etsyId;
-        existing.fromEtsy=true;
-        if(!existing.price) existing.price=price;
-        if(!existing.photo&&photo) existing.photo=photo;
-        if(tags.length&&(!existing.tags||!existing.tags.length)) existing.tags=tags;
-        updated++;
-      }else{
-        catalogItems.push({
-          id:uid(),name:name,etsyId:etsyId,fromEtsy:true,
-          price:price,photo:photo,category:category,tags:tags,
-          variants:[],cost:0,description:'',createdAt:new Date().toISOString()
-        });
-        added++;
-      }
-    });
-    saveCatalog();
-    etsyCfg.lastPoll=Date.now();saveEtsy();
-    toast('Etsy Products Synced',added+' added, '+updated+' updated','success');
-    render();
-  }catch(e){
-    toast('Etsy Sync Error','Network error — is the API server running?','error');
-  }
-}
-
-async function pollEtsyOrders(){
-  if(!etsyCfg.connected) return;
-  try{
-    const resp=await fetch('/api/etsy/orders');
-    if(!resp.ok) return;
-    const data=await resp.json();
-    const receipts=data.receipts||[];
-    let added=0;
-    receipts.forEach(function(r){
-      const etsyOrderId='ETSY-'+r.receipt_id;
-      if(orders.find(function(o){return o.orderId===etsyOrderId;})) return;
-      const statusMap={open:'pending',paid:'pending',complete:'shipped',cancelled:'cancelled'};
-      const status=statusMap[r.status]||'pending';
-      const items=(r.transactions||[]).map(function(t){
-        return{name:t.title||'Item',qty:t.quantity||1,price:String((t.price&&t.price.amount?t.price.amount/Math.max(1,t.price.divisor||100):0).toFixed(2))};
-      });
-      const customer=r.name||(r.buyer_email?r.buyer_email.split('@')[0]:'Etsy Buyer');
-      const total=items.reduce(function(a,i){return a+parseFloat(i.price)*parseInt(i.qty||1);},0);
-      const newOrder={
-        id:uid(),orderId:etsyOrderId,etsyReceiptId:r.receipt_id,
-        customer:customer,email:r.buyer_email||'',platform:'Etsy',fromEtsy:true,
-        date:r.created_timestamp?new Date(r.created_timestamp*1000).toISOString().split('T')[0]:new Date().toISOString().split('T')[0],
-        items:items,status:status,shipping:0,notes:'Etsy order',
-        timestamp:r.created_timestamp?r.created_timestamp*1000:Date.now()
-      };
-      orders.push(newOrder);
-      added++;
-      // Auto-queue items
-      items.forEach(function(item){
-        var catItem=catalogItems.find(function(c){return c.name&&c.name.toLowerCase()===item.name.toLowerCase();});
-        var matchTmf=catItem&&catItem.tmfId?tmfLib.find(function(t){return t.id===catItem.tmfId;}):
-          tmfLib.find(function(t){return t.name&&(t.name.toLowerCase().includes(item.name.split(' ')[0].toLowerCase())||item.name.toLowerCase().includes(t.name.split(' ')[0].toLowerCase()));});
-        queueItems.push({
-          id:uid(),name:item.name,
-          category:catItem?catItem.category:'Etsy',
-          printer:printerRecords[0]?.name||'X1C',
-          hrs:matchTmf?matchTmf.hrs||0:0,
-          qty:parseInt(item.qty||1),priority:'normal',orderId:etsyOrderId,
-          stage:'queued',fromEtsy:true,
-          noTmf:!matchTmf,
-          tmfId:matchTmf?matchTmf.id:null,
-          notes:matchTmf?'3MF matched: '+matchTmf.name:'⚠ No 3MF — update print info before starting',
-          timestamp:Date.now()
-        });
-      });
-    });
-    if(added>0){
-      saveOrders();saveQueue();
-      etsyCfg.lastPoll=Date.now();saveEtsy();
-      toast('Etsy Orders Synced',added+' new order'+(added!==1?'s':'')+' imported','success');
-      render();
-      document.getElementById('nav-badge-queue')?.classList.add('show');
-      document.getElementById('nav-badge-orders')?.classList.add('show');
-    }else{
-      etsyCfg.lastPoll=Date.now();saveEtsy();
-    }
-  }catch(e){
-    toast('Etsy Sync Error','Network error — is the API server running?','error');
-  }
-}
 
 // ════════ PRICE ENGINE ════════
 async function runPriceAnalysis(){
@@ -6009,8 +5674,7 @@ function exportData(){
   const backup={
     version:'ha3d_v7',exportedAt:new Date().toISOString(),
     spools,prints,tmfLib,queueItems,orders,sales,usageHist,
-    shinyRolls,maintLog,cfg,shopifyCfg:{domain:shopifyCfg.domain,connected:shopifyCfg.connected},
-    etsyCfg:{domain:etsyCfg.domain,connected:etsyCfg.connected}
+    shinyRolls,maintLog,cfg,shopifyCfg:{domain:shopifyCfg.domain,connected:shopifyCfg.connected}
   };
   const blob=new Blob([JSON.stringify(backup,null,2)],{type:'application/json'});
   const url=URL.createObjectURL(blob);
@@ -6549,7 +6213,7 @@ function savePokemonMap(){localStorage.setItem(KEYS.pokemonMap,JSON.stringify(po
 Object.assign(TAB_NAMES,{printers:'Printers',fulfillment:'Fulfillment',restock:'Restock & Shop List',failrate:'Fail Rates & Waste'});
 
 // Extend ALL_TABS
-ALL_TABS.push('printers','fulfillment','restock','failrate','shopify','etsy');
+ALL_TABS.push('printers','fulfillment','restock','failrate','shopify');
 Object.assign(TAB_NAMES,{shopify:'Shopify'});
 
 // ════════════════════════════════════════
@@ -7586,8 +7250,7 @@ function exportData(){
     version:'ha3d_v10',exportedAt:new Date().toISOString(),
     spools,prints,tmfLib,queueItems,orders,sales,usageHist,
     shinyRolls,maintLog,wasteLog,printerRecords,cfg,
-    shopifyCfg:{domain:shopifyCfg.domain,connected:shopifyCfg.connected},
-    etsyCfg:{domain:etsyCfg.domain,connected:etsyCfg.connected}
+    shopifyCfg:{domain:shopifyCfg.domain,connected:shopifyCfg.connected}
   };
   const blob=new Blob([JSON.stringify(backup,null,2)],{type:'application/json'});
   const url=URL.createObjectURL(blob);
@@ -7798,7 +7461,6 @@ function render(){
   if(curTab==='maint')      {renderMaint();renderNozzle();}
   if(curTab==='forecast')   renderForecast();
   if(curTab==='shopify')    renderShopify();
-  if(curTab==='etsy')       renderEtsy();
   if(curTab==='history')    renderHistory();
   if(curTab==='stats')      renderStats();
   if(curTab==='backup')     {renderBackup();checkBackupReminder();}
@@ -8062,7 +7724,6 @@ function initSupabase(){
           await pullFromCloud(true);
           render();
           checkShopifyConfig();
-          checkEtsyConfig();
         }
         startAutoSync();
       }else{
@@ -8261,13 +7922,11 @@ function toggleCloudPanel(){
 function syncAll(){
   pushAllToCloud();
   if(shopifyCfg&&shopifyCfg.connected)pollShopifyOrders();
-  if(etsyCfg&&etsyCfg.connected)pollEtsyOrders();
   toast('Pushing...','Sending all local changes to cloud','info',2000);
 }
 function pullAll(){
   pullFromCloud();
   if(shopifyCfg&&shopifyCfg.connected)pollShopifyOrders();
-  if(etsyCfg&&etsyCfg.connected)pollEtsyOrders();
   toast('Pulling...','Fetching latest from all sources','info',2000);
 }
 async function pushAllToCloud(){
@@ -11063,7 +10722,6 @@ function startAutoSync(){
     await processSyncQueue();
     await pullFromCloud(true);
     if(shopifyCfg&&shopifyCfg.connected)pollShopifyOrders();
-    if(etsyCfg&&etsyCfg.connected)pollEtsyOrders();
     updateMysteryBadge();
     autoSyncNextAt=Date.now()+ms;
     updateAutoSyncCountdown();
@@ -11513,8 +11171,6 @@ async function testPushNotification(){
 // ── Check for OAuth redirect params on page load ──
 function _onReady(){
   setTimeout(checkShopifyOAuthCallback,700);
-  setTimeout(checkEtsyOAuthCallback,750);
-  setTimeout(checkEtsyConfig,1500);
   // Service worker + push notifications
   setTimeout(initPushNotifications,1000);
   // Handle push notification action from URL
