@@ -8331,6 +8331,7 @@ async function processSyncQueue(){
   isSyncing=true;
   updateSyncIndicator('syncing');
   let totalSuccess=0,totalFailed=0,lockContention=false;
+  const syncedCollections=new Set();
   try{
     while(syncQueue.length>0){
       const queue=[...syncQueue];
@@ -8343,6 +8344,7 @@ async function processSyncQueue(){
           const{error}=result;
           if(error)throw new Error(error.message);
           syncQueue=syncQueue.filter(q=>q.timestamp!==item.timestamp);
+          syncedCollections.add(item.collection);
           success++;
         }catch(e){
           const emsg=sbErrMsg(e);
@@ -8367,7 +8369,12 @@ async function processSyncQueue(){
       setTimeout(()=>processSyncQueue(),3000); // retry whole batch once token lock clears
     }else if(totalFailed===0){
       updateSyncIndicator('connected');
-      if(totalSuccess>0)addSyncLog('Synced '+totalSuccess+' collection'+(totalSuccess!==1?'s':'')+' ✓','ok');
+      if(totalSuccess>0){
+        addSyncLog('Synced '+totalSuccess+' collection'+(totalSuccess!==1?'s':'')+' ✓','ok');
+        if(syncedCollections.has('orders')){
+          toast('Orders Synced',orders.length+' order'+(orders.length!==1?'s':'')+' saved to cloud','success');
+        }
+      }
     }else{
       updateSyncIndicator('error');
     }
@@ -12193,11 +12200,13 @@ async function searchEvents(){
   }
 }
 
-// ── VISIBILITY CHANGE — only sync if been > 2 min since last sync ──
+// ── VISIBILITY CHANGE — dedicate separate timer so push-queue updates don't reset the gap ──
+let _lastTabSyncTime=0;
 document.addEventListener('visibilitychange',function(){
   if(document.visibilityState==='visible'&&currentUser&&isOnline){
-    const minGap=2*60*1000;
-    if(!lastSyncTime||Date.now()-lastSyncTime>minGap){
+    const now=Date.now();
+    if(now-_lastTabSyncTime>5*60*1000){
+      _lastTabSyncTime=now;
       pullFromCloud(true);
     }
   }
