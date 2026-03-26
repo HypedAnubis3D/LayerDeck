@@ -1813,8 +1813,22 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
     </div>
     <!-- items -->
     <div>
-      <div style="font-size:9px;color:var(--txt-d);margin-bottom:4px;letter-spacing:1px;font-family:'Inter',sans-serif">ITEMS — Name · Qty · $Price per line</div>
-      <textarea id="qo-items" rows="2" placeholder="e.g. Anubis Figure · 1 · $35.00" style="width:100%;background:var(--bg);border:1px solid var(--bdr2);color:var(--txt);padding:6px 9px;font-family:'Share Tech Mono',monospace;font-size:10px;border-radius:6px;resize:vertical;box-sizing:border-box"></textarea>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">
+        <div style="font-size:9px;color:var(--txt-d);letter-spacing:1px;font-family:'Inter',sans-serif">ITEMS</div>
+        <span id="qo-items-total" style="font-family:'Orbitron',monospace;font-size:11px;color:var(--grn);font-weight:700"></span>
+      </div>
+      <!-- column headers -->
+      <div class="oi-row" style="margin-bottom:3px">
+        <div class="oi-col-lbl" style="text-align:left">Product / Name</div>
+        <div class="oi-col-lbl">Qty</div>
+        <div class="oi-col-lbl">Price $</div>
+        <div></div>
+      </div>
+      <div id="qo-item-rows"></div>
+      <div style="display:flex;gap:6px;margin-top:4px">
+        <button type="button" class="btn btn-ghost" style="flex:1;font-size:10px;padding:5px 4px" onclick="addOrderItemRow('catalog',null,'qo-item-rows')">📦 From Catalog</button>
+        <button type="button" class="btn btn-ghost" style="flex:1;font-size:10px;padding:5px 4px" onclick="addOrderItemRow('manual',null,'qo-item-rows')">✏️ Manual</button>
+      </div>
     </div>
     <!-- platform + submit -->
     <div style="display:flex;gap:8px;align-items:center">
@@ -4825,21 +4839,25 @@ function saveQueueItem(){
 function closeQueue(){document.getElementById('mod-queue').style.display='none';}
 
 // ── ORDER ITEM ROW HELPERS ──
-function clearOrderItemRows(){
-  const c=document.getElementById('eo-item-rows');
+function clearOrderItemRows(cid){
+  cid=cid||'eo-item-rows';
+  const c=document.getElementById(cid);
   if(c)c.innerHTML='';
-  const el=document.getElementById('eo-items-total');
+  const totalId=cid==='eo-item-rows'?'eo-items-total':'qo-items-total';
+  const el=document.getElementById(totalId);
   if(el)el.textContent='';
 }
-function addOrderItemRow(type,item){
+function addOrderItemRow(type,item,cid){
+  cid=cid||'eo-item-rows';
   const id=uid();
-  const container=document.getElementById('eo-item-rows');
+  const container=document.getElementById(cid);
   if(!container)return;
   const row=document.createElement('div');
   row.className='oi-row';row.id='oir-'+id;
   const qty=item?(item.qty||1):1;
   const rawPrice=item?(parseFloat(item.price)||0):'';
   const priceVal=rawPrice!==''?parseFloat(rawPrice).toFixed(2):'';
+  const updCall='updateOrderItemsTotal(\''+cid+'\')';
   if(type==='catalog'){
     const prefillName=item&&item.name?esc(item.name):'';
     const prefillCatId=item&&item._catalogId?item._catalogId:'';
@@ -4847,17 +4865,17 @@ function addOrderItemRow(type,item){
       +'<input type="text" class="oir-name oir-cat-inp" placeholder="Search catalog…" value="'+prefillName+'" data-cat-id="'+prefillCatId+'" oninput="filterCatSearch(\''+id+'\')" onfocus="filterCatSearch(\''+id+'\')" autocomplete="off">'
       +'<div class="oi-cat-results" id="oi-res-'+id+'" style="display:none"></div>'
       +'</div>'
-      +'<input class="oir-qty" type="number" min="1" value="'+qty+'" oninput="updateOrderItemsTotal()">'
-      +'<input class="oir-price" type="number" min="0" step="0.01" value="'+priceVal+'" placeholder="0.00" oninput="updateOrderItemsTotal()">'
-      +'<button class="oi-rm" onclick="removeOrderItemRow(\''+id+'\')">✕</button>';
+      +'<input class="oir-qty" type="number" min="1" value="'+qty+'" oninput="'+updCall+'">'
+      +'<input class="oir-price" type="number" min="0" step="0.01" value="'+priceVal+'" placeholder="0.00" oninput="'+updCall+'">'
+      +'<button class="oi-rm" onclick="removeOrderItemRow(\''+id+'\',\''+cid+'\')">✕</button>';
   }else{
     row.innerHTML='<input class="oir-name" type="text" placeholder="Item name…" value="'+esc(item?item.name:'')+'">'
-      +'<input class="oir-qty" type="number" min="1" value="'+qty+'" oninput="updateOrderItemsTotal()">'
-      +'<input class="oir-price" type="number" min="0" step="0.01" value="'+priceVal+'" placeholder="0.00" oninput="updateOrderItemsTotal()">'
-      +'<button class="oi-rm" onclick="removeOrderItemRow(\''+id+'\')">✕</button>';
+      +'<input class="oir-qty" type="number" min="1" value="'+qty+'" oninput="'+updCall+'">'
+      +'<input class="oir-price" type="number" min="0" step="0.01" value="'+priceVal+'" placeholder="0.00" oninput="'+updCall+'">'
+      +'<button class="oi-rm" onclick="removeOrderItemRow(\''+id+'\',\''+cid+'\')">✕</button>';
   }
   container.appendChild(row);
-  updateOrderItemsTotal();
+  updateOrderItemsTotal(cid);
 }
 function filterCatSearch(rowId){
   const row=document.getElementById('oir-'+rowId);
@@ -4896,26 +4914,30 @@ function selectCatResult(rowId,catalogId){
   if(priceInp)priceInp.value=parseFloat(cat.price||0).toFixed(2);
   const res=document.getElementById('oi-res-'+rowId);
   if(res)res.style.display='none';
-  updateOrderItemsTotal();
+  const cid=row.parentElement?row.parentElement.id:'eo-item-rows';
+  updateOrderItemsTotal(cid);
 }
-function removeOrderItemRow(rowId){
+function removeOrderItemRow(rowId,cid){
   const row=document.getElementById('oir-'+rowId);
   if(row)row.remove();
-  updateOrderItemsTotal();
+  updateOrderItemsTotal(cid||'eo-item-rows');
 }
-function updateOrderItemsTotal(){
-  const rows=document.querySelectorAll('#eo-item-rows .oi-row');
+function updateOrderItemsTotal(cid){
+  cid=cid||'eo-item-rows';
+  const rows=document.querySelectorAll('#'+cid+' .oi-row');
   let total=0;
   rows.forEach(function(row){
     const qty=parseInt(row.querySelector('.oir-qty').value)||1;
     const price=parseFloat(row.querySelector('.oir-price').value)||0;
     total+=qty*price;
   });
-  const el=document.getElementById('eo-items-total');
+  const totalId=cid==='eo-item-rows'?'eo-items-total':'qo-items-total';
+  const el=document.getElementById(totalId);
   if(el)el.textContent=total>0?'$'+total.toFixed(2):'';
 }
-function getOrderItems(){
-  const rows=document.querySelectorAll('#eo-item-rows .oi-row');
+function getOrderItems(cid){
+  cid=cid||'eo-item-rows';
+  const rows=document.querySelectorAll('#'+cid+' .oi-row');
   const items=[];
   rows.forEach(function(row){
     const nameEl=row.querySelector('.oir-name');
@@ -11369,25 +11391,22 @@ function toggleQuickOrderBar(){
   if(!showing){
     var custEl=document.getElementById('qo-cust');
     if(custEl){custEl.value='';custEl.focus();}
-    var itEl=document.getElementById('qo-items');if(itEl)itEl.value='';
+    clearOrderItemRows('qo-item-rows');
+    addOrderItemRow('manual',null,'qo-item-rows');
   }
 }
 function quickAddOrder(){
   var cust=(document.getElementById('qo-cust')?.value||'').trim();
   if(!cust){toast('Customer name required','','warning');document.getElementById('qo-cust')?.focus();return;}
-  var rawItems=(document.getElementById('qo-items')?.value||'').trim();
   var plat=document.getElementById('qo-plat')?.value||'Direct';
-  var items=rawItems?rawItems.split('\n').filter(Boolean).map(function(l){
-    var pts=l.split('·').map(function(p){return p.trim();});
-    return{name:pts[0]||'Item',qty:parseInt(pts[1])||1,price:parseFloat((pts[2]||'0').replace('$',''))||0};
-  }):[];
-  if(!items.length){toast('Add at least one item','e.g. Anubis Figure · 1 · $35','warning');return;}
+  var items=getOrderItems('qo-item-rows');
+  if(!items.length){toast('Add at least one item','Use 📦 From Catalog or ✏️ Manual','warning');return;}
   var order={
     id:uid(),
     orderId:'ORD-'+Date.now().toString().slice(-5),
     customer:cust,platform:plat,
     date:new Date().toISOString().split('T')[0],
-    items,status:'pending',shipping:0,notes:'Quick add',
+    items:items,status:'pending',shipping:0,notes:'Quick add',
     fromConvention:plat==='Convention',
     timestamp:Date.now()
   };
@@ -11396,6 +11415,7 @@ function quickAddOrder(){
   document.getElementById('nav-badge-orders')?.classList.add('show');
   render();
   toast('Order Created',order.orderId+' — '+cust,'success');
+  autoQueueOrderItems(order);
 }
 
 // ════════ CONVENTION SALE → ORDER RECORD ════════
