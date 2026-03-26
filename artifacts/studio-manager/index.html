@@ -8037,7 +8037,7 @@ function initSupabase(){
         updateCloudPanel();
         if(event==='SIGNED_IN'||event==='INITIAL_SESSION'){
           addSyncLog('Signed in as '+currentUser.email,'ok');
-          await new Promise(r=>setTimeout(r,800));
+          await new Promise(r=>setTimeout(r,1500));
           await pullFromCloud(true);
           render();
           checkShopifyConfig();
@@ -8124,7 +8124,21 @@ async function processSyncQueue(){
           if(error)throw new Error(error.message);
           syncQueue=syncQueue.filter(q=>q.timestamp!==item.timestamp);
           success++;
-        }catch(e){failed++;addSyncLog('Sync failed for '+item.collection+': '+sbErrMsg(e),'err');}
+        }catch(e){
+          const emsg=sbErrMsg(e);
+          // Retry once on token-refresh lock contention
+          if(emsg&&emsg.toLowerCase().includes('lock')&&emsg.toLowerCase().includes('stole')){
+            await new Promise(r=>setTimeout(r,1500));
+            try{
+              const r2=await sbWithTimeout(
+                supabaseClient.from('ha3d_user_data').upsert({user_id:currentUser.id,collection:item.collection,payload:item.data,updated_at:new Date().toISOString()})
+              );
+              if(r2.error)throw new Error(r2.error.message);
+              syncQueue=syncQueue.filter(q=>q.timestamp!==item.timestamp);
+              success++;
+            }catch(e2){failed++;addSyncLog('Sync failed for '+item.collection+': '+sbErrMsg(e2),'err');}
+          }else{failed++;addSyncLog('Sync failed for '+item.collection+': '+emsg,'err');}
+        }
       }
       totalSuccess+=success;totalFailed+=failed;
       if(failed>0)break;
@@ -8150,7 +8164,7 @@ function sbErrMsg(e){
   return e.message||e.error_description||e.msg||e.code||JSON.stringify(e);
 }
 
-async function pullFromCloud(silent=false){
+async function pullFromCloud(silent=false,_lockRetry=false){
   if(!supabaseClient||!currentUser){if(!silent)toast('Not signed in','Please sign in first','error');return;}
   // If a sync is already in-flight, wait for it to finish before pulling
   // (prevents Supabase auth-token lock contention)
@@ -8203,6 +8217,13 @@ async function pullFromCloud(silent=false){
     }
   }catch(e){
     const msg=sbErrMsg(e);
+    // Supabase token-refresh lock race: retry once after a short wait
+    if(!_lockRetry&&msg&&msg.toLowerCase().includes('lock')&&msg.toLowerCase().includes('stole')){
+      isSyncing=false;
+      addSyncLog('Token lock contention — retrying pull…','info');
+      await new Promise(r=>setTimeout(r,1500));
+      return pullFromCloud(silent,true);
+    }
     console.error('pullFromCloud error:',msg,e);
     updateSyncIndicator('error');
     addSyncLog('Pull failed: '+msg,'err');
