@@ -4164,7 +4164,8 @@ function renderOrders(){
         ?'<span class="uorder-platform up-etsy">🟠 Etsy</span>'
         :'<span class="uorder-platform" style="background:var(--bdr);color:var(--txt-d);border:1px solid var(--bdr2)">✏ Manual</span>';
     var borderAccent=shopify?'var(--shopify)':etsy?'#e07828':'var(--bdr)';
-    return '<div class="order-card'+(sel?' selected':'')+'" data-selid="'+o.id+'" style="border-top:2px solid '+borderAccent+'" onclick="if(selectMode===\'orders\')toggleSelect(\''+o.id+'\')">'
+    return '<div class="order-card selectable'+(sel?' selected':'')+'" data-selid="'+o.id+'" style="border-top:2px solid '+borderAccent+'" onclick="if(selectMode===\'orders\')toggleSelect(\''+o.id+'\')">'
+      +'<input type="checkbox" class="sel-checkbox"'+(sel?' checked':'')+' onclick="event.stopPropagation();toggleSelect(\''+o.id+'\')" />'
       +'<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">'
         +'<div style="flex:1;min-width:0">'
           +'<div style="display:flex;align-items:center;gap:5px;margin-bottom:2px">'+platformBadge+'</div>'
@@ -6707,7 +6708,10 @@ function renderSpools(){
     const safeKey=key.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
 
     const matColor=MAT_C[rep.material]||'#666';
-    return '<div class="card" style="border-left:3px solid '+rep.color+';cursor:pointer" onclick="toggleSpoolGroup(\''+safeKey+'\')">'
+    const allSel=selectMode==='spools'&&ss.every(function(s){return selectedIds.includes(s.id);});
+    const someSel=selectMode==='spools'&&ss.some(function(s){return selectedIds.includes(s.id);});
+    return '<div class="card selectable'+(allSel?' selected':'')+'" style="border-left:3px solid '+rep.color+';cursor:pointer" onclick="if(selectMode===\'spools\'){toggleSpoolGroupSelect(\''+safeKey+'\');}else{toggleSpoolGroup(\''+safeKey+'\');}">'
+      +'<input type="checkbox" class="sel-checkbox"'+(allSel?' checked':'')+' style="'+(someSel&&!allSel?'opacity:.5':'')+'" onclick="event.stopPropagation();toggleSpoolGroupSelect(\''+safeKey+'\')" />'
 
       // ── Header ──
       +'<div style="display:flex;align-items:center;gap:8px">'
@@ -11706,9 +11710,11 @@ let selectMode=''; // 'spools','orders','queue','printers'
 
 function enterSelectMode(mode){
   selectMode=mode;selectedIds=[];
-  const grid=document.getElementById(mode+'-grid')||document.getElementById(mode+'-content')||document.getElementById('kanban-board');
+  const gridId=mode==='spools'?'spool-grid':mode+'-grid';
+  const grid=document.getElementById(gridId)||document.getElementById(mode+'-content')||document.getElementById('kanban-board');
   if(grid)grid.classList.add('multi-select-mode');
   if(mode==='queue')renderQueue();
+  else if(mode==='spools')renderSpools();
   updateBulkBar();
 }
 function toggleSelect(id){
@@ -11718,6 +11724,18 @@ function toggleSelect(id){
   // Toggle visual
   const card=document.querySelector('[data-selid="'+id+'"]');
   if(card)card.classList.toggle('selected',selectedIds.includes(id));
+  updateBulkBar();
+}
+function toggleSpoolGroupSelect(key){
+  const groupSpools=spools.filter(function(s){return getGroupKey(s)===key;});
+  const groupIds=groupSpools.map(function(s){return s.id;});
+  const allSel=groupIds.every(function(id){return selectedIds.includes(id);});
+  if(allSel){
+    selectedIds=selectedIds.filter(function(id){return !groupIds.includes(id);});
+  } else {
+    groupIds.forEach(function(id){if(!selectedIds.includes(id))selectedIds.push(id);});
+  }
+  renderSpools();
   updateBulkBar();
 }
 function updateBulkBar(){
