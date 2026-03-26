@@ -2277,7 +2277,7 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
   <div class="ctrl" style="flex-wrap:wrap;gap:6px">
     <button class="btn btn-teal" onclick="openLogShipping()">+ Log Shipment</button>
     <button class="btn btn-sm" style="background:rgba(34,170,204,.1);border:1px solid var(--cyn);color:var(--cyn)" onclick="openShipFromOrder()" title="Pre-fill from an existing order">📬 Log from Order</button>
-    <span style="font-size:7px;color:var(--txt-d);letter-spacing:1px">Track actual vs charged shipping to optimise your rates</span>
+    <span style="font-size:7px;color:var(--txt-d);letter-spacing:1px">Track shipments, carriers, and addresses</span>
   </div>
   <div class="shipping-summary" id="shipping-summary"></div>
   <div id="shipping-list"></div>
@@ -2559,10 +2559,7 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
   <div class="field"><div class="fl">Order</div>
     <select id="esh-order" style="width:100%;background:var(--bg);border:1px solid var(--bdr2);color:var(--txt);padding:7px 9px;font-family:'Share Tech Mono',monospace;font-size:9px;border-radius:3px;"></select>
   </div>
-  <div class="fr2">
-    <div class="field"><div class="fl">Charged to Customer ($)</div><input type="number" id="esh-charged" min="0" step="0.01" placeholder="5.99"/></div>
-    <div class="field"><div class="fl">Actual Cost ($)</div><input type="number" id="esh-actual" min="0" step="0.01" placeholder="4.50"/></div>
-  </div>
+  <div class="field"><div class="fl">Shipping Charged ($)</div><input type="number" id="esh-charged" min="0" step="0.01" placeholder="5.99"/></div>
   <div class="fr2">
     <div class="field"><div class="fl">Carrier</div>
       <select id="esh-carrier"><option>USPS</option><option>UPS</option><option>FedEx</option><option>DHL</option><option>Other</option></select>
@@ -6873,7 +6870,7 @@ function ingestShopifyOrder(o){
   if((shipping>0||shippingAddress)&&!shippingLog.some(function(s){return s.orderId===orderId;})){
     const slCarrier=(o.shipping_lines&&o.shipping_lines[0]&&o.shipping_lines[0].title?o.shipping_lines[0].title:'Shipping');
     const slTracking=(o.fulfillments&&o.fulfillments[0]&&o.fulfillments[0].tracking_number?o.fulfillments[0].tracking_number:'');
-    shippingLog.push({id:uid(),orderId,charged:shipping,actual:0,carrier:slCarrier,date:order.date,tracking:slTracking,fromShopify:true,timestamp:Date.now()});
+    shippingLog.push({id:uid(),orderId,charged:shipping,carrier:slCarrier,date:order.date,tracking:slTracking,fromShopify:true,timestamp:Date.now()});
     saveShippingLog();
   }
   // Check repeat customer
@@ -10264,30 +10261,25 @@ function closePurchase(){document.getElementById('mod-purchase').style.display='
 // ── SHIPPING TRACKER ──
 function renderShipping(){
   const totalCharged=shippingLog.reduce((a,s)=>a+(s.charged||0),0);
-  const totalActual=shippingLog.reduce((a,s)=>a+(s.actual||0),0);
-  const diff=totalCharged-totalActual;
   const avgCharged=shippingLog.length?totalCharged/shippingLog.length:0;
-  const avgActual=shippingLog.length?totalActual/shippingLog.length:0;
+  const withTracking=shippingLog.filter(s=>s.tracking).length;
   document.getElementById('shipping-summary').innerHTML=`
-    <div class="shipping-stat"><div class="shipping-stat-n" style="color:var(--cyn)">$${totalCharged.toFixed(2)}</div><div class="shipping-stat-l">Total Charged</div></div>
-    <div class="shipping-stat"><div class="shipping-stat-n" style="color:var(--org-b)">$${totalActual.toFixed(2)}</div><div class="shipping-stat-l">Actual Cost</div></div>
-    <div class="shipping-stat"><div class="shipping-stat-n" style="color:${diff>=0?'var(--grn-b)':'var(--red-b)'}">$${Math.abs(diff).toFixed(2)}</div><div class="shipping-stat-l">${diff>=0?'Surplus':'Deficit'}</div></div>
-    <div class="shipping-stat"><div class="shipping-stat-n" style="color:var(--gold-b)">$${avgActual.toFixed(2)}</div><div class="shipping-stat-l">Avg Actual</div></div>`;
+    <div class="shipping-stat"><div class="shipping-stat-n" style="color:var(--cyn)">$${totalCharged.toFixed(2)}</div><div class="shipping-stat-l">Total Shipped</div></div>
+    <div class="shipping-stat"><div class="shipping-stat-n" style="color:var(--grn-b)">${shippingLog.length}</div><div class="shipping-stat-l">Shipments</div></div>
+    <div class="shipping-stat"><div class="shipping-stat-n" style="color:var(--gold-b)">$${avgCharged.toFixed(2)}</div><div class="shipping-stat-l">Avg Charged</div></div>
+    <div class="shipping-stat"><div class="shipping-stat-n" style="color:var(--pur-b)">${withTracking}</div><div class="shipping-stat-l">Tracked</div></div>`;
   const el=document.getElementById('shipping-list');
-  if(!shippingLog.length){el.innerHTML=emptyState('📬','No Shipments Logged','Log every shipment to see if your shipping charges are covering actual costs',`<button class="btn btn-teal" onclick="openLogShipping()">+ Log First Shipment</button>`);return;}
+  if(!shippingLog.length){el.innerHTML=emptyState('📬','No Shipments Logged','Shipments from Shopify orders are added automatically — or log one manually',`<button class="btn btn-teal" onclick="openLogShipping()">+ Log First Shipment</button>`);return;}
   el.innerHTML=`<div style="background:var(--surf);border:1px solid var(--bdr);border-radius:6px;overflow:hidden">`+[...shippingLog].reverse().map(s=>{
-    const d=s.charged-s.actual;
     const order=orders.find(o=>o.id===s.orderId||o.orderId===s.orderId);
     return `<div class="shipping-row">
       <div style="flex:1">
         <div style="color:var(--txt-b);font-weight:bold">${esc(order?.customer||s.orderId||'—')}<span style="font-size:6px;color:var(--txt-d);font-weight:400;margin-left:6px">${esc(s.orderId||'')}</span></div>
         ${order?.shippingAddress?`<div style="font-size:7px;color:var(--cyn);margin-bottom:1px">📍 ${esc(order.shippingAddress)}</div>`:''}
         <div style="font-size:6px;color:var(--txt-d)">${esc(s.carrier||'—')} · ${s.date||'—'}${s.tracking?' · 📦 '+esc(s.tracking):''}</div>
-        ${s.actual===0&&s.fromShopify?`<div style="font-size:6px;color:var(--amb)">⚠ Actual cost not yet entered</div>`:''}
       </div>
-      <div style="text-align:right">
-        <div style="font-size:8px;color:var(--txt-d)">Charged: $${(s.charged||0).toFixed(2)} · Actual: $${(s.actual||0).toFixed(2)}</div>
-        <div class="shipping-diff" style="color:${d>=0?'var(--grn-b)':'var(--red-b)'}">${d>=0?'+':''}$${d.toFixed(2)}</div>
+      <div style="text-align:right;flex-shrink:0">
+        <div class="shipping-diff" style="color:var(--cyn)">$${(s.charged||0).toFixed(2)}</div>
       </div>
       <button class="btn btn-xs" style="background:var(--red-d);border:1px solid var(--red-d);color:var(--red-b)" onclick="delShipping('${s.id}')">✕</button>
     </div>`;
@@ -10296,7 +10288,7 @@ function renderShipping(){
 function openLogShipping(){
   const sel=document.getElementById('esh-order');
   sel.innerHTML=`<option value="">— Select Order —</option>`+[...orders].reverse().map(o=>`<option value="${o.id}">${esc(o.orderId)} — ${esc(o.customer)}</option>`).join('');
-  ['esh-charged','esh-actual','esh-tracking'].forEach(i=>document.getElementById(i).value='');
+  ['esh-charged','esh-tracking'].forEach(i=>document.getElementById(i).value='');
   document.getElementById('esh-date').value=new Date().toISOString().split('T')[0];
   document.getElementById('mod-shipping').style.display='flex';
 }
@@ -10341,23 +10333,19 @@ function prefillShipFromOrder(orderId){
   // Pre-fill charged shipping from order
   const charged=parseFloat(o.shipping)||0;
   document.getElementById('esh-charged').value=charged||'';
-  document.getElementById('esh-actual').value='';
   document.getElementById('esh-tracking').value=o.trackingNumber||o.tracking||'';
   document.getElementById('esh-date').value=o.date||new Date().toISOString().split('T')[0];
   if(o.carrier&&document.getElementById('esh-carrier'))
     document.getElementById('esh-carrier').value=o.carrier;
   document.getElementById('mod-shipping').style.display='flex';
-  if(charged)toast('Shipping Pre-filled','$'+charged.toFixed(2)+' charged from order — enter actual cost below','info',3000);
+  if(charged)toast('Shipping Pre-filled','$'+charged.toFixed(2)+' from order','info',3000);
 }
 function saveShipping(){
   const charged=parseFloat(document.getElementById('esh-charged').value)||0;
-  const actual=parseFloat(document.getElementById('esh-actual').value)||0;
   const orderId=document.getElementById('esh-order').value;
-  shippingLog.push({id:uid(),orderId,charged,actual,carrier:document.getElementById('esh-carrier').value,date:document.getElementById('esh-date').value,tracking:document.getElementById('esh-tracking').value.trim(),timestamp:Date.now()});
+  shippingLog.push({id:uid(),orderId,charged,carrier:document.getElementById('esh-carrier').value,date:document.getElementById('esh-date').value,tracking:document.getElementById('esh-tracking').value.trim(),timestamp:Date.now()});
   saveShippingLog();closeShipping();render();
-  const diff=charged-actual;
-  const diffStr=(diff>=0?'+':'')+diff.toFixed(2);
-  toast('Shipment Logged','$'+diffStr+' vs actual cost','success');
+  toast('Shipment Logged','$'+charged.toFixed(2)+' shipping logged','success');
 }
 function delShipping(id){showConfirm('Delete shipment?','',()=>{shippingLog=shippingLog.filter(s=>s.id!==id);saveShippingLog();render();});}
 function closeShipping(){document.getElementById('mod-shipping').style.display='none';}
@@ -10394,7 +10382,7 @@ function renderTax(){
   const qEnd=new Date(activeQ.y,activeQ.q*3,0,23,59,59).getTime();
   const qPurchases=purchases.filter(p=>new Date(p.date||p.timestamp).getTime()>=qStart&&new Date(p.date||p.timestamp).getTime()<=qEnd);
   const filamentExpense=qPurchases.reduce((a,p)=>a+(p.price||0)*(p.qty||1),0);
-  const shippingExpense=shippingLog.filter(s=>new Date(s.date||s.timestamp).getTime()>=qStart&&new Date(s.date||s.timestamp).getTime()<=qEnd).reduce((a,s)=>a+(s.actual||0),0);
+  const shippingExpense=shippingLog.filter(s=>new Date(s.date||s.timestamp).getTime()>=qStart&&new Date(s.date||s.timestamp).getTime()<=qEnd).reduce((a,s)=>a+(s.charged||0),0);
   const totalExpenses=cogs+filamentExpense+shippingExpense;
   const grossProfit=revenue-totalExpenses;
   const taxOwed=Math.max(0,grossProfit*taxRate);
