@@ -11484,8 +11484,12 @@ function advanceMystery(id){
   saveMysteryOrders();render();updateMysteryBadge();
   const m=mysteryOrders.find(x=>x.id===id);
   if(m){
-    if(queueCreated)toast('🎁 Mystery Queued',m.print+' added to Print Queue for '+m.orderId,'success');
-    else toast('Mystery Updated',m.orderId+' → '+m.status,'success');
+    if(queueCreated){
+      toast('🎁 Mystery Queued',m.print+' added to Print Queue for '+m.orderId,'success');
+      navTo('queue',document.getElementById('nav-queue'));
+    }else{
+      toast('Mystery Updated',m.orderId+' → '+m.status,'success');
+    }
   }
 }
 
