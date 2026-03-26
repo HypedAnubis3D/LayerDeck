@@ -4866,8 +4866,11 @@ function filterCatSearch(rowId){
   const res=document.getElementById('oi-res-'+rowId);
   if(!inp||!res)return;
   const q=(inp.value||'').toLowerCase().trim();
+  const tmfMap={};tmfLib.forEach(function(t){tmfMap[t.id]=t;});
   const matches=catalogItems.filter(function(c){
-    return !q||(c.name||'').toLowerCase().includes(q)||(c.category||'').toLowerCase().includes(q);
+    if(!q)return true;
+    const tmfName=(c.tmfId&&tmfMap[c.tmfId]?(tmfMap[c.tmfId].name||''):'').toLowerCase();
+    return(c.name||'').toLowerCase().includes(q)||(c.category||'').toLowerCase().includes(q)||tmfName.includes(q);
   }).slice(0,50);
   if(!matches.length){
     res.innerHTML='<div class="oi-cat-empty">No products found</div>';
@@ -9255,7 +9258,12 @@ function renderCatalog(){
   updateCatalogSyncLabel();
   checkCatalogAutoRefresh();
   const q=(document.getElementById('cat-s')?.value||'').toLowerCase();
-  let items=catalogItems.filter(i=>!q||i.name.toLowerCase().includes(q)||(i.category||'').toLowerCase().includes(q));
+  const _tmfMap={};tmfLib.forEach(function(t){_tmfMap[t.id]=t;});
+  let items=catalogItems.filter(function(i){
+    if(!q)return true;
+    const tmfN=(i.tmfId&&_tmfMap[i.tmfId]?(_tmfMap[i.tmfId].name||''):'').toLowerCase();
+    return i.name.toLowerCase().includes(q)||(i.category||'').toLowerCase().includes(q)||tmfN.includes(q);
+  });
   // Platform filter
   if(catalogFilter==='shopify') items=items.filter(i=>i.shopifyId||i.fromShopify);
   else if(catalogFilter==='etsy') items=items.filter(i=>i.etsyId||i.fromEtsy);
@@ -10367,7 +10375,12 @@ function renderCatalogPicker(){
   const q=(document.getElementById('em-picker-search')?.value||'').toLowerCase();
   const c=getEvt();
   const alreadyIn=new Set((c.inPersonCatalog||[]).map(function(i){return i.catalogItemId;}));
-  const items=catalogItems.filter(function(i){return !q||i.name.toLowerCase().includes(q)||((i.category||'').toLowerCase().includes(q));});
+  const _pTmfMap={};tmfLib.forEach(function(t){_pTmfMap[t.id]=t;});
+  const items=catalogItems.filter(function(i){
+    if(!q)return true;
+    const tmfN=(i.tmfId&&_pTmfMap[i.tmfId]?(_pTmfMap[i.tmfId].name||''):'').toLowerCase();
+    return i.name.toLowerCase().includes(q)||(i.category||'').toLowerCase().includes(q)||tmfN.includes(q);
+  });
   document.getElementById('em-picker-grid').innerHTML=items.map(function(item){
     const inList=alreadyIn.has(item.id);
     return `<div style="background:var(--surf);border:1px solid ${inList?'var(--pur)':'var(--bdr)'};border-radius:5px;padding:7px;cursor:pointer;text-align:center" onclick="${inList?'removeFromPackList':'addToPackList'}('${item.id}')">
