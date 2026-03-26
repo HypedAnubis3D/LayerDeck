@@ -3113,6 +3113,10 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
     <div class="field"><div class="fl">Customer Name</div><input type="text" id="eo-cust" placeholder="Jane Smith" oninput="checkRepeatCustomer()"/></div>
     <div class="field"><div class="fl">Order Date</div><input type="date" id="eo-date"/></div>
   </div>
+  <div class="fr2">
+    <div class="field"><div class="fl">Email</div><input type="email" id="eo-email" placeholder="customer@example.com"/></div>
+    <div class="field"><div class="fl">Phone</div><input type="tel" id="eo-phone" placeholder="+1 555 000 0000"/></div>
+  </div>
   <div class="field">
     <div class="fl" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">
       <span>Items</span>
@@ -3139,6 +3143,7 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
     </div>
     <div class="field"><div class="fl">Shipping ($)</div><input type="number" id="eo-ship" min="0" step="0.01" placeholder="5.99"/></div>
   </div>
+  <div class="field"><div class="fl">Shipping Address</div><input type="text" id="eo-addr" placeholder="123 Main St, City, State ZIP, Country"/></div>
   <div class="fr2">
     <div class="field"><div class="fl">Promo / Discount Code</div><input type="text" id="eo-code" placeholder="e.g. WELCOME20" style="text-transform:uppercase"/></div>
     <div class="field" style="display:flex;align-items:flex-end;padding-bottom:2px">
@@ -4171,6 +4176,8 @@ function renderOrders(){
           +'<div style="display:flex;align-items:center;gap:5px;margin-bottom:2px">'+platformBadge+'</div>'
           +'<div style="font-weight:bold;font-size:9px">'+esc(o.customer)+'</div>'
           +'<div style="font-size:7px;color:var(--txt-d)">'+(o.orderId||'')+(o.date?' · '+esc(o.date):'')+'</div>'
+          +(o.customerEmail?'<div style="font-size:7px;color:var(--txt-d)">📧 '+esc(o.customerEmail)+'</div>':'')
+          +(o.shippingAddress?'<div style="font-size:7px;color:var(--txt-d)">📍 '+esc(o.shippingAddress)+'</div>':'')
         +'</div>'
         +'<div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;margin-left:8px">'
           +'<span style="font-size:8px;color:'+statusColor+';font-weight:bold;text-transform:uppercase">'+esc(o.status||'pending')+'</span>'
@@ -5225,6 +5232,9 @@ function openEditOrder(id){
   document.getElementById('eo-date').value=o.date||'';
   document.getElementById('eo-status').value=o.status||'pending';
   document.getElementById('eo-ship').value=o.shipping||'';
+  document.getElementById('eo-addr').value=o.shippingAddress||'';
+  document.getElementById('eo-email').value=o.customerEmail||'';
+  document.getElementById('eo-phone').value=o.customerPhone||'';
   document.getElementById('eo-notes').value=o.notes||'';
   document.getElementById('eo-code').value=o.discountCode||'';
   document.getElementById('eo-mystery').checked=!!(o.mystery||false);
@@ -5244,7 +5254,7 @@ function saveOrder(){
   const code=(document.getElementById('eo-code').value||'').trim().toUpperCase()||undefined;
   const items=getOrderItems();
   if(!items.length){toast('No Items','Add at least one item to the order','warning');return;}
-  const order={id:id||uid(),customer,orderId:document.getElementById('eo-oid').value.trim()||'ORD-'+Date.now().toString().slice(-4),platform:document.getElementById('eo-platform').value,date:document.getElementById('eo-date').value,items,status:document.getElementById('eo-status').value,shipping:parseFloat(document.getElementById('eo-ship').value)||0,notes:document.getElementById('eo-notes').value.trim(),discountCode:code,timestamp:id?(orders.find(function(o){return o.id===id;})||{}).timestamp||Date.now():Date.now()};
+  const order={id:id||uid(),customer,orderId:document.getElementById('eo-oid').value.trim()||'ORD-'+Date.now().toString().slice(-4),platform:document.getElementById('eo-platform').value,date:document.getElementById('eo-date').value,customerEmail:(document.getElementById('eo-email').value||'').trim(),customerPhone:(document.getElementById('eo-phone').value||'').trim(),shippingAddress:(document.getElementById('eo-addr').value||'').trim(),items,status:document.getElementById('eo-status').value,shipping:parseFloat(document.getElementById('eo-ship').value)||0,notes:document.getElementById('eo-notes').value.trim(),discountCode:code,timestamp:id?(orders.find(function(o){return o.id===id;})||{}).timestamp||Date.now():Date.now()};
   if(id){orders=orders.map(function(o){return o.id===id?order:o;});}else{orders.push(order);}
   const flagMystery=document.getElementById('eo-mystery').checked;
   if((flagMystery||isMysteryOrder(order))&&typeof checkMysteryTrigger==='function'){
@@ -5833,12 +5843,14 @@ function renderCustomers(){
   const custMap={};
   orders.forEach(o=>{
     const key=o.customer;
-    if(!custMap[key])custMap[key]={name:key,orders:[],totalSpend:0,platform:o.platform};
+    if(!custMap[key])custMap[key]={name:key,orders:[],totalSpend:0,platform:o.platform,email:'',phone:''};
     custMap[key].orders.push(o);
     custMap[key].totalSpend+=(o.items||[]).reduce((a,i)=>a+parseFloat(i.price||0)*parseInt(i.qty||1),0)+(parseFloat(o.shipping)||0);
+    if(!custMap[key].email&&o.customerEmail)custMap[key].email=o.customerEmail;
+    if(!custMap[key].phone&&o.customerPhone)custMap[key].phone=o.customerPhone;
   });
   let customers=Object.values(custMap).sort((a,b)=>b.totalSpend-a.totalSpend);
-  if(q)customers=customers.filter(c=>c.name.toLowerCase().includes(q));
+  if(q)customers=customers.filter(c=>c.name.toLowerCase().includes(q)||(c.email||'').toLowerCase().includes(q));
   document.getElementById('cust-cnt').textContent=customers.length+' customers';
   const g=document.getElementById('customers-grid');
   if(!customers.length){g.innerHTML='<div class="empty" style="grid-column:1/-1">No customer data yet — create orders to build profiles automatically</div>';return;}
@@ -5853,6 +5865,8 @@ function renderCustomers(){
         <div style="flex:1;min-width:0">
           <div class="cust-name">${esc(c.name)}</div>
           <div class="cust-meta">Customer since ${lastOrder?new Date(lastOrder.timestamp||lastOrder.date).toLocaleDateString('en-US',{month:'short',year:'numeric'}):'—'}${c.platform?' · '+esc(c.platform):''}</div>
+          ${c.email?`<div style="font-size:7px;color:var(--txt-d);margin-top:2px">📧 <a href="mailto:${esc(c.email)}" style="color:var(--teal);text-decoration:none" onclick="event.stopPropagation()">${esc(c.email)}</a></div>`:''}
+          ${c.phone?`<div style="font-size:7px;color:var(--txt-d)">📞 ${esc(c.phone)}</div>`:''}
         </div>
         <button class="btn btn-red btn-sm" style="flex-shrink:0" onclick="deleteCustomer(this.closest('[data-cname]').dataset.cname)">🗑</button>
       </div>
@@ -6806,7 +6820,12 @@ function ingestShopifyOrder(o){
   const status=shopifyStatusMap(o);
   const rawDiscountCodes=(o.discount_codes||[]).map(d=>d.code).filter(Boolean);
   const discountCode=rawDiscountCodes.join(', ');
-  const order={id:uid(),shopifyId:String(o.id),orderId,customer,platform:'Shopify',date:o.created_at?o.created_at.split('T')[0]:new Date().toISOString().split('T')[0],items,status,shipping:0,notes:'',discountCode,timestamp:Date.now(),fromShopify:true};
+  const customerEmail=(o.email||o.customer?.email||'').trim();
+  const customerPhone=(o.customer?.phone||o.phone||o.shipping_address?.phone||'').replace(/\s+/g,' ').trim();
+  const sa=o.shipping_address||{};
+  const shippingAddress=[sa.address1,sa.address2,sa.city,sa.province_code||sa.province,sa.zip,sa.country_code||sa.country].filter(Boolean).join(', ');
+  const shipping=parseFloat(((o.shipping_lines||[]).reduce((s,l)=>s+parseFloat(l.price||0),0)).toFixed(2));
+  const order={id:uid(),shopifyId:String(o.id),orderId,customer,customerEmail,customerPhone,shippingAddress,platform:'Shopify',date:o.created_at?o.created_at.split('T')[0]:new Date().toISOString().split('T')[0],items,status,shipping,notes:'',discountCode,timestamp:Date.now(),fromShopify:true};
   // NOTE: order is pushed to the array AFTER items are processed so that if the
   // forEach throws, no orphaned order record is left in storage (which would cause
   // the dedup check to skip this order on every future poll, losing the queue items).
