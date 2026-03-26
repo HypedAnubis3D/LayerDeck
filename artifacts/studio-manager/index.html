@@ -3423,12 +3423,13 @@ const KEYS={spools:'ha3d_fil_v2',hist:'ha3d_hist_v2',prints:'ha3d_prints_v1',
   tmfs:'ha3d_tmfs_v1',queue:'ha3d_queue_v1',orders:'ha3d_orders_v1',
   sales:'ha3d_sales_v1',maint:'ha3d_maint_v1',cfg:'ha3d_cfg_v1',
   shopify:'ha3d_shopify_v1',inv:'hypedanubis_v2',inperson:'ha3d_inperson_v1',
-  dashHidden:'ha3d_dash_hidden_v1',barcodeDb:'ha3d_barcode_db_v1'};
+  dashHidden:'ha3d_dash_hidden_v1',barcodeDb:'ha3d_barcode_db_v1',notifIds:'ha3d_notif_ids_v1'};
 
 const MAT_C={'PLA Basic':'#3a80e0','PLA Matte':'#8858c0','PLA Silk':'#c09828','PLA+':'#28a858','PLA-CF':'#786860','PETG Basic':'#22aacc','PETG-CF':'#1a5050','ABS':'#c04828','ASA':'#a07828','TPU 95A':'#9050b0','PA':'#507080','PC':'#3a6090','Support':'#404850'};
 
 let spools=[],usageHist=[],prints=[],tmfLib=[],queueItems=[],orders=[],sales=[],maintLog=[],inPersonInventory=[];
 let dashHidden=[];
+let notifIds=new Set();
 let shopifyCfg={domain:'',connected:false,lastOrderId:null,lastPoll:null};
 let cfg={kwh:0.13,watts:350,labor:0,markup:30};
 let qrScanner=null,rowScanner=null,targetRowId=null,filRowCount=0,finOutcome=null,scannerMode='use';
@@ -6809,8 +6810,12 @@ function ingestShopifyOrder(o){
   const prevOrders=orders.filter(x=>x.customer&&x.customer===customer&&x.shopifyId!==String(o.id));
   if(prevOrders.length>0)toast(`⭐ Returning Customer!`,`${customer} has ordered ${prevOrders.length} time${prevOrders.length!==1?'s':''} before`,'shiny',7000);
   const summary=items.map(i=>`${i.name} ×${i.qty}`).join(', ');
-  showNotification('New Order '+orderId,`${customer} · ${summary}`,order.id);
-  fetch('/api/push/notify-order',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({orderId,customer,summary,itemCount:items.length})}).catch(()=>{});
+  if(!notifIds.has(orderId)){
+    notifIds.add(orderId);
+    try{localStorage.setItem(KEYS.notifIds,JSON.stringify([...notifIds]));}catch(e){}
+    showNotification('New Order '+orderId,`${customer} · ${summary}`,order.id);
+    fetch('/api/push/notify-order',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({orderId,customer,summary,itemCount:items.length})}).catch(()=>{});
+  }
   const qb=document.getElementById('nav-badge-queue');if(qb)qb.classList.add('show');
   const ob=document.getElementById('nav-badge-orders');if(ob)ob.classList.add('show');
   // Auto-trigger mystery print if order used a qualifying discount code
@@ -6841,6 +6846,7 @@ function loadV9(){
   try{printSettingsMap=JSON.parse(localStorage.getItem(KEYS.printSettings))||{};}catch{printSettingsMap={};}
   try{pokemonMap=JSON.parse(localStorage.getItem(KEYS.pokemonMap))||{};}catch{pokemonMap={};}
   try{barcodeDb=JSON.parse(localStorage.getItem(KEYS.barcodeDb))||{};}catch{barcodeDb={};}
+  try{notifIds=new Set(JSON.parse(localStorage.getItem(KEYS.notifIds))||[]);}catch{notifIds=new Set();}
 }
 function savePrinters(){ss(KEYS.printers,printerRecords);}
 function saveFulfillment(){localStorage.setItem(KEYS.fulfillment,JSON.stringify(fulfillmentData));}
@@ -8565,9 +8571,7 @@ async function processSyncQueue(){
       updateSyncIndicator('connected');
       if(totalSuccess>0){
         addSyncLog('Synced '+totalSuccess+' collection'+(totalSuccess!==1?'s':'')+' ✓','ok');
-        if(syncedCollections.has('orders')){
-          toast('Orders Synced',orders.length+' order'+(orders.length!==1?'s':'')+' saved to cloud','success');
-        }
+        // No toast here — sync indicator icon shows status without spamming notifications
       }
     }else{
       updateSyncIndicator('error');
