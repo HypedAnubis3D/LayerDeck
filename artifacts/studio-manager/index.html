@@ -431,11 +431,19 @@ input.srch::placeholder{color:var(--txt-d);}
 .dash-alert-row:last-child{border-bottom:none;}
 .dash-print-row{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--bdr);}
 .dash-print-row:last-child{border-bottom:none;}
-.dash-printer-card{background:var(--bg);border:1px solid var(--bdr);border-radius:8px;padding:10px 12px;}
-.dpc-name{font-family:'Orbitron',monospace;font-size:10px;color:var(--txt-b);font-weight:700;margin-bottom:4px;}
-.dpc-status{font-size:9px;margin-bottom:2px;}
+.dash-printer-card{background:var(--bg);border:1px solid var(--bdr);border-radius:10px;padding:10px 12px;}
+.dpc-name{font-family:'Orbitron',monospace;font-size:10px;color:var(--txt-b);font-weight:700;margin-bottom:5px;}
+.dpc-status{font-size:10px;margin-bottom:2px;}
 .dpc-bar{background:var(--bdr);height:4px;border-radius:3px;overflow:hidden;margin-top:5px;}
 .dpc-fill{height:100%;border-radius:3px;background:var(--grn);transition:width .5s;}
+.ams-dash-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin-top:8px;}
+.ams-dash-slot{border-radius:8px;padding:6px 3px;text-align:center;cursor:pointer;transition:all .2s;border:1px solid var(--bdr2);background:var(--bg);}
+.ams-dash-slot:hover{transform:translateY(-1px);box-shadow:0 3px 10px rgba(0,0,0,.4);}
+.ams-dash-slot.filled{border-color:transparent;}
+.ams-dash-num{font-size:8px;color:var(--txt-d);letter-spacing:.5px;margin-bottom:4px;font-family:'Inter',sans-serif;}
+.ams-dash-dot{width:16px;height:16px;border-radius:50%;margin:0 auto 4px;transition:all .2s;}
+.ams-dash-label{font-size:8px;color:var(--txt-b);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:'Inter',sans-serif;}
+.ams-dash-pct{font-size:8px;font-family:'Orbitron',monospace;margin-top:1px;}
 .activity-item{display:flex;align-items:center;gap:9px;padding:6px 0;border-bottom:1px solid var(--bdr);font-size:10px;}
 .activity-item:last-child{border-bottom:none;}
 .activity-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
@@ -7469,9 +7477,9 @@ function renderDashboard(){
           return '<div class="dash-printer-card">'
             +'<div class="dpc-name">'+esc(pr)+'</div>'
             +(active
-              ?'<div style="font-size:7px;color:var(--grn-b);display:flex;align-items:center;gap:4px"><span style="width:6px;height:6px;border-radius:50%;background:var(--grn);display:inline-block;animation:pulse-dot 1.5s ease-in-out infinite"></span>'+esc(active.name.slice(0,16))+'</div><div class="dpc-bar"><div class="dpc-fill" style="width:'+(active.startedAt&&active.hrs?Math.min(100,((Date.now()-active.startedAt)/(active.hrs*3600000))*100).toFixed(1):35)+'%"></div></div>'+formatFinishBadge(active)
-              :'<div style="font-size:7px;color:var(--txt-d)">— Idle</div>'+(next?'<div style="font-size:6px;color:var(--txt-d);margin-top:2px">Next: '+esc(next.name.slice(0,14))+'</div>':'<div style="font-size:6px;color:var(--bdr2);margin-top:2px">Queue empty</div>'))
-            +renderAmsMap(pr,true)
+              ?'<div style="font-size:10px;color:var(--grn-b);display:flex;align-items:center;gap:5px"><span style="width:7px;height:7px;border-radius:50%;background:var(--grn);display:inline-block;flex-shrink:0;animation:pulse-dot 1.5s ease-in-out infinite"></span>'+esc(active.name.slice(0,20))+'</div><div class="dpc-bar"><div class="dpc-fill" style="width:'+(active.startedAt&&active.hrs?Math.min(100,((Date.now()-active.startedAt)/(active.hrs*3600000))*100).toFixed(1):35)+'%"></div></div>'+formatFinishBadge(active)
+              :'<div style="font-size:10px;color:var(--txt-d)">— Idle</div>'+(next?'<div style="font-size:9px;color:var(--txt-d);margin-top:2px">Next: '+esc(next.name.slice(0,18))+'</div>':'<div style="font-size:9px;color:var(--bdr2);margin-top:2px">Queue empty</div>'))
+            +renderAmsMapDash(pr)
             +'</div>';
         }).join('')
       +'</div>'
@@ -8236,6 +8244,28 @@ function renderAmsMap(printerName,compact=false){
       :`<div style="font-size:6px;color:var(--bdr2);letter-spacing:1px">EMPTY</div>`}
     </div>`;
   }).join('')}</div>`;
+}
+
+function renderAmsMapDash(printerName){
+  const slots=amsMap[printerName]||{};
+  const pr=printerRecords.find(function(p){return p.name===printerName;});
+  const numSlots=pr?pr.amsSlots:4;
+  if(!numSlots)return '<div style="font-size:9px;color:var(--txt-d);padding:6px 0;font-style:italic">No AMS configured</div>';
+  const count=Math.min(numSlots,4);
+  return '<div class="ams-dash-grid">'+Array.from({length:count},function(_,i){
+    const n=i+1;
+    const sp=slots[n]?spools.find(function(s){return s.id===slots[n];}):null;
+    const col=sp?sp.color:'var(--bdr2)';
+    const p=sp?pct(sp):0;
+    const bc=sp?barcol(p):'var(--txt-d)';
+    const label=sp?esc(sp.name.split(' ').pop()):'—';
+    return '<div class="ams-dash-slot'+(sp?' filled':'')+'" onclick="openAmsModal(\''+esc(printerName)+'\','+n+')" style="'+(sp?'background:'+col+'14;border-color:'+col+'44;':'')+'">'
+      +'<div class="ams-dash-num">'+n+'</div>'
+      +'<div class="ams-dash-dot" style="background:'+col+';'+(sp?'box-shadow:0 0 6px '+col+'55':'')+'"></div>'
+      +'<div class="ams-dash-label" title="'+(sp?esc(sp.name):'Empty')+'">'+label+'</div>'
+      +(sp?'<div class="ams-dash-pct" style="color:'+bc+'">'+p+'%</div>':'<div class="ams-dash-pct" style="color:var(--bdr2)">—</div>')
+      +'</div>';
+  }).join('')+'</div>';
 }
 
 function openAmsModal(printerName,slotNum){
