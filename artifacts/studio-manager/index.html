@@ -214,6 +214,7 @@ input.srch::placeholder{color:var(--txt-d);}
 .kcard:hover{border-color:var(--cyn-d);box-shadow:0 4px 16px rgba(0,0,0,.3);}
 .kcard.kc-shopify{border-left:2px solid var(--shopify);}
 .kcard.kc-warn{border-left:2px solid var(--amb);}
+.kcard.selected{outline:2px solid var(--gold);outline-offset:2px;background:rgba(201,162,39,.08);}
 .kcard-name{font-size:10px;color:var(--txt-b);font-weight:600;margin-bottom:3px;}
 .kcard-meta{font-size:9px;color:var(--txt-d);line-height:1.6;}
 .kcard-colors{display:flex;gap:4px;margin-top:5px;}
@@ -3875,12 +3876,13 @@ function renderQueue(){
     const items=queueItems.filter(q=>(q.stage||'queued')===st.key);
     const cards=items.map(q=>{
       const isShopify=q.fromShopify;
-
       const isWarn=q.noTmf;
+      const isSel=selectedIds.includes(q.id);
       const prioIcon=q.priority==='high'?'🔴':q.priority==='low'?'🔵':'';
       const prevStage=st.key==='inprogress'?'queued':st.key==='done'?'inprogress':null;
       const nextStage=st.key==='queued'?'inprogress':st.key==='inprogress'?'done':null;
-      return `<div class="kcard${isShopify?' kc-shopify':''}${isWarn?' kc-warn':''}">
+      return `<div class="kcard${isShopify?' kc-shopify':''}${isWarn?' kc-warn':''}${isSel?' selected':''}" data-selid="${q.id}" onclick="if(selectMode==='queue'){event.stopPropagation();toggleSelect('${q.id}');}">
+        <input type="checkbox" class="sel-checkbox"${isSel?' checked':''} onclick="event.stopPropagation();toggleSelect('${q.id}')"/>
         ${prioIcon?`<div class="k-priority">${prioIcon}</div>`:''}
         ${isShopify?`<div style="font-size:6px;color:var(--shopify);letter-spacing:1px;margin-bottom:3px">🛍 SHOPIFY ORDER</div>`:''}
         ${isWarn?`<div style="font-size:6px;color:var(--amb);letter-spacing:1px;margin-bottom:3px">⚠ NO 3MF ON FILE</div>`:''}
@@ -3888,9 +3890,9 @@ function renderQueue(){
         <div class="kcard-meta">${esc(q.printer||'?')} · ${q.hrs||'?'}h${q.orderId?' · '+esc(q.orderId):''}</div>
         ${q.notes?`<div style="font-size:6px;color:var(--txt-d);margin-top:3px">${esc(q.notes)}</div>`:''}
         <div class="kcard-actions">
-          ${prevStage?`<button class="k-move-btn" onclick="moveQueue('${q.id}','${prevStage}')">← Back</button>`:''}
-          ${nextStage?`<button class="k-move-btn" style="color:${st.key==='queued'?'var(--cyn)':'var(--grn)'};border-color:${st.key==='queued'?'var(--cyn-d)':'var(--grn-d)'}" onclick="moveQueue('${q.id}','${nextStage}')">${st.key==='queued'?'Start →':'✓ Done'}</button>`:''}
-          <button class="k-move-btn" style="color:var(--red);border-color:var(--red-d)" onclick="delQueue('${q.id}')">✕</button>
+          ${prevStage?`<button class="k-move-btn" onclick="event.stopPropagation();moveQueue('${q.id}','${prevStage}')">← Back</button>`:''}
+          ${nextStage?`<button class="k-move-btn" style="color:${st.key==='queued'?'var(--cyn)':'var(--grn)'};border-color:${st.key==='queued'?'var(--cyn-d)':'var(--grn-d)'}" onclick="event.stopPropagation();moveQueue('${q.id}','${nextStage}')">${st.key==='queued'?'Start →':'✓ Done'}</button>`:''}
+          <button class="k-move-btn" style="color:var(--red);border-color:var(--red-d)" onclick="event.stopPropagation();delQueue('${q.id}')">✕</button>
         </div>
       </div>`;
     }).join('');
@@ -5505,15 +5507,16 @@ function renderShiny(){
     <div class="shiny-stat"><div class="shiny-stat-n" style="color:var(--cyn)">${total}</div><div class="shiny-stat-l">Total Rolls</div></div>`;
   // ── Order selection pool ──
   const rolledOrderIds=new Set(shinyRolls.map(r=>r.rolledOrderId).filter(Boolean));
-  const eligible=orders.filter(o=>o.status!=='cancelled'&&o.status!=='shipped');
+  const eligible=[...orders].filter(o=>o.status!=='cancelled').reverse();
   const pool=document.getElementById('shiny-order-pool');
   if(eligible.length){
     pool.innerHTML=`
       <div style="font-size:7px;letter-spacing:1.5px;color:var(--txt-d);margin-bottom:8px">SELECT ORDERS TO ROLL</div>
-      <div style="background:var(--surf);border:1px solid var(--bdr);border-radius:6px;overflow:hidden;margin-bottom:10px">
+      <div style="background:var(--surf);border:1px solid var(--bdr);border-radius:6px;overflow:hidden;margin-bottom:10px;max-height:300px;overflow-y:auto">
         ${eligible.map(o=>{
           const items=(o.items||[]).map(i=>esc(i.name)+(i.qty>1?' ×'+i.qty:'')).join(', ');
           const alreadyRolled=rolledOrderIds.has(o.id);
+          const isShipped=o.status==='shipped';
           return `<label style="display:flex;align-items:center;gap:10px;padding:9px 12px;border-bottom:1px solid var(--bdr);cursor:pointer;${alreadyRolled?'opacity:.45;':''}">
             <input type="checkbox" class="shiny-order-check" data-id="${o.id}" ${alreadyRolled?'disabled':''} onchange="updateShinyRollBtn()" style="accent-color:var(--gold);width:14px;height:14px;flex-shrink:0"/>
             <div style="flex:1;min-width:0">
@@ -5521,13 +5524,13 @@ function renderShiny(){
               <div style="font-size:8px;color:var(--txt)">${esc(o.customer)}</div>
               <div style="font-size:7px;color:var(--txt-d);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${items||'—'}</div>
             </div>
-            ${alreadyRolled?'<span style="font-size:7px;color:var(--grn)">✓ Rolled</span>':''}
+            ${alreadyRolled?'<span style="font-size:7px;color:var(--grn)">✓ Rolled</span>':isShipped?'<span style="font-size:7px;color:var(--cyn)">Shipped</span>':''}
           </label>`;
         }).join('')}
       </div>
       <button class="btn btn-amb" id="shiny-roll-btn" onclick="openRollModal()" style="width:100%;padding:10px;font-size:10px" disabled>✨ Roll For Shiny (select orders above)</button>`;
   }else{
-    pool.innerHTML=`<div class="empty" style="padding:16px 0">No active orders to roll — orders appear here when they come in</div>`;
+    pool.innerHTML=`<div class="empty" style="padding:16px 0">No orders to roll — add orders first</div>`;
   }
   // ── Roll history ──
   const g=document.getElementById('shiny-grid');
@@ -11159,8 +11162,9 @@ let selectMode=''; // 'spools','orders','queue','printers'
 
 function enterSelectMode(mode){
   selectMode=mode;selectedIds=[];
-  const grid=document.getElementById(mode+'-grid')||document.getElementById(mode+'-content');
+  const grid=document.getElementById(mode+'-grid')||document.getElementById(mode+'-content')||document.getElementById('kanban-board');
   if(grid)grid.classList.add('multi-select-mode');
+  if(mode==='queue')renderQueue();
   updateBulkBar();
 }
 function toggleSelect(id){
