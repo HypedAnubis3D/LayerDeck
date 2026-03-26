@@ -2522,8 +2522,21 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
       <select id="mys-platform"><option>Shopify</option><option>Etsy</option><option>Manual</option></select>
     </div>
   </div>
-  <div class="field"><div class="fl">Mystery Print Assigned</div>
-    <input type="text" id="mys-print" placeholder="Leave blank to choose later — e.g. Mini Anubis, Rubber Duck Wizard…"/>
+  <div class="field">
+    <div class="fl" style="margin-bottom:6px">Mystery Print Assigned</div>
+    <div style="display:flex;gap:5px;margin-bottom:8px">
+      <button id="mys-mode-catalog" class="btn btn-pur btn-sm" onclick="setMysteryPickerMode('catalog')">📦 Browse Catalog</button>
+      <button id="mys-mode-manual" class="btn btn-ghost btn-sm" onclick="setMysteryPickerMode('manual')">✏ Enter Manually</button>
+    </div>
+    <div id="mys-catalog-section">
+      <input type="text" id="mys-catalog-search" placeholder="Search catalog…" oninput="filterMysteryCatalog()" style="margin-bottom:6px;width:100%;box-sizing:border-box"/>
+      <div id="mys-catalog-list" style="max-height:160px;overflow-y:auto;background:var(--bg);border:1px solid var(--bdr);border-radius:4px;padding:5px"></div>
+    </div>
+    <div id="mys-manual-section" style="display:none">
+      <input type="text" id="mys-print-manual" placeholder="e.g. Mini Anubis, Rubber Duck Wizard…" oninput="document.getElementById('mys-print').value=this.value" style="width:100%;box-sizing:border-box"/>
+    </div>
+    <div id="mys-print-selected" style="display:none;margin-top:7px;padding:7px 11px;background:var(--gold-d);border:1px solid var(--gold-dim);border-radius:4px;font-size:8px;color:var(--gold-b)"></div>
+    <input type="hidden" id="mys-print"/>
   </div>
   <div class="field"><div class="fl">Gift Status</div>
     <select id="mys-status">
@@ -11120,11 +11133,13 @@ function advanceMystery(id){
 
 function openAddMystery(){
   document.getElementById('mystery-modal-title').textContent='Add Mystery Print';
-  ['mys-id','mys-orderid','mys-customer','mys-print','mys-notes'].forEach(i=>document.getElementById(i).value='');
+  ['mys-id','mys-orderid','mys-customer','mys-notes'].forEach(i=>document.getElementById(i).value='');
+  document.getElementById('mys-print').value='';
   document.getElementById('mys-code').value='WELCOME20';
   document.getElementById('mys-status').value='pending';
   document.getElementById('mys-platform').value='Shopify';
   document.getElementById('mod-mystery').style.display='flex';
+  initMysteryPicker('');
 }
 function openEditMystery(id){
   const m=mysteryOrders.find(x=>x.id===id);if(!m)return;
@@ -11138,6 +11153,53 @@ function openEditMystery(id){
   document.getElementById('mys-status').value=m.status||'pending';
   document.getElementById('mys-notes').value=m.notes||'';
   document.getElementById('mod-mystery').style.display='flex';
+  initMysteryPicker(m.print||'');
+}
+function initMysteryPicker(current){
+  document.getElementById('mys-catalog-search').value='';
+  // If the current value matches a catalog item, start in catalog mode; else manual
+  const inCatalog=current&&catalogItems.some(c=>c.name===current);
+  const mode=(current&&!inCatalog)?'manual':'catalog';
+  setMysteryPickerMode(mode);
+  if(mode==='manual')document.getElementById('mys-print-manual').value=current;
+  updateMysterySelectedPreview(current);
+}
+function setMysteryPickerMode(mode){
+  const isCatalog=mode==='catalog';
+  document.getElementById('mys-catalog-section').style.display=isCatalog?'block':'none';
+  document.getElementById('mys-manual-section').style.display=isCatalog?'none':'block';
+  document.getElementById('mys-mode-catalog').className='btn btn-sm '+(isCatalog?'btn-pur':'btn-ghost');
+  document.getElementById('mys-mode-manual').className='btn btn-sm '+(isCatalog?'btn-ghost':'btn-pur');
+  if(isCatalog)filterMysteryCatalog();
+}
+function filterMysteryCatalog(){
+  const q=(document.getElementById('mys-catalog-search').value||'').toLowerCase();
+  const sel=document.getElementById('mys-print').value;
+  const items=catalogItems.filter(c=>!q||c.name.toLowerCase().includes(q)||(c.category||'').toLowerCase().includes(q));
+  const el=document.getElementById('mys-catalog-list');
+  if(!items.length){
+    el.innerHTML='<div style="padding:10px;font-size:7px;color:var(--txt-d);text-align:center">'+(catalogItems.length?'No items match your search':'No catalog items yet — add items in the Catalog tab')+'</div>';
+    return;
+  }
+  el.innerHTML=items.map(c=>{
+    const picked=sel===c.name;
+    return '<div onclick="pickMysteryPrint(\''+esc(c.name)+'\')" style="padding:7px 9px;border-radius:4px;cursor:pointer;margin-bottom:3px;border:1px solid '+(picked?'var(--gold)':'var(--bdr)')+';background:'+(picked?'var(--gold-d)':'transparent')+';display:flex;align-items:center;gap:6px;transition:background .1s" onmouseover="if(!'+picked+')this.style.background=\'var(--surf2)\'" onmouseout="if(!'+picked+')this.style.background=\'transparent\'">'
+      +'<div style="flex:1;min-width:0"><div style="font-size:9px;color:'+(picked?'var(--gold-b)':'var(--txt-b)')+';font-weight:'+(picked?'bold':'normal')+'">'+esc(c.name)+'</div>'
+      +(c.category?'<div style="font-size:6px;color:var(--txt-d);margin-top:1px">'+esc(c.category)+'</div>':'')
+      +'</div>'
+      +(picked?'<span style="color:var(--gold);font-size:12px;flex-shrink:0">✓</span>':'')
+      +'</div>';
+  }).join('');
+}
+function pickMysteryPrint(name){
+  document.getElementById('mys-print').value=name;
+  updateMysterySelectedPreview(name);
+  filterMysteryCatalog();
+}
+function updateMysterySelectedPreview(name){
+  const el=document.getElementById('mys-print-selected');
+  if(name){el.textContent='🎁 Selected: '+name;el.style.display='block';}
+  else{el.style.display='none';}
 }
 function saveMystery(){
   const orderId=document.getElementById('mys-orderid').value.trim();
