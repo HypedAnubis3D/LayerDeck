@@ -1777,22 +1777,29 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
     </select>
   </div>
   <!-- QUICK ADD BAR -->
-  <div id="quick-order-bar" style="display:none;background:var(--surf);border:1px solid var(--bdr2);border-radius:6px;padding:10px;margin-bottom:10px;gap:8px;flex-wrap:wrap;align-items:flex-end">
-    <div style="flex:1;min-width:130px">
-      <div style="font-size:6px;color:var(--txt-d);margin-bottom:3px;letter-spacing:1px">CUSTOMER</div>
-      <input id="qo-cust" class="srch" placeholder="Customer name…" style="width:100%;margin:0"/>
+  <div id="quick-order-bar" style="display:none;flex-direction:column;gap:8px;background:var(--surf);border:1px solid var(--bdr2);border-radius:10px;padding:12px;margin-bottom:10px">
+    <!-- header row -->
+    <div style="display:flex;align-items:center;justify-content:space-between">
+      <span style="font-size:9px;font-family:'Inter',sans-serif;font-weight:600;color:var(--gold-dim);letter-spacing:1.5px;text-transform:uppercase">⚡ Quick Add Order</span>
+      <button onclick="document.getElementById('quick-order-bar').style.display='none'" style="background:none;border:none;color:var(--txt-d);font-size:16px;cursor:pointer;line-height:1;padding:0">✕</button>
     </div>
-    <div style="flex:2;min-width:200px">
-      <div style="font-size:6px;color:var(--txt-d);margin-bottom:3px;letter-spacing:1px">ITEMS (Name · Qty · $Price per line)</div>
-      <textarea id="qo-items" rows="2" placeholder="e.g. Anubis Figure · 1 · $35.00" style="width:100%;background:var(--bg);border:1px solid var(--bdr2);color:var(--txt);padding:5px 8px;font-family:'Share Tech Mono',monospace;font-size:8px;border-radius:3px;resize:none;box-sizing:border-box"></textarea>
+    <!-- customer -->
+    <div>
+      <div style="font-size:9px;color:var(--txt-d);margin-bottom:4px;letter-spacing:1px;font-family:'Inter',sans-serif">CUSTOMER</div>
+      <input id="qo-cust" class="srch" placeholder="Customer name…" style="width:100%;margin:0;box-sizing:border-box"/>
     </div>
-    <div style="display:flex;flex-direction:column;gap:4px">
-      <select id="qo-plat" style="background:var(--bg);border:1px solid var(--bdr2);color:var(--txt);padding:4px 8px;font-family:'Share Tech Mono',monospace;font-size:8px;border-radius:3px">
+    <!-- items -->
+    <div>
+      <div style="font-size:9px;color:var(--txt-d);margin-bottom:4px;letter-spacing:1px;font-family:'Inter',sans-serif">ITEMS — Name · Qty · $Price per line</div>
+      <textarea id="qo-items" rows="2" placeholder="e.g. Anubis Figure · 1 · $35.00" style="width:100%;background:var(--bg);border:1px solid var(--bdr2);color:var(--txt);padding:6px 9px;font-family:'Share Tech Mono',monospace;font-size:10px;border-radius:6px;resize:vertical;box-sizing:border-box"></textarea>
+    </div>
+    <!-- platform + submit -->
+    <div style="display:flex;gap:8px;align-items:center">
+      <select id="qo-plat" style="flex:1;background:var(--bg);border:1px solid var(--bdr2);color:var(--txt);padding:6px 9px;font-family:'Inter',sans-serif;font-size:11px;border-radius:6px">
         <option>Direct</option><option>Convention</option><option>Instagram</option><option>Etsy</option><option>Shopify</option><option>Other</option>
       </select>
-      <button class="btn btn-gold btn-sm" onclick="quickAddOrder()">⚡ Add</button>
+      <button class="btn btn-gold" onclick="quickAddOrder()" style="flex-shrink:0">⚡ Add Order</button>
     </div>
-    <button onclick="document.getElementById('quick-order-bar').style.display='none'" style="background:none;border:none;color:var(--txt-d);font-size:14px;cursor:pointer;align-self:flex-start;padding:2px">✕</button>
   </div>
   <!-- Row 3: scrollable segmented filter -->
   <div class="seg-scroll">
