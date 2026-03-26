@@ -918,9 +918,10 @@ body.light-mode ::-webkit-scrollbar-thumb{background:var(--bdr2);}
   /* Header */
   header{padding:9px 12px;gap:8px;flex-wrap:nowrap;}
   .header-tab-name{display:none;}
-  .header-right{flex-wrap:nowrap;}
-  #ls-header-sub{display:none;}
-  header img{height:54px!important;}
+  .header-right{flex-wrap:nowrap;flex-shrink:0;}
+  #ls-brand-name{font-size:11px;letter-spacing:1px;}
+  #ls-header-sub{font-size:6px;letter-spacing:1px;}
+  header img{height:48px!important;}
   /* Main padding */
   main{padding:10px 12px;}
   /* Buttons full width in modal */
@@ -1672,7 +1673,7 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
   <div style="display:flex;align-items:center;gap:10px;flex-shrink:0;">
     <img src="/layerstack-logo.png" alt="LayerStack" style="height:72px;width:auto;filter:drop-shadow(0 0 10px rgba(201,162,39,.55));"/>
     <div style="display:flex;flex-direction:column;line-height:1.1;">
-      <span style="font-family:'Orbitron',monospace;font-size:15px;font-weight:900;color:var(--gold-b);letter-spacing:2px;">LAYERSTACK</span>
+      <span id="ls-brand-name" style="font-family:'Orbitron',monospace;font-size:15px;font-weight:900;color:var(--gold-b);letter-spacing:2px;">LAYERSTACK</span>
       <span id="ls-header-sub" style="font-family:'Orbitron',monospace;font-size:7px;color:var(--txt-d);letter-spacing:2.5px;margin-top:2px;">STUDIO MANAGER</span>
     </div>
   </div>
