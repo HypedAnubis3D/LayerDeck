@@ -114,20 +114,23 @@ export function useAddToLibrary() {
       const alreadyIn = existing.some((e: any) => e.filename === file.filename);
       if (alreadyIn) return;
 
-      const hrs = file.printTimeEstimate
-        ? (() => {
-            const m = file.printTimeEstimate.match(/(\d+)h\s*(\d+)m/);
-            return m ? parseFloat((parseInt(m[1]) + parseInt(m[2]) / 60).toFixed(2)) : null;
-          })()
-        : null;
+      const hrs = file.hrs ?? null;
 
       const newItem = {
         id: crypto.randomUUID(),
         filename: file.filename,
         name: file.modelName || file.filename.replace(/\.3mf$/i, ''),
-        objects: file.objectsCount,
+        objects: file.objects ?? [],
         hrs,
         hasGcode: !!hrs,
+        filamentTypes: file.filamentTypes ?? [],
+        filamentColors: file.filamentColors ?? [],
+        filamentGramsPerColor: file.filamentGramsPerColor ?? [],
+        filamentType: file.filamentTypes?.[0] ?? '',
+        filamentColor: file.filamentColors?.[0] ?? '',
+        layerHeight: file.layerHeight ?? null,
+        nozzleDiam: file.nozzleDiam ?? '',
+        printer: file.printer ?? '',
         uploadedAt: Date.now(),
       };
 
@@ -155,19 +158,22 @@ export function useAddAllToLibrary() {
       const newItems = files
         .filter(f => f.status === 'ready' && !existingNames.has(f.filename))
         .map(f => {
-          const hrs = f.printTimeEstimate
-            ? (() => {
-                const m = f.printTimeEstimate!.match(/(\d+)h\s*(\d+)m/);
-                return m ? parseFloat((parseInt(m[1]) + parseInt(m[2]) / 60).toFixed(2)) : null;
-              })()
-            : null;
+          const hrs = f.hrs ?? null;
           return {
             id: crypto.randomUUID(),
             filename: f.filename,
             name: f.modelName || f.filename.replace(/\.3mf$/i, ''),
-            objects: f.objectsCount,
+            objects: f.objects ?? [],
             hrs,
             hasGcode: !!hrs,
+            filamentTypes: f.filamentTypes ?? [],
+            filamentColors: f.filamentColors ?? [],
+            filamentGramsPerColor: f.filamentGramsPerColor ?? [],
+            filamentType: f.filamentTypes?.[0] ?? '',
+            filamentColor: f.filamentColors?.[0] ?? '',
+            layerHeight: f.layerHeight ?? null,
+            nozzleDiam: f.nozzleDiam ?? '',
+            printer: f.printer ?? '',
             uploadedAt: Date.now(),
           };
         });

@@ -1,7 +1,7 @@
 import { Parsed3MF } from '@/lib/3mf-parser';
 import { useAddToLibrary, useAddAllToLibrary } from '@/hooks/use-collections';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Box, FileBox, CheckCircle, Clock, Loader2, AlertCircle, Plus, Library } from 'lucide-react';
+import { Box, FileBox, CheckCircle, Clock, Loader2, AlertCircle, Plus, Library, Layers } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 
@@ -21,11 +21,11 @@ export function PreviewList({ files, onFileUpdated }: PreviewListProps) {
     addToLibrary(file, {
       onSuccess: () => {
         onFileUpdated(file.id, { status: 'added' });
-        toast({ title: "Added to 3MF Library", description: file.modelName });
+        toast({ title: 'Added to 3MF Library', description: file.modelName });
       },
       onError: (err) => {
-        toast({ title: "Failed to add", description: err.message, variant: "destructive" });
-      }
+        toast({ title: 'Failed to add', description: err.message, variant: 'destructive' });
+      },
     });
   };
 
@@ -36,12 +36,12 @@ export function PreviewList({ files, onFileUpdated }: PreviewListProps) {
         files.filter(f => f.status === 'ready').forEach(f => onFileUpdated(f.id, { status: 'added' }));
         toast({
           title: `Synced ${result.added} file${result.added !== 1 ? 's' : ''} to 3MF Library`,
-          description: result.added === 0 ? "All files were already in the library." : undefined,
+          description: result.added === 0 ? 'All files already in library.' : undefined,
         });
       },
       onError: (err) => {
-        toast({ title: "Sync failed", description: err.message, variant: "destructive" });
-      }
+        toast({ title: 'Sync failed', description: err.message, variant: 'destructive' });
+      },
     });
   };
 
@@ -62,8 +62,7 @@ export function PreviewList({ files, onFileUpdated }: PreviewListProps) {
           >
             {isAddingAll
               ? <Loader2 className="h-4 w-4 animate-spin" />
-              : <Library className="h-4 w-4" />
-            }
+              : <Library className="h-4 w-4" />}
             Sync All to Library ({readyFiles.length})
           </Button>
         )}
@@ -85,67 +84,110 @@ export function PreviewList({ files, onFileUpdated }: PreviewListProps) {
                 ${file.status === 'error' ? 'border-destructive/30 bg-destructive/5' : ''}
               `}
             >
-              <div className={`absolute left-0 top-0 h-full w-1 
+              {/* Status bar */}
+              <div className={`absolute left-0 top-0 h-full w-1
                 ${file.status === 'ready' ? 'bg-accent' : ''}
                 ${file.status === 'added' ? 'bg-primary' : ''}
                 ${file.status === 'error' ? 'bg-destructive' : ''}
-                ${file.status === 'parsing' ? 'bg-muted' : ''}
+                ${file.status === 'parsing' ? 'bg-muted animate-pulse' : ''}
               `} />
 
-              <div className="flex items-start justify-between gap-4 pl-2">
-                <div className="flex-1 space-y-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <h4 className="font-semibold text-foreground truncate" title={file.modelName}>
-                      {file.modelName}
-                    </h4>
-                    {file.status === 'added' && (
-                      <span className="flex items-center rounded-full bg-primary/20 px-2 py-0.5 text-[10px] font-bold tracking-wider text-primary uppercase">
-                        In Library
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-xs text-muted-foreground truncate font-mono" title={file.filename}>
-                    {file.filename}
-                  </p>
-
-                  <div className="mt-3 flex items-center gap-4 text-xs font-medium text-muted-foreground/80">
-                    <div className="flex items-center gap-1.5">
-                      <Box className="h-3.5 w-3.5" />
-                      {file.status === 'parsing' ? '--' : file.objectsCount} objects
+              <div className="pl-2 space-y-3">
+                {/* Header row */}
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h4 className="font-semibold text-foreground truncate" title={file.modelName}>
+                        {file.modelName}
+                      </h4>
+                      {file.status === 'added' && (
+                        <span className="flex items-center rounded-full bg-primary/20 px-2 py-0.5 text-[10px] font-bold tracking-wider text-primary uppercase">
+                          In Library
+                        </span>
+                      )}
                     </div>
-                    {file.printTimeEstimate && (
-                      <div className="flex items-center gap-1.5 text-accent/80">
-                        <Clock className="h-3.5 w-3.5" />
-                        ~{file.printTimeEstimate}
+                    <p className="text-xs text-muted-foreground font-mono truncate mt-0.5" title={file.filename}>
+                      {file.filename}
+                    </p>
+                  </div>
+
+                  {/* Action button */}
+                  <div className="shrink-0">
+                    {file.status === 'parsing' && <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />}
+                    {file.status === 'error' && <AlertCircle className="h-6 w-6 text-destructive" title={file.errorMessage} />}
+                    {file.status === 'added' && (
+                      <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-primary">
+                        <CheckCircle className="h-5 w-5" />
                       </div>
                     )}
+                    {file.status === 'ready' && (
+                      <Button
+                        size="sm"
+                        onClick={() => handleAdd(file)}
+                        disabled={isAddingOne}
+                        className="bg-accent text-accent-foreground hover:bg-accent/90 shadow-lg shadow-accent/20"
+                      >
+                        {isAddingOne ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="mr-1 h-4 w-4" />}
+                        Add to Library
+                      </Button>
+                    )}
                   </div>
                 </div>
 
-                <div className="flex shrink-0 items-center justify-center">
-                  {file.status === 'parsing' && (
-                    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                  )}
-                  {file.status === 'error' && (
-                    <AlertCircle className="h-6 w-6 text-destructive" title={file.errorMessage} />
-                  )}
-                  {file.status === 'added' && (
-                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
-                      <CheckCircle className="h-5 w-5" />
-                    </div>
-                  )}
-                  {file.status === 'ready' && (
-                    <Button
-                      size="sm"
-                      onClick={() => handleAdd(file)}
-                      disabled={isAddingOne}
-                      className="bg-accent text-accent-foreground hover:bg-accent/90 shadow-lg shadow-accent/20 transition-all hover:scale-105 active:scale-95"
-                    >
-                      {isAddingOne ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="mr-1 h-4 w-4" />}
-                      Add to Library
-                    </Button>
-                  )}
-                </div>
+                {/* Stats row */}
+                {file.status !== 'parsing' && (
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs font-medium text-muted-foreground/80">
+                    {file.objectsCount > 0 && (
+                      <span className="flex items-center gap-1">
+                        <Box className="h-3.5 w-3.5" />
+                        {file.objectsCount} object{file.objectsCount !== 1 ? 's' : ''}
+                      </span>
+                    )}
+                    {file.printTimeEstimate && (
+                      <span className="flex items-center gap-1 text-accent/90">
+                        <Clock className="h-3.5 w-3.5" />
+                        {file.printTimeEstimate}
+                      </span>
+                    )}
+                    {file.layerHeight && (
+                      <span className="flex items-center gap-1">
+                        <Layers className="h-3.5 w-3.5" />
+                        {file.layerHeight}mm
+                      </span>
+                    )}
+                    {file.nozzleDiam && (
+                      <span className="text-muted-foreground/60">⌀{file.nozzleDiam}mm</span>
+                    )}
+                    {file.printer && (
+                      <span className="text-muted-foreground/60 truncate">{file.printer}</span>
+                    )}
+                  </div>
+                )}
+
+                {/* Filament color swatches + grams */}
+                {file.status !== 'parsing' && file.filamentColors.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-2">
+                    {file.filamentColors.map((color, i) => (
+                      <div key={i} className="flex items-center gap-1.5">
+                        <div
+                          className="h-4 w-4 rounded-full border border-white/20 shadow-sm"
+                          style={{ backgroundColor: color }}
+                          title={`${file.filamentTypes[i] || 'Filament'} — ${color}`}
+                        />
+                        {file.filamentGramsPerColor[i] != null && (
+                          <span className="text-[10px] font-mono text-muted-foreground/70">
+                            {file.filamentGramsPerColor[i]}g
+                          </span>
+                        )}
+                        {file.filamentTypes[i] && (
+                          <span className="text-[10px] text-muted-foreground/50">
+                            {file.filamentTypes[i]}
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </motion.div>
           ))}
