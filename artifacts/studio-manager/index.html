@@ -3215,12 +3215,28 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
   <div class="mtitle" id="ams-modal-title">Assign Spool to Slot</div>
   <input type="hidden" id="ams-printer-name"/>
   <input type="hidden" id="ams-slot-num"/>
-  <div style="font-size:8px;color:var(--txt-d);margin-bottom:12px" id="ams-slot-label"></div>
-  <div class="field"><div class="fl">Select Spool</div>
-    <select id="ams-spool-select" style="width:100%;background:var(--bg);border:1px solid var(--bdr2);color:var(--txt);padding:7px 9px;font-family:'Share Tech Mono',monospace;font-size:9px;border-radius:3px;">
+  <div style="font-size:9px;color:var(--txt-d);margin-bottom:12px" id="ams-slot-label"></div>
+
+  <!-- Scan shortcut -->
+  <button class="btn btn-grn" style="width:100%;margin-bottom:12px;font-size:12px;gap:7px;display:flex;align-items:center;justify-content:center" onclick="openAmsScannerBtn()">
+    <span style="font-size:15px">📷</span> Scan Spool QR
+  </button>
+
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+    <div style="flex:1;height:1px;background:var(--bdr)"></div>
+    <span style="font-size:9px;color:var(--txt-d);white-space:nowrap">or select manually</span>
+    <div style="flex:1;height:1px;background:var(--bdr)"></div>
+  </div>
+
+  <div class="field" style="margin-bottom:10px"><div class="fl">Spool</div>
+    <select id="ams-spool-select" onchange="updateAmsPreview()" style="width:100%;background:var(--bg);border:1px solid var(--bdr2);color:var(--txt);padding:7px 9px;font-family:'Inter',sans-serif;font-size:10px;border-radius:6px;">
       <option value="">— Empty Slot —</option>
     </select>
   </div>
+
+  <!-- Spool preview — shown after scan or manual select -->
+  <div id="ams-spool-preview" style="display:none;background:var(--bg);border:1px solid var(--bdr);border-radius:10px;padding:12px;margin-bottom:12px"></div>
+
   <div class="macts">
     <button class="btn btn-gold" onclick="saveAmsAssignment()">Assign</button>
     <button class="btn btn-ghost" onclick="closeAmsModal()">Cancel</button>
@@ -8269,15 +8285,78 @@ function renderAmsMapDash(printerName){
 }
 
 function openAmsModal(printerName,slotNum){
-  document.getElementById('ams-modal-title').textContent=`${printerName} — Slot ${slotNum}`;
+  document.getElementById('ams-modal-title').textContent=printerName+' — Slot '+slotNum;
   document.getElementById('ams-printer-name').value=printerName;
   document.getElementById('ams-slot-num').value=slotNum;
   const currentId=(amsMap[printerName]||{})[slotNum]||'';
-  const cur=currentId?spools.find(s=>s.id===currentId):null;
-  document.getElementById('ams-slot-label').textContent=cur?`Current: ${cur.name} (${pct(cur)}% remaining)`:'Currently empty — select a spool to assign';
+  const cur=currentId?spools.find(function(s){return s.id===currentId;}):null;
+  document.getElementById('ams-slot-label').textContent=cur?'Currently: '+cur.name+' ('+pct(cur)+'% remaining)':'Empty slot — scan or select a spool to assign';
   const sel=document.getElementById('ams-spool-select');
-  sel.innerHTML=`<option value="">— Empty Slot —</option>`+spools.map(s=>`<option value="${s.id}"${s.id===currentId?' selected':''}>${esc(s.name)} — ${s.material} (${pct(s)}%)</option>`).join('');
+  sel.innerHTML='<option value="">— Empty Slot —</option>'+spools.map(function(s){return '<option value="'+s.id+'"'+(s.id===currentId?' selected':'')+'>'+esc(s.name)+' — '+s.material+' ('+pct(s)+'%)</option>';}).join('');
   document.getElementById('mod-ams').style.display='flex';
+  updateAmsPreview();
+}
+function updateAmsPreview(){
+  const id=document.getElementById('ams-spool-select').value;
+  const prev=document.getElementById('ams-spool-preview');
+  if(!prev)return;
+  if(!id){prev.style.display='none';return;}
+  const s=spools.find(function(x){return x.id===id;});
+  if(!s){prev.style.display='none';return;}
+  const p=pct(s);const bc=barcol(p);
+  prev.style.display='block';
+  prev.innerHTML='<div style="display:flex;align-items:center;gap:10px">'
+    +'<div style="width:20px;height:20px;border-radius:50%;flex-shrink:0;background:'+s.color+';box-shadow:0 0 8px '+s.color+'55"></div>'
+    +'<div style="flex:1;min-width:0">'
+      +'<div style="font-size:11px;font-weight:600;color:var(--txt-b);font-family:Inter,sans-serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(s.name)+'</div>'
+      +'<div style="font-size:9px;color:var(--txt-d);margin-top:1px">'+esc(s.material)+(s.brand?' · '+esc(s.brand):'')+'</div>'
+    +'</div>'
+    +'<div style="text-align:right;flex-shrink:0">'
+      +'<div style="font-family:Orbitron,monospace;font-size:14px;font-weight:700;color:'+bc+'">'+p+'%</div>'
+      +'<div style="font-size:9px;color:var(--txt-d)">'+s.remaining+'g left</div>'
+    +'</div>'
+  +'</div>'
+  +'<div style="background:var(--bdr);height:4px;border-radius:3px;overflow:hidden;margin-top:10px">'
+    +'<div style="width:'+p+'%;height:100%;background:'+bc+';border-radius:3px;transition:width .4s"></div>'
+  +'</div>';
+}
+function openAmsScannerBtn(){
+  const printerName=document.getElementById('ams-printer-name').value;
+  const slotNum=parseInt(document.getElementById('ams-slot-num').value);
+  document.getElementById('mod-ams').style.display='none';
+  scannerMode='ams';
+  const title=document.querySelector('#mod-scan .mtitle');
+  if(title)title.textContent='Scan Spool → Slot '+slotNum;
+  document.getElementById('scan-status').textContent='Starting camera…';
+  document.getElementById('mod-scan').style.display='flex';
+  try{
+    qrScanner=new Html5Qrcode('qr-reader');
+    qrScanner.start({facingMode:'environment'},{fps:10,qrbox:{width:200,height:200}},
+      function(txt){
+        if(!txt.startsWith('HA3D_SPOOL:'))return;
+        const id=txt.replace('HA3D_SPOOL:','');
+        closeScanner();
+        const s=spools.find(function(x){return x.id===id;});
+        if(!s){toast('Not Found','Spool not in your list — add it in Spools first','warning');document.getElementById('mod-ams').style.display='flex';return;}
+        document.getElementById('mod-ams').style.display='flex';
+        const sel=document.getElementById('ams-spool-select');
+        let opt=[...sel.options].find(function(o){return o.value===id;});
+        if(!opt){
+          opt=document.createElement('option');
+          opt.value=id;opt.textContent=esc(s.name)+' — '+s.material+' ('+pct(s)+'%)';
+          sel.appendChild(opt);
+        }
+        sel.value=id;
+        updateAmsPreview();
+        toast('Spool Scanned ✓',s.name+' ready — tap Assign to confirm','success');
+      },
+      function(){}
+    ).then(function(){document.getElementById('scan-status').textContent='Point camera at spool QR…';})
+    .catch(function(e){document.getElementById('scan-status').textContent='Camera error: '+e;document.getElementById('mod-ams').style.display='flex';});
+  }catch(e){
+    document.getElementById('scan-status').textContent='Scanner unavailable: '+e;
+    document.getElementById('mod-ams').style.display='flex';
+  }
 }
 function saveAmsAssignment(){
   const printerName=document.getElementById('ams-printer-name').value;
