@@ -3876,6 +3876,7 @@ function renderQueue(){
     const items=queueItems.filter(q=>(q.stage||'queued')===st.key);
     const cards=items.map(q=>{
       const isShopify=q.fromShopify;
+      const isMystery=q.fromMystery;
       const isWarn=q.noTmf;
       const isSel=selectedIds.includes(q.id);
       const prioIcon=q.priority==='high'?'🔴':q.priority==='low'?'🔵':'';
@@ -3884,7 +3885,8 @@ function renderQueue(){
       return `<div class="kcard${isShopify?' kc-shopify':''}${isWarn?' kc-warn':''}${isSel?' selected':''}" data-selid="${q.id}" onclick="if(selectMode==='queue'){event.stopPropagation();toggleSelect('${q.id}');}">
         <input type="checkbox" class="sel-checkbox"${isSel?' checked':''} onclick="event.stopPropagation();toggleSelect('${q.id}')"/>
         ${prioIcon?`<div class="k-priority">${prioIcon}</div>`:''}
-        ${isShopify?`<div style="font-size:6px;color:var(--shopify);letter-spacing:1px;margin-bottom:3px">🛍 SHOPIFY ORDER</div>`:''}
+        ${isMystery?`<div style="font-size:6px;color:var(--pur-b);letter-spacing:1px;margin-bottom:3px">🎁 MYSTERY GIFT</div>`:''}
+        ${isShopify&&!isMystery?`<div style="font-size:6px;color:var(--shopify);letter-spacing:1px;margin-bottom:3px">🛍 SHOPIFY ORDER</div>`:''}
         ${isWarn?`<div style="font-size:6px;color:var(--amb);letter-spacing:1px;margin-bottom:3px">⚠ NO 3MF ON FILE</div>`:''}
         <div class="kcard-name">${esc(q.name)}${q.qty>1?' ×'+q.qty:''}</div>
         <div class="kcard-meta">${esc(q.printer||'?')} · ${q.hrs||'?'}h${q.orderId?' · '+esc(q.orderId):''}</div>
@@ -4038,6 +4040,7 @@ function renderOrders(){
         +'</div>'
       +'</div>'
       +(itemsText?'<div style="font-size:7px;color:var(--txt-d);margin-bottom:6px">'+itemsText+'</div>':'')
+      +(o.discountCode?'<div style="margin-bottom:6px;display:flex;gap:4px;flex-wrap:wrap"><span style="font-size:6px;background:var(--pur-d);color:var(--pur-b);padding:2px 7px;border-radius:8px;letter-spacing:.5px">🏷 '+esc(o.discountCode)+'</span>'+(isMysteryOrder&&isMysteryOrder(o)?'<span style="font-size:6px;background:rgba(80,30,120,.3);color:var(--pur-b);padding:2px 7px;border-radius:8px">🎁 Mystery Eligible</span>':'')+'</div>':'')
       +(o.notes?'<div style="font-size:7px;color:var(--txt-d);font-style:italic;margin-bottom:6px">'+esc(o.notes)+'</div>':'')
       +'<div style="display:flex;gap:4px;flex-wrap:wrap">'
         +'<button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();openEditOrder(\''+o.id+'\')">Edit</button>'
@@ -6503,7 +6506,9 @@ function ingestShopifyOrder(o){
   const items=(o.line_items||[]).map(li=>({name:li.title,variantTitle:li.variant_title||'',qty:li.quantity,price:parseFloat(li.price||0).toFixed(2),shopifyVariantId:String(li.variant_id||'')}));
   const orderId=o.name||('#'+o.id);
   const status=shopifyStatusMap(o);
-  const order={id:uid(),shopifyId:String(o.id),orderId,customer,platform:'Shopify',date:o.created_at?o.created_at.split('T')[0]:new Date().toISOString().split('T')[0],items,status,shipping:0,notes:'',timestamp:Date.now(),fromShopify:true};
+  const rawDiscountCodes=(o.discount_codes||[]).map(d=>d.code).filter(Boolean);
+  const discountCode=rawDiscountCodes.join(', ');
+  const order={id:uid(),shopifyId:String(o.id),orderId,customer,platform:'Shopify',date:o.created_at?o.created_at.split('T')[0]:new Date().toISOString().split('T')[0],items,status,shipping:0,notes:'',discountCode,timestamp:Date.now(),fromShopify:true};
   // NOTE: order is pushed to the array AFTER items are processed so that if the
   // forEach throws, no orphaned order record is left in storage (which would cause
   // the dedup check to skip this order on every future poll, losing the queue items).
@@ -6554,6 +6559,8 @@ function ingestShopifyOrder(o){
   showNotification('New Order '+orderId,`${customer} · ${summary}`,order.id);
   const qb=document.getElementById('nav-badge-queue');if(qb)qb.classList.add('show');
   const ob=document.getElementById('nav-badge-orders');if(ob)ob.classList.add('show');
+  // Auto-trigger mystery print if order used a qualifying discount code
+  if(discountCode)checkMysteryTrigger(order);
 }
 
 // (executeRoll is defined above with the new multi-select pool mechanic)
@@ -11070,18 +11077,45 @@ function renderMystery(){
 
 function advanceMystery(id){
   const next={pending:'queued',queued:'packed',packed:'shipped'};
+  let queueCreated=false;
   mysteryOrders=mysteryOrders.map(m=>{
     if(m.id!==id)return m;
     const newStatus=next[m.status]||m.status;
-    if(newStatus==='queued'&&!m.print){
-      toast('Assign a Print First','Edit this order to assign a specific mystery print before queuing','warning');
-      return m;
+    if(newStatus==='queued'){
+      if(!m.print){
+        toast('Assign a Print First','Edit this mystery order to set the print name before queuing','warning');
+        return m;
+      }
+      // Only create queue item if one doesn't already exist for this mystery order
+      const already=queueItems.some(q=>q.mysteryId===m.id);
+      if(!already){
+        queueItems.push({
+          id:uid(),
+          name:m.print+' 🎁',
+          category:'Mystery',
+          printer:printerRecords[0]?.name||'X1C',
+          hrs:0,
+          qty:1,
+          priority:'normal',
+          orderId:m.orderId,
+          stage:'queued',
+          notes:'Mystery gift · '+m.customer+' · '+m.code,
+          fromMystery:true,
+          mysteryId:m.id,
+          timestamp:Date.now()
+        });
+        saveQueue();
+        queueCreated=true;
+      }
     }
     return {...m,status:newStatus};
   });
   saveMysteryOrders();render();updateMysteryBadge();
   const m=mysteryOrders.find(x=>x.id===id);
-  if(m)toast('Mystery Updated',m.orderId+' → '+m.status,'success');
+  if(m){
+    if(queueCreated)toast('🎁 Mystery Queued',m.print+' added to Print Queue for '+m.orderId,'success');
+    else toast('Mystery Updated',m.orderId+' → '+m.status,'success');
+  }
 }
 
 function openAddMystery(){
