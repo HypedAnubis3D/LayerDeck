@@ -2518,7 +2518,7 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
     </div>
   </div>
   <div class="fr3">
-    <div class="field"><div class="fl">Price Paid ($)</div><input type="number" id="ep3-price" min="0" step="0.01" placeholder="12.99"/></div>
+    <div class="field"><div class="fl">Price Paid ($)</div><input type="number" id="ep3-price" min="0" step="0.01" placeholder="13.99"/></div>
     <div class="field"><div class="fl">Spool Weight (g)</div><input type="number" id="ep3-weight" min="1" value="1000"/></div>
     <div class="field"><div class="fl">Qty Spools</div><input type="number" id="ep3-qty" min="1" value="1"/></div>
   </div>
@@ -2873,7 +2873,7 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
     <div class="field"><div class="fl">Remaining (g)</div><input type="number" id="es-rem" min="0"/></div>
   </div>
   <div class="fr2">
-    <div class="field"><div class="fl">Cost/Spool ($)</div><input type="number" id="es-cost" min="0" step="0.01" placeholder="12.99"/></div>
+    <div class="field"><div class="fl">Cost/Spool ($)</div><input type="number" id="es-cost" min="0" step="0.01" placeholder="13.99"/></div>
     <div class="field"><div class="fl">Brand</div><input type="text" id="es-brand" placeholder="Bambu Lab"/></div>
   </div>
   <div class="field"><div class="fl">Tags (comma-separated)</div><input type="text" id="es-tags" placeholder="warm tones, skin"/></div>
@@ -3449,10 +3449,10 @@ function load(){
   const hasBeenOnboarded=localStorage.getItem(KEYS.onboarded);
   if(!spools.length&&!hasBeenReset&&!hasBeenOnboarded){
     spools=[
-      {id:uid(),name:'Bambu Matte Black',color:'#1a1a1e',material:'PLA Matte',printer:'X1C',amsSlot:'1',total:1000,remaining:780,cost:12.99,brand:'Bambu Lab',tags:['dark tones'],notes:'',driedDate:'2026-02-10',driedHours:6},
-      {id:uid(),name:'Bambu Jade White',color:'#e8f0e2',material:'PLA Basic',printer:'X1C',amsSlot:'2',total:1000,remaining:210,cost:12.99,brand:'Bambu Lab',tags:['light tones','skin'],notes:'',driedDate:'',driedHours:''},
+      {id:uid(),name:'Bambu Matte Black',color:'#1a1a1e',material:'PLA Matte',printer:'X1C',amsSlot:'1',total:1000,remaining:780,cost:13.99,brand:'Bambu Lab',tags:['dark tones'],notes:'',driedDate:'2026-02-10',driedHours:6},
+      {id:uid(),name:'Bambu Jade White',color:'#e8f0e2',material:'PLA Basic',printer:'X1C',amsSlot:'2',total:1000,remaining:210,cost:13.99,brand:'Bambu Lab',tags:['light tones','skin'],notes:'',driedDate:'',driedHours:''},
       {id:uid(),name:'Bambu Gold Silk',color:'#c8a020',material:'PLA Silk',printer:'P1S',amsSlot:'1',total:1000,remaining:950,cost:14.99,brand:'Bambu Lab',tags:['metallic','shiny variant'],notes:'',driedDate:'',driedHours:''},
-      {id:uid(),name:'Bambu Cobalt Blue',color:'#1848c0',material:'PLA Basic',printer:'Unloaded',amsSlot:'',total:1000,remaining:60,cost:12.99,brand:'Bambu Lab',tags:['cool tones'],notes:'',driedDate:'',driedHours:''},
+      {id:uid(),name:'Bambu Cobalt Blue',color:'#1848c0',material:'PLA Basic',printer:'Unloaded',amsSlot:'',total:1000,remaining:60,cost:13.99,brand:'Bambu Lab',tags:['cool tones'],notes:'',driedDate:'',driedHours:''},
     ];
     ss(KEYS.spools,spools);
   }
@@ -4925,7 +4925,7 @@ function openAddSpool(){
   document.getElementById('es-col').value='#ffffff';document.getElementById('es-cp').value='#ffffff';
   document.getElementById('es-mat').value='PLA Basic';
   document.getElementById('es-total').value='1000';
-  document.getElementById('es-rem').value='1000';document.getElementById('es-cost').value='12.99';
+  document.getElementById('es-rem').value='1000';document.getElementById('es-cost').value='13.99';
   document.getElementById('es-brand').value='Bambu Lab';
   document.getElementById('es-ddate').value='';document.getElementById('es-dhrs').value='';
   // Populate printer dropdown — only from added printers, no hardcoded fallback
@@ -8209,7 +8209,7 @@ function renderObStep(){
       <div class="field"><div class="fl">Material</div><select id="ob-spool-mat" style="width:100%;background:var(--bg);border:1px solid var(--bdr2);color:var(--txt);padding:7px 9px;font-family:'Share Tech Mono',monospace;font-size:9px;border-radius:3px;">
         <option>PLA Basic</option><option>PLA Matte</option><option>PLA Silk</option><option>PLA+</option><option>PETG Basic</option><option>ABS</option>
       </select></div>
-      <div class="field"><div class="fl">Cost/Spool ($)</div><input type="number" id="ob-spool-cost" value="12.99" step="0.01" style="width:100%;background:var(--bg);border:1px solid var(--bdr2);color:var(--txt);padding:7px 9px;font-family:'Share Tech Mono',monospace;font-size:9px;border-radius:3px;"/></div>
+      <div class="field"><div class="fl">Cost/Spool ($)</div><input type="number" id="ob-spool-cost" value="13.99" step="0.01" style="width:100%;background:var(--bg);border:1px solid var(--bdr2);color:var(--txt);padding:7px 9px;font-family:'Share Tech Mono',monospace;font-size:9px;border-radius:3px;"/></div>
     </div>`;
   }else if(step.id==='store'){
     content=`<p style="font-size:9px;color:var(--txt-d);margin-bottom:14px;line-height:1.7">${step.sub}</p>
@@ -8238,7 +8238,7 @@ function obNext(){
   if(OB_STEPS[obStep].id==='spool'){
     const name=document.getElementById('ob-spool-name')?.value?.trim();
     if(name){
-      spools.push({id:uid(),name,color:'#1a1a1e',material:document.getElementById('ob-spool-mat')?.value||'PLA Basic',printer:'Unloaded',amsSlot:'',total:1000,remaining:1000,cost:parseFloat(document.getElementById('ob-spool-cost')?.value)||12.99,brand:'Bambu Lab',tags:[],driedDate:'',driedHours:'',notes:''});
+      spools.push({id:uid(),name,color:'#1a1a1e',material:document.getElementById('ob-spool-mat')?.value||'PLA Basic',printer:'Unloaded',amsSlot:'',total:1000,remaining:1000,cost:parseFloat(document.getElementById('ob-spool-cost')?.value)||13.99,brand:'Bambu Lab',tags:[],driedDate:'',driedHours:'',notes:''});
       saveSpools();
     }
   }
