@@ -6047,15 +6047,18 @@ function previewShopifyDemo(){
     timestamp:Date.now(),fromShopify:true
   };
   orders.push(demoOrder);saveOrders();
-  // Auto-trigger mystery print (demo uses welcome20 code)
+  // Auto-trigger mystery print (demo uses welcome20 code) — silent so it folds into order notification
   demoOrder.discountCode='WELCOME20';
-  if(typeof checkMysteryTrigger==='function')checkMysteryTrigger(demoOrder);
+  const demoMystery=(typeof checkMysteryTrigger==='function')?checkMysteryTrigger(demoOrder,{silent:true}):null;
   // Add to queue
   queueItems.push({id:uid(),name:'Anubis Figurine Standard',category:'Figurines',printer:printerRecords[0]?.name||'X1C',hrs:3.5,qty:1,priority:'high',orderId:demoId,stage:'queued',fromShopify:true,timestamp:Date.now()});
   saveQueue();
   render();
   setTimeout(()=>{
-    showNotification('New Shopify Order '+demoId,'Sarah K. — Anubis Figurine × 1, Duck Wizard × 2 · $59.97',demoOrder.id);
+    const demoNotifText=demoMystery
+      ?'Sarah K. — Anubis Figurine × 1, Duck Wizard × 2 · $59.97 · 🎁 Mystery: WELCOME20'
+      :'Sarah K. — Anubis Figurine × 1, Duck Wizard × 2 · $59.97';
+    showNotification('New Shopify Order '+demoId,demoNotifText,demoOrder.id);
     document.getElementById('nav-badge-queue')?.classList.add('show');
     document.getElementById('nav-badge-orders')?.classList.add('show');
   },800);
@@ -6810,16 +6813,19 @@ function ingestShopifyOrder(o){
   const prevOrders=orders.filter(x=>x.customer&&x.customer===customer&&x.shopifyId!==String(o.id));
   if(prevOrders.length>0)toast(`⭐ Returning Customer!`,`${customer} has ordered ${prevOrders.length} time${prevOrders.length!==1?'s':''} before`,'shiny',7000);
   const summary=items.map(i=>`${i.name} ×${i.qty}`).join(', ');
+  // Trigger mystery silently first so we can fold it into the order notification
+  const mysteryEntry=discountCode?checkMysteryTrigger(order,{silent:true}):null;
   if(!notifIds.has(orderId)){
     notifIds.add(orderId);
     try{localStorage.setItem(KEYS.notifIds,JSON.stringify([...notifIds]));}catch(e){}
-    showNotification('New Order '+orderId,`${customer} · ${summary}`,order.id);
-    fetch('/api/push/notify-order',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({orderId,customer,summary,itemCount:items.length})}).catch(()=>{});
+    const notifText=mysteryEntry
+      ?`${customer} · ${summary} · 🎁 Mystery: ${mysteryEntry.code}`
+      :`${customer} · ${summary}`;
+    showNotification('New Order '+orderId,notifText,order.id);
+    fetch('/api/push/notify-order',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({orderId,customer,summary,itemCount:items.length,mysteryCode:mysteryEntry?mysteryEntry.code:null})}).catch(()=>{});
   }
   const qb=document.getElementById('nav-badge-queue');if(qb)qb.classList.add('show');
   const ob=document.getElementById('nav-badge-orders');if(ob)ob.classList.add('show');
-  // Auto-trigger mystery print if order used a qualifying discount code
-  if(discountCode)checkMysteryTrigger(order);
 }
 
 // (executeRoll is defined above with the new multi-select pool mechanic)
@@ -11307,10 +11313,11 @@ function isMysteryOrder(order){
 }
 
 // Called when a new order arrives (Shopify webhook / polling)
-function checkMysteryTrigger(order){
-  if(!isMysteryOrder(order))return;
+function checkMysteryTrigger(order,opts){
+  const silent=(opts&&opts.silent)||false;
+  if(!isMysteryOrder(order))return null;
   // Don't duplicate
-  if(mysteryOrders.find(m=>m.orderId===order.orderId))return;
+  if(mysteryOrders.find(m=>m.orderId===order.orderId))return null;
   const entry={
     id:uid(),
     orderId:order.orderId||order.id,
@@ -11325,12 +11332,15 @@ function checkMysteryTrigger(order){
   };
   mysteryOrders.push(entry);
   saveMysteryOrders();
-  // Badge + toast
+  // Badge update
   updateMysteryBadge();
-  toast('🎁 Mystery Print Needed!','Order '+entry.orderId+' from '+entry.customer+' used '+entry.code,'warning',0);
-  // Flash nav badge
   const badge=document.getElementById('nav-badge-mystery');
   if(badge){badge.textContent=mysteryOrders.filter(m=>m.status==='pending').length;badge.style.display='block';}
+  // Only show standalone toast when not folded into an order notification
+  if(!silent){
+    toast('🎁 Mystery Print Needed!','Order '+entry.orderId+' from '+entry.customer+' used '+entry.code,'warning',8000);
+  }
+  return entry;
 }
 
 function extractPromoCode(order){
