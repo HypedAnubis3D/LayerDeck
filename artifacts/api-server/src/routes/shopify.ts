@@ -360,7 +360,18 @@ router.get(
   }
 );
 
-/** GET /api/shopify/products — proxy to Shopify products API */
+/** Parse the next-page URL from a Shopify Link header, or null if none. */
+function parseNextLink(linkHeader: string | null): string | null {
+  if (!linkHeader) return null;
+  for (const part of linkHeader.split(",")) {
+    const urlMatch = part.match(/<([^>]+)>/);
+    const relMatch = part.match(/rel="([^"]+)"/);
+    if (urlMatch && relMatch && relMatch[1] === "next") return urlMatch[1];
+  }
+  return null;
+}
+
+/** GET /api/shopify/products — proxy to Shopify products API (all pages) */
 router.get(
   "/products",
   async (req: Request, res: Response): Promise<void> => {
@@ -376,28 +387,37 @@ router.get(
         return;
       }
 
-      const url = new URL(
-        `https://${conn.shopDomain}/admin/api/2024-01/products.json`
-      );
-      url.searchParams.set("limit", "250");
-      url.searchParams.set(
-        "fields",
-        "id,title,variants,images,status,product_type,tags"
-      );
+      const allProducts: unknown[] = [];
+      let nextUrl: string | null = (() => {
+        const url = new URL(
+          `https://${conn.shopDomain}/admin/api/2024-01/products.json`
+        );
+        url.searchParams.set("limit", "250");
+        url.searchParams.set(
+          "fields",
+          "id,title,variants,images,status,product_type,tags"
+        );
+        return url.toString();
+      })();
 
-      const shopifyResp = await fetch(url.toString(), {
-        headers: { "X-Shopify-Access-Token": conn.accessToken },
-      });
+      while (nextUrl) {
+        const shopifyResp = await fetch(nextUrl, {
+          headers: { "X-Shopify-Access-Token": conn.accessToken },
+        });
 
-      if (!shopifyResp.ok) {
-        res
-          .status(shopifyResp.status)
-          .json({ error: "Shopify API error", products: [] });
-        return;
+        if (!shopifyResp.ok) {
+          res
+            .status(shopifyResp.status)
+            .json({ error: "Shopify API error", products: [] });
+          return;
+        }
+
+        const data = (await shopifyResp.json()) as { products: unknown[] };
+        allProducts.push(...(data.products ?? []));
+        nextUrl = parseNextLink(shopifyResp.headers.get("link"));
       }
 
-      const data = (await shopifyResp.json()) as { products: unknown[] };
-      res.json(data);
+      res.json({ products: allProducts });
     } catch (err) {
       req.log.error(err, "Failed to fetch Shopify products");
       res.status(500).json({ error: "Internal error", products: [] });
