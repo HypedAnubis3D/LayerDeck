@@ -1416,9 +1416,12 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
   font-family:'Orbitron',monospace;font-size:10px;color:var(--txt-b);font-weight:700;
 }
 .ptd-unit{font-size:6px;color:var(--txt-d);font-family:'Share Tech Mono',monospace;font-weight:normal;margin-left:1px;margin-right:4px;}
-/* Hide native number spinners on time inputs so text is always visible */
-.time-inp::-webkit-inner-spin-button,.time-inp::-webkit-outer-spin-button{-webkit-appearance:none;margin:0;}
-.time-inp{-moz-appearance:textfield;appearance:textfield;}
+/* Print time duration boxes */
+.ptbox{background:var(--bg2);border:1px solid var(--bdr2);border-radius:8px;padding:10px 6px 8px;display:flex;flex-direction:column;align-items:center;gap:4px;transition:border-color .15s,box-shadow .15s;cursor:text;}
+.ptbox:focus-within{border-color:var(--gold);box-shadow:0 0 0 2px rgba(201,162,39,.12);}
+.ptinp{background:transparent;border:none;outline:none;color:var(--txt);font-size:24px;font-weight:700;width:100%;text-align:center;font-family:'Share Tech Mono',monospace;padding:0;line-height:1.1;}
+.ptinp::placeholder{color:var(--bdr2);}
+.ptlabel{font-size:6px;letter-spacing:2px;color:var(--gold-dim);text-transform:uppercase;font-family:'Share Tech Mono',monospace;}
 
 @media print{
 ══════════════════════════════════════ */
@@ -2913,27 +2916,28 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
       <select id="ep-cat"><option>Themed Balls</option><option>Ducks</option><option>Figurines</option><option>Cosplay</option><option>Other</option></select>
     </div>
   </div>
-  <div class="fr3">
+  <div style="display:grid;grid-template-columns:2fr 1fr;gap:7px">
     <div class="field"><div class="fl">Printer</div>
       <select id="ep-printer" onchange="onPrinterSelected()"><option value="">— Select Printer —</option></select>
     </div>
-    <div class="field"><div class="fl">Print Time</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">
-        <div style="background:var(--bg);border:1px solid var(--bdr2);border-radius:6px;padding:8px 4px;display:flex;flex-direction:column;align-items:center;gap:3px">
-          <input type="text" inputmode="numeric" pattern="[0-9]*" id="ep-hrs-h" placeholder="0" autocomplete="off" oninput="updateCostPreview()" style="background:transparent;border:none;outline:none;color:var(--txt);font-size:20px;font-weight:700;width:100%;text-align:center;font-family:'Share Tech Mono',monospace;padding:0"/>
-          <div style="font-size:6px;letter-spacing:1.5px;color:var(--txt-d);text-transform:uppercase">Hours</div>
-        </div>
-        <div style="background:var(--bg);border:1px solid var(--bdr2);border-radius:6px;padding:8px 4px;display:flex;flex-direction:column;align-items:center;gap:3px">
-          <input type="text" inputmode="numeric" pattern="[0-9]*" id="ep-hrs-m" placeholder="0" autocomplete="off" oninput="updateCostPreview()" style="background:transparent;border:none;outline:none;color:var(--txt);font-size:20px;font-weight:700;width:100%;text-align:center;font-family:'Share Tech Mono',monospace;padding:0"/>
-          <div style="font-size:6px;letter-spacing:1.5px;color:var(--txt-d);text-transform:uppercase">Min</div>
-        </div>
-        <div style="background:var(--bg);border:1px solid var(--bdr2);border-radius:6px;padding:8px 4px;display:flex;flex-direction:column;align-items:center;gap:3px">
-          <input type="text" inputmode="numeric" pattern="[0-9]*" id="ep-hrs-s" placeholder="0" autocomplete="off" oninput="updateCostPreview()" style="background:transparent;border:none;outline:none;color:var(--txt);font-size:20px;font-weight:700;width:100%;text-align:center;font-family:'Share Tech Mono',monospace;padding:0"/>
-          <div style="font-size:6px;letter-spacing:1.5px;color:var(--txt-d);text-transform:uppercase">Sec</div>
-        </div>
+    <div class="field"><div class="fl">Qty</div><input type="number" id="ep-qty" min="1" value="1" oninput="updateCostPreview()"/></div>
+  </div>
+  <div class="field">
+    <div class="fl">Print Duration</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
+      <div class="ptbox" onclick="this.querySelector('.ptinp').focus()">
+        <input type="text" inputmode="numeric" pattern="[0-9]*" id="ep-hrs-h" class="ptinp" placeholder="0" autocomplete="off" oninput="updateCostPreview()"/>
+        <div class="ptlabel">Hours</div>
+      </div>
+      <div class="ptbox" onclick="this.querySelector('.ptinp').focus()">
+        <input type="text" inputmode="numeric" pattern="[0-9]*" id="ep-hrs-m" class="ptinp" placeholder="0" autocomplete="off" oninput="updateCostPreview()"/>
+        <div class="ptlabel">Min</div>
+      </div>
+      <div class="ptbox" onclick="this.querySelector('.ptinp').focus()">
+        <input type="text" inputmode="numeric" pattern="[0-9]*" id="ep-hrs-s" class="ptinp" placeholder="0" autocomplete="off" oninput="updateCostPreview()"/>
+        <div class="ptlabel">Sec</div>
       </div>
     </div>
-    <div class="field"><div class="fl">Quantity</div><input type="number" id="ep-qty" min="1" value="1" oninput="updateCostPreview()"/></div>
   </div>
 
   <!-- Extra 3MF info (shown when 3MF selected) -->
