@@ -2917,8 +2917,21 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
     <div class="field"><div class="fl">Printer</div>
       <select id="ep-printer" onchange="onPrinterSelected()"><option value="">— Select Printer —</option></select>
     </div>
-    <div class="field"><div class="fl">Print Time <span style="font-size:7px;color:var(--txt-d);font-weight:normal">(e.g. 2h 30m · 1:30 · 90m)</span></div>
-      <input type="text" id="ep-hrs-text" placeholder="e.g. 2h 30m" autocomplete="off" oninput="updateCostPreview()" style="color:var(--txt)"/>
+    <div class="field"><div class="fl">Print Time</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">
+        <div style="background:var(--bg);border:1px solid var(--bdr2);border-radius:6px;padding:8px 4px;display:flex;flex-direction:column;align-items:center;gap:3px">
+          <input type="text" inputmode="numeric" pattern="[0-9]*" id="ep-hrs-h" placeholder="0" autocomplete="off" oninput="updateCostPreview()" style="background:transparent;border:none;outline:none;color:var(--txt);font-size:20px;font-weight:700;width:100%;text-align:center;font-family:'Share Tech Mono',monospace;padding:0"/>
+          <div style="font-size:6px;letter-spacing:1.5px;color:var(--txt-d);text-transform:uppercase">Hours</div>
+        </div>
+        <div style="background:var(--bg);border:1px solid var(--bdr2);border-radius:6px;padding:8px 4px;display:flex;flex-direction:column;align-items:center;gap:3px">
+          <input type="text" inputmode="numeric" pattern="[0-9]*" id="ep-hrs-m" placeholder="0" autocomplete="off" oninput="updateCostPreview()" style="background:transparent;border:none;outline:none;color:var(--txt);font-size:20px;font-weight:700;width:100%;text-align:center;font-family:'Share Tech Mono',monospace;padding:0"/>
+          <div style="font-size:6px;letter-spacing:1.5px;color:var(--txt-d);text-transform:uppercase">Min</div>
+        </div>
+        <div style="background:var(--bg);border:1px solid var(--bdr2);border-radius:6px;padding:8px 4px;display:flex;flex-direction:column;align-items:center;gap:3px">
+          <input type="text" inputmode="numeric" pattern="[0-9]*" id="ep-hrs-s" placeholder="0" autocomplete="off" oninput="updateCostPreview()" style="background:transparent;border:none;outline:none;color:var(--txt);font-size:20px;font-weight:700;width:100%;text-align:center;font-family:'Share Tech Mono',monospace;padding:0"/>
+          <div style="font-size:6px;letter-spacing:1.5px;color:var(--txt-d);text-transform:uppercase">Sec</div>
+        </div>
+      </div>
     </div>
     <div class="field"><div class="fl">Quantity</div><input type="number" id="ep-qty" min="1" value="1" oninput="updateCostPreview()"/></div>
   </div>
@@ -7000,18 +7013,26 @@ function fmtHrsInput(hrs){
   return s>0?s+'s':'';
 }
 function getHrsFromForm(){
-  const el=document.getElementById('ep-hrs-text');
-  const val=el?el.value:'';
-  const hrs=parseHrsInput(val);
-  // Sanity cap: >999h is almost certainly corrupted data — silently zero it
-  return hrs>999?0:hrs;
+  const h=Math.max(0,parseInt(document.getElementById('ep-hrs-h')?.value)||0);
+  const m=Math.max(0,Math.min(59,parseInt(document.getElementById('ep-hrs-m')?.value)||0));
+  const s=Math.max(0,Math.min(59,parseInt(document.getElementById('ep-hrs-s')?.value)||0));
+  const total=h+(m/60)+(s/3600);
+  // Silently cap corrupt/impossible values
+  return total>999?0:total;
 }
 function setHrsToForm(hrs){
-  const el=document.getElementById('ep-hrs-text');
-  if(!el)return;
-  // Reject corrupt/impossible values silently
-  if(!hrs||hrs<0||hrs>999){el.value='';return;}
-  el.value=fmtHrsInput(hrs);
+  const elH=document.getElementById('ep-hrs-h');
+  const elM=document.getElementById('ep-hrs-m');
+  const elS=document.getElementById('ep-hrs-s');
+  const clear=()=>{if(elH)elH.value='';if(elM)elM.value='';if(elS)elS.value='';};
+  if(!hrs||hrs<0||hrs>999){clear();return;}
+  const h=Math.floor(hrs);
+  const rem=(hrs-h)*60;
+  const m=Math.floor(rem);
+  const s=Math.round((rem-m)*60);
+  if(elH)elH.value=h||'';
+  if(elM)elM.value=m||'';
+  if(elS)elS.value=s||'';
 }
 function formatHms(hrs){return hmsDisplay(hrs)||'—';}
 
