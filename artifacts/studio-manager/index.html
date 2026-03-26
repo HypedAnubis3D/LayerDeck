@@ -3905,7 +3905,10 @@ function renderTmf(){
       // Link to product
       '<div style="margin-bottom:8px">'+
         '<div style="font-size:6px;color:var(--txt-d);letter-spacing:1px;text-transform:uppercase;margin-bottom:4px">Linked Product</div>'+
-        '<select style="width:100%;background:var(--bg);border:1px solid var(--bdr2);color:var(--txt);padding:5px 8px;font-family:\'Share Tech Mono\',monospace;font-size:8px;border-radius:3px" '+
+        '<input type="text" id="tmf-ps-'+t.id+'" placeholder="🔍 Search products…" '+
+          'style="width:100%;background:var(--bg);border:1px solid var(--bdr2);color:var(--txt);padding:4px 8px;font-family:\'Share Tech Mono\',monospace;font-size:8px;border-radius:3px;margin-bottom:4px;box-sizing:border-box" '+
+          'oninput="filterTmfProdSearch(\''+t.id+'\',this.value)" onclick="event.stopPropagation()" />'+
+        '<select id="tmf-psel-'+t.id+'" style="width:100%;background:var(--bg);border:1px solid var(--bdr2);color:var(--txt);padding:5px 8px;font-family:\'Share Tech Mono\',monospace;font-size:8px;border-radius:3px" '+
           'onchange="linkTmfToProduct(\''+t.id+'\',this.value)" '+
           'onclick="event.stopPropagation()">'+
           '<option value="">— Not linked to any product —</option>'+
@@ -3942,6 +3945,17 @@ function linkTmfToProduct(tmfId, productId){
   saveCatalog();
   // Re-render both tabs if visible
   if(curTab==='tmf'||curTab==='catalog')render();
+}
+function filterTmfProdSearch(tmfId, q){
+  const sel=document.getElementById('tmf-psel-'+tmfId);
+  if(!sel)return;
+  const query=q.toLowerCase().trim();
+  const linkedId=(catalogItems.find(function(p){return p.tmfId===tmfId;})||{}).id||'';
+  sel.innerHTML='<option value="">— Not linked to any product —</option>'+
+    catalogItems
+      .filter(function(p){return !query||p.name.toLowerCase().includes(query)||(p.category||'').toLowerCase().includes(query);})
+      .map(function(p){return '<option value="'+p.id+'"'+(p.id===linkedId?' selected':'')+'>'+esc(p.name)+'</option>';})
+      .join('');
 }
 
 function useTmfForPrint(tmfId){
