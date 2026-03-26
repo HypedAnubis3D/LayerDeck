@@ -31,3 +31,6 @@ timeoutMs = 20000
 VAPID_PUBLIC_KEY = "BPzlfDuf6yrePYnq8mbXN75nGsgKqGU5jfOGZn5uGZIKBpwsoT4f4GLUlm-6xowQqB5xzdgsHBmFt_qiPcPdVtc"
 VAPID_PRIVATE_KEY = "UxhuEgFukDbXHKYGpzP6cRKV3Lfz0V1ucfPKScFwQ3I"
 VAPID_EMAIL = "mailto:admin@hypedanubis3d.com"
+
+[userenv.production]
+SHOPIFY_REDIRECT_URI = "https://layerstack.replit.app/api/shopify/oauth/callback"

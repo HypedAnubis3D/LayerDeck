@@ -14,7 +14,11 @@ const SCOPES =
 
 function getRedirectUri(_req: Request): string {
   if (process.env.SHOPIFY_REDIRECT_URI) return process.env.SHOPIFY_REDIRECT_URI;
-  // Use Replit's dev domain (always HTTPS) when available
+  // In production deployment, use the public app domain
+  if (process.env.REPLIT_DEPLOYMENT && process.env.REPLIT_APP_DOMAIN) {
+    return `https://${process.env.REPLIT_APP_DOMAIN}/api/shopify/oauth/callback`;
+  }
+  // In dev, use Replit's dev domain (always HTTPS)
   if (process.env.REPLIT_DEV_DOMAIN) {
     return `https://${process.env.REPLIT_DEV_DOMAIN}/api/shopify/oauth/callback`;
   }
