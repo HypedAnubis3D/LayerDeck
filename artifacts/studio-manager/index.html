@@ -2349,6 +2349,11 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
     <button class="btn btn-ghost btn-sm" onclick="openEventFinder()">🔍 Find Events</button>
     <span class="cnt" id="convention-cnt"></span>
   </div>
+  <div style="display:flex;gap:6px;margin-bottom:12px">
+    <button id="cft-all" class="btn btn-sm btn-pur" onclick="setConvFilter('all')">All</button>
+    <button id="cft-confirmed" class="btn btn-sm btn-ghost" onclick="setConvFilter('confirmed')">✓ Confirmed</button>
+    <button id="cft-potential" class="btn btn-sm btn-ghost" onclick="setConvFilter('potential')">⭐ Potential</button>
+  </div>
   <div id="convention-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:10px"></div>
 </div>
 
@@ -10684,20 +10689,58 @@ function saveEvt(){
   saveConventions();
 }
 
+function setConvFilter(f){
+  _convFilter=f;
+  ['all','confirmed','potential'].forEach(function(k){
+    const btn=document.getElementById('cft-'+k);
+    if(!btn)return;
+    btn.className='btn btn-sm '+(k===f?'btn-pur':'btn-ghost');
+  });
+  renderConvention();
+}
+function confirmConvention(id){
+  const idx=conventions.findIndex(function(c){return c.id===id;});
+  if(idx<0)return;
+  conventions[idx]=Object.assign({},conventions[idx],{status:'confirmed'});
+  saveConventions();
+  renderConvention();
+  toast('Event Confirmed',conventions[idx].name+' moved to Confirmed','success');
+}
 function renderConvention(){
-  document.getElementById('convention-cnt').textContent=conventions.length+' events';
+  const total=conventions.length;
   const cmpBtn=document.getElementById('btn-compare-events');
-  if(cmpBtn)cmpBtn.style.display=conventions.length>=2?'':'none';
+  if(cmpBtn)cmpBtn.style.display=total>=2?'':'none';
   updateConventionBadge();
+  // Sync filter tab styles
+  ['all','confirmed','potential'].forEach(function(k){
+    const btn=document.getElementById('cft-'+k);
+    if(!btn)return;
+    btn.className='btn btn-sm '+(k===_convFilter?'btn-pur':'btn-ghost');
+  });
   const g=document.getElementById('convention-grid');
-  if(!conventions.length){g.innerHTML=emptyState('🎪','No Events Planned','Track conventions, markets, and popup events — full inventory, day-of sales, and QR tags',`<button class="btn btn-pur" onclick="openAddConvention()">+ Add First Event</button>`);return;}
+  if(!total){
+    document.getElementById('convention-cnt').textContent='0 events';
+    g.innerHTML=emptyState('🎪','No Events Planned','Track conventions, markets, and popup events — full inventory, day-of sales, and QR tags',`<button class="btn btn-pur" onclick="openAddConvention()">+ Add First Event</button>`);
+    return;
+  }
   const now=Date.now();
-  const sorted=[...conventions].sort(function(a,b){
+  const allSorted=[...conventions].sort(function(a,b){
     const isPotA=a.status==='potential';const isPotB=b.status==='potential';
     if(isPotA!==isPotB)return isPotA?1:-1;
     return new Date(a.start||'9999')-new Date(b.start||'9999');
   });
-  g.innerHTML=sorted.map(function(c){
+  const filtered=allSorted.filter(function(c){
+    if(_convFilter==='potential')return c.status==='potential';
+    if(_convFilter==='confirmed')return c.status!=='potential';
+    return true;
+  });
+  document.getElementById('convention-cnt').textContent=filtered.length+' event'+(filtered.length===1?'':'s')+(total!==filtered.length?' of '+total:'');
+  if(!filtered.length){
+    const label=_convFilter==='potential'?'potential':'confirmed';
+    g.innerHTML=emptyState('🎪','No '+label[0].toUpperCase()+label.slice(1)+' Events','Switch to "All" to see every event or add a new one',`<button class="btn btn-pur" onclick="openAddConvention()">+ Add Event</button>`);
+    return;
+  }
+  g.innerHTML=filtered.map(function(c){
     const isPotential=c.status==='potential';
     const startTs=new Date(c.start).getTime();
     const endTs=new Date(c.end||c.start).getTime()+86399999;
@@ -10741,7 +10784,8 @@ function renderConvention(){
         ${checkTotal?`<div style="font-size:6.5px;color:var(--txt-d);margin-bottom:6px">✅ Checklist ${checkDone}/${checkTotal} done</div>`:''}
         <div class="card-acts">
           ${isPotential
-            ?`<button class="btn btn-amb btn-xs" style="flex:2" onclick="openEditConvention('${c.id}')">✏ Edit Details</button>`
+            ?`<button class="btn btn-grn btn-xs" style="flex:2" onclick="confirmConvention('${c.id}')">✓ Confirm</button>
+          <button class="btn btn-ghost btn-xs" onclick="openEditConvention('${c.id}')">Edit</button>`
             :`<button class="btn btn-pur btn-xs" style="flex:2" onclick="openEventManage('${c.id}')">🎪 Manage →</button>
           <button class="btn btn-ghost btn-xs" onclick="openEditConvention('${c.id}')">Edit</button>`}
           <button class="btn btn-xs" style="background:var(--red-d);border:1px solid var(--red-d);color:var(--red-b)" onclick="delConvention('${c.id}')">✕</button>
@@ -12540,6 +12584,7 @@ function closeEventFinder(){
   document.getElementById('mod-event-finder').style.display='none';
 }
 let _evfResults=[];
+let _convFilter='all';
 async function searchEvents(){
   const city=(document.getElementById('evf-city').value||'').trim();
   const type=document.getElementById('evf-type').value||'3D printing collectibles maker';
