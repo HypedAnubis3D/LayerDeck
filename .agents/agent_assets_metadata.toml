@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "eboCne2VyQ2JqtS2tqQDW"
+uri = "file://README.md"
+type = "text"
+title = "LayerStack Platform — README"
