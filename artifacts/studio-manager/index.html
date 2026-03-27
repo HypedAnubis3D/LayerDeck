@@ -5318,7 +5318,9 @@ function saveOrder(){
   if((flagMystery||isMysteryOrder(order))&&typeof checkMysteryTrigger==='function'){
     checkMysteryTrigger(order);
   }
-  saveOrders();closeOrder();render();
+  saveOrders();
+  if(typeof initFulfillmentForOrder==='function'){initFulfillmentForOrder(order.orderId,customer,order.items);saveFulfillment();}
+  closeOrder();render();
   autoQueueOrderItems(order);
 }
 function delOrder(id){
@@ -7863,25 +7865,6 @@ function _moveShopifyQueueItemToInProgress(printId){
     queueItems=queueItems.map(q=>q.id===qi.id?{...q,stage:'inprogress'}:q);
     saveQueue();render();
   }
-}
-
-// ════════════════════════════════════════
-// OVERRIDE ingestShopifyOrder TO ADD FULFILLMENT + REPEAT CUSTOMER + QR CHECK
-// ════════════════════════════════════════
-// Override saveOrder to init fulfillment and check repeat customer
-function saveOrder(){
-  const customer=document.getElementById('eo-cust').value.trim();
-  if(!customer){document.getElementById('eo-cust').focus();return;}
-  const id=document.getElementById('eo-id').value;
-  const items=document.getElementById('eo-items').value.trim().split('\n').filter(Boolean).map(l=>{
-    const pts=l.split('·').map(p=>p.trim());
-    return{name:pts[0]||'Item',qty:parseInt(pts[1])||1,price:parseFloat((pts[2]||'0').replace('$',''))||0};
-  });
-  const order={id:id||uid(),customer,orderId:document.getElementById('eo-oid').value.trim()||'ORD-'+Date.now().toString().slice(-4),platform:document.getElementById('eo-platform').value,date:document.getElementById('eo-date').value,items,status:document.getElementById('eo-status').value,shipping:parseFloat(document.getElementById('eo-ship').value)||0,notes:document.getElementById('eo-notes').value.trim(),timestamp:id?(orders.find(o=>o.id===id)||{}).timestamp||Date.now():Date.now()};
-  if(id){orders=orders.map(o=>o.id===id?order:o);}else{orders.push(order);}
-  saveOrders();
-  initFulfillmentForOrder(order.orderId,customer,items);saveFulfillment();
-  closeOrder();render();
 }
 
 // Set initial nav
