@@ -1,11 +1,65 @@
 import { useCompanionData } from '@/hooks/use-collections';
-import { Calendar, MapPin, CheckSquare, Clock, RefreshCw } from 'lucide-react';
+import { Calendar, MapPin, CheckSquare, Clock, RefreshCw, Package, ShoppingBag } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 function daysUntil(dateStr: string): number {
   const today = new Date(); today.setHours(0, 0, 0, 0);
   const d = new Date(dateStr); d.setHours(0, 0, 0, 0);
   return Math.round((d.getTime() - today.getTime()) / 86400000);
+}
+
+function PackList({ items, isPast }: { items: any[]; isPast?: boolean }) {
+  if (!items.length) return null;
+  const totalUnits = items.reduce((a: number, i: any) => a + (i.qtyBring || 0), 0);
+  const totalSold  = items.reduce((a: number, i: any) => a + (i.qtySold  || 0), 0);
+
+  return (
+    <div className="mt-4 pt-4 border-t border-white/5">
+      <div className="flex items-center justify-between mb-2">
+        <span className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+          <Package className="h-3.5 w-3.5" /> Pack List
+        </span>
+        <span className="text-xs text-muted-foreground/60">
+          {items.length} items · {totalUnits} units
+          {isPast && totalSold > 0 && <span className="text-emerald-400 ml-2">{totalSold} sold</span>}
+        </span>
+      </div>
+      <div className="space-y-1.5">
+        {items.map((item: any, i: number) => {
+          const bring = item.qtyBring || 0;
+          const sold  = item.qtySold  || 0;
+          const pct   = bring > 0 ? Math.min(1, sold / bring) : 0;
+          const remaining = Math.max(0, bring - sold);
+          return (
+            <div key={item.catalogItemId || i} className="flex items-center gap-3">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs text-foreground/80 truncate">{item.name}</span>
+                  <span className="shrink-0 text-xs font-mono text-muted-foreground/50">
+                    {isPast && sold > 0
+                      ? <span className="text-emerald-400">{sold}/{bring}</span>
+                      : `×${bring}`
+                    }
+                  </span>
+                </div>
+                {isPast && bring > 0 && (
+                  <div className="mt-0.5 flex items-center gap-2">
+                    <div className="flex-1 h-1 rounded-full bg-white/5 overflow-hidden">
+                      <div className="h-full rounded-full bg-emerald-500/70 transition-all"
+                        style={{ width: `${pct * 100}%` }} />
+                    </div>
+                    {remaining > 0 && (
+                      <span className="shrink-0 text-[10px] text-muted-foreground/40">{remaining} left</span>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
 
 export function EventsTab() {
@@ -29,6 +83,7 @@ export function EventsTab() {
   const nextDays = next ? daysUntil(next.start) : null;
   const checkDone = next ? (next.checklist || []).filter((x: any) => x.done).length : 0;
   const checkTotal = next ? (next.checklist || []).length : 0;
+  const nextPack: any[] = next ? (next.inPersonCatalog || []) : [];
 
   return (
     <div className="space-y-6">
@@ -103,6 +158,10 @@ export function EventsTab() {
                   </div>
                 )}
               </div>
+
+              {nextPack.length > 0 && (
+                <PackList items={nextPack} isPast={nextDays !== null && nextDays < 0} />
+              )}
             </div>
           )}
 
@@ -120,7 +179,7 @@ export function EventsTab() {
 
           {past.length > 0 && (
             <EventSection title="Past" count={past.length} muted>
-              {past.map((c: any) => <EventRow key={c.id} c={c} />)}
+              {past.map((c: any) => <EventRow key={c.id} c={c} isPast />)}
             </EventSection>
           )}
         </>
@@ -145,8 +204,12 @@ function EventSection({ title, count, children, accent, muted }: {
   );
 }
 
-function EventRow({ c }: { c: any }) {
+function EventRow({ c, isPast }: { c: any; isPast?: boolean }) {
   const days = c.start ? daysUntil(c.start) : null;
+  const pack: any[] = c.inPersonCatalog || [];
+  const totalUnits = pack.reduce((a: number, i: any) => a + (i.qtyBring || 0), 0);
+  const totalSold  = pack.reduce((a: number, i: any) => a + (i.qtySold  || 0), 0);
+
   return (
     <div className="px-5 py-3 flex items-center gap-4">
       <div className="flex-1 min-w-0">
@@ -154,6 +217,13 @@ function EventRow({ c }: { c: any }) {
         <div className="flex items-center gap-2 mt-0.5 text-xs text-muted-foreground/60 flex-wrap">
           {c.loc && <span className="flex items-center gap-1"><MapPin className="h-3 w-3" />{c.loc}</span>}
           {c.start && <span>{c.start}</span>}
+          {pack.length > 0 && (
+            <span className="flex items-center gap-1">
+              <ShoppingBag className="h-3 w-3" />
+              {pack.length} items · {totalUnits} units
+              {isPast && totalSold > 0 && <span className="text-emerald-400 ml-1">· {totalSold} sold</span>}
+            </span>
+          )}
         </div>
         {c.status === 'potential' && c.vendorDeadline && c.vendorDeadline !== 'Unknown' && (
           <p className="text-xs text-amber-400/70 mt-0.5">Deadline: {c.vendorDeadline}</p>
