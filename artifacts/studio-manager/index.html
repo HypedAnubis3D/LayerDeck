@@ -783,27 +783,6 @@ header{
 .pspec-l{font-size:6px;color:var(--txt-d);letter-spacing:1px;}
 .pspec-v{font-size:10px;color:var(--txt-b);margin-top:1px;font-family:'Orbitron',monospace;font-weight:700;}
 
-/* ── FULFILLMENT CHECKLIST ── */
-.fulfillment-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:9px;}
-.fc-order-card{background:var(--surf);border:1px solid var(--bdr);border-radius:6px;padding:13px;transition:border-color .2s;}
-.fc-order-card:hover{border-color:var(--bdr2);}
-.fc-order-card.fc-complete{border-left:3px solid var(--grn);opacity:.8;}
-.fc-order-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px;gap:8px;}
-.fc-order-id{font-family:'Orbitron',monospace;font-size:10px;color:var(--gold);font-weight:700;}
-.fc-order-customer{font-size:10px;color:var(--txt-b);font-weight:bold;}
-.fc-order-meta{font-size:7px;color:var(--txt-d);margin-top:1px;}
-.fc-steps{display:flex;flex-direction:column;gap:5px;margin-bottom:9px;}
-.fc-step{display:flex;align-items:center;gap:9px;padding:5px 8px;background:var(--bg);border:1px solid var(--bdr);border-radius:4px;cursor:pointer;transition:all .15s;}
-.fc-step:hover{border-color:var(--bdr2);}
-.fc-step.done{background:rgba(5,150,105,.06);border-color:var(--grn-d);}
-.fc-step-check{width:16px;height:16px;border-radius:50%;border:1.5px solid var(--bdr2);display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .15s;font-size:9px;}
-.fc-step.done .fc-step-check{background:var(--grn);border-color:var(--grn);color:#fff;}
-.fc-step-label{font-size:8px;color:var(--txt-d);flex:1;letter-spacing:.5px;}
-.fc-step.done .fc-step-label{color:var(--grn-b);text-decoration:line-through;opacity:.7;}
-.fc-step-icon{font-size:12px;flex-shrink:0;}
-.fc-progress{background:var(--bdr);height:3px;border-radius:2px;overflow:hidden;margin-bottom:7px;}
-.fc-progress-fill{height:100%;background:linear-gradient(90deg,var(--gold),var(--grn));border-radius:2px;transition:width .4s;}
-.fc-complete-badge{display:inline-flex;align-items:center;gap:4px;background:var(--grn-d);border:1px solid var(--grn);color:var(--grn-b);padding:3px 9px;border-radius:10px;font-size:7px;letter-spacing:1px;}
 
 /* ── RESTOCK SUGGESTIONS ── */
 .restock-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:9px;}
@@ -917,7 +896,7 @@ body.light-mode ::-webkit-scrollbar-thumb{background:var(--bdr2);}
   /* Stats bar scrolls horizontally */
   .sbar{grid-template-columns:repeat(7,minmax(80px,1fr));overflow-x:auto;}
   /* Grids go single column */
-  .grid,.prints-grid,.orders-grid,.printers-grid,.tmf-grid,.shiny-grid,.customers-grid,.forecast-grid,.maint-grid,.fail-grid,.restock-grid,.fulfillment-grid,.pe-product-grid,.shopify-products-grid,.integrations-grid,.export-grid,.batch-layout,.rev-grid,.stats-2col,.kanban{grid-template-columns:1fr!important;}
+  .grid,.prints-grid,.orders-grid,.printers-grid,.tmf-grid,.shiny-grid,.customers-grid,.forecast-grid,.maint-grid,.fail-grid,.restock-grid,.pe-product-grid,.shopify-products-grid,.integrations-grid,.export-grid,.batch-layout,.rev-grid,.stats-2col,.kanban{grid-template-columns:1fr!important;}
   /* Kanban columns stacked */
   .kanban{gap:8px;}
   /* Header */
@@ -1600,7 +1579,6 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
         <button class="nav-item" id="nav-convention" onclick="navTo('convention',this)"><span class="nav-icon">🎪</span><span class="nav-label">Conventions</span><span class="nav-badge" id="nav-badge-convention"></span></button>
         <button class="nav-item" id="nav-priceengine" onclick="navTo('priceengine',this)"><span class="nav-icon">🤖</span><span class="nav-label">Price AI</span></button>
         <button class="nav-item" id="nav-labels" onclick="navTo('labels',this)"><span class="nav-icon">🏷</span><span class="nav-label">Labels</span></button>
-        <button class="nav-item" id="nav-fulfillment" onclick="navTo('fulfillment',this)"><span class="nav-icon">✅</span><span class="nav-label">Fulfillment</span></button>
         <button class="nav-item" id="nav-failrate" onclick="navTo('failrate',this)"><span class="nav-icon">📉</span><span class="nav-label">Fail Rates & Waste</span></button>
       </div>
     </div>
@@ -2086,27 +2064,6 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
     <span class="cnt" id="printers-cnt"></span>
   </div>
   <div class="printers-grid" id="printers-grid"></div>
-</div>
-
-<!-- FULFILLMENT CHECKLIST -->
-<div id="tab-fulfillment" style="display:none">
-  <div class="ctrl">
-    <select class="flt" id="fc-filter" onchange="render()">
-      <option value="">All Orders</option>
-      <option value="active">Active (incomplete)</option>
-      <option value="complete">Completed</option>
-    </select>
-    <button class="btn btn-ghost btn-sm" id="fc-select-btn" onclick="toggleFcSelectMode()">Select</button>
-    <span class="cnt" id="fulfillment-cnt"></span>
-  </div>
-  <div id="fc-bulk-bar" style="display:none;background:var(--surf2);border:1px solid var(--bdr2);border-radius:6px;padding:8px 12px;margin-bottom:10px;align-items:center;gap:10px;flex-wrap:wrap">
-    <span id="fc-sel-count" style="font-size:8px;color:var(--txt-d);letter-spacing:1px">0 selected</span>
-    <button class="btn btn-sm" style="background:none;border:1px solid var(--bdr2);color:var(--txt-d);padding:4px 10px;font-size:7px" onclick="fcSelectAll()">Select All</button>
-    <button class="btn btn-sm" style="background:none;border:1px solid var(--bdr2);color:var(--txt-d);padding:4px 10px;font-size:7px" onclick="fcSelectNone()">None</button>
-    <button class="btn btn-red btn-sm" style="margin-left:auto;padding:5px 12px;font-size:7px" onclick="bulkDeleteFulfillment()" id="fc-bulk-del-btn">🗑 Delete Selected</button>
-    <button class="btn btn-ghost btn-sm" style="padding:5px 10px;font-size:7px" onclick="toggleFcSelectMode()">Cancel</button>
-  </div>
-  <div class="fulfillment-grid" id="fulfillment-grid"></div>
 </div>
 
 <!-- RESTOCK SUGGESTIONS -->
@@ -4129,7 +4086,6 @@ function moveQueue(id,stage){
         prints.push(newPrint);savePrints();
         queueItems=queueItems.map(q=>q.id===id?{...q,printId:newPrint.id}:q);
         saveQueue();
-        initFulfillment(newPrint.id,newPrint.name);saveFulfillment();
         toast('Print Started',qi.name+' → Prints tab','success');
         if(profile?.filaments?.length)setTimeout(()=>checkMultiSpoolAlert(newPrint.id),300);
       }
@@ -5320,7 +5276,6 @@ function saveOrder(){
     checkMysteryTrigger(order);
   }
   saveOrders();
-  if(typeof initFulfillmentForOrder==='function'){initFulfillmentForOrder(order.orderId,customer,order.items);saveFulfillment();}
   closeOrder();render();
   autoQueueOrderItems(order);
 }
@@ -6919,7 +6874,6 @@ function ingestShopifyOrder(o){
   // All items processed successfully — now commit everything atomically
   orders.push(order);
   saveOrders();savePrints();saveQueue();
-  initFulfillmentForOrder(orderId,customer,items);saveFulfillment();
   // Auto-create shipping log entry if this order has a shipping charge or address
   if((shipping>0||shippingAddress)&&!shippingLog.some(function(s){return s.orderId===orderId;})){
     const slCarrier=(o.shipping_lines&&o.shipping_lines[0]&&o.shipping_lines[0].title?o.shipping_lines[0].title:'Shipping');
@@ -6960,28 +6914,25 @@ function setInitialNav(){
 // ════════════════════════════════════════
 // V9 DATA & STORAGE
 // ════════════════════════════════════════
-Object.assign(KEYS,{printers:'ha3d_printers_v1',fulfillment:'ha3d_fulfillment_v1',printSettings:'ha3d_printsettings_v1',pokemonMap:'ha3d_pokemon_v1'});
-let printerRecords=[],fulfillmentData={},printSettingsMap={},pokemonMap={};
-let fcSelectMode=false;const fcSelected=new Set();
+Object.assign(KEYS,{printers:'ha3d_printers_v1',printSettings:'ha3d_printsettings_v1',pokemonMap:'ha3d_pokemon_v1'});
+let printerRecords=[],printSettingsMap={},pokemonMap={};
 
 function loadV9(){
   printerRecords=gs(KEYS.printers);
-  try{fulfillmentData=JSON.parse(localStorage.getItem(KEYS.fulfillment))||{};}catch{fulfillmentData={};}
   try{printSettingsMap=JSON.parse(localStorage.getItem(KEYS.printSettings))||{};}catch{printSettingsMap={};}
   try{pokemonMap=JSON.parse(localStorage.getItem(KEYS.pokemonMap))||{};}catch{pokemonMap={};}
   try{barcodeDb=JSON.parse(localStorage.getItem(KEYS.barcodeDb))||{};}catch{barcodeDb={};}
   try{notifIds=new Set(JSON.parse(localStorage.getItem(KEYS.notifIds))||[]);}catch{notifIds=new Set();}
 }
 function savePrinters(){ss(KEYS.printers,printerRecords);}
-function saveFulfillment(){localStorage.setItem(KEYS.fulfillment,JSON.stringify(fulfillmentData));}
 function savePrintSettings(){localStorage.setItem(KEYS.printSettings,JSON.stringify(printSettingsMap));}
 function savePokemonMap(){localStorage.setItem(KEYS.pokemonMap,JSON.stringify(pokemonMap));}
 
 // Add new tab names
-Object.assign(TAB_NAMES,{printers:'Printers',fulfillment:'Fulfillment',restock:'Restock & Shop List',failrate:'Fail Rates & Waste'});
+Object.assign(TAB_NAMES,{printers:'Printers',restock:'Restock & Shop List',failrate:'Fail Rates & Waste'});
 
 // Extend ALL_TABS
-ALL_TABS.push('printers','fulfillment','restock','failrate','shopify');
+ALL_TABS.push('printers','restock','failrate','shopify');
 Object.assign(TAB_NAMES,{shopify:'Shopify'});
 
 // ════════════════════════════════════════
@@ -7008,7 +6959,6 @@ function render(){
   if(curTab==='backup')     renderBackup();
   if(curTab==='labels')     renderLabels();
   if(curTab==='printers')   renderPrinters();
-  if(curTab==='fulfillment')renderFulfillment();
   if(curTab==='restock')    renderRestock();
   if(curTab==='failrate')   renderFailRate();
 }
@@ -7373,8 +7323,6 @@ function savePrint(){
       saveWasteLog();
       toast('Support Waste Logged',selectedTmf.supportGrams.toFixed(1)+'g/unit support material recorded in Waste Tracker','info',3000);
     }
-    // Init fulfillment
-    initFulfillment(print.id,print.name);saveFulfillment();
     // ── MANUALLY LOGGED PRINTS go straight to "In Progress" in Queue ──
     queueItems.push({
       id:uid(),
@@ -7429,138 +7377,6 @@ function onPrintNameChange(){
   }
 }
 
-// ════════════════════════════════════════
-// FULFILLMENT CHECKLIST
-// ════════════════════════════════════════
-const FC_STEPS=[
-  {key:'queued',label:'Added to Print Queue',icon:'📋'},
-  {key:'printed',label:'Print Completed',icon:'🖨'},
-  {key:'shiny',label:'Shiny Roll Done',icon:'✨'},
-  {key:'packaged',label:'Packaged',icon:'📦'},
-  {key:'shipped',label:'Shipped',icon:'🚚'},
-];
-
-function initFulfillment(printId,printName){
-  if(!fulfillmentData[printId]){
-    fulfillmentData[printId]={printId,printName,steps:{},createdAt:Date.now()};
-    saveFulfillment();
-  }
-}
-
-function initFulfillmentForOrder(orderId,customer,items){
-  const key='order-'+orderId;
-  if(!fulfillmentData[key]){
-    fulfillmentData[key]={orderId,customer,items,steps:{},createdAt:Date.now()};
-    saveFulfillment();
-  }
-}
-
-function toggleFcStep(key,stepKey){
-  if(!fulfillmentData[key])return;
-  fulfillmentData[key].steps[stepKey]=!fulfillmentData[key].steps[stepKey];
-  saveFulfillment();render();
-}
-
-function renderFulfillment(){
-  const filter=document.getElementById('fc-filter').value;
-  // Build fulfillment items from orders — skip any order without a valid unique orderId
-  orders.forEach(o=>{
-    if(!o.orderId)return;
-    const key='order-'+o.orderId;
-    if(!fulfillmentData[key]){
-      fulfillmentData[key]={orderId:o.orderId,customer:o.customer,items:o.items,steps:{},createdAt:o.timestamp||Date.now()};
-    }
-  });
-  let items=Object.entries(fulfillmentData).map(([k,v])=>({key:k,...v}));
-  if(filter==='active')items=items.filter(i=>!isAllDone(i));
-  if(filter==='complete')items=items.filter(i=>isAllDone(i));
-  items.sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
-  document.getElementById('fulfillment-cnt').textContent=items.length+' orders';
-  const g=document.getElementById('fulfillment-grid');
-  if(!items.length){g.innerHTML=emptyState('✅','No Orders Yet','Orders will appear here automatically when created',`<button class="btn btn-teal" onclick="navTo('orders')">Go to Orders</button>`);return;}
-  const selBtn=document.getElementById('fc-select-btn');
-  if(selBtn)selBtn.textContent=fcSelectMode?'Done':'Select';
-  const bulkBar=document.getElementById('fc-bulk-bar');
-  if(bulkBar)bulkBar.style.display=fcSelectMode?'flex':'none';
-  g.innerHTML=items.map(item=>{
-    const doneCount=FC_STEPS.filter(s=>item.steps[s.key]).length;
-    const allDone=doneCount===FC_STEPS.length;
-    const pct2=Math.round((doneCount/FC_STEPS.length)*100);
-    const itemList=(item.items||[]).map(i=>`${esc(i.name||i)}${i.qty>1?' ×'+i.qty:''}`).join(', ');
-    const isSelected=fcSelected.has(item.key);
-    const selBorder=fcSelectMode&&isSelected?';border-color:var(--red);box-shadow:0 0 0 2px rgba(220,50,50,.25)':'';
-    return `<div class="fc-order-card${allDone?' fc-complete':''}" style="${selBorder?'outline:none'+selBorder:''}">
-      <div class="fc-order-header">
-        ${fcSelectMode?`<div onclick="toggleFcSelect('${item.key}')" style="display:flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:4px;border:2px solid ${isSelected?'var(--red)':'var(--bdr2)'};background:${isSelected?'var(--red-d)':'transparent'};cursor:pointer;flex-shrink:0;margin-right:8px;font-size:11px;color:var(--red-b)">${isSelected?'✓':''}</div>`:''}
-        <div style="flex:1;min-width:0" ${fcSelectMode?`onclick="toggleFcSelect('${item.key}')" style="flex:1;min-width:0;cursor:pointer"`:'style="flex:1;min-width:0"'}>
-          <div class="fc-order-id">${esc(item.orderId||item.printId||item.key)}</div>
-          <div class="fc-order-customer">${esc(item.customer||item.printName||'—')}</div>
-          <div class="fc-order-meta">${itemList?esc(itemList.slice(0,50)):'—'}</div>
-        </div>
-        <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
-          ${allDone?'<span class="fc-complete-badge">✓ Complete</span>':'<span style="font-family:\'Orbitron\',monospace;font-size:10px;color:var(--gold)">'+(doneCount)+'/'+FC_STEPS.length+'</span>'}
-          ${fcSelectMode?'':`<button onclick="deleteFulfillment('${item.key}')" title="Delete record" style="background:none;border:none;color:var(--red-b);cursor:pointer;font-size:13px;padding:2px 4px;opacity:.6;line-height:1" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=.6">✕</button>`}
-        </div>
-      </div>
-      <div class="fc-progress"><div class="fc-progress-fill" style="width:${pct2}%"></div></div>
-      <div class="fc-steps">
-        ${FC_STEPS.map(s=>`
-          <div class="fc-step${item.steps[s.key]?' done':''}" onclick="toggleFcStep('${item.key}','${s.key}')">
-            <div class="fc-step-check">${item.steps[s.key]?'✓':''}</div>
-            <span class="fc-step-label">${s.label}</span>
-            <span class="fc-step-icon">${s.icon}</span>
-          </div>`).join('')}
-      </div>
-    </div>`;
-  }).join('');
-}
-function isAllDone(item){return FC_STEPS.every(s=>item.steps[s.key]);}
-function deleteFulfillment(key){
-  const item=fulfillmentData[key];
-  if(!item)return;
-  const label=item.orderId||item.printId||key;
-  showConfirm('Delete Record','Remove fulfillment record for '+label+'? This cannot be undone.',function(){
-    delete fulfillmentData[key];
-    saveFulfillment();
-    render();
-    toast('Deleted','Fulfillment record removed','success',2000);
-  });
-}
-function toggleFcSelectMode(){
-  fcSelectMode=!fcSelectMode;
-  fcSelected.clear();
-  renderFulfillment();
-}
-function toggleFcSelect(key){
-  if(fcSelected.has(key))fcSelected.delete(key);else fcSelected.add(key);
-  const cnt=document.getElementById('fc-sel-count');
-  if(cnt)cnt.textContent=fcSelected.size+' selected';
-  renderFulfillment();
-}
-function fcSelectAll(){
-  Object.keys(fulfillmentData).forEach(k=>fcSelected.add(k));
-  const cnt=document.getElementById('fc-sel-count');
-  if(cnt)cnt.textContent=fcSelected.size+' selected';
-  renderFulfillment();
-}
-function fcSelectNone(){
-  fcSelected.clear();
-  const cnt=document.getElementById('fc-sel-count');
-  if(cnt)cnt.textContent='0 selected';
-  renderFulfillment();
-}
-function bulkDeleteFulfillment(){
-  if(!fcSelected.size){toast('Nothing selected','Tap cards to select them','warning');return;}
-  const n=fcSelected.size;
-  showConfirm('Delete '+n+' Record'+(n!==1?'s':''),'Permanently remove '+n+' fulfillment record'+(n!==1?'s':'')+'. This cannot be undone.',function(){
-    fcSelected.forEach(k=>{delete fulfillmentData[k];});
-    saveFulfillment();
-    fcSelected.clear();
-    fcSelectMode=false;
-    render();
-    toast('Deleted',n+' fulfillment record'+(n!==1?'s':'')+' removed','success',2500);
-  });
-}
 
 // ════════════════════════════════════════
 // RESTOCK SUGGESTIONS
@@ -8313,7 +8129,6 @@ function render(){
   if(curTab==='backup')     {renderBackup();checkBackupReminder();}
   if(curTab==='labels')     renderLabels();
   if(curTab==='printers')   renderPrinters();
-  if(curTab==='fulfillment')renderFulfillment();
   if(curTab==='restock')    {renderRestock();renderShop();}
   if(curTab==='failrate')   {renderFailRate();renderWaste();}
   if(curTab==='sync')       renderSync();
@@ -10513,7 +10328,7 @@ function openGroupForTab(tab){
     dashboard:null,
     prints:'sbg-production',tmf:'sbg-production',queue:'sbg-production',
     orders:'sbg-orders',customers:'sbg-orders',reviews:'sbg-orders',mystery:'sbg-orders',shiny:'sbg-orders',
-    revenue:'sbg-business',catalog:'sbg-business',catalogItems:'sbg-business',tax:'sbg-business',convention:'sbg-business',priceengine:'sbg-business',labels:'sbg-business',fulfillment:'sbg-business',failrate:'sbg-business',
+    revenue:'sbg-business',catalog:'sbg-business',catalogItems:'sbg-business',tax:'sbg-business',convention:'sbg-business',priceengine:'sbg-business',labels:'sbg-business',failrate:'sbg-business',
     printers:'sbg-ops',spools:'sbg-ops',fildb:'sbg-ops',drying:'sbg-ops',power:'sbg-ops',maint:'sbg-ops',nozzle:'sbg-ops',waste:'sbg-ops',purchases:'sbg-ops',shipping:'sbg-ops',forecast:'sbg-ops',restock:'sbg-ops',shop:'sbg-ops',
     sync:'sbg-system',history:'sbg-system',stats:'sbg-system',backup:'sbg-system'
   };
