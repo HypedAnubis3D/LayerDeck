@@ -183,12 +183,20 @@ Single-file HTML PWA for managing a Bambu Lab 3D printing collectibles business 
 
 ### `artifacts/desktop-companion` — LayerStack Desktop Companion
 
-React + Vite companion app at `/companion/`. Focused tool for 3MF file management and quick-glance business dashboard.
+React + Vite companion app at `/companion/`. Full tabbed business dashboard + 3MF file management tool.
 
-- **Auth**: Supabase email/password (same account as Studio Manager). SUPABASE_URL + SUPABASE_ANON_KEY injected via Vite `define` in vite.config.ts.
-- **3MF Upload**: Drag-and-drop zone using react-dropzone + JSZip to unzip and parse .3mf files locally. Extracts model name and settings from XML inside the ZIP. Adds parsed items to Supabase `ha3d_user_data` catalog collection.
-- **Dashboard**: Reads all `ha3d_user_data` collections (catalog, orders, printQueue, spools, conventions) and shows key stat cards.
-- Stack: React, Vite, Tailwind, @supabase/supabase-js, jszip, react-dropzone, framer-motion, lucide-react
+- **Auth**: Supabase email/password (same account as Studio Manager). SUPABASE_URL + SUPABASE_ANON_KEY injected via Vite `define` in vite.config.ts (as `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY`).
+- **Data layer**: `useCompanionData()` hook in `use-collections.ts` fetches all 7 `ha3d_user_data` collections (printQueue, spools, catalog, conventions, printers, orders, wasteLog) in one Supabase query with 30s staleTime. Also: `useDashboardMetrics()` for stat tiles, `useLibrary()` / `usePullLibrary()` / `usePushLibrary()` for 3MF library CRUD.
+- **Tab navigation**: Sticky tab bar below navbar with 7 tabs — Home, Library, Queue, Events, Workshop, Sales, Printers.
+- **Home tab**: 6 stat tiles (Library count, Catalog Items, Open Orders, Print Queue, Spool Stock, Conventions) + 3MF drag-and-drop upload zone + session file cards. Session files persist to localStorage. Library sync effect marks uploaded files as 'added' if already in library.
+- **Library tab** (`LibraryTab.tsx`): Full 3MF library with search (by name/filename), filter chips (by printer, by filament type), select-mode bulk delete, pull/push cloud sync.
+- **Queue tab** (`QueueTab.tsx`): Jobs grouped by status (Printing / Queued / Done / Failed / Cancelled) in colour-coded panels.
+- **Events tab** (`EventsTab.tsx`): Next-event countdown hero card (days until, checklist progress bar, cost/target), then Upcoming / Potential / Past sections.
+- **Workshop tab** (`WorkshopTab.tsx`): Low-spool alerts (<250g remaining, with colour progress bar) + out-of-stock / low-stock catalog items (≤3 units).
+- **Sales tab** (`SalesTab.tsx`): Aggregates `daySales` from all conventions → total revenue, units sold, events-with-sales tiles; by-convention breakdown; top-10 products; recent 50 sales list.
+- **Printers tab** (`PrintersTab.tsx`): Nozzle wear cards with colour-coded progress bars (Good/Worn/Replace), + live Bambu Cloud status via `/api/bambu/status` API route (shows linked device count + per-device print status).
+- **Bambu API** (`artifacts/api-server/src/routes/bambu.ts`): `GET /api/bambu/status` authenticates to Bambu Cloud using BAMBU_EMAIL / BAMBU_PASSWORD env vars and returns `{connected, devices[]}`.
+- Stack: React, Vite, Tailwind, @supabase/supabase-js, @tanstack/react-query, framer-motion, lucide-react, jszip, react-dropzone
 
 ### `scripts` (`@workspace/scripts`)
 

@@ -3,30 +3,41 @@ import { Navbar } from '@/components/layout/Navbar';
 import { StatCard } from '@/components/dashboard/StatCard';
 import { DropZone } from '@/components/upload/DropZone';
 import { PreviewList } from '@/components/upload/PreviewList';
-import {
-  useDashboardMetrics, useLibrary, usePullLibrary, usePushLibrary,
-  useRemoveFromLibrary, useRemoveManyFromLibrary,
-} from '@/hooks/use-collections';
+import { useDashboardMetrics, useLibrary } from '@/hooks/use-collections';
 import { parse3MFFile, Parsed3MF } from '@/lib/3mf-parser';
 import {
-  Database, PackageOpen, Printer, Disc, Calendar, Layers,
-  Library, RefreshCw, UploadCloud, DownloadCloud, Box, Clock,
-  Trash2, CheckSquare, Square, X,
+  Database, PackageOpen, Printer, Disc, Calendar,
+  Library, LayoutDashboard, ListOrdered, Wrench, TrendingUp, Cpu, X,
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
+import { LibraryTab } from '@/components/tabs/LibraryTab';
+import { QueueTab } from '@/components/tabs/QueueTab';
+import { EventsTab } from '@/components/tabs/EventsTab';
+import { WorkshopTab } from '@/components/tabs/WorkshopTab';
+import { SalesTab } from '@/components/tabs/SalesTab';
+import { PrintersTab } from '@/components/tabs/PrintersTab';
 
 const PARSED_STORAGE_KEY = 'layerstack_companion_parsed_files';
 
-// Serialise: strip the File object (can't be stored), skip 'parsing' entries
+type TabId = 'home' | 'library' | 'queue' | 'events' | 'workshop' | 'sales' | 'printers';
+
+const TABS: { id: TabId; label: string; Icon: React.ComponentType<{ className?: string }> }[] = [
+  { id: 'home',     label: 'Home',     Icon: LayoutDashboard },
+  { id: 'library',  label: 'Library',  Icon: Library },
+  { id: 'queue',    label: 'Queue',    Icon: ListOrdered },
+  { id: 'events',   label: 'Events',   Icon: Calendar },
+  { id: 'workshop', label: 'Workshop', Icon: Wrench },
+  { id: 'sales',    label: 'Sales',    Icon: TrendingUp },
+  { id: 'printers', label: 'Printers', Icon: Cpu },
+];
+
 function saveParsedToStorage(files: Parsed3MF[]) {
   const serialisable = files
     .filter(f => f.status !== 'parsing')
     .map(({ file: _file, ...rest }) => rest);
-  try {
-    localStorage.setItem(PARSED_STORAGE_KEY, JSON.stringify(serialisable));
-  } catch { /* storage full — silently skip */ }
+  try { localStorage.setItem(PARSED_STORAGE_KEY, JSON.stringify(serialisable)); } catch { }
 }
 
 function loadParsedFromStorage(): Parsed3MF[] {
@@ -34,85 +45,55 @@ function loadParsedFromStorage(): Parsed3MF[] {
     const raw = localStorage.getItem(PARSED_STORAGE_KEY);
     if (!raw) return [];
     const items = JSON.parse(raw) as Parsed3MF[];
-    // Restore as 'ready' (library-sync useEffect will correct to 'added' if needed)
-    return items.map(f => ({
-      ...f,
-      file: null,
-      status: f.status === 'error' ? 'error' : 'ready',
-    }));
-  } catch {
-    return [];
-  }
+    return items.map(f => ({ ...f, file: null, status: f.status === 'error' ? 'error' : 'ready' }));
+  } catch { return []; }
 }
 
 export default function Dashboard() {
   const { data: metrics, isLoading } = useDashboardMetrics();
-  const { data: libraryItems = [], isLoading: isLibraryLoading } = useLibrary();
-  const { mutate: pullLibrary, isPending: isPulling } = usePullLibrary();
-  const { mutate: pushLibrary, isPending: isPushing } = usePushLibrary();
-  const { mutate: removeOne, isPending: isRemoving } = useRemoveFromLibrary();
-  const { mutate: removeMany, isPending: isRemovingMany } = useRemoveManyFromLibrary();
+  const { data: libraryItems = [] } = useLibrary();
   const { toast } = useToast();
 
+  const [tab, setTab] = useState<TabId>('home');
   const [parsedFiles, setParsedFiles] = useState<Parsed3MF[]>(() => loadParsedFromStorage());
-  const [selectMode, setSelectMode] = useState(false);
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
-  // Skip the first save (mount restore) to avoid immediately re-writing what we just read
   const isFirstRender = useRef(true);
   useEffect(() => {
     if (isFirstRender.current) { isFirstRender.current = false; return; }
     saveParsedToStorage(parsedFiles);
   }, [parsedFiles]);
 
-  // Keep parsed file statuses in sync with the live library at all times:
-  //   • removed from library  → 'added' resets to 'ready'  (re-enables the button)
-  //   • already in library    → 'ready' becomes 'added'     (prevents duplicate adds)
   useEffect(() => {
     if (parsedFiles.length === 0) return;
-    const libraryFilenames = new Set((libraryItems as any[]).map((i: any) => i.filename));
+    const libNames = new Set((libraryItems as any[]).map((i: any) => i.filename));
     setParsedFiles(prev =>
       prev.map(f => {
-        if (f.status === 'added' && !libraryFilenames.has(f.filename)) return { ...f, status: 'ready' };
-        if (f.status === 'ready' && libraryFilenames.has(f.filename)) return { ...f, status: 'added' };
+        if (f.status === 'added' && !libNames.has(f.filename)) return { ...f, status: 'ready' };
+        if (f.status === 'ready' && libNames.has(f.filename)) return { ...f, status: 'added' };
         return f;
       })
     );
   }, [libraryItems]);
 
   const handleFilesAccepted = useCallback(async (newFiles: File[]) => {
-    // Deduplicate: skip files whose filename is already in the session list
     const existingFilenames = new Set(parsedFiles.map(f => f.filename));
     const fresh = newFiles.filter(f => !existingFilenames.has(f.name));
     if (!fresh.length) {
       toast({ title: 'Already loaded', description: 'All dropped files are already in your session.' });
       return;
     }
-
-    const libraryFilenames = new Set((libraryItems as any[]).map((i: any) => i.filename));
-
     const initialEntries: Parsed3MF[] = fresh.map(file => ({
-      id: crypto.randomUUID(),
-      filename: file.name,
-      file,
-      modelName: file.name.replace(/\.3mf$/i, ''),
-      objectsCount: 0,
-      objects: [],
-      filamentColors: [],
-      filamentTypes: [],
-      filamentGramsPerColor: [],
-      status: 'parsing',
+      id: crypto.randomUUID(), filename: file.name, file,
+      modelName: file.name.replace(/\.3mf$/i, ''), objectsCount: 0, objects: [],
+      filamentColors: [], filamentTypes: [], filamentGramsPerColor: [], status: 'parsing',
     }));
-
     setParsedFiles(prev => [...initialEntries, ...prev]);
-
     for (const entry of initialEntries) {
       const parsed = await parse3MFFile(entry.file!);
       parsed.id = entry.id;
-      if (libraryFilenames.has(parsed.filename)) parsed.status = 'added';
       setParsedFiles(prev => prev.map(p => p.id === entry.id ? parsed : p));
     }
-  }, [parsedFiles, libraryItems]);
+  }, [parsedFiles, toast]);
 
   const handleFileUpdated = useCallback((id: string, updates: Partial<Parsed3MF>) => {
     setParsedFiles(prev => prev.map(p => p.id === id ? { ...p, ...updates } : p));
@@ -124,78 +105,9 @@ export default function Dashboard() {
     toast({ title: 'Session cleared' });
   };
 
-  const handleRemoveCard = (id: string) => {
-    setParsedFiles(prev => prev.filter(p => p.id !== id));
-  };
+  const handleRemoveCard = (id: string) => setParsedFiles(prev => prev.filter(p => p.id !== id));
 
-  const handlePull = () => {
-    pullLibrary(undefined, {
-      onSuccess: (data) => {
-        toast({ title: 'Library pulled', description: `${data.length} file${data.length !== 1 ? 's' : ''} synced from cloud.` });
-      },
-      onError: (err) => {
-        toast({ title: 'Pull failed', description: err.message, variant: 'destructive' });
-      },
-    });
-  };
-
-  const handlePush = () => {
-    pushLibrary(libraryItems, {
-      onSuccess: () => {
-        toast({ title: 'Library pushed to cloud', description: `${libraryItems.length} file${libraryItems.length !== 1 ? 's' : ''} saved.` });
-      },
-      onError: (err) => {
-        toast({ title: 'Push failed', description: err.message, variant: 'destructive' });
-      },
-    });
-  };
-
-  const handleRemoveOne = (itemId: string) => {
-    removeOne(itemId, {
-      onSuccess: () => toast({ title: 'Removed from library' }),
-      onError: (err) => toast({ title: 'Failed to remove', description: err.message, variant: 'destructive' }),
-    });
-  };
-
-  const handleRemoveSelected = () => {
-    const ids = [...selectedIds];
-    removeMany(ids, {
-      onSuccess: (count) => {
-        toast({ title: `Removed ${count} file${count !== 1 ? 's' : ''} from library` });
-        setSelectedIds(new Set());
-        setSelectMode(false);
-      },
-      onError: (err) => toast({ title: 'Delete failed', description: err.message, variant: 'destructive' }),
-    });
-  };
-
-  const toggleSelect = (id: string) => {
-    setSelectedIds(prev => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
-  };
-
-  const toggleSelectAll = () => {
-    if (selectedIds.size === libraryItems.length) {
-      setSelectedIds(new Set());
-    } else {
-      setSelectedIds(new Set((libraryItems as any[]).map((i: any) => i.id)));
-    }
-  };
-
-  const exitSelectMode = () => {
-    setSelectMode(false);
-    setSelectedIds(new Set());
-  };
-
-  const containerVars = {
-    hidden: { opacity: 0 },
-    show: { opacity: 1, transition: { staggerChildren: 0.08 } },
-  };
-
-  const allSelected = libraryItems.length > 0 && selectedIds.size === libraryItems.length;
+  const containerVars = { hidden: { opacity: 0 }, show: { opacity: 1, transition: { staggerChildren: 0.08 } } };
 
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col relative">
@@ -203,182 +115,69 @@ export default function Dashboard() {
 
       <Navbar />
 
-      <main className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 z-10 space-y-8">
-
-        {/* DASHBOARD METRICS */}
-        <div>
-          <div className="flex items-center gap-3 mb-6">
-            <Database className="h-5 w-5 text-accent" />
-            <h2 className="font-display text-xl font-semibold tracking-wide">Business Overview</h2>
-          </div>
-          <motion.div
-            variants={containerVars}
-            initial="hidden"
-            animate="show"
-            className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4"
-          >
-            <StatCard title="3MF Library" value={isLoading ? '-' : metrics?.libraryCount ?? 0} icon={Library} accentColor="primary" />
-            <StatCard title="Catalog Items" value={isLoading ? '-' : metrics?.catalogCount ?? 0} icon={Layers} accentColor="accent" />
-            <StatCard title="Open Orders" value={isLoading ? '-' : metrics?.openOrdersCount ?? 0} icon={PackageOpen} accentColor="accent" />
-            <StatCard title="Print Queue" value={isLoading ? '-' : metrics?.activePrintJobs ?? 0} icon={Printer} accentColor="primary" />
-            <StatCard title="Spool Stock" value={isLoading ? '-' : metrics?.spoolCount ?? 0} icon={Disc} accentColor="muted" />
-            <StatCard title="Conventions" value={isLoading ? '-' : metrics?.upcomingConventions ?? 0} icon={Calendar} accentColor="muted" />
-          </motion.div>
+      <div className="sticky top-16 z-40 border-b border-white/5 bg-background/80 backdrop-blur-md">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <nav className="flex gap-0.5 py-2 overflow-x-auto" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+            {TABS.map(({ id, label, Icon }) => (
+              <button key={id} onClick={() => setTab(id)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap transition-all border
+                  ${tab === id
+                    ? 'bg-primary/15 text-primary border-primary/20'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-white/5 border-transparent'}`}>
+                <Icon className="h-3.5 w-3.5 shrink-0" />
+                <span className="hidden sm:inline">{label}</span>
+              </button>
+            ))}
+          </nav>
         </div>
+      </div>
 
-        {/* 3MF LIBRARY */}
-        <div className="rounded-2xl border border-white/5 bg-card/30 backdrop-blur-sm overflow-hidden">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-5 border-b border-white/5">
+      <main className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 z-10">
+        {tab === 'home' && (
+          <div className="space-y-8">
             <div>
-              <h3 className="font-display text-base font-semibold tracking-wide flex items-center gap-2">
-                <Library className="h-4 w-4 text-primary" />
-                3MF Library
-                {libraryItems.length > 0 && (
-                  <span className="ml-1 rounded-full bg-primary/20 px-2 py-0.5 text-xs font-bold text-primary">
-                    {libraryItems.length}
-                  </span>
-                )}
-              </h3>
-              <p className="text-sm text-muted-foreground mt-0.5">Files saved here are synced to your cloud workspace</p>
-            </div>
-
-            <div className="flex items-center gap-2">
-              {selectMode ? (
-                <>
-                  <Button variant="outline" size="sm" onClick={toggleSelectAll}
-                    className="gap-1.5 border-white/10 hover:border-primary/40 text-xs">
-                    {allSelected ? <CheckSquare className="h-3.5 w-3.5 text-primary" /> : <Square className="h-3.5 w-3.5" />}
-                    {allSelected ? 'Deselect All' : 'Select All'}
-                  </Button>
-                  {selectedIds.size > 0 && (
-                    <Button size="sm" onClick={handleRemoveSelected} disabled={isRemovingMany}
-                      className="gap-1.5 bg-destructive text-destructive-foreground hover:bg-destructive/90">
-                      {isRemovingMany ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
-                      Delete ({selectedIds.size})
-                    </Button>
-                  )}
-                  <Button variant="ghost" size="sm" onClick={exitSelectMode}
-                    className="gap-1.5 text-muted-foreground hover:text-foreground">
-                    <X className="h-3.5 w-3.5" /> Cancel
-                  </Button>
-                </>
-              ) : (
-                <>
-                  {libraryItems.length > 0 && (
-                    <Button variant="ghost" size="sm" onClick={() => setSelectMode(true)}
-                      className="gap-1.5 text-muted-foreground hover:text-foreground border border-white/5 hover:border-white/10">
-                      <CheckSquare className="h-3.5 w-3.5" /> Select
-                    </Button>
-                  )}
-                  <Button variant="outline" size="sm" onClick={handlePull} disabled={isPulling}
-                    className="gap-2 border-white/10 hover:border-primary/40">
-                    {isPulling ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <DownloadCloud className="h-3.5 w-3.5" />}
-                    Pull
-                  </Button>
-                  <Button size="sm" onClick={handlePush} disabled={isPushing || libraryItems.length === 0}
-                    className="gap-2 bg-primary hover:bg-primary/90">
-                    {isPushing ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <UploadCloud className="h-3.5 w-3.5" />}
-                    Push
-                  </Button>
-                </>
-              )}
-            </div>
-          </div>
-
-          <div className="p-5">
-            {isLibraryLoading ? (
-              <div className="flex items-center justify-center py-10 text-muted-foreground">
-                <RefreshCw className="h-5 w-5 animate-spin mr-2" /> Loading library…
+              <div className="flex items-center gap-3 mb-6">
+                <Database className="h-5 w-5 text-accent" />
+                <h2 className="font-display text-xl font-semibold tracking-wide">Business Overview</h2>
               </div>
-            ) : libraryItems.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-10 text-center text-muted-foreground/60">
-                <Library className="h-10 w-10 mb-3 opacity-30" />
-                <p className="text-sm">No files in library yet.</p>
-                <p className="text-xs mt-1">Upload a 3MF below and click "Add to Library".</p>
-              </div>
-            ) : (
               <motion.div variants={containerVars} initial="hidden" animate="show"
-                className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                <AnimatePresence>
-                  {(libraryItems as any[]).map((item) => {
-                    const isSelected = selectedIds.has(item.id);
-                    const colors: string[] = Array.isArray(item.filamentColors) ? item.filamentColors : [];
-                    const grams: number[] = Array.isArray(item.filamentGramsPerColor) ? item.filamentGramsPerColor : [];
-                    return (
-                      <motion.div key={item.id} initial={{ opacity: 0, scale: 0.97 }} animate={{ opacity: 1, scale: 1 }}
-                        exit={{ opacity: 0, scale: 0.95 }}
-                        onClick={() => selectMode && toggleSelect(item.id)}
-                        className={`group relative flex items-start gap-3 rounded-xl border p-4 transition-all duration-200
-                          ${selectMode ? 'cursor-pointer' : ''}
-                          ${isSelected ? 'border-destructive/50 bg-destructive/10' : 'border-white/5 bg-card/50 hover:border-primary/20 hover:bg-card/80'}`}>
-                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-                          {selectMode
-                            ? isSelected ? <CheckSquare className="h-4 w-4 text-destructive" /> : <Square className="h-4 w-4 text-muted-foreground/50" />
-                            : <Library className="h-4 w-4 text-primary/70" />}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="font-medium text-sm text-foreground truncate" title={item.name}>{item.name || item.filename}</p>
-                          <p className="text-xs text-muted-foreground font-mono truncate" title={item.filename}>{item.filename}</p>
-                          <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground/60">
-                            {Array.isArray(item.objects) ? item.objects.length > 0 && (
-                              <span className="flex items-center gap-1"><Box className="h-3 w-3" />{item.objects.length} obj</span>
-                            ) : item.objects > 0 && (
-                              <span className="flex items-center gap-1"><Box className="h-3 w-3" />{item.objects} obj</span>
-                            )}
-                            {item.hrs && <span className="flex items-center gap-1"><Clock className="h-3 w-3" />~{item.hrs}h</span>}
-                            <span className="ml-auto">{new Date(item.uploadedAt).toLocaleDateString()}</span>
-                          </div>
-                          {colors.length > 0 && (
-                            <div className="mt-2 flex items-center gap-1.5 flex-wrap">
-                              {colors.map((color, i) => (
-                                <div key={i} className="flex items-center gap-1">
-                                  <div className="h-3.5 w-3.5 rounded-full border border-white/20" style={{ backgroundColor: color }} title={color} />
-                                  {grams[i] != null && <span className="text-[10px] font-mono text-muted-foreground/50">{grams[i]}g</span>}
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                        {!selectMode && (
-                          <button onClick={(e) => { e.stopPropagation(); handleRemoveOne(item.id); }}
-                            disabled={isRemoving}
-                            className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded text-muted-foreground/40 hover:text-destructive"
-                            title="Remove from library">
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
-                        )}
-                      </motion.div>
-                    );
-                  })}
-                </AnimatePresence>
+                className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+                <StatCard title="3MF Library"   value={isLoading ? '-' : metrics?.libraryCount ?? 0}     icon={Library}     accentColor="primary" />
+                <StatCard title="Catalog Items"  value={isLoading ? '-' : metrics?.catalogCount ?? 0}     icon={Database}    accentColor="accent" />
+                <StatCard title="Open Orders"    value={isLoading ? '-' : metrics?.openOrdersCount ?? 0}  icon={PackageOpen} accentColor="accent" />
+                <StatCard title="Print Queue"    value={isLoading ? '-' : metrics?.activePrintJobs ?? 0}  icon={Printer}     accentColor="primary" />
+                <StatCard title="Spool Stock"    value={isLoading ? '-' : metrics?.spoolCount ?? 0}       icon={Disc}        accentColor="muted" />
+                <StatCard title="Conventions"    value={isLoading ? '-' : metrics?.upcomingConventions ?? 0} icon={Calendar} accentColor="muted" />
               </motion.div>
-            )}
-          </div>
-        </div>
-
-        {/* UPLOAD / SESSION SECTION */}
-        <div className="bg-card/30 border border-white/5 rounded-3xl p-6 md:p-8 backdrop-blur-sm shadow-xl">
-          <div className="max-w-4xl mx-auto">
-            {/* Section header with clear button */}
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h3 className="font-display text-base font-semibold tracking-wide text-foreground/80">3MF Files</h3>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  Files persist between sessions — drop new ones to add them
-                </p>
-              </div>
-              {parsedFiles.length > 0 && (
-                <Button variant="ghost" size="sm" onClick={handleClearSession}
-                  className="gap-1.5 text-muted-foreground/60 hover:text-destructive text-xs">
-                  <X className="h-3.5 w-3.5" /> Clear all
-                </Button>
-              )}
             </div>
-            <DropZone onFilesAccepted={handleFilesAccepted} />
-            <PreviewList files={parsedFiles} onFileUpdated={handleFileUpdated} onRemoveCard={handleRemoveCard} />
-          </div>
-        </div>
 
+            <div className="bg-card/30 border border-white/5 rounded-3xl p-6 md:p-8 backdrop-blur-sm shadow-xl">
+              <div className="max-w-4xl mx-auto">
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <h3 className="font-display text-base font-semibold tracking-wide text-foreground/80">3MF Files</h3>
+                    <p className="text-xs text-muted-foreground mt-0.5">Files persist between sessions — drop new ones to add them</p>
+                  </div>
+                  {parsedFiles.length > 0 && (
+                    <Button variant="ghost" size="sm" onClick={handleClearSession}
+                      className="gap-1.5 text-muted-foreground/60 hover:text-destructive text-xs">
+                      <X className="h-3.5 w-3.5" /> Clear all
+                    </Button>
+                  )}
+                </div>
+                <DropZone onFilesAccepted={handleFilesAccepted} />
+                <PreviewList files={parsedFiles} onFileUpdated={handleFileUpdated} onRemoveCard={handleRemoveCard} />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {tab === 'library'  && <LibraryTab />}
+        {tab === 'queue'    && <QueueTab />}
+        {tab === 'events'   && <EventsTab />}
+        {tab === 'workshop' && <WorkshopTab />}
+        {tab === 'sales'    && <SalesTab />}
+        {tab === 'printers' && <PrintersTab />}
       </main>
     </div>
   );

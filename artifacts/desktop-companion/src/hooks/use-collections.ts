@@ -259,3 +259,49 @@ export function usePushLibrary() {
     }
   });
 }
+
+export interface CompanionData {
+  printQueue: any[];
+  spools: any[];
+  catalog: any[];
+  conventions: any[];
+  printers: any[];
+  orders: any[];
+  wasteLog: any[];
+}
+
+export function useCompanionData() {
+  const { user } = useAuth();
+  return useQuery<CompanionData>({
+    queryKey: ['companion-data', user?.id],
+    enabled: !!user?.id,
+    staleTime: 30_000,
+    refetchOnWindowFocus: true,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('ha3d_user_data')
+        .select('collection, payload')
+        .eq('user_id', user!.id);
+      if (error) throw error;
+      const out: CompanionData = {
+        printQueue: [], spools: [], catalog: [],
+        conventions: [], printers: [], orders: [], wasteLog: [],
+      };
+      (data || []).forEach(row => {
+        try {
+          const parsed = safeParse<any[]>(row.payload, []);
+          if (row.collection === 'printQueue') out.printQueue = parsed;
+          else if (row.collection === 'spools') out.spools = parsed;
+          else if (row.collection === 'catalog' || row.collection === 'catalogItems') {
+            if (out.catalog.length === 0) out.catalog = parsed;
+          }
+          else if (row.collection === 'conventions') out.conventions = parsed;
+          else if (row.collection === 'printers') out.printers = parsed;
+          else if (row.collection === 'orders') out.orders = parsed;
+          else if (row.collection === 'wasteLog') out.wasteLog = parsed;
+        } catch { /* skip bad rows */ }
+      });
+      return out;
+    }
+  });
+}
