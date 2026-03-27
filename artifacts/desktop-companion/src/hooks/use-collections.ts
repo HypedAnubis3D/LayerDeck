@@ -190,6 +190,42 @@ export function useAddAllToLibrary() {
   });
 }
 
+export function useRemoveFromLibrary() {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (itemId: string) => {
+      if (!user) throw new Error("Not authenticated");
+      const existing = await fetchLibrary(user.id);
+      await saveLibrary(user.id, existing.filter((e: any) => e.id !== itemId));
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['library3mf'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-metrics'] });
+    }
+  });
+}
+
+export function useRemoveManyFromLibrary() {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (ids: string[]) => {
+      if (!user) throw new Error("Not authenticated");
+      const idSet = new Set(ids);
+      const existing = await fetchLibrary(user.id);
+      await saveLibrary(user.id, existing.filter((e: any) => !idSet.has(e.id)));
+      return ids.length;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['library3mf'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-metrics'] });
+    }
+  });
+}
+
 export function usePullLibrary() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
