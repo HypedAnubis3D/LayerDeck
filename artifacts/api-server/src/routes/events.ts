@@ -20,7 +20,7 @@ router.post("/search", async (req, res) => {
 
   const prompt = `You are a helpful assistant for a small business owner who sells 3D printed collectibles at vendor events.
 
-Today is ${today}. Find upcoming conventions, craft fairs, maker markets, anime/pop-culture cons, and artisan markets near ${city} where a vendor selling 3D printed collectibles could book a booth.
+Today is ${today}. Find upcoming conventions, craft fairs, maker markets, anime/pop-culture cons, and artisan markets near "${city}" (this may be a city name, city+state, or US zip code — use it to determine the region) where a vendor selling 3D printed collectibles could book a booth.
 
 Focus on event type: ${eventType}
 
@@ -32,7 +32,8 @@ Return ONLY a valid JSON array (no markdown, no explanation) of up to 8 events. 
 - attendance: string (estimated attendance, e.g. "~2,000" or "Unknown")
 - boothCost: string (typical vendor booth cost, e.g. "$150–$250/day" or "Unknown")
 - website: string (official website URL or empty string if unknown)
-- notes: string (any useful notes: application deadlines, indoor/outdoor, recurring, etc.)
+- vendorDeadline: string (vendor/exhibitor application deadline, e.g. "March 15, 2026" — use "Unknown" if not known)
+- notes: string (any useful notes: indoor/outdoor, recurring, special requirements, etc.)
 
 If you don't know of specific confirmed events, include well-known recurring events in that region that typically occur annually. Be honest — use "TBD" for dates you're not certain about and note if the event is recurring/annual.
 

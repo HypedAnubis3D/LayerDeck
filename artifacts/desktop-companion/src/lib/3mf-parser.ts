@@ -12,6 +12,7 @@ export interface Parsed3MF {
   filamentColors: string[];
   filamentTypes: string[];
   filamentGramsPerColor: number[];
+  supportGrams?: number;
   layerHeight?: number | null;
   nozzleDiam?: string;
   printer?: string;
@@ -103,7 +104,7 @@ export async function parse3MFFile(file: File): Promise<Parsed3MF> {
       }
     }
 
-    // ── Metadata/slice_info.config (XML) — print time + grams ──
+    // ── Metadata/slice_info.config (XML) — print time + grams + support ──
     if (sliceRaw) {
       try {
         const siDoc = new DOMParser().parseFromString(sliceRaw, 'application/xml');
@@ -113,11 +114,22 @@ export async function parse3MFFile(file: File): Promise<Parsed3MF> {
           if (sec > 0) hrs = sec / 3600;
         }
         const filEls = [...siDoc.querySelectorAll('filament')];
+        const SUPPORT_TYPES = ['supp', 'pva', 'bvoh', 'hips'];
         if (filEls.length) {
-          filamentGramsPerColor = filEls
-            .map((f) => parseFloat(f.getAttribute('used_g') || f.getAttribute('weight') || '0'))
-            .filter((v) => v > 0)
-            .map((v) => parseFloat(v.toFixed(2)));
+          let supportG = 0;
+          const modelGrams: number[] = [];
+          filEls.forEach((f) => {
+            const g = parseFloat(f.getAttribute('used_g') || f.getAttribute('weight') || '0');
+            const ftype = (f.getAttribute('type') || '').toLowerCase();
+            const isSupport = SUPPORT_TYPES.some((s) => ftype.includes(s));
+            if (isSupport) {
+              supportG += g;
+            } else if (g > 0) {
+              modelGrams.push(parseFloat(g.toFixed(2)));
+            }
+          });
+          filamentGramsPerColor = modelGrams;
+          if (supportG > 0) result.supportGrams = parseFloat(supportG.toFixed(2));
         }
       } catch (e) {
         console.warn('slice_info parse error:', e);

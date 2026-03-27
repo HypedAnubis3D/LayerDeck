@@ -2692,7 +2692,7 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
   <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px">
     <div>
       <div style="font-size:7px;color:var(--txt-d);letter-spacing:1px;margin-bottom:4px">YOUR CITY / REGION</div>
-      <input id="evf-city" type="text" placeholder="e.g. Toronto, ON or Chicago" class="modal-input" style="width:100%;box-sizing:border-box" onkeydown="if(event.key==='Enter')searchEvents()"/>
+      <input id="evf-city" type="text" placeholder="e.g. Chicago IL, Toronto ON, or 60614" class="modal-input" style="width:100%;box-sizing:border-box" onkeydown="if(event.key==='Enter')searchEvents()"/>
     </div>
     <div>
       <div style="font-size:7px;color:var(--txt-d);letter-spacing:1px;margin-bottom:4px">EVENT TYPE</div>
@@ -7355,6 +7355,13 @@ function savePrint(){
     const settings=getPrintSettingsFromForm();
     printSettingsMap[name]=settings;
     savePrintSettings();
+    // Auto-log support/interface filament waste from 3MF
+    if(selectedTmf&&selectedTmf.supportGrams>0){
+      const wSpool=filaments.length?spools.find(s=>s.id===filaments[0].spoolId):null;
+      wasteLog.push({id:uid(),spoolId:wSpool?wSpool.id:'',spoolName:wSpool?wSpool.name:'Unknown',type:'Support',amount:parseFloat((selectedTmf.supportGrams*qty).toFixed(2)),notes:'Auto-logged from 3MF: '+esc(selectedTmf.name),timestamp:Date.now()});
+      saveWasteLog();
+      toast('Support Waste Logged',selectedTmf.supportGrams.toFixed(1)+'g/unit support material recorded in Waste Tracker','info',3000);
+    }
     // Init fulfillment
     initFulfillment(print.id,print.name);saveFulfillment();
     // ── MANUALLY LOGGED PRINTS go straight to "In Progress" in Queue ──
@@ -8575,10 +8582,9 @@ function initSupabase(){
         updateCloudPanel();
         if(event==='SIGNED_IN'||event==='INITIAL_SESSION'){
           addSyncLog('Signed in as '+currentUser.email,'ok');
-          await new Promise(r=>setTimeout(r,1500));
-          await pullFromCloud(true);
           render();
           checkShopifyConfig();
+          pullFromCloud(true);
         }else if(event==='TOKEN_REFRESHED'){
           addSyncLog('Session refreshed','ok');
         }
@@ -8723,7 +8729,7 @@ async function pullFromCloud(silent=false,_lockRetry=false){
     const{data,error}=result;
     if(error)throw new Error(error.message);
     let pulled=0;
-    const knownCollections={spools:1,prints:1,queueItems:1,orders:1,sales:1,usageHist:1,shinyRolls:1,maintLog:1,wasteLog:1,printerRecords:1,tmfLib:1,catalogItems:1};
+    const knownCollections={spools:1,prints:1,queueItems:1,orders:1,sales:1,usageHist:1,shinyRolls:1,maintLog:1,wasteLog:1,printerRecords:1,tmfLib:1,catalogItems:1,catalog:1,conventions:1};
     for(const row of(data||[])){
       if(!knownCollections[row.collection])continue;
       try{
@@ -8741,8 +8747,10 @@ async function pullFromCloud(silent=false,_lockRetry=false){
           else if(c==='wasteLog')wasteLog=parsed;
           else if(c==='printerRecords')printerRecords=parsed;
           else if(c==='tmfLib')tmfLib=parsed;
-          else if(c==='catalogItems')catalogItems=parsed;
-          ss(KEYS[c]||('ha3d_'+c+'_v1'),parsed);
+          else if(c==='catalogItems'||c==='catalog')catalogItems=parsed;
+          else if(c==='conventions')conventions=parsed;
+          const storageKey=c==='catalog'?KEYS.catalog:c==='conventions'?KEYS.conventions:(KEYS[c]||('ha3d_'+c+'_v1'));
+          ss(storageKey,parsed);
           pulled++;
         }
       }catch(e){console.warn('Parse error for',row.collection,e);}
@@ -8751,6 +8759,7 @@ async function pullFromCloud(silent=false,_lockRetry=false){
     addSyncLog('Pulled '+pulled+' collections ✓','ok');
     if(!silent)toast('Data Pulled','Your data is up to date','success');
     render();
+    if(typeof checkConventionDeadlines==='function')checkConventionDeadlines();
     // Re-merge Shopify products after a cloud pull — cloud may have a stale catalog
     if(typeof syncShopifyToCatalog==='function'&&shopifyCfg&&shopifyCfg.connected&&!shopifyCfg.domain.includes('DEMO')){
       syncShopifyToCatalog();
@@ -10171,7 +10180,7 @@ function calcNozzleHours(printerName){
     },0);
 }
 function renderNozzle(){
-  const printers=printerRecords.length?printerRecords.map(p=>p.name):['X1C','P1S','A1 Mini'];
+  const printers=printerRecords.map(p=>p.name);
   const g=document.getElementById('nozzle-grid');
   if(!printers.length){g.innerHTML=emptyState('🔩','No Printers','Add printers in the Printers tab first',`<button class="btn btn-org" onclick="navTo('printers')">Go to Printers</button>`);return;}
   g.innerHTML=printers.map(pr=>{
@@ -10195,7 +10204,7 @@ function renderNozzle(){
 }
 function openLogNozzle(printerName=''){
   const sel=document.getElementById('en-printer');
-  sel.innerHTML=(printerRecords.length?printerRecords.map(p=>p.name):['X1C','P1S','A1 Mini']).map(n=>`<option${n===printerName?' selected':''}>${esc(n)}</option>`).join('');
+  sel.innerHTML=printerRecords.map(p=>`<option${p.name===printerName?' selected':''}>${esc(p.name)}</option>`).join('')||'<option>No printers added</option>';
   document.getElementById('en-date').value=new Date().toISOString().split('T')[0];
   document.getElementById('en-notes').value='';
   document.getElementById('mod-nozzle').style.display='flex';
@@ -10217,7 +10226,7 @@ function runSplitter(){
   const el=document.getElementById('splitter-results');
   if(!el)return;
   if(!qty||!hrsEach){el.innerHTML='<div style="font-size:8px;color:var(--txt-d);padding:10px 0">Enter quantity and print time per unit to see split</div>';return;}
-  const available=printerRecords.length?printerRecords:['X1C','P1S','A1 Mini'].map(n=>({name:n}));
+  const available=printerRecords;
   if(!available.length){el.innerHTML='<div style="font-size:8px;color:var(--txt-d);padding:10px 0">Add printers in the Printers tab first</div>';return;}
   // Split evenly, give remainder to first printer
   const perPrinter=Math.floor(qty/available.length);
@@ -10493,7 +10502,7 @@ function loadV15(){
   conventions=gs(KEYS.conventions);
 }
 function saveReviews(){ss(KEYS.reviews,reviewsList);}
-function saveConventions(){ss(KEYS.conventions,conventions);}
+function saveConventions(){ss(KEYS.conventions,conventions);queueSync('conventions',conventions);}
 
 // V15 tabs added directly to consolidated render() function above
 
@@ -10683,12 +10692,17 @@ function renderConvention(){
   const g=document.getElementById('convention-grid');
   if(!conventions.length){g.innerHTML=emptyState('🎪','No Events Planned','Track conventions, markets, and popup events — full inventory, day-of sales, and QR tags',`<button class="btn btn-pur" onclick="openAddConvention()">+ Add First Event</button>`);return;}
   const now=Date.now();
-  const sorted=[...conventions].sort(function(a,b){return new Date(a.start)-new Date(b.start);});
+  const sorted=[...conventions].sort(function(a,b){
+    const isPotA=a.status==='potential';const isPotB=b.status==='potential';
+    if(isPotA!==isPotB)return isPotA?1:-1;
+    return new Date(a.start||'9999')-new Date(b.start||'9999');
+  });
   g.innerHTML=sorted.map(function(c){
+    const isPotential=c.status==='potential';
     const startTs=new Date(c.start).getTime();
     const endTs=new Date(c.end||c.start).getTime()+86399999;
-    const isPast=endTs<now;
-    const isLive=startTs<=now&&endTs>=now;
+    const isPast=!isPotential&&endTs<now;
+    const isLive=!isPotential&&startTs<=now&&endTs>=now;
     const daySalesRev=(c.daySales||[]).reduce(function(a,s){return a+parseFloat(s.price||0)*parseInt(s.qty||1);},0);
     const revenue=daySalesRev||c.revenue||0;
     const cost=c.cost||0;
@@ -10696,31 +10710,40 @@ function renderConvention(){
     const packCount=(c.inPersonCatalog||[]).reduce(function(a,i){return a+(i.qtyBring||0);},0);
     const checkDone=(c.checklist||[]).filter(function(x){return x.done;}).length;
     const checkTotal=(c.checklist||[]).length;
-    return `<div class="catalogItems-card" style="border-left:3px solid ${isLive?'var(--grn)':isPast?'var(--bdr2)':'var(--pur)'}">
+    const borderCol=isPotential?'var(--gold)':isLive?'var(--grn)':isPast?'var(--bdr2)':'var(--pur)';
+    const badgeBg=isPotential?'var(--gold-d)':isLive?'var(--grn-d)':isPast?'var(--bdr)':'var(--pur-d)';
+    const badgeCol=isPotential?'var(--gold-b)':isLive?'var(--grn-b)':isPast?'var(--txt-d)':'var(--pur-b)';
+    const badgeTxt=isPotential?'⭐ Potential':isLive?'🟢 LIVE':isPast?'Past':'Upcoming';
+    const deadlineHtml=isPotential&&c.vendorDeadline&&c.vendorDeadline!=='Unknown'
+      ?`<div style="font-size:7px;color:var(--gold-b);margin-bottom:6px">📅 Vendor deadline: ${esc(c.vendorDeadline)}</div>`:'';
+    return `<div class="catalogItems-card" style="border-left:3px solid ${borderCol}">
       <div class="catalogItems-body">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
           <div style="flex:1;min-width:0">
             <div style="font-size:12px;font-weight:bold;color:var(--txt-b);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(c.name)}</div>
             <div style="font-size:7px;color:var(--txt-d)">${esc(c.loc||'—')} · ${c.start||'TBD'}${c.end&&c.end!==c.start?' → '+c.end:''}</div>
           </div>
-          <span style="font-size:7px;padding:2px 7px;border-radius:10px;margin-left:6px;flex-shrink:0;background:${isLive?'var(--grn-d)':isPast?'var(--bdr)':'var(--pur-d)'};color:${isLive?'var(--grn-b)':isPast?'var(--txt-d)':'var(--pur-b)'}">
-            ${isLive?'🟢 LIVE':isPast?'Past':'Upcoming'}
+          <span style="font-size:7px;padding:2px 7px;border-radius:10px;margin-left:6px;flex-shrink:0;background:${badgeBg};color:${badgeCol}">
+            ${badgeTxt}
           </span>
         </div>
-        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin-bottom:8px">
+        ${deadlineHtml}
+        ${isPotential?'':`<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin-bottom:8px">
           <div class="cstat"><div class="cstat-n" style="color:var(--red-b)">$${cost.toFixed(0)}</div><div class="cstat-l">Booth</div></div>
           <div class="cstat"><div class="cstat-n" style="color:var(--gold-b)">$${(c.target||0).toFixed(0)}</div><div class="cstat-l">Target</div></div>
           <div class="cstat"><div class="cstat-n" style="color:var(--cyn)">${packCount}</div><div class="cstat-l">Items</div></div>
           <div class="cstat"><div class="cstat-n" style="color:${profit>=0?'var(--grn-b)':'var(--red-b)'}">$${profit.toFixed(0)}</div><div class="cstat-l">Net</div></div>
-        </div>
+        </div>`}
         ${revenue&&c.target?`<div style="margin-bottom:8px">
           <div style="display:flex;justify-content:space-between;font-size:6px;color:var(--txt-d);margin-bottom:3px"><span>Revenue $${revenue.toFixed(0)}</span><span>${Math.min(100,Math.round(revenue/c.target*100))}%</span></div>
           <div class="break-even-bar"><div class="break-even-fill" style="width:${Math.min(100,revenue/c.target*100).toFixed(1)}%;background:${revenue>=cost?'var(--grn)':'var(--amb)'}"></div></div>
         </div>`:''}
         ${checkTotal?`<div style="font-size:6.5px;color:var(--txt-d);margin-bottom:6px">✅ Checklist ${checkDone}/${checkTotal} done</div>`:''}
         <div class="card-acts">
-          <button class="btn btn-pur btn-xs" style="flex:2" onclick="openEventManage('${c.id}')">🎪 Manage →</button>
-          <button class="btn btn-ghost btn-xs" onclick="openEditConvention('${c.id}')">Edit</button>
+          ${isPotential
+            ?`<button class="btn btn-amb btn-xs" style="flex:2" onclick="openEditConvention('${c.id}')">✏ Edit Details</button>`
+            :`<button class="btn btn-pur btn-xs" style="flex:2" onclick="openEventManage('${c.id}')">🎪 Manage →</button>
+          <button class="btn btn-ghost btn-xs" onclick="openEditConvention('${c.id}')">Edit</button>`}
           <button class="btn btn-xs" style="background:var(--red-d);border:1px solid var(--red-d);color:var(--red-b)" onclick="delConvention('${c.id}')">✕</button>
         </div>
       </div>
@@ -12516,28 +12539,31 @@ function openEventFinder(){
 function closeEventFinder(){
   document.getElementById('mod-event-finder').style.display='none';
 }
+let _evfResults=[];
 async function searchEvents(){
   const city=(document.getElementById('evf-city').value||'').trim();
   const type=document.getElementById('evf-type').value||'3D printing collectibles maker';
   const res=document.getElementById('evf-results');
   const btn=document.querySelector('#mod-event-finder .btn-pur');
-  if(!city){toast('Enter a location','Type your city or region','warning');return;}
+  if(!city){toast('Enter a location','City, state, or zip code','warning');return;}
   res.innerHTML='<div style="text-align:center;padding:20px;font-size:8px;color:var(--txt-d);letter-spacing:1px">✨ Searching with AI… this takes a moment</div>';
   if(btn){btn.disabled=true;btn.textContent='Searching…';}
   try{
     const r=await fetch('/api/events/search',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({city,type})});
     const data=await r.json();
     if(!r.ok||!data.events){throw new Error(data.error||'Search failed');}
-    const events=data.events;
-    if(!events.length){
+    _evfResults=data.events;
+    if(!_evfResults.length){
       res.innerHTML='<div style="font-size:8px;color:var(--txt-d);padding:12px 0">No events found for that location and type. Try a broader city or different event type.</div>';
     }else{
       const typeIcons={Convention:'🎪','Craft Fair':'🧵','Maker Market':'⚙','Pop-up Market':'🛍','Anime/Comic Con':'🎌','Gaming Con':'🎮','Artisan Market':'🎨'};
-      res.innerHTML='<div style="font-size:7px;color:var(--txt-d);letter-spacing:1px;margin-bottom:10px;text-transform:uppercase">'+events.length+' events near '+esc(city)+'</div>'
+      res.innerHTML='<div style="font-size:7px;color:var(--txt-d);letter-spacing:1px;margin-bottom:10px;text-transform:uppercase">'+_evfResults.length+' events near '+esc(city)+'</div>'
         +'<div style="display:flex;flex-direction:column;gap:10px">'
-        +events.map(function(ev){
+        +_evfResults.map(function(ev,i){
           const icon=typeIcons[ev.type]||'🎪';
           const hasUrl=ev.website&&ev.website.startsWith('http');
+          const alreadySaved=conventions.some(function(c){return c.name===ev.name;});
+          const deadline=ev.vendorDeadline&&ev.vendorDeadline!=='Unknown'?ev.vendorDeadline:'';
           return '<div style="background:var(--surf2);border:1px solid var(--bdr2);border-radius:8px;padding:12px">'
             +'<div style="display:flex;align-items:flex-start;gap:10px;margin-bottom:8px">'
             +'<span style="font-size:20px;flex-shrink:0">'+icon+'</span>'
@@ -12552,18 +12578,85 @@ async function searchEvents(){
             +'<div style="font-size:7px;color:var(--txt-d)">📍 <span style="color:var(--txt-b)">'+esc(ev.venue||'')+'</span></div>'
             +'<div style="font-size:7px;color:var(--txt-d)">👥 <span style="color:var(--txt-b)">'+esc(ev.attendance||'Unknown')+'</span></div>'
             +'<div style="font-size:7px;color:var(--txt-d)">💰 <span style="color:var(--grn-b)">'+esc(ev.boothCost||'Unknown')+'</span></div>'
+            +(deadline?'<div style="font-size:7px;color:var(--txt-d)">⏰ <span style="color:var(--gold-b)">Deadline: '+esc(deadline)+'</span></div>':'')
             +'</div>'
-            +(ev.notes?'<div style="font-size:7px;color:var(--txt-d);line-height:1.7;padding-top:6px;border-top:1px solid var(--bdr)">'+esc(ev.notes)+'</div>':'')
+            +(ev.notes?'<div style="font-size:7px;color:var(--txt-d);line-height:1.7;padding-top:6px;border-top:1px solid var(--bdr);margin-bottom:8px">'+esc(ev.notes)+'</div>':'')
+            +(alreadySaved
+              ?'<div style="font-size:7px;color:var(--grn-b);padding:5px 0">✓ Already saved to Conventions</div>'
+              :'<button class="btn btn-amb btn-sm" style="width:100%;padding:6px" onclick="addEventFromSearch('+i+')">⭐ Save as Potential</button>')
             +'</div>';
         }).join('')
         +'</div>'
-        +'<div style="margin-top:12px;font-size:7px;color:var(--txt-d);line-height:1.8;border-top:1px solid var(--bdr);padding-top:8px">💡 AI results are based on known recurring events — always verify dates on the official website. Found one you want to track? Click <b style="color:var(--pur-b)">+ Add Event</b> on the Conventions page.</div>';
+        +'<div style="margin-top:12px;font-size:7px;color:var(--txt-d);line-height:1.8;border-top:1px solid var(--bdr);padding-top:8px">💡 AI results are based on known recurring events — always verify dates on the official website.</div>';
     }
   }catch(err){
     res.innerHTML='<div style="font-size:8px;color:var(--red-b);padding:10px 0">Search failed: '+(err.message||'Network error')+'</div>';
   }finally{
     if(btn){btn.disabled=false;btn.textContent='✨ Find Events with AI';}
   }
+}
+
+function addEventFromSearch(idx){
+  const ev=_evfResults[idx];
+  if(!ev)return;
+  const obj={
+    id:uid(),name:ev.name,
+    loc:ev.venue||'',
+    start:'',end:'',cost:0,target:0,revenue:0,
+    notes:[ev.notes,ev.boothCost?'Booth: '+ev.boothCost:'',ev.attendance?'Attendance: '+ev.attendance:''].filter(Boolean).join('\n'),
+    vendorDeadline:ev.vendorDeadline||'Unknown',
+    website:ev.website||'',
+    status:'potential',
+    inPersonCatalog:[],checklist:defaultChecklist(),daySales:[],reconciled:false
+  };
+  // Parse event date into start/end if possible
+  if(ev.date&&ev.date!=='TBD'){
+    try{
+      const rangeM=ev.date.match(/(\w+)\s+(\d+)[–\-](\d+),?\s*(\d{4})/);
+      const singleM=ev.date.match(/(\w+\s+\d+),?\s*(\d{4})/);
+      if(rangeM){
+        const s=new Date(rangeM[1]+' '+rangeM[2]+', '+rangeM[4]);
+        const e=new Date(rangeM[1]+' '+rangeM[3]+', '+rangeM[4]);
+        if(!isNaN(s.getTime()))obj.start=s.toISOString().split('T')[0];
+        if(!isNaN(e.getTime()))obj.end=e.toISOString().split('T')[0];
+      }else if(singleM){
+        const s=new Date(singleM[1]+' '+singleM[2]);
+        if(!isNaN(s.getTime()))obj.start=s.toISOString().split('T')[0];
+      }
+    }catch(e){}
+  }
+  conventions.push(obj);
+  saveConventions();
+  render();
+  toast('Saved as Potential','Added to Conventions — edit to confirm dates and costs','success',3000);
+  // Check if deadline is within 10 days
+  if(obj.vendorDeadline&&obj.vendorDeadline!=='Unknown'){
+    try{
+      const dl=new Date(obj.vendorDeadline).getTime();
+      const daysLeft=Math.floor((dl-Date.now())/(864e5));
+      if(daysLeft>=0&&daysLeft<=10){
+        setTimeout(function(){toast('Deadline Alert!','Vendor application for '+esc(obj.name)+' is in '+daysLeft+' day'+(daysLeft!==1?'s':''),'warning',6000);},500);
+      }
+    }catch(e){}
+  }
+  // Re-render results so the button changes to ✓ saved
+  searchEvents&&document.getElementById('evf-results')&&(function(){
+    const cards=document.querySelectorAll('#evf-results .btn-amb');
+    cards.forEach(function(b,i){if(i===idx){b.textContent='✓ Saved';b.disabled=true;b.style.opacity='.5';}});
+  })();
+}
+
+function checkConventionDeadlines(){
+  const now=Date.now();
+  conventions.filter(function(c){return c.status==='potential'&&c.vendorDeadline&&c.vendorDeadline!=='Unknown';}).forEach(function(c){
+    try{
+      const dl=new Date(c.vendorDeadline).getTime();
+      const daysLeft=Math.floor((dl-now)/(864e5));
+      if(daysLeft>=0&&daysLeft<=10){
+        setTimeout(function(){toast('Vendor Deadline Alert','⏰ '+esc(c.name)+': application due in '+daysLeft+' day'+(daysLeft!==1?'s':'')+'!','warning',7000);},1500);
+      }
+    }catch(e){}
+  });
 }
 
 // ── VISIBILITY CHANGE — dedicate separate timer so push-queue updates don't reset the gap ──
