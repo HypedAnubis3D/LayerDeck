@@ -3976,7 +3976,8 @@ function applyTmf(t){
   // fill filament rows
   document.getElementById('fil-rows').innerHTML='';
   filRows=[];filRowCount=0;
-  if(t.filamentGrams.length){t.filamentGrams.forEach(g=>addFilRow('',g));}
+  const fgrams=t.filamentGramsPerColor||t.filamentGrams||[];
+  if(fgrams.length){fgrams.forEach(g=>addFilRow('',g));}
   else{addFilRow();}
   updateCostPreview();
 }
@@ -4621,7 +4622,8 @@ function ingestShopifyOrder(o){
   items.forEach(it=>{
     const matchTmf=tmfLib.find(t=>t.name.toLowerCase().includes(it.name.split(' ')[0].toLowerCase())||it.name.toLowerCase().includes(t.name.split(' ')[0].toLowerCase()));
     if(matchTmf){
-      const print={id:uid(),name:it.name,category:'Other',printer:'X1C',hrs:matchTmf.hrs||0,qty:it.qty,filaments:matchTmf.filamentGrams.map(g=>({spoolId:spools[0]?.id||'',grams:g})),notes:'Auto-created from Shopify order '+orderId,tmfName:matchTmf.name,timestamp:Date.now(),status:'printing'};
+      const _sfg=matchTmf.filamentGramsPerColor||matchTmf.filamentGrams||[];
+      const print={id:uid(),name:it.name,category:'Other',printer:printerRecords[0]?.name||'',hrs:matchTmf.hrs||0,qty:it.qty,filaments:_sfg.map(g=>({spoolId:spools[0]?.id||'',grams:g})),notes:'Auto-created from Shopify order '+orderId,tmfName:matchTmf.name,timestamp:Date.now(),status:'printing'};
       prints.push(print);
     }
   });
@@ -6867,7 +6869,8 @@ function ingestShopifyOrder(o){
       queueItems.push({id:uid(),name:queueLabel,category:catalogItem?catalogItem.category:'Other',printer:printerRecords[0]?.name||'X1C',hrs:matchTmf?matchTmf.hrs||0:0,qty:it.qty,priority:'high',orderId,stage:'queued',fromShopify:true,noTmf:!matchTmf,tmfId:matchTmf?matchTmf.id:null,printId:newPrintId,fromShopifyOrder:orderId,notes:matchTmf?'3MF: '+matchTmf.name+(it.variantTitle?' ['+it.variantTitle+']':''):'⚠ No 3MF on file',timestamp:Date.now()});
       if(matchTmf){
         const alreadyPrinted=prints.some(p=>p.fromShopifyOrder===orderId&&p.name===queueLabel);
-        if(!alreadyPrinted){prints.push({id:newPrintId,name:queueLabel,category:catalogItem?catalogItem.category:'Other',printer:printerRecords[0]?.name||'X1C',hrs:matchTmf.hrs||0,qty:it.qty,filaments:matchTmf.filamentGrams.map(g=>({spoolId:spools[0]?.id||'',grams:g})),notes:'Auto from Shopify '+orderId,fromShopifyOrder:orderId,tmfName:matchTmf.name,timestamp:Date.now(),status:'printing'});}
+        const _qfg=matchTmf.filamentGramsPerColor||matchTmf.filamentGrams||[];
+        if(!alreadyPrinted){prints.push({id:newPrintId,name:queueLabel,category:catalogItem?catalogItem.category:'Other',printer:printerRecords[0]?.name||'',hrs:matchTmf.hrs||0,qty:it.qty,filaments:_qfg.map(g=>({spoolId:spools[0]?.id||'',grams:g})),notes:'Auto from Shopify '+orderId,fromShopifyOrder:orderId,tmfName:matchTmf.name,timestamp:Date.now(),status:'printing'});}
       }
     }
   });
@@ -7091,9 +7094,8 @@ function buildPrinterOpts(selVal=''){
     return '<option value="">— Select Printer —</option>'+
       printerRecords.map(p=>'<option value="'+esc(p.name)+'"'+(p.name===selVal?' selected':'')+'>'+esc(p.name)+(p.model?' ('+esc(p.model)+')':'')+' · '+(p.amsUnits||0)+' AMS</option>').join('');
   }
-  // No printers added — show manual entry option
-  return '<option value="">— Add manually —</option>'
-    +'<option>X1C</option><option>X1E</option><option>P1S</option><option>P1P</option><option>A1</option><option>A1 Mini</option><option>H2D</option>'
+  // No printers added yet
+  return '<option value="">— No printers added yet —</option>'
     +'<option value="_add">+ Add a Printer...</option>';
 }
 
@@ -11972,7 +11974,7 @@ function addToPrintsFromCatalog(id){
     id:uid(),name:item.name,category:item.category||'Other',
     printer:printerRecords[0]?.name||'X1C',
     hrs:tmf.hrs||0,qty:1,
-    filaments:tmf.filamentGrams?tmf.filamentGrams.map(function(g){return{spoolId:spools[0]?.id||'',grams:g};}): [],
+    filaments:(tmf.filamentGramsPerColor||tmf.filamentGrams||[]).map(function(g){return{spoolId:spools[0]?.id||'',grams:g};}),
     notes:'From catalog',tmfName:tmf.name,timestamp:Date.now(),status:'printing'
   };
   prints.push(newPrint);savePrints();
