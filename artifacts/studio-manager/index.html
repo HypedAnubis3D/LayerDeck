@@ -6402,17 +6402,7 @@ if(impDrop){
   });
 }
 
-// drag and drop for 3mf
-const dz=document.getElementById('tmf-drop-zone');
-dz.addEventListener('dragover',e=>{e.preventDefault();dz.classList.add('drag');});
-dz.addEventListener('dragleave',()=>dz.classList.remove('drag'));
-dz.addEventListener('drop',e=>{
-  e.preventDefault();dz.classList.remove('drag');
-  const files=[...e.dataTransfer.files].filter(f=>f.name.endsWith('.3mf'));
-  if(files.length){
-    Promise.all(files.map(f=>parse3mfFile(f))).then(()=>{saveTmfs();render();});
-  }
-});
+// drag and drop for 3mf (upload zone removed — handled by Desktop Companion)
 
 // ════════════════════════════════════════
 // SIDEBAR

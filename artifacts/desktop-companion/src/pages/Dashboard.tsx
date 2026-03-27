@@ -30,18 +30,18 @@ export default function Dashboard() {
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
-  // When the library changes (pull or delete from either app), reset any
-  // parsed files that are no longer in the library back to 'ready' so the
-  // "Add to Library" button becomes active again.
+  // Keep parsed file statuses in sync with the live library at all times:
+  //   • File removed from library → reset 'added' back to 'ready' (re-enables the button)
+  //   • File already in library (loaded after drop) → mark 'ready' as 'added' (prevents duplicate adds)
   useEffect(() => {
-    if (!libraryItems.length && parsedFiles.length === 0) return;
+    if (parsedFiles.length === 0) return;
     const libraryFilenames = new Set((libraryItems as any[]).map((i: any) => i.filename));
     setParsedFiles(prev =>
-      prev.map(f =>
-        f.status === 'added' && !libraryFilenames.has(f.filename)
-          ? { ...f, status: 'ready' }
-          : f
-      )
+      prev.map(f => {
+        if (f.status === 'added' && !libraryFilenames.has(f.filename)) return { ...f, status: 'ready' };
+        if (f.status === 'ready' && libraryFilenames.has(f.filename)) return { ...f, status: 'added' };
+        return f;
+      })
     );
   }, [libraryItems]);
 
