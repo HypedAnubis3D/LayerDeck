@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { Navbar } from '@/components/layout/Navbar';
 import { StatCard } from '@/components/dashboard/StatCard';
 import { DropZone } from '@/components/upload/DropZone';
@@ -17,6 +17,34 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 
+const PARSED_STORAGE_KEY = 'layerstack_companion_parsed_files';
+
+// Serialise: strip the File object (can't be stored), skip 'parsing' entries
+function saveParsedToStorage(files: Parsed3MF[]) {
+  const serialisable = files
+    .filter(f => f.status !== 'parsing')
+    .map(({ file: _file, ...rest }) => rest);
+  try {
+    localStorage.setItem(PARSED_STORAGE_KEY, JSON.stringify(serialisable));
+  } catch { /* storage full — silently skip */ }
+}
+
+function loadParsedFromStorage(): Parsed3MF[] {
+  try {
+    const raw = localStorage.getItem(PARSED_STORAGE_KEY);
+    if (!raw) return [];
+    const items = JSON.parse(raw) as Parsed3MF[];
+    // Restore as 'ready' (library-sync useEffect will correct to 'added' if needed)
+    return items.map(f => ({
+      ...f,
+      file: null,
+      status: f.status === 'error' ? 'error' : 'ready',
+    }));
+  } catch {
+    return [];
+  }
+}
+
 export default function Dashboard() {
   const { data: metrics, isLoading } = useDashboardMetrics();
   const { data: libraryItems = [], isLoading: isLibraryLoading } = useLibrary();
@@ -26,13 +54,20 @@ export default function Dashboard() {
   const { mutate: removeMany, isPending: isRemovingMany } = useRemoveManyFromLibrary();
   const { toast } = useToast();
 
-  const [parsedFiles, setParsedFiles] = useState<Parsed3MF[]>([]);
+  const [parsedFiles, setParsedFiles] = useState<Parsed3MF[]>(() => loadParsedFromStorage());
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
+  // Skip the first save (mount restore) to avoid immediately re-writing what we just read
+  const isFirstRender = useRef(true);
+  useEffect(() => {
+    if (isFirstRender.current) { isFirstRender.current = false; return; }
+    saveParsedToStorage(parsedFiles);
+  }, [parsedFiles]);
+
   // Keep parsed file statuses in sync with the live library at all times:
-  //   • File removed from library → reset 'added' back to 'ready' (re-enables the button)
-  //   • File already in library (loaded after drop) → mark 'ready' as 'added' (prevents duplicate adds)
+  //   • removed from library  → 'added' resets to 'ready'  (re-enables the button)
+  //   • already in library    → 'ready' becomes 'added'     (prevents duplicate adds)
   useEffect(() => {
     if (parsedFiles.length === 0) return;
     const libraryFilenames = new Set((libraryItems as any[]).map((i: any) => i.filename));
@@ -45,8 +80,18 @@ export default function Dashboard() {
     );
   }, [libraryItems]);
 
-  const handleFilesAccepted = useCallback(async (files: File[]) => {
-    const initialEntries: Parsed3MF[] = files.map(file => ({
+  const handleFilesAccepted = useCallback(async (newFiles: File[]) => {
+    // Deduplicate: skip files whose filename is already in the session list
+    const existingFilenames = new Set(parsedFiles.map(f => f.filename));
+    const fresh = newFiles.filter(f => !existingFilenames.has(f.name));
+    if (!fresh.length) {
+      toast({ title: 'Already loaded', description: 'All dropped files are already in your session.' });
+      return;
+    }
+
+    const libraryFilenames = new Set((libraryItems as any[]).map((i: any) => i.filename));
+
+    const initialEntries: Parsed3MF[] = fresh.map(file => ({
       id: crypto.randomUUID(),
       filename: file.name,
       file,
@@ -62,18 +107,26 @@ export default function Dashboard() {
     setParsedFiles(prev => [...initialEntries, ...prev]);
 
     for (const entry of initialEntries) {
-      const parsed = await parse3MFFile(entry.file);
+      const parsed = await parse3MFFile(entry.file!);
       parsed.id = entry.id;
-      // Mark as already-added if filename is in the current library
-      const libraryFilenames = new Set((libraryItems as any[]).map((i: any) => i.filename));
       if (libraryFilenames.has(parsed.filename)) parsed.status = 'added';
       setParsedFiles(prev => prev.map(p => p.id === entry.id ? parsed : p));
     }
-  }, [libraryItems]);
+  }, [parsedFiles, libraryItems]);
 
   const handleFileUpdated = useCallback((id: string, updates: Partial<Parsed3MF>) => {
     setParsedFiles(prev => prev.map(p => p.id === id ? { ...p, ...updates } : p));
   }, []);
+
+  const handleClearSession = () => {
+    setParsedFiles([]);
+    localStorage.removeItem(PARSED_STORAGE_KEY);
+    toast({ title: 'Session cleared' });
+  };
+
+  const handleRemoveCard = (id: string) => {
+    setParsedFiles(prev => prev.filter(p => p.id !== id));
+  };
 
   const handlePull = () => {
     pullLibrary(undefined, {
@@ -175,7 +228,6 @@ export default function Dashboard() {
 
         {/* 3MF LIBRARY */}
         <div className="rounded-2xl border border-white/5 bg-card/30 backdrop-blur-sm overflow-hidden">
-          {/* Header */}
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-5 border-b border-white/5">
             <div>
               <h3 className="font-display text-base font-semibold tracking-wide flex items-center gap-2">
@@ -187,76 +239,44 @@ export default function Dashboard() {
                   </span>
                 )}
               </h3>
-              <p className="text-sm text-muted-foreground mt-0.5">
-                Files saved here are synced to your cloud workspace
-              </p>
+              <p className="text-sm text-muted-foreground mt-0.5">Files saved here are synced to your cloud workspace</p>
             </div>
 
             <div className="flex items-center gap-2">
-              {/* Select mode toolbar */}
               {selectMode ? (
                 <>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={toggleSelectAll}
-                    className="gap-1.5 border-white/10 hover:border-primary/40 text-xs"
-                  >
-                    {allSelected
-                      ? <CheckSquare className="h-3.5 w-3.5 text-primary" />
-                      : <Square className="h-3.5 w-3.5" />}
+                  <Button variant="outline" size="sm" onClick={toggleSelectAll}
+                    className="gap-1.5 border-white/10 hover:border-primary/40 text-xs">
+                    {allSelected ? <CheckSquare className="h-3.5 w-3.5 text-primary" /> : <Square className="h-3.5 w-3.5" />}
                     {allSelected ? 'Deselect All' : 'Select All'}
                   </Button>
                   {selectedIds.size > 0 && (
-                    <Button
-                      size="sm"
-                      onClick={handleRemoveSelected}
-                      disabled={isRemovingMany}
-                      className="gap-1.5 bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                    >
-                      {isRemovingMany
-                        ? <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-                        : <Trash2 className="h-3.5 w-3.5" />}
+                    <Button size="sm" onClick={handleRemoveSelected} disabled={isRemovingMany}
+                      className="gap-1.5 bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                      {isRemovingMany ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
                       Delete ({selectedIds.size})
                     </Button>
                   )}
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={exitSelectMode}
-                    className="gap-1.5 text-muted-foreground hover:text-foreground"
-                  >
+                  <Button variant="ghost" size="sm" onClick={exitSelectMode}
+                    className="gap-1.5 text-muted-foreground hover:text-foreground">
                     <X className="h-3.5 w-3.5" /> Cancel
                   </Button>
                 </>
               ) : (
                 <>
                   {libraryItems.length > 0 && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setSelectMode(true)}
-                      className="gap-1.5 text-muted-foreground hover:text-foreground border border-white/5 hover:border-white/10"
-                    >
+                    <Button variant="ghost" size="sm" onClick={() => setSelectMode(true)}
+                      className="gap-1.5 text-muted-foreground hover:text-foreground border border-white/5 hover:border-white/10">
                       <CheckSquare className="h-3.5 w-3.5" /> Select
                     </Button>
                   )}
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handlePull}
-                    disabled={isPulling}
-                    className="gap-2 border-white/10 hover:border-primary/40"
-                  >
+                  <Button variant="outline" size="sm" onClick={handlePull} disabled={isPulling}
+                    className="gap-2 border-white/10 hover:border-primary/40">
                     {isPulling ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <DownloadCloud className="h-3.5 w-3.5" />}
                     Pull
                   </Button>
-                  <Button
-                    size="sm"
-                    onClick={handlePush}
-                    disabled={isPushing || libraryItems.length === 0}
-                    className="gap-2 bg-primary hover:bg-primary/90"
-                  >
+                  <Button size="sm" onClick={handlePush} disabled={isPushing || libraryItems.length === 0}
+                    className="gap-2 bg-primary hover:bg-primary/90">
                     {isPushing ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <UploadCloud className="h-3.5 w-3.5" />}
                     Push
                   </Button>
@@ -265,7 +285,6 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* Library items */}
           <div className="p-5">
             {isLibraryLoading ? (
               <div className="flex items-center justify-center py-10 text-muted-foreground">
@@ -278,101 +297,53 @@ export default function Dashboard() {
                 <p className="text-xs mt-1">Upload a 3MF below and click "Add to Library".</p>
               </div>
             ) : (
-              <motion.div
-                variants={containerVars}
-                initial="hidden"
-                animate="show"
-                className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3"
-              >
+              <motion.div variants={containerVars} initial="hidden" animate="show"
+                className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 <AnimatePresence>
                   {(libraryItems as any[]).map((item) => {
                     const isSelected = selectedIds.has(item.id);
                     const colors: string[] = Array.isArray(item.filamentColors) ? item.filamentColors : [];
                     const grams: number[] = Array.isArray(item.filamentGramsPerColor) ? item.filamentGramsPerColor : [];
-
                     return (
-                      <motion.div
-                        key={item.id}
-                        initial={{ opacity: 0, scale: 0.97 }}
-                        animate={{ opacity: 1, scale: 1 }}
+                      <motion.div key={item.id} initial={{ opacity: 0, scale: 0.97 }} animate={{ opacity: 1, scale: 1 }}
                         exit={{ opacity: 0, scale: 0.95 }}
                         onClick={() => selectMode && toggleSelect(item.id)}
-                        className={`
-                          group relative flex items-start gap-3 rounded-xl border p-4
-                          transition-all duration-200
+                        className={`group relative flex items-start gap-3 rounded-xl border p-4 transition-all duration-200
                           ${selectMode ? 'cursor-pointer' : ''}
-                          ${isSelected
-                            ? 'border-destructive/50 bg-destructive/10'
-                            : 'border-white/5 bg-card/50 hover:border-primary/20 hover:bg-card/80'
-                          }
-                        `}
-                      >
-                        {/* Checkbox / icon */}
+                          ${isSelected ? 'border-destructive/50 bg-destructive/10' : 'border-white/5 bg-card/50 hover:border-primary/20 hover:bg-card/80'}`}>
                         <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-                          {selectMode ? (
-                            isSelected
-                              ? <CheckSquare className="h-4 w-4 text-destructive" />
-                              : <Square className="h-4 w-4 text-muted-foreground/50" />
-                          ) : (
-                            <Library className="h-4 w-4 text-primary/70" />
-                          )}
+                          {selectMode
+                            ? isSelected ? <CheckSquare className="h-4 w-4 text-destructive" /> : <Square className="h-4 w-4 text-muted-foreground/50" />
+                            : <Library className="h-4 w-4 text-primary/70" />}
                         </div>
-
                         <div className="flex-1 min-w-0">
-                          <p className="font-medium text-sm text-foreground truncate" title={item.name}>
-                            {item.name || item.filename}
-                          </p>
-                          <p className="text-xs text-muted-foreground font-mono truncate" title={item.filename}>
-                            {item.filename}
-                          </p>
-
+                          <p className="font-medium text-sm text-foreground truncate" title={item.name}>{item.name || item.filename}</p>
+                          <p className="text-xs text-muted-foreground font-mono truncate" title={item.filename}>{item.filename}</p>
                           <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground/60">
                             {Array.isArray(item.objects) ? item.objects.length > 0 && (
-                              <span className="flex items-center gap-1">
-                                <Box className="h-3 w-3" />{item.objects.length} obj
-                              </span>
+                              <span className="flex items-center gap-1"><Box className="h-3 w-3" />{item.objects.length} obj</span>
                             ) : item.objects > 0 && (
-                              <span className="flex items-center gap-1">
-                                <Box className="h-3 w-3" />{item.objects} obj
-                              </span>
+                              <span className="flex items-center gap-1"><Box className="h-3 w-3" />{item.objects} obj</span>
                             )}
-                            {item.hrs && (
-                              <span className="flex items-center gap-1">
-                                <Clock className="h-3 w-3" />~{item.hrs}h
-                              </span>
-                            )}
-                            <span className="ml-auto">
-                              {new Date(item.uploadedAt).toLocaleDateString()}
-                            </span>
+                            {item.hrs && <span className="flex items-center gap-1"><Clock className="h-3 w-3" />~{item.hrs}h</span>}
+                            <span className="ml-auto">{new Date(item.uploadedAt).toLocaleDateString()}</span>
                           </div>
-
-                          {/* Color swatches */}
                           {colors.length > 0 && (
                             <div className="mt-2 flex items-center gap-1.5 flex-wrap">
                               {colors.map((color, i) => (
                                 <div key={i} className="flex items-center gap-1">
-                                  <div
-                                    className="h-3.5 w-3.5 rounded-full border border-white/20"
-                                    style={{ backgroundColor: color }}
-                                    title={color}
-                                  />
-                                  {grams[i] != null && (
-                                    <span className="text-[10px] font-mono text-muted-foreground/50">{grams[i]}g</span>
-                                  )}
+                                  <div className="h-3.5 w-3.5 rounded-full border border-white/20" style={{ backgroundColor: color }} title={color} />
+                                  {grams[i] != null && <span className="text-[10px] font-mono text-muted-foreground/50">{grams[i]}g</span>}
                                 </div>
                               ))}
                             </div>
                           )}
                         </div>
-
-                        {/* Single delete — hidden in select mode */}
                         {!selectMode && (
-                          <button
-                            onClick={(e) => { e.stopPropagation(); handleRemoveOne(item.id); }}
+                          <button onClick={(e) => { e.stopPropagation(); handleRemoveOne(item.id); }}
                             disabled={isRemoving}
                             className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded text-muted-foreground/40 hover:text-destructive"
-                            title="Remove from library"
-                          >
+                            title="Remove from library">
                             <Trash2 className="h-3.5 w-3.5" />
                           </button>
                         )}
@@ -385,11 +356,26 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* UPLOAD SECTION */}
+        {/* UPLOAD / SESSION SECTION */}
         <div className="bg-card/30 border border-white/5 rounded-3xl p-6 md:p-8 backdrop-blur-sm shadow-xl">
           <div className="max-w-4xl mx-auto">
+            {/* Section header with clear button */}
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="font-display text-base font-semibold tracking-wide text-foreground/80">3MF Files</h3>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Files persist between sessions — drop new ones to add them
+                </p>
+              </div>
+              {parsedFiles.length > 0 && (
+                <Button variant="ghost" size="sm" onClick={handleClearSession}
+                  className="gap-1.5 text-muted-foreground/60 hover:text-destructive text-xs">
+                  <X className="h-3.5 w-3.5" /> Clear all
+                </Button>
+              )}
+            </div>
             <DropZone onFilesAccepted={handleFilesAccepted} />
-            <PreviewList files={parsedFiles} onFileUpdated={handleFileUpdated} />
+            <PreviewList files={parsedFiles} onFileUpdated={handleFileUpdated} onRemoveCard={handleRemoveCard} />
           </div>
         </div>
 

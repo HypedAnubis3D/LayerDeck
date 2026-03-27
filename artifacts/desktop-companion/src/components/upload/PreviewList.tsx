@@ -1,16 +1,17 @@
 import { Parsed3MF } from '@/lib/3mf-parser';
 import { useAddToLibrary, useAddAllToLibrary } from '@/hooks/use-collections';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Box, FileBox, CheckCircle, Clock, Loader2, AlertCircle, Plus, Library, Layers } from 'lucide-react';
+import { Box, FileBox, CheckCircle, Clock, Loader2, AlertCircle, Plus, Library, Layers, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 
 interface PreviewListProps {
   files: Parsed3MF[];
   onFileUpdated: (fileId: string, updates: Partial<Parsed3MF>) => void;
+  onRemoveCard?: (fileId: string) => void;
 }
 
-export function PreviewList({ files, onFileUpdated }: PreviewListProps) {
+export function PreviewList({ files, onFileUpdated, onRemoveCard }: PreviewListProps) {
   const { mutate: addToLibrary, isPending: isAddingOne } = useAddToLibrary();
   const { mutate: addAll, isPending: isAddingAll } = useAddAllToLibrary();
   const { toast } = useToast();
@@ -92,10 +93,21 @@ export function PreviewList({ files, onFileUpdated }: PreviewListProps) {
                 ${file.status === 'parsing' ? 'bg-muted animate-pulse' : ''}
               `} />
 
+              {/* Dismiss card button */}
+              {onRemoveCard && file.status !== 'parsing' && (
+                <button
+                  onClick={() => onRemoveCard(file.id)}
+                  className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded text-muted-foreground/30 hover:text-muted-foreground/80"
+                  title="Remove from session"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
+
               <div className="pl-2 space-y-3">
                 {/* Header row */}
                 <div className="flex items-start justify-between gap-3">
-                  <div className="flex-1 min-w-0">
+                  <div className="flex-1 min-w-0 pr-6">
                     <div className="flex items-center gap-2 flex-wrap">
                       <h4 className="font-semibold text-foreground truncate" title={file.modelName}>
                         {file.modelName}
