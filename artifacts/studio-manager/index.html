@@ -3719,9 +3719,11 @@ async function parse3mfFile(file){
         // BambuStudio also uses enable_support boolean
         if(!supports){const se=cfg.enable_support||cfg.support_enable;if(se===true||se==='1'||se==='true'){supports=true;supportType=supportType||'enabled';}}
         nozzleDiam=(Array.isArray(cfg.nozzle_diameter)?cfg.nozzle_diameter[0]:cfg.nozzle_diameter)||'';
-        const amsStr=(Array.isArray(cfg.extruder_ams_count)?cfg.extruder_ams_count[0]:cfg.extruder_ams_count)||'';
-        const amsM=amsStr.match(/(\d+)#/);
-        if(amsM)amsUnits=parseInt(amsM[1]);
+        const amsRaw=(Array.isArray(cfg.extruder_ams_count)?cfg.extruder_ams_count[0]:cfg.extruder_ams_count)||cfg.ams_count||'';
+        const amsStr=String(amsRaw).trim();
+        // Formats: "1#0", "1", "4", plain integer — grab first number
+        const amsM=amsStr.match(/^(\d+)/);
+        if(amsM){const n=parseInt(amsM[1]);if(n>0)amsUnits=n;}
         profile=cfg.default_print_profile||'';
       }catch(ex){console.warn('3MF settings parse:',ex);}
     }
