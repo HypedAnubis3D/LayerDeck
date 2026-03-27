@@ -3,7 +3,7 @@ import JSZip from 'jszip';
 export interface Parsed3MF {
   id: string;
   filename: string;
-  file: File;
+  file?: File | null;
   modelName: string;
   objectsCount: number;
   objects: string[];
