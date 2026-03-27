@@ -6,3 +6,9 @@ id = "eboCne2VyQ2JqtS2tqQDW"
 uri = "file://README.md"
 type = "text"
 title = "LayerStack Platform — README"
+
+[[outputs]]
+id = "UUBiLzjB4IVcoiLR4A7gj"
+uri = "file://README.txt"
+type = "text"
+title = "LayerStack Platform — README"
