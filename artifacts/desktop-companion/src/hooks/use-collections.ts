@@ -290,13 +290,13 @@ export function useCompanionData() {
       (data || []).forEach(row => {
         try {
           const parsed = safeParse<any[]>(row.payload, []);
-          if (row.collection === 'printQueue') out.printQueue = parsed;
+          if (row.collection === 'queueItems') out.printQueue = parsed;
           else if (row.collection === 'spools') out.spools = parsed;
           else if (row.collection === 'catalog' || row.collection === 'catalogItems') {
             if (out.catalog.length === 0) out.catalog = parsed;
           }
           else if (row.collection === 'conventions') out.conventions = parsed;
-          else if (row.collection === 'printers') out.printers = parsed;
+          else if (row.collection === 'printerRecords') out.printers = parsed;
           else if (row.collection === 'orders') out.orders = parsed;
           else if (row.collection === 'wasteLog') out.wasteLog = parsed;
         } catch { /* skip bad rows */ }

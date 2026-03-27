@@ -7,7 +7,7 @@ import { useDashboardMetrics, useLibrary } from '@/hooks/use-collections';
 import { parse3MFFile, Parsed3MF } from '@/lib/3mf-parser';
 import {
   Database, PackageOpen, Printer, Disc, Calendar,
-  Library, LayoutDashboard, ListOrdered, Wrench, TrendingUp, Cpu, X,
+  Library, LayoutDashboard, ListOrdered, ShoppingCart, Cpu, X,
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
@@ -15,21 +15,19 @@ import { useToast } from '@/hooks/use-toast';
 import { LibraryTab } from '@/components/tabs/LibraryTab';
 import { QueueTab } from '@/components/tabs/QueueTab';
 import { EventsTab } from '@/components/tabs/EventsTab';
-import { WorkshopTab } from '@/components/tabs/WorkshopTab';
-import { SalesTab } from '@/components/tabs/SalesTab';
+import { OrdersTab } from '@/components/tabs/OrdersTab';
 import { PrintersTab } from '@/components/tabs/PrintersTab';
 
 const PARSED_STORAGE_KEY = 'layerstack_companion_parsed_files';
 
-type TabId = 'home' | 'library' | 'queue' | 'events' | 'workshop' | 'sales' | 'printers';
+type TabId = 'home' | 'library' | 'queue' | 'events' | 'orders' | 'printers';
 
 const TABS: { id: TabId; label: string; Icon: React.ComponentType<{ className?: string }> }[] = [
   { id: 'home',     label: 'Home',     Icon: LayoutDashboard },
   { id: 'library',  label: 'Library',  Icon: Library },
   { id: 'queue',    label: 'Queue',    Icon: ListOrdered },
   { id: 'events',   label: 'Events',   Icon: Calendar },
-  { id: 'workshop', label: 'Workshop', Icon: Wrench },
-  { id: 'sales',    label: 'Sales',    Icon: TrendingUp },
+  { id: 'orders',   label: 'Orders',   Icon: ShoppingCart },
   { id: 'printers', label: 'Printers', Icon: Cpu },
 ];
 
@@ -175,8 +173,7 @@ export default function Dashboard() {
         {tab === 'library'  && <LibraryTab />}
         {tab === 'queue'    && <QueueTab />}
         {tab === 'events'   && <EventsTab />}
-        {tab === 'workshop' && <WorkshopTab />}
-        {tab === 'sales'    && <SalesTab />}
+        {tab === 'orders'   && <OrdersTab />}
         {tab === 'printers' && <PrintersTab />}
       </main>
     </div>

@@ -2792,7 +2792,10 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
         <div style="font-size:8px;font-weight:bold;color:var(--txt-b);margin-bottom:8px">Record a Sale</div>
         <div class="field">
           <div class="fl">Product</div>
-          <select id="em-sale-item" style="font-size:8px" onchange="fillSalePrice()"></select>
+          <select id="em-sale-item" style="font-size:8px" onchange="fillSalePrice();toggleCustomSaleName(this)"></select>
+        </div>
+        <div id="em-custom-name-row" style="display:none">
+          <div class="field"><div class="fl">Item Name</div><input type="text" id="em-custom-name" placeholder="e.g. Anubis Figurine" style="font-size:9px"/></div>
         </div>
         <div class="fr2">
           <div class="field"><div class="fl">Qty</div><input type="number" id="em-sale-qty" value="1" min="1" style="font-size:9px"/></div>
@@ -11243,21 +11246,29 @@ function renderDaySales(){
     }).join('')
     :'<div style="text-align:center;color:var(--txt-d);font-size:8px;padding:20px">No sales recorded yet</div>';
 }
+function toggleCustomSaleName(sel){
+  const row=document.getElementById('em-custom-name-row');
+  if(row) row.style.display=(sel&&sel.value==='__custom')?'block':'none';
+  if(sel&&sel.value!=='__custom'){const inp=document.getElementById('em-custom-name');if(inp)inp.value='';}
+}
 function recordSale(){
   const c=getEvt();if(!c)return;
   const sel=document.getElementById('em-sale-item');
   const catalogItemId=sel?.value||'__custom';
+  const customNameEl=document.getElementById('em-custom-name');
+  const customName=(customNameEl?.value||'').trim();
   const itemName=catalogItemId==='__custom'
-    ?prompt('Item name:')||'Custom Item'
+    ?customName||'Custom Item'
     :(c.inPersonCatalog||[]).find(function(i){return i.catalogItemId===catalogItemId;})?.name||'Item';
+  if(catalogItemId==='__custom'&&!customName){toast('Enter an item name','','warning');customNameEl?.focus();return;}
   const qty=parseInt(document.getElementById('em-sale-qty')?.value||1)||1;
   const price=parseFloat(document.getElementById('em-sale-price')?.value||0)||0;
   if(!price){toast('Enter a price','','warning');return;}
   const sale={id:uid(),timestamp:Date.now(),itemName,catalogItemId,qty,price,method:evtSaleMethod};
   if(!c.daySales) c.daySales=[];
   c.daySales.push(sale);
-  // Reset qty input
   const qtyEl=document.getElementById('em-sale-qty');if(qtyEl)qtyEl.value=1;
+  if(customNameEl)customNameEl.value='';
   saveEvt();
   renderDaySales();
   toast('Sale Recorded',itemName+' × '+qty+' — $'+(price*qty).toFixed(2),'success');

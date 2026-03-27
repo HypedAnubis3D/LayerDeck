@@ -187,14 +187,13 @@ React + Vite companion app at `/companion/`. Full tabbed business dashboard + 3M
 
 - **Auth**: Supabase email/password (same account as Studio Manager). SUPABASE_URL + SUPABASE_ANON_KEY injected via Vite `define` in vite.config.ts (as `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY`).
 - **Data layer**: `useCompanionData()` hook in `use-collections.ts` fetches all 7 `ha3d_user_data` collections (printQueue, spools, catalog, conventions, printers, orders, wasteLog) in one Supabase query with 30s staleTime. Also: `useDashboardMetrics()` for stat tiles, `useLibrary()` / `usePullLibrary()` / `usePushLibrary()` for 3MF library CRUD.
-- **Tab navigation**: Sticky tab bar below navbar with 7 tabs — Home, Library, Queue, Events, Workshop, Sales, Printers.
+- **Tab navigation**: Sticky tab bar below navbar with 6 tabs — Home, Library, Queue, Events, Orders, Printers.
 - **Home tab**: 6 stat tiles (Library count, Catalog Items, Open Orders, Print Queue, Spool Stock, Conventions) + 3MF drag-and-drop upload zone + session file cards. Session files persist to localStorage. Library sync effect marks uploaded files as 'added' if already in library.
 - **Library tab** (`LibraryTab.tsx`): Full 3MF library with search (by name/filename), filter chips (by printer, by filament type), select-mode bulk delete, pull/push cloud sync.
-- **Queue tab** (`QueueTab.tsx`): Jobs grouped by status (Printing / Queued / Done / Failed / Cancelled) in colour-coded panels.
+- **Queue tab** (`QueueTab.tsx`): Jobs grouped by status (Printing / Queued / Done / Failed / Cancelled) in colour-coded panels. Reads `queueItems` collection.
 - **Events tab** (`EventsTab.tsx`): Next-event countdown hero card (days until, checklist progress bar, cost/target), then Upcoming / Potential / Past sections.
-- **Workshop tab** (`WorkshopTab.tsx`): Low-spool alerts (<250g remaining, with colour progress bar) + out-of-stock / low-stock catalog items (≤3 units).
-- **Sales tab** (`SalesTab.tsx`): Aggregates `daySales` from all conventions → total revenue, units sold, events-with-sales tiles; by-convention breakdown; top-10 products; recent 50 sales list.
-- **Printers tab** (`PrintersTab.tsx`): Nozzle wear cards with colour-coded progress bars (Good/Worn/Replace), + live Bambu Cloud status via `/api/bambu/status` API route (shows linked device count + per-device print status).
+- **Orders tab** (`OrdersTab.tsx`): Revenue summary tiles + full order list (customer, platform, status badge, items, total). Reads `orders` collection.
+- **Printers tab** (`PrintersTab.tsx`): Nozzle wear cards with colour-coded progress bars (Good/Worn/Replace), + live Bambu Cloud status via `/api/bambu/status` API route (shows linked device count + per-device print status). Reads `printerRecords` collection.
 - **Bambu API** (`artifacts/api-server/src/routes/bambu.ts`): `GET /api/bambu/status` authenticates to Bambu Cloud using BAMBU_EMAIL / BAMBU_PASSWORD env vars and returns `{connected, devices[]}`.
 - Stack: React, Vite, Tailwind, @supabase/supabase-js, @tanstack/react-query, framer-motion, lucide-react, jszip, react-dropzone
 
