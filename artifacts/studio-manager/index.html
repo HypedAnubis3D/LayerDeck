@@ -1779,14 +1779,9 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
 <!-- 3MF LIBRARY -->
 <div id="tab-tmf" style="display:none">
   <div class="ctrl">
-    <span style="font-size:8px;color:var(--txt-d);letter-spacing:1px">Upload .3mf files to build your library — select them when logging a print to auto-fill all fields</span>
+    <span style="font-size:8px;color:var(--txt-d);letter-spacing:1px">Sync 3MF files from the Desktop Companion — select them when logging a print to auto-fill all fields</span>
+    <button class="btn btn-ghost btn-sm" onclick="enterSelectMode('tmf')">☑ Select</button>
     <span class="cnt" id="tmf-cnt"></span>
-  </div>
-  <div class="tmf-upload-zone" id="tmf-drop-zone">
-    <input type="file" id="tmf-file-input" accept=".3mf" multiple onchange="handle3mfUpload(event)"/>
-    <div class="tmf-upload-icon">📦</div>
-    <div class="tmf-upload-text">Drop .3mf files here or click to upload</div>
-    <div class="tmf-upload-hint">Supports multiple files at once · Print time, layers, filament weights, and settings are extracted automatically</div>
   </div>
   <div class="tmf-grid" id="tmf-grid"></div>
 </div>
@@ -3873,8 +3868,10 @@ async function parse3mfFile(file){
 function renderTmf(){
   document.getElementById('tmf-cnt').textContent=tmfLib.length+' files';
   const g=document.getElementById('tmf-grid');
-  if(!tmfLib.length){g.innerHTML='<div class="empty">No 3MF files yet — upload above</div>';return;}
+  if(selectMode==='tmf')g.classList.add('multi-select-mode');
+  if(!tmfLib.length){g.innerHTML='<div class="empty">No 3MF files yet — sync from the Desktop Companion</div>';return;}
   g.innerHTML=[...tmfLib].reverse().map(t=>{
+    const isSel=selectedIds.includes(t.id);
     // Build all color swatches with per-color grams
     const colors=t.filamentColors&&t.filamentColors.length?t.filamentColors:(t.filamentColor?[t.filamentColor]:[]);
     const types=t.filamentTypes&&t.filamentTypes.length?t.filamentTypes:(t.filamentType?[t.filamentType]:[]);
@@ -3892,7 +3889,7 @@ function renderTmf(){
       '</div>';
     }).join('');
     const totalGrams=grams.length?grams.reduce((a,v)=>a+(v||0),0).toFixed(1):null;
-    return '<div class="tmf-card">'+
+    return '<div class="tmf-card'+(isSel?' selected':'')+'" data-selid="'+t.id+'" onclick="if(selectMode===\'tmf\'){event.stopPropagation();toggleSelect(\''+t.id+'\');}">'+
       '<div class="tmf-name">'+esc(t.name)+'</div>'+
       '<div class="tmf-sub">'+esc(t.filename)+' · '+new Date(t.uploadedAt).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})+'</div>'+
       // Printer badge + all filament swatches with grams
@@ -4022,7 +4019,7 @@ function applyTmf(t){
 function delTmf(id){
   const t=tmfLib.find(x=>x.id===id);
   showConfirm('Remove "'+( t?.name||'this 3MF')+'" from library?','',()=>{
-    tmfLib=tmfLib.filter(x=>x.id!==id);saveTmfs();render();
+    tmfLib=tmfLib.filter(x=>x.id!==id);saveTmfs();queueSync('tmfLib',tmfLib);render();
     toast('3MF Removed','','warning');
   });
 }
@@ -11791,6 +11788,7 @@ function enterSelectMode(mode){
   if(grid)grid.classList.add('multi-select-mode');
   if(mode==='queue')renderQueue();
   else if(mode==='spools')renderSpools();
+  else if(mode==='tmf')renderTmf();
   updateBulkBar();
 }
 function toggleSelect(id){
@@ -11838,6 +11836,7 @@ function bulkDelete(){
     else if(selectMode==='queue'){queueItems=queueItems.filter(q=>!selectedIds.includes(q.id));saveQueue();}
     else if(selectMode==='printers'){printerRecords=printerRecords.filter(p=>!selectedIds.includes(p.id));savePrinters();}
     else if(selectMode==='catalog'){catalogItems=catalogItems.filter(c=>!selectedIds.includes(c.id));saveCatalog();}
+    else if(selectMode==='tmf'){tmfLib=tmfLib.filter(t=>!selectedIds.includes(t.id));saveTmfs();queueSync('tmfLib',tmfLib);}
     clearSelection();render();
     toast(n+' item'+(n!==1?'s':'')+' deleted','','warning');
   });
