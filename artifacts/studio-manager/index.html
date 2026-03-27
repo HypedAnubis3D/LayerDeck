@@ -3694,6 +3694,7 @@ async function parse3mfFile(file){
     let filamentType='',filamentColor='',filamentBrand='';
     let nozzleTemp=null,bedTemp=null,layerHeight=null,supportType='',nozzleDiam='',bedType='';
     let amsUnits=0,hrs=null,layers=null,supports=false,profile='',objects=[],plates=[];
+    let supportGrams=0,purgeGrams=0;
 
     // ── project_settings.config (JSON) ──
     if(settingsRaw){
@@ -3713,8 +3714,10 @@ async function parse3mfFile(file){
         nozzleTemp=parseInt((Array.isArray(cfg.nozzle_temperature)?cfg.nozzle_temperature[0]:cfg.nozzle_temperature))||null;
         bedType=cfg.curr_bed_type||'';
         layerHeight=parseFloat(cfg.layer_height)||null;
-        supportType=cfg.support_type||'';
+        supportType=cfg.support_type||cfg.support_style||'';
         supports=!!(supportType&&supportType!=='none'&&supportType!=='');
+        // BambuStudio also uses enable_support boolean
+        if(!supports){const se=cfg.enable_support||cfg.support_enable;if(se===true||se==='1'||se==='true'){supports=true;supportType=supportType||'enabled';}}
         nozzleDiam=(Array.isArray(cfg.nozzle_diameter)?cfg.nozzle_diameter[0]:cfg.nozzle_diameter)||'';
         const amsStr=(Array.isArray(cfg.extruder_ams_count)?cfg.extruder_ams_count[0]:cfg.extruder_ams_count)||'';
         const amsM=amsStr.match(/(\d+)#/);
@@ -3747,13 +3750,22 @@ async function parse3mfFile(file){
           const predEl=siDoc.querySelector('metadata[key="prediction"]');
           if(predEl){const sec=parseInt(predEl.getAttribute('value'));if(sec>0)hrs=sec/3600;}
         }
-        // Per-color weights: <filament id="0" used_g="42.50" .../>
+        // Per-color weights + support/purge detection: <filament id="0" used_g="42.50" type="Normal filament"/>
         const filEls=[...siDoc.querySelectorAll('filament')];
         if(filEls.length&&!filamentGramsPerColor.length){
-          filamentGramsPerColor=filEls
-            .map(f=>parseFloat(f.getAttribute('used_g')||f.getAttribute('weight')||'0'))
-            .filter(v=>v>0)
-            .map(v=>parseFloat(v.toFixed(2)));
+          let supG=0,purgeG=0;
+          filEls.forEach(f=>{
+            const g=parseFloat(f.getAttribute('used_g')||f.getAttribute('weight')||'0');
+            const ft=(f.getAttribute('type')||'').toLowerCase();
+            if(ft.includes('support')||ft.includes('interface')){
+              if(g>0){supG+=g;supports=true;supportType=supportType||'auto-detected';}
+            } else if(ft.includes('flush')){
+              if(g>0)purgeG+=g;
+            }
+            if(g>0)filamentGramsPerColor.push(parseFloat(g.toFixed(2)));
+          });
+          if(supG>0)supportGrams=parseFloat(supG.toFixed(2));
+          if(purgeG>0)purgeGrams=parseFloat(purgeG.toFixed(2));
         }
       }catch(ex){console.warn('slice_info parse fail:',ex,sliceRaw?sliceRaw.slice(0,300):'(empty)');}
     }
@@ -3818,6 +3830,7 @@ async function parse3mfFile(file){
         supportType,supports,amsUnits,objects,plates,
         hrs:hrs?parseFloat(hrs.toFixed(2)):null,
         layers,profile,filamentGrams:[],
+        supportGrams,purgeGrams,
         hasGcode:!!hrs,
         uploadedAt:Date.now()
       });
@@ -3872,7 +3885,7 @@ function renderTmf(){
         '<div class="tmf-mc"><div class="tmf-ml">Print Time</div><div class="tmf-mv">'+(t.hrs!=null?formatHms(t.hrs):'—')+(t.hrs?'':' <span style="font-size:5px;color:var(--amb)">need sliced</span>')+'</div></div>'+
         '<div class="tmf-mc"><div class="tmf-ml">Layer Height</div><div class="tmf-mv">'+(t.layerHeight?t.layerHeight+'mm':'—')+'</div></div>'+
         '<div class="tmf-mc"><div class="tmf-ml">Nozzle</div><div class="tmf-mv">'+(t.nozzleDiam?t.nozzleDiam+'mm':'—')+'</div></div>'+
-        '<div class="tmf-mc"><div class="tmf-ml">Supports</div><div class="tmf-mv" style="font-size:8px">'+(t.supports?'✓ '+esc(t.supportType||'Yes'):'None')+'</div></div>'+
+        '<div class="tmf-mc"><div class="tmf-ml">Supports</div><div class="tmf-mv" style="font-size:8px">'+(t.supports?'✓ '+(t.supportGrams>0?t.supportGrams.toFixed(1)+'g':esc(t.supportType||'Yes')):'None')+'</div></div>'+
         '<div class="tmf-mc"><div class="tmf-ml">AMS Units</div><div class="tmf-mv">'+(t.amsUnits||'—')+'</div></div>'+
         '<div class="tmf-mc"><div class="tmf-ml">Bed Type</div><div class="tmf-mv" style="font-size:6px">'+(t.bedType||'—')+'</div></div>'+
       '</div>'+
@@ -7318,12 +7331,20 @@ function savePrint(){
     const settings=getPrintSettingsFromForm();
     printSettingsMap[name]=settings;
     savePrintSettings();
-    // Auto-log support/interface filament waste from 3MF
-    if(selectedTmf&&selectedTmf.supportGrams>0){
+    // Auto-log support/interface and purge filament waste from 3MF
+    if(selectedTmf){
       const wSpool=filaments.length?spools.find(s=>s.id===filaments[0].spoolId):null;
-      wasteLog.push({id:uid(),spoolId:wSpool?wSpool.id:'',spoolName:wSpool?wSpool.name:'Unknown',type:'Support',amount:parseFloat((selectedTmf.supportGrams*qty).toFixed(2)),notes:'Auto-logged from 3MF: '+esc(selectedTmf.name),timestamp:Date.now()});
-      saveWasteLog();
-      toast('Support Waste Logged',selectedTmf.supportGrams.toFixed(1)+'g/unit support material recorded in Waste Tracker','info',3000);
+      const wNotes='Auto-logged from 3MF: '+esc(selectedTmf.name);
+      let wasteAdded=[];
+      if(selectedTmf.supportGrams>0){
+        wasteLog.push({id:uid(),spoolId:wSpool?wSpool.id:'',spoolName:wSpool?wSpool.name:'Unknown',type:'Support',amount:parseFloat((selectedTmf.supportGrams*qty).toFixed(2)),notes:wNotes,timestamp:Date.now()});
+        wasteAdded.push(selectedTmf.supportGrams.toFixed(1)+'g support');
+      }
+      if(selectedTmf.purgeGrams>0){
+        wasteLog.push({id:uid(),spoolId:wSpool?wSpool.id:'',spoolName:wSpool?wSpool.name:'Unknown',type:'Purge',amount:parseFloat((selectedTmf.purgeGrams*qty).toFixed(2)),notes:wNotes,timestamp:Date.now()});
+        wasteAdded.push(selectedTmf.purgeGrams.toFixed(1)+'g purge');
+      }
+      if(wasteAdded.length){saveWasteLog();toast('Waste Auto-Logged',wasteAdded.join(' · ')+' recorded in Waste Tracker','info',3000);}
     }
     // ── MANUALLY LOGGED PRINTS go straight to "In Progress" in Queue ──
     queueItems.push({
