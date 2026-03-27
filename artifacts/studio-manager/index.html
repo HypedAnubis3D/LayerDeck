@@ -1706,10 +1706,12 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">
       <select class="flt" id="sp-m" onchange="render()">
         <option value="">All Materials</option>
-        <option>PLA Basic</option><option>PLA Matte</option><option>PLA Silk</option>
-        <option>PLA+</option><option>PLA-CF</option><option>PETG Basic</option>
-        <option>PETG-CF</option><option>ABS</option><option>ASA</option>
-        <option>TPU 95A</option><option>PA</option><option>PC</option><option>Support</option>
+        <option>PLA Basic</option><option>PLA Matte</option><option>PLA Silk</option><option>PLA+</option><option>PLA Glow</option><option>PLA Metal</option><option>PLA Marble</option><option>PLA Translucent</option><option>PLA High Speed</option><option>PLA Aero</option><option>PLA-CF</option><option>PLA-GF</option>
+        <option>PETG Basic</option><option>PETG HF</option><option>PETG Translucent</option><option>PETG-CF</option>
+        <option>ABS</option><option>ABS-CF</option><option>ABS-GF</option><option>ASA</option><option>ASA-CF</option><option>ASA Aero</option>
+        <option>PA</option><option>PA-CF</option><option>PA-GF</option><option>PC</option><option>PC-CF</option><option>PPS</option><option>PPS-CF</option>
+        <option>TPU 95A</option><option>TPU 85A</option>
+        <option>Support W</option><option>Support G</option><option>HIPS</option><option>BVOH</option><option>PVA</option>
       </select>
       <select class="flt" id="sp-p" onchange="render()">
         <option value="">All Printers</option>
@@ -2287,8 +2289,12 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
     <input class="srch" id="fildb-s" placeholder="Search filaments… brand, color, material" oninput="renderFildb()"/>
     <select class="flt" id="fildb-mat" onchange="renderFildb()">
       <option value="">All Materials</option>
-      <option>PLA Basic</option><option>PLA Matte</option><option>PLA Silk</option><option>PLA+</option>
-      <option>PLA-CF</option><option>PETG Basic</option><option>PETG-CF</option><option>ABS</option><option>ASA</option><option>TPU 95A</option>
+      <option>PLA Basic</option><option>PLA Matte</option><option>PLA Silk</option><option>PLA+</option><option>PLA Glow</option><option>PLA Metal</option><option>PLA Marble</option><option>PLA Translucent</option><option>PLA High Speed</option><option>PLA Aero</option><option>PLA-CF</option><option>PLA-GF</option>
+      <option>PETG Basic</option><option>PETG HF</option><option>PETG Translucent</option><option>PETG-CF</option>
+      <option>ABS</option><option>ABS-CF</option><option>ABS-GF</option><option>ASA</option><option>ASA-CF</option><option>ASA Aero</option>
+      <option>PA</option><option>PA-CF</option><option>PA-GF</option><option>PC</option><option>PC-CF</option><option>PPS</option><option>PPS-CF</option>
+      <option>TPU 95A</option><option>TPU 85A</option>
+      <option>Support W</option><option>Support G</option><option>HIPS</option><option>BVOH</option><option>PVA</option>
     </select>
     <span class="cnt" id="fildb-cnt"></span>
   </div>
@@ -2495,7 +2501,14 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
   <div class="fr2">
     <div class="field"><div class="fl">Name / Color</div><input type="text" id="ep3-name" placeholder="Bambu Matte Black PLA"/></div>
     <div class="field"><div class="fl">Material</div>
-      <select id="ep3-mat"><option>PLA Basic</option><option>PLA Matte</option><option>PLA Silk</option><option>PLA+</option><option>PLA-CF</option><option>PETG Basic</option><option>PETG-CF</option><option>ABS</option><option>ASA</option><option>TPU 95A</option><option>Other</option></select>
+      <select id="ep3-mat">
+        <optgroup label="── PLA Family ──"><option>PLA Basic</option><option>PLA Matte</option><option>PLA Silk</option><option>PLA+</option><option>PLA Glow</option><option>PLA Metal</option><option>PLA Marble</option><option>PLA Translucent</option><option>PLA High Speed</option><option>PLA Aero</option><option>PLA-CF</option><option>PLA-GF</option></optgroup>
+        <optgroup label="── PETG Family ──"><option>PETG Basic</option><option>PETG HF</option><option>PETG Translucent</option><option>PETG-CF</option></optgroup>
+        <optgroup label="── ABS / ASA ──"><option>ABS</option><option>ABS-CF</option><option>ABS-GF</option><option>ASA</option><option>ASA-CF</option><option>ASA Aero</option></optgroup>
+        <optgroup label="── Engineering ──"><option>PA</option><option>PA-CF</option><option>PA-GF</option><option>PC</option><option>PC-CF</option><option>PPS</option><option>PPS-CF</option></optgroup>
+        <optgroup label="── Flexible ──"><option>TPU 95A</option><option>TPU 85A</option></optgroup>
+        <optgroup label="── Support / Other ──"><option>Support W</option><option>Support G</option><option>HIPS</option><option>BVOH</option><option>PVA</option></optgroup>
+      </select>
     </div>
   </div>
   <div class="sdiv">Purchase Details</div>
@@ -2842,7 +2855,14 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
   </div>
   <div class="fr2">
     <div class="field"><div class="fl">Material</div>
-      <select id="es-mat"><option>PLA Basic</option><option>PLA Matte</option><option>PLA Silk</option><option>PLA+</option><option>PLA-CF</option><option>PETG Basic</option><option>PETG-CF</option><option>ABS</option><option>ASA</option><option>TPU 95A</option><option>PA</option><option>PC</option><option>Support</option></select>
+      <select id="es-mat">
+        <optgroup label="── PLA Family ──"><option>PLA Basic</option><option>PLA Matte</option><option>PLA Silk</option><option>PLA+</option><option>PLA Glow</option><option>PLA Metal</option><option>PLA Marble</option><option>PLA Translucent</option><option>PLA High Speed</option><option>PLA Aero</option><option>PLA-CF</option><option>PLA-GF</option></optgroup>
+        <optgroup label="── PETG Family ──"><option>PETG Basic</option><option>PETG HF</option><option>PETG Translucent</option><option>PETG-CF</option></optgroup>
+        <optgroup label="── ABS / ASA ──"><option>ABS</option><option>ABS-CF</option><option>ABS-GF</option><option>ASA</option><option>ASA-CF</option><option>ASA Aero</option></optgroup>
+        <optgroup label="── Engineering ──"><option>PA</option><option>PA-CF</option><option>PA-GF</option><option>PC</option><option>PC-CF</option><option>PPS</option><option>PPS-CF</option></optgroup>
+        <optgroup label="── Flexible ──"><option>TPU 95A</option><option>TPU 85A</option></optgroup>
+        <optgroup label="── Support / Other ──"><option>Support W</option><option>Support G</option><option>HIPS</option><option>BVOH</option><option>PVA</option></optgroup>
+      </select>
     </div>
     <div class="field"><div class="fl">Printer</div>
       <select id="es-printer" onchange="updateSpoolAmsSlots()"><option value="">Unloaded</option></select>
@@ -3417,7 +3437,10 @@ const KEYS={spools:'ha3d_fil_v2',hist:'ha3d_hist_v2',prints:'ha3d_prints_v1',
   shopify:'ha3d_shopify_v1',inv:'hypedanubis_v2',inperson:'ha3d_inperson_v1',
   dashHidden:'ha3d_dash_hidden_v1',barcodeDb:'ha3d_barcode_db_v1',notifIds:'ha3d_notif_ids_v1'};
 
-const MAT_C={'PLA Basic':'#3a80e0','PLA Matte':'#8858c0','PLA Silk':'#c09828','PLA+':'#28a858','PLA-CF':'#786860','PETG Basic':'#22aacc','PETG-CF':'#1a5050','ABS':'#c04828','ASA':'#a07828','TPU 95A':'#9050b0','PA':'#507080','PC':'#3a6090','Support':'#404850'};
+const MAT_C={'PLA Basic':'#3a80e0','PLA Matte':'#8858c0','PLA Silk':'#c09828','PLA+':'#28a858','PLA Glow':'#88ee44','PLA Metal':'#b0b0c0','PLA Marble':'#d0ccc8','PLA Translucent':'#80e0f8','PLA High Speed':'#f08040','PLA Aero':'#60b0d8','PLA-CF':'#786860','PLA-GF':'#606870','PETG Basic':'#22aacc','PETG HF':'#20d0c0','PETG Translucent':'#80d8e0','PETG-CF':'#1a5050','ABS':'#c04828','ABS-CF':'#484040','ABS-GF':'#584840','ASA':'#a07828','ASA-CF':'#487048','ASA Aero':'#80c088','PA':'#507080','PA-CF':'#383838','PA-GF':'#485058','PC':'#3a6090','PC-CF':'#304050','PPS':'#504858','PPS-CF':'#282828','TPU 95A':'#9050b0','TPU 85A':'#c080d8','Support W':'#a0c8e0','Support G':'#888888','Support':'#404850','HIPS':'#d8c898','BVOH':'#90d090','PVA':'#e8e090'};
+// Nozzle wear multiplier per material (1.0 = baseline brass nozzle wear)
+const WEAR_FACTOR={'PLA-CF':3.0,'PA-CF':3.0,'PA-GF':3.0,'PC-CF':3.0,'PPS-CF':3.0,'PETG-CF':2.5,'ABS-CF':2.5,'ABS-GF':2.5,'ASA-CF':2.5,'PLA-GF':2.5,'PLA Glow':1.5,'PLA Metal':1.5,'PLA Marble':1.3,'PC':1.2,'PA':1.2,'PPS':1.2,'PC-CF':3.0};
+function matWear(m){return WEAR_FACTOR[m]||1.0;}
 
 let spools=[],usageHist=[],prints=[],tmfLib=[],queueItems=[],orders=[],sales=[],maintLog=[],inPersonInventory=[];
 let dashHidden=[];
@@ -8220,7 +8243,10 @@ function renderObStep(){
     <div class="field"><div class="fl">Spool Name / Color</div><input type="text" id="ob-spool-name" placeholder="Bambu Matte Black" style="width:100%;background:var(--bg);border:1px solid var(--bdr2);color:var(--txt);padding:7px 9px;font-family:'Share Tech Mono',monospace;font-size:9px;border-radius:3px;"/></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
       <div class="field"><div class="fl">Material</div><select id="ob-spool-mat" style="width:100%;background:var(--bg);border:1px solid var(--bdr2);color:var(--txt);padding:7px 9px;font-family:'Share Tech Mono',monospace;font-size:9px;border-radius:3px;">
-        <option>PLA Basic</option><option>PLA Matte</option><option>PLA Silk</option><option>PLA+</option><option>PETG Basic</option><option>ABS</option>
+        <option>PLA Basic</option><option>PLA Matte</option><option>PLA Silk</option><option>PLA+</option><option>PLA Glow</option><option>PLA Metal</option><option>PLA Marble</option><option>PLA Translucent</option><option>PLA High Speed</option><option>PLA Aero</option><option>PLA-CF</option><option>PLA-GF</option>
+        <option>PETG Basic</option><option>PETG HF</option><option>PETG Translucent</option><option>PETG-CF</option>
+        <option>ABS</option><option>ABS-CF</option><option>ABS-GF</option><option>ASA</option><option>ASA-CF</option><option>PA</option><option>PA-CF</option><option>PC</option><option>TPU 95A</option><option>TPU 85A</option>
+        <option>Support W</option><option>Support G</option><option>HIPS</option>
       </select></div>
       <div class="field"><div class="fl">Cost/Spool ($)</div><input type="number" id="ob-spool-cost" value="13.99" step="0.01" style="width:100%;background:var(--bg);border:1px solid var(--bdr2);color:var(--txt);padding:7px 9px;font-family:'Share Tech Mono',monospace;font-size:9px;border-radius:3px;"/></div>
     </div>`;
@@ -10005,9 +10031,10 @@ function calcNozzleHours(printerName){
     .filter(p=>p.printer===printerName&&p.timestamp>since)
     .reduce((a,p)=>{
       const hrs=p.hrs||0;
-      // CF/GF counts double
-      const isAbrasive=(p.filaments||[]).some(f=>{const sp=spools.find(s=>s.id===f.spoolId);return sp&&(sp.material.includes('CF')||sp.material.includes('GF'));});
-      return a+hrs*(isAbrasive?2:1);
+      // Use highest wear factor among filaments used in this print
+      const filMats=(p.filaments||[]).map(f=>{const sp=spools.find(s=>s.id===f.spoolId);return sp?sp.material:'';});
+      const wf=filMats.reduce((mx,m)=>Math.max(mx,matWear(m)),1.0);
+      return a+hrs*wf;
     },0);
 }
 function renderNozzle(){
