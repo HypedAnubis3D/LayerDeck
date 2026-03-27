@@ -1,27 +1,25 @@
 import { useCompanionData } from '@/hooks/use-collections';
-import { Printer, RefreshCw, Clock, AlertCircle, CheckCircle, ListOrdered } from 'lucide-react';
+import { Printer, RefreshCw, Clock, AlertCircle, CheckCircle, ListOrdered, XCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; border: string; Icon: React.ComponentType<{ className?: string }> }> = {
-  printing: { label: 'Printing', color: 'text-emerald-400', bg: 'bg-emerald-400/10', border: 'border-emerald-400/20', Icon: Printer },
-  queued:   { label: 'Queued',   color: 'text-primary',     bg: 'bg-primary/10',       border: 'border-primary/20',     Icon: Clock },
-  done:     { label: 'Done',     color: 'text-muted-foreground', bg: 'bg-muted/20',    border: 'border-white/5',        Icon: CheckCircle },
-  failed:   { label: 'Failed',   color: 'text-destructive', bg: 'bg-destructive/10',   border: 'border-destructive/20', Icon: AlertCircle },
-  cancelled:{ label: 'Cancelled',color: 'text-muted-foreground/50', bg: 'bg-muted/10', border: 'border-white/5',        Icon: AlertCircle },
+  inprogress: { label: 'Printing',  color: 'text-emerald-400', bg: 'bg-emerald-400/10', border: 'border-emerald-400/20', Icon: Printer },
+  queued:     { label: 'Queued',    color: 'text-primary',     bg: 'bg-primary/10',      border: 'border-primary/20',    Icon: Clock },
+  done:       { label: 'Done',      color: 'text-muted-foreground', bg: 'bg-muted/20',   border: 'border-white/5',       Icon: CheckCircle },
 };
 
-const STATUS_ORDER = ['printing', 'queued', 'done', 'failed', 'cancelled'];
+const STATUS_ORDER = ['inprogress', 'queued', 'done'];
 
 export function QueueTab() {
   const { data, isLoading, refetch, isFetching } = useCompanionData();
   const queue = data?.printQueue ?? [];
 
   const grouped = STATUS_ORDER.reduce<Record<string, any[]>>((acc, s) => {
-    acc[s] = queue.filter((j: any) => j.status === s);
+    acc[s] = queue.filter((j: any) => (j.stage ?? 'queued') === s);
     return acc;
   }, {});
 
-  const activeCount = (grouped.printing?.length ?? 0) + (grouped.queued?.length ?? 0);
+  const activeCount = (grouped.inprogress?.length ?? 0) + (grouped.queued?.length ?? 0);
 
   return (
     <div className="space-y-4">
@@ -71,22 +69,35 @@ export function QueueTab() {
                   </span>
                 </div>
                 <div className="divide-y divide-white/5">
-                  {jobs.map((job: any) => (
-                    <div key={job.id} className="px-4 py-3 flex items-center gap-3">
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-foreground truncate">{job.name || 'Unnamed job'}</p>
-                        <div className="flex items-center gap-3 mt-0.5 text-xs text-muted-foreground/60">
-                          {job.printer && <span className="flex items-center gap-1"><Printer className="h-3 w-3" />{job.printer}</span>}
-                          {job.notes && <span className="truncate max-w-[120px]">{job.notes}</span>}
+                  {jobs.map((job: any) => {
+                    const succeeded = job.stage === 'done' && job.outcome === 'done';
+                    const failed    = job.stage === 'done' && job.outcome === 'failed';
+                    return (
+                      <div key={job.id} className="px-4 py-3 flex items-center gap-3">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-foreground truncate">{job.name || 'Unnamed job'}</p>
+                          <div className="flex items-center gap-3 mt-0.5 text-xs text-muted-foreground/60">
+                            {job.printer && <span className="flex items-center gap-1"><Printer className="h-3 w-3" />{job.printer}</span>}
+                            {job.hrs > 0 && <span>{job.hrs}h</span>}
+                            {job.orderId && <span className="truncate max-w-[100px]">{job.orderId}</span>}
+                          </div>
+                          {(succeeded || failed) && (
+                            <div className={`flex items-center gap-1 mt-1 text-xs font-semibold ${failed ? 'text-destructive' : 'text-emerald-400'}`}>
+                              {failed
+                                ? <><XCircle className="h-3 w-3" /> Failed</>
+                                : <><CheckCircle className="h-3 w-3" /> Succeeded</>
+                              }
+                            </div>
+                          )}
                         </div>
+                        {job.qty > 1 && (
+                          <span className="shrink-0 rounded-full bg-white/5 px-2 py-0.5 text-xs font-mono text-muted-foreground">
+                            ×{job.qty}
+                          </span>
+                        )}
                       </div>
-                      {job.qty > 1 && (
-                        <span className="shrink-0 rounded-full bg-white/5 px-2 py-0.5 text-xs font-mono text-muted-foreground">
-                          ×{job.qty}
-                        </span>
-                      )}
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             );

@@ -4056,6 +4056,7 @@ function renderQueue(){
         <div class="kcard-name">${esc(q.name)}${q.qty>1?' ×'+q.qty:''}</div>
         <div class="kcard-meta">${esc(q.printer||'?')} · ${q.hrs||'?'}h${q.orderId?' · '+esc(q.orderId):''}</div>
         ${q.notes?`<div style="font-size:6px;color:var(--txt-d);margin-top:3px">${esc(q.notes)}</div>`:''}
+        ${q.stage==='done'&&q.outcome?`<div style="font-size:6px;font-weight:bold;letter-spacing:1px;margin-top:4px;color:${q.outcome==='failed'?'var(--red)':'var(--grn)'}">${q.outcome==='failed'?'✕ FAILED':'✓ SUCCEEDED'}</div>`:''}
         <div class="kcard-actions">
           ${prevStage?`<button class="k-move-btn" onclick="event.stopPropagation();moveQueue('${q.id}','${prevStage}')">← Back</button>`:''}
           ${nextStage?`<button class="k-move-btn" style="color:${st.key==='queued'?'var(--cyn)':'var(--grn)'};border-color:${st.key==='queued'?'var(--cyn-d)':'var(--grn-d)'}" onclick="event.stopPropagation();moveQueue('${q.id}','${nextStage}')">${st.key==='queued'?'Start →':'✓ Done'}</button>`:''}
@@ -4999,7 +5000,7 @@ function confirmFinish(){
   if(finishedPrint){
     const qi=queueItems.find(q=>q.printId===id||(q.name===finishedPrint.name&&(q.stage==='inprogress'||q.stage==='queued')));
     if(qi){
-      queueItems=queueItems.map(q=>q.id===qi.id?{...q,stage:'done',finishedAt}:q);
+      queueItems=queueItems.map(q=>q.id===qi.id?{...q,stage:'done',finishedAt,outcome:finOutcome}:q);
       saveQueue();
       fetch('/api/push/watch-print/'+qi.id,{method:'DELETE'}).catch(()=>{});
     }
