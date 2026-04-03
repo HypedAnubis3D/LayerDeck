@@ -3674,6 +3674,28 @@ function render(){
 function pct(s){return s.total?Math.round(s.remaining/s.total*100):0;}
 function fmtDried(d){if(!d)return'';const dt=new Date(d+'T12:00:00');const now=new Date();const sameYear=dt.getFullYear()===now.getFullYear();return dt.toLocaleDateString('en-US',{month:'short',day:'numeric',...(sameYear?{}:{year:'2-digit'})});}
 function barcol(p){return p>=50?'#28b858':p>=25?'#c09828':p>=10?'#e07020':'#e03535';}
+// Find the closest spool in the library by RGB distance. Returns null when nothing is close enough.
+// threshold=35 allows ~±35/255 per channel — tight enough to avoid wrong matches, loose enough to
+// survive minor hex-entry differences between what Bambu stores and what the user typed.
+function closestSpoolByHex(hexStr,threshold){
+  if(!hexStr)return null;
+  var h=(hexStr.replace(/^#/,'')).toLowerCase().slice(0,6);
+  if(h.length<6)return null;
+  var r1=parseInt(h.slice(0,2),16),g1=parseInt(h.slice(2,4),16),b1=parseInt(h.slice(4,6),16);
+  if(isNaN(r1)||isNaN(g1)||isNaN(b1))return null;
+  var best=null,bestD=Infinity;
+  var thr=threshold!=null?threshold:35;
+  spools.forEach(function(s){
+    if(!s.color)return;
+    var sh=s.color.replace(/^#/,'').toLowerCase().slice(0,6);
+    if(sh.length<6)return;
+    var r2=parseInt(sh.slice(0,2),16),g2=parseInt(sh.slice(2,4),16),b2=parseInt(sh.slice(4,6),16);
+    if(isNaN(r2)||isNaN(g2)||isNaN(b2))return;
+    var d=Math.sqrt((r2-r1)*(r2-r1)+(g2-g1)*(g2-g1)+(b2-b1)*(b2-b1));
+    if(d<bestD){bestD=d;best=s;}
+  });
+  return bestD<=thr?best:null;
+}
 
 function renderStatBar(){
   const tg=spools.reduce((a,s)=>a+(s.remaining||0),0);
@@ -4098,9 +4120,8 @@ function renderTmf(){
       const type=types[i]||'';
       const g=grams[i];
       if(g===0)return ''; // skip unused slots (0g = not used on this plate/print)
-      // Try to match hex color against spool library for real color name
-      const normHex=c.replace(/^#/,'').toLowerCase().slice(0,6);
-      const matchSp=normHex?spools.find(function(s){return s.color&&s.color.replace(/^#/,'').toLowerCase().slice(0,6)===normHex;}):null;
+      // Try to match hex color against spool library (fuzzy RGB distance)
+      const matchSp=closestSpoolByHex(c);
       const colorName=matchSp?matchSp.name:'';
       const mainLabel=colorName||type;
       const subLabel=colorName&&type?type:'';
@@ -9364,17 +9385,21 @@ function renderAmsMap(printerName,compact=false){
         const bc=disp?barcol(p):'var(--txt-d)';
         const col=disp?disp.color:'transparent';
         const isActive=fromPi&&disp&&disp.isActive;
-        // Build display name + sub-label (material type) for the slot
-        let slotMain='',slotSub='';
-        if(disp){
-          if(fromPi){
-            const _ph=(piTray.tray_color||'').replace(/^#/,'').toLowerCase().slice(0,6);
-            const _pm=_ph&&_ph!=='00000000'?spools.find(function(s){return s.color&&s.color.replace(/^#/,'').toLowerCase().slice(0,6)===_ph;}):null;
-            if(_pm){slotMain=_pm.name;slotSub=piTray.tray_sub_brands||piTray.tray_type||'';}
-            else{slotMain=piTray.tray_sub_brands||piTray.tray_type||'?';}
-          }else{slotMain=sp.name||'?';slotSub=sp.material||'';}
-        }
+        // Compute mapping key early so we can check amsSlotMappings for a stored color
         const mappingKey=_amsSlotKey(printerName,unitIdx,trayIdx);
+        const mappedEntry=amsSlotMappings[mappingKey];
+        const mappedObj=mappedEntry&&typeof mappedEntry==='object'?mappedEntry:null;
+        // Build display name + sub-label using fuzzy spool library color match
+        let slotMain='',slotSub='';
+        if(sp){
+          slotMain=sp.name||'?';slotSub=sp.material||'';
+        }else if(disp){
+          const lookupHex=mappedObj&&mappedObj.color?mappedObj.color:(piTray?piTray.tray_color:'');
+          const matchSp=closestSpoolByHex(lookupHex);
+          const typeLabel=mappedObj?mappedObj.material:(piTray?piTray.tray_sub_brands||piTray.tray_type||'?':'');
+          if(matchSp){slotMain=matchSp.name;slotSub=typeLabel;}
+          else{slotMain=typeLabel||'?';}
+        }
         const isLayerDeckSet=!!(amsSlotMappings[mappingKey]);
         // Action buttons (only shown when Pi is connected)
         const btns=hasPi?('<div class="ams-slot-btns" onclick="event.stopPropagation()">'+
@@ -9455,13 +9480,12 @@ function renderAmsMapDash(printerName){
     var col=sp?sp.color:piTray?('#'+(piTray.tray_color||'888888').slice(0,6)):'var(--bdr2)';
     var p=sp?pct(sp):piTray?(piTray.remain||0):0;
     var bc=p>0?barcol(p):'var(--txt-d)';
-    // Resolve display name: full spool name for assigned spools; try color-match for Pi trays
+    // Resolve display name: full spool name for assigned spools; fuzzy color-match for Pi trays
     var dashMain,dashSub='';
     if(sp){dashMain=sp.name;dashSub=sp.material||'';}
     else if(piTray){
-      var _dh=(piTray.tray_color||'').replace(/^#/,'').toLowerCase().slice(0,6);
-      var _dm=_dh&&_dh!=='00000000'?spools.find(function(s){return s.color&&s.color.replace(/^#/,'').toLowerCase().slice(0,6)===_dh;}):null;
-      if(_dm){dashMain=_dm.name;dashSub=piTray.tray_sub_brands||piTray.tray_type||'';}
+      var _dashMatch=closestSpoolByHex(piTray.tray_color);
+      if(_dashMatch){dashMain=_dashMatch.name;dashSub=piTray.tray_sub_brands||piTray.tray_type||'';}
       else{dashMain=piTray.tray_sub_brands||piTray.tray_type||'?';}
     }else{dashMain='—';}
     var filled=sp||piTray;
