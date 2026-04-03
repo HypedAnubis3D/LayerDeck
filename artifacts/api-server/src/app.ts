@@ -30,9 +30,13 @@ app.use(
 );
 app.use(cors());
 
-// Raw body capture for Shopify webhook HMAC verification
+// Raw body capture for webhook HMAC verification (Shopify + Square)
 app.use(
   "/api/shopify/webhooks",
+  express.raw({ type: "application/json" })
+);
+app.use(
+  "/api/square/webhook",
   express.raw({ type: "application/json" })
 );
 

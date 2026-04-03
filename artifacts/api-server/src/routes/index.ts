@@ -7,6 +7,7 @@ import bambuRouter from "./bambu";
 import pihubRouter from "./pihub";
 import cameraRouter from "./camera";
 import discordRouter from "./discord";
+import squareRouter from "./square";
 
 const router: IRouter = Router();
 
@@ -18,5 +19,6 @@ router.use("/bambu", bambuRouter);
 router.use("/pihub", pihubRouter);
 router.use("/camera", cameraRouter);
 router.use("/discord", discordRouter);
+router.use("/square", squareRouter);
 
 export default router;
