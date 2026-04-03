@@ -3773,14 +3773,19 @@ function renderPrints(){
       :st==='failed'?`<span class="status-pill sp-failed">✕ Failed${p.failPct!=null?' '+p.failPct.toFixed(0)+'%':''}</span>`
       :`<span class="status-pill sp-printing">⟳ Printing</span>`;
     const cc=st==='done'?'card-done':st==='failed'?'card-failed':'';
-    const d=new Date(p.timestamp);
+    // Support legacy Pi Hub records that used productName/date instead of name/timestamp
+    const displayName=p.name||p.productName||'Unknown';
+    const displayCategory=p.category||'Other';
+    const displayPrinter=p.printer||p.printerName||'—';
+    const ts=p.timestamp||(p.date?new Date(p.date).getTime():null)||Date.now();
+    const d=new Date(ts);
     const finD=p.finishedAt?new Date(p.finishedAt):null;
     const finLabel=finD?` · ✓ ${finD.toLocaleDateString('en-US',{month:'short',day:'numeric'})} ${finD.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})}` :'';
     return `<div class="print-card ${cc}">
       <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:5px;margin-bottom:2px">
-        <div class="pname">${esc(p.name)}${p.qty>1?' ×'+p.qty:''}</div>${pill}
+        <div class="pname">${esc(displayName)}${p.qty>1?' ×'+p.qty:''}</div>${pill}
       </div>
-      <div class="pcat">${esc(p.category)} · ${esc(p.printer)} · <span class="print-time-display" style="display:inline-flex;font-size:8px;padding:2px 6px">${formatHms(p.hrs)||'—'}</span> · ${d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}${p.tmfName?` · 📦 ${esc(p.tmfName)}`:''}${(st==='done'||st==='failed')?`<span style="color:var(--txt-d)">${finLabel}</span>`:''}</div>
+      <div class="pcat">${esc(displayCategory)} · ${esc(displayPrinter)} · <span class="print-time-display" style="display:inline-flex;font-size:8px;padding:2px 6px">${formatHms(p.hrs||p.printTime)||'—'}</span> · ${d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}${p.tmfName?` · 📦 ${esc(p.tmfName)}`:''}${(st==='done'||st==='failed')?`<span style="color:var(--txt-d)">${finLabel}</span>`:''}</div>
       ${chips?`<div class="pc-colors">${chips}</div>`:''}
       <div class="cost-box">
         <div class="cb-title">Cost Breakdown</div>
@@ -13407,8 +13412,28 @@ function getPiAMSMaterial(printerData){
 }
 
 // ── AMS color swatches ──
-function renderAmsSwatches(amsData){
-  if(!amsData?.ams||!amsData.ams.length)return'<span style="font-size:7px;color:var(--txt-d)">No AMS data</span>';
+function renderAmsSwatches(amsData,vtTray,printerName){
+  const hasAms=amsData&&amsData.ams&&amsData.ams.length;
+  const hasExt=!!(vtTray&&vtTray.tray_type);
+  if(!hasAms&&!hasExt)return'<span style="font-size:7px;color:var(--txt-d)">No AMS data</span>';
+
+  // ── External / direct spool (no AMS) ─────────────────────────────────
+  if(!hasAms&&hasExt){
+    const rawCol=(vtTray.tray_color||'').replace(/^#/,'');
+    const col='#'+(rawCol&&rawCol!=='00000000'?rawCol.slice(0,6):'888888');
+    const mat=vtTray.tray_sub_brands||vtTray.tray_type||'?';
+    const rem=vtTray.remain>0?vtTray.remain+'% left':'';
+    const extKey=printerName?_amsSlotKey(printerName,255,254):null;
+    const mappedSpool=extKey&&amsSlotMappings[extKey]?spools.find(s=>s.id===amsSlotMappings[extKey]):null;
+    return'<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">'
+      +'<div style="width:13px;height:13px;border-radius:50%;background:'+col+';border:2px solid rgba(255,255,255,0.3);flex-shrink:0"></div>'
+      +'<span style="font-size:7px;color:var(--txt)">Ext: '+esc(mat)+(rem?' ('+rem+')':'')+'</span>'
+      +(printerName?'<button class="btn btn-xs" style="font-size:5px;padding:2px 6px;background:var(--gold-d);color:var(--gold-b);border-color:var(--gold-dim)" onclick="openSetFilamentModal(\''+esc(printerName)+'\',255,254)">Set Spool</button>':'')
+      +(mappedSpool?'<span style="font-size:6px;color:var(--grn)">→ '+esc(mappedSpool.name||mappedSpool.material)+'</span>':'<span style="font-size:6px;color:var(--txt-d)">no spool set</span>')
+      +'</div>';
+  }
+
+  // ── AMS ──────────────────────────────────────────────────────────────
   const activeTrayId=String(amsData.tray_now||'');
   let html='<div style="display:flex;gap:3px;flex-wrap:wrap;align-items:center">';
   let anyFilled=false;
@@ -13421,7 +13446,7 @@ function renderAmsSwatches(amsData){
       html+='<span style="font-size:6px;color:var(--txt-d);margin-right:1px">AMS'+(ui+1)+'</span>';
     }
     trays.forEach(tray=>{
-      if(!tray.tray_type)return; // skip empty slots
+      if(!tray.tray_type)return;
       const rawCol=tray.tray_color||'888888';
       const col='#'+rawCol.slice(0,6);
       const mat=tray.tray_sub_brands||tray.tray_type||'?';
@@ -13519,40 +13544,60 @@ async function onPiPrintFinished(name,data){
   const gramsUsed=estimatePiFilament(material,durationMins);
   const jobName=(data.subtask_name||'').replace('.gcode.3mf','').replace('.3mf','')||'Unknown';
 
-  // Find matching spool
-  const matchSpool=spools.find(s=>s.material&&s.material.toLowerCase().includes(material.toLowerCase())&&(s.remaining||0)>0);
+  // Find matching spool — first try AMS slot mapping, then fallback to material match
+  const extKey=_amsSlotKey(name,255,254);
+  const extSpoolId=amsSlotMappings[extKey];
+  const matchSpool=spools.find(s=>s.id===extSpoolId)
+    ||spools.find(s=>s.material&&s.material.toLowerCase().includes(material.toLowerCase())&&(s.remaining||0)>0);
 
   let filamentCost=0;
   if(matchSpool){
     const totalG=matchSpool.totalGrams||1000;
     const price=matchSpool.price||0;
     filamentCost=parseFloat((gramsUsed*(price/totalG)).toFixed(2));
-    // Deduct from spool
     matchSpool.remaining=Math.max(0,(matchSpool.remaining||totalG)-gramsUsed);
     saveSpools();
-    usageHist.push({id:uid(),spoolId:matchSpool.id,spoolName:matchSpool.name||matchSpool.material,amount:gramsUsed,date:new Date().toISOString().split('T')[0],timestamp:Date.now(),note:'Auto-deducted by Pi Hub'});
-    saveHist();
+    if((matchSpool.remaining||0)<100){
+      postToDiscord('low_spool',
+        '🧵 Spool Running Low — '+(matchSpool.brand||'')+' '+(matchSpool.colorName||matchSpool.name||'')+'\nRemaining: ~'+Math.round(matchSpool.remaining||0)+'g\nPrinter: '+name);
+    }
   }
 
-  const elecCost=parseFloat(((durationMins/60)*0.12*0.13).toFixed(2));
+  // Always log filament usage — even without a spool, we want to track the material used
+  usageHist.push({
+    id:uid(),
+    spoolId:matchSpool?matchSpool.id:'unassigned',
+    spoolName:matchSpool?(matchSpool.name||matchSpool.material):('~'+material+' (unassigned)'),
+    amount:gramsUsed,
+    date:new Date().toISOString().split('T')[0],
+    timestamp:Date.now(),
+    note:'Auto-logged by Pi Hub — '+jobName+(matchSpool?'':' (no spool matched)')
+  });
+  saveHist();
+
+  const elecCost=parseFloat(((durationMins/60)*(cfg.electricityRate||0.12)*0.13).toFixed(2));
+  const actualHrs=Math.round((durationMins/60)*100)/100;
+  const filamentEntry=matchSpool
+    ?{spoolId:matchSpool.id,grams:gramsUsed}
+    :{spoolId:'',grams:gramsUsed,material};
   const printRecord={
     id:uid(),
-    date:new Date().toISOString().split('T')[0],
-    productName:jobName,
-    filamentUsed:gramsUsed,
-    filamentType:material,
-    printTime:fmtMins(durationMins),
-    success:true,
+    name:jobName,
+    category:'Other',
+    printer:name,
+    hrs:actualHrs,
+    qty:1,
+    filaments:[filamentEntry],
+    status:'done',
+    finishedAt:Date.now(),
+    timestamp:Date.now(),
     notes:'Auto-logged by LayerDeck Pi Hub',
-    linkedOrderId:null,
-    printerName:name,
-    costBreakdown:{filamentCost,electricityCost:elecCost,totalCost:parseFloat((filamentCost+elecCost).toFixed(2))}
+    autoFromPi:true
   };
   prints.push(printRecord);
   savePrints();
 
-  // Move queue card to done — write actual elapsed hrs so "?h" shows real time
-  const actualHrs=Math.round((durationMins/60)*100)/100;
+  // Move queue card to done — use actualHrs already computed above
   queueItems=queueItems.map(q=>{
     if(q.stage==='inprogress'&&(!q.printer||q.printer===name))return{...q,stage:'done',completedAt:Date.now(),hrs:actualHrs};
     return q;
@@ -13567,10 +13612,6 @@ async function onPiPrintFinished(name,data){
   piPrintStartTimes[name]=null;
   postToDiscord('print_complete',
     '✅ Print Complete — '+name+'\nJob: '+jobName+'\nDuration: '+fmtMins(durationMins)+'\nFilament: ~'+gramsUsed+'g '+material);
-  if(matchSpool&&(matchSpool.remaining||0)<100){
-    postToDiscord('low_spool',
-      '🧵 Spool Running Low — '+(matchSpool.brand||'')+' '+(matchSpool.colorName||matchSpool.name||'')+'\\nRemaining: ~'+Math.round(matchSpool.remaining||0)+'g\nPrinter: '+name);
-  }
 }
 
 async function onPiPrintFailed(name,data){
@@ -13851,8 +13892,9 @@ function updatePrinterCardLive(name,data,state){
   allId('bar').forEach(bar=>{bar.style.width=pct+'%';});
 
   // AMS swatches — update all matching containers (Pi Hub tab + Printers tab)
-  if(data.ams){
-    const amsHtml=renderAmsSwatches(data.ams);
+  // Also handles external spool (vt_tray) for printers with no AMS
+  {
+    const amsHtml=renderAmsSwatches(data.ams,data.vt_tray,name);
     allId('ams').forEach(el=>{el.innerHTML=amsHtml;});
   }
   // Dashboard mini-AMS grid — update in-place so colors sync without full re-render
