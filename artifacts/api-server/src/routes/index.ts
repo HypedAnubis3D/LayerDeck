@@ -6,6 +6,7 @@ import eventsRouter from "./events";
 import bambuRouter from "./bambu";
 import pihubRouter from "./pihub";
 import cameraRouter from "./camera";
+import discordRouter from "./discord";
 
 const router: IRouter = Router();
 
@@ -16,5 +17,6 @@ router.use("/events", eventsRouter);
 router.use("/bambu", bambuRouter);
 router.use("/pihub", pihubRouter);
 router.use("/camera", cameraRouter);
+router.use("/discord", discordRouter);
 
 export default router;

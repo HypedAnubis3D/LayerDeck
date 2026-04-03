@@ -6606,7 +6606,7 @@ function closeSidebar(){
 const TAB_NAMES={
   dashboard:'Dashboard',spools:'Spools',prints:'Prints',tmf:'3MF Library',
   queue:'Queue',orders:'Orders',scheduler:'Scheduler',shiny:'✨ Shiny Tracker',
-  revenue:'Revenue, Tax & Power',customers:'Customers',batch:'Batch Planner',
+  revenue:'Revenue',customers:'Customers',batch:'Batch Planner',
   integrations:'Integrations',etsy:'Etsy',maint:'Maintenance & Nozzles',forecast:'Forecast',
   priceengine:'Price AI',shop:'Shop List',history:'History',
   stats:'Stats',backup:'Backup',labels:'Labels'
@@ -7087,6 +7087,15 @@ function ingestShopifyOrder(o){
   // All items processed successfully — now commit everything atomically
   orders.push(order);
   saveOrders();savePrints();saveQueue();
+  // Discord: new order alert
+  (function(){
+    const nameParts=(order.customer||'').split(' ');
+    const displayName=nameParts.length>1?nameParts[0]+' '+nameParts[nameParts.length-1][0]+'.':order.customer||'Guest';
+    const itemList=(order.items||[]).map(function(i){return i.name+(i.qty>1?' x'+i.qty:'');}).join(', ');
+    const total=(order.items||[]).reduce(function(a,i){return a+parseFloat(i.price||0)*parseInt(i.qty||1);},0);
+    postToDiscord('new_order',
+      '🛍️ New Shopify Order — '+order.orderId+'\nCustomer: '+displayName+'\nItems: '+itemList+'\nTotal: $'+total.toFixed(2));
+  })();
   // Auto-create shipping log entry if this order has a shipping charge or address
   if((shipping>0||shippingAddress)&&!shippingLog.some(function(s){return s.orderId===orderId;})){
     const slCarrier=(o.shipping_lines&&o.shipping_lines[0]&&o.shipping_lines[0].title?o.shipping_lines[0].title:'Shipping');
@@ -11323,6 +11332,26 @@ function recordSale(){
   saveEvt();
   renderDaySales();
   toast('Sale Recorded',itemName+' × '+qty+' — $'+(price*qty).toFixed(2),'success');
+  // Discord: convention sale alert
+  (function(){
+    const allSales=c.daySales||[];
+    const dayTotal=allSales.reduce(function(a,s){return a+(parseFloat(s.price||0)*parseInt(s.qty||1));},0);
+    const badgeMap={square:'[SQ]',cash:'[Cash]',venmo:'[Venmo]',other:'[Other]'};
+    const badge=badgeMap[evtSaleMethod]||'[Manual]';
+    const remaining=(c.inPersonCatalog||[]).find(function(i){return i.catalogItemId===catalogItemId;});
+    var remQty='?';
+    if(remaining){
+      var soldQty=allSales.filter(function(s){return s.catalogItemId===catalogItemId;}).reduce(function(a,s){return a+parseInt(s.qty||1);},0);
+      remQty=Math.max(0,(remaining.qtyBring||0)-soldQty);
+    }
+    const lines=[
+      '💰 Sale — '+(c.name||'Convention')+' · '+new Date().toLocaleDateString('en-US',{month:'long',day:'numeric'}),
+      itemName+' × '+qty+' — $'+(price*qty).toFixed(2)+' '+badge,
+      'Pack list remaining: '+itemName+' '+remQty,
+      "Today's total: $"+dayTotal.toFixed(2)+' across '+allSales.length+' sale'+(allSales.length!==1?'s':'')
+    ];
+    postToDiscord('convention_sale',lines.join('\n'));
+  })();
 }
 function deleteSale(saleId){
   const c=getEvt();if(!c)return;
@@ -12793,6 +12822,8 @@ function _onReady(){
   setTimeout(checkShopifyOAuthCallback,700);
   // Service worker + push notifications
   setTimeout(initPushNotifications,1000);
+  // Discord daily report scheduler (fires at 6AM)
+  scheduleDailyDiscordReport();
   // Handle push notification action from URL
   const _sp=new URLSearchParams(window.location.search);
   if(_sp.get('push-action')==='confirm-print'){
@@ -13093,6 +13124,12 @@ async function onPiPrintFinished(name,data){
   render();
   toast('✅ '+name+' finished',jobName,'success',6000);
   piPrintStartTimes[name]=null;
+  postToDiscord('print_complete',
+    '✅ Print Complete — '+name+'\nJob: '+jobName+'\nDuration: '+fmtMins(durationMins)+'\nFilament: ~'+gramsUsed+'g '+material);
+  if(matchSpool&&(matchSpool.remaining||0)<100){
+    postToDiscord('low_spool',
+      '🧵 Spool Running Low — '+(matchSpool.brand||'')+' '+(matchSpool.colorName||matchSpool.name||'')+'\\nRemaining: ~'+Math.round(matchSpool.remaining||0)+'g\nPrinter: '+name);
+  }
 }
 
 async function onPiPrintFailed(name,data){
@@ -13109,6 +13146,8 @@ async function onPiPrintFailed(name,data){
   render();
   toast('⚠️ '+name+' FAILED',jobName,'error',8000);
   piPrintStartTimes[name]=null;
+  postToDiscord('print_failed',
+    '❌ Print Failed — '+name+'\nJob: '+jobName+'\nTime into print: '+fmtMins(durationMins)+'\nMaterial: '+material);
 }
 
 function incrementPrinterStat(name,field){
@@ -13826,31 +13865,226 @@ function renderSquare(){
   '</div>';
 }
 
-// ── Discord placeholder ──
 function renderDiscord(){
   const el=document.getElementById('discord-content');
   if(!el)return;
-  const channels=[
-    {name:'#print-alerts',desc:'Print finish/fail notifications with photos'},
-    {name:'#orders',desc:'New Shopify and Square order alerts'},
-    {name:'#stock-alerts',desc:'Low stock and spool alerts'},
-    {name:'#daily-report',desc:'Nightly print summary at 6AM'},
-    {name:'#convention-sales',desc:'Real-time sales feed during events'},
-    {name:'#pi-health',desc:'Pi service monitoring — 5 min checks'},
-    {name:'#bambu-restock',desc:'Bambu filament restock alerts'},
-    {name:'#convention-prep',desc:'Event reminders at 7, 3, 1 day before'},
-    {name:'#print-watch',desc:'AI failure detection alerts with photos'},
+
+  const maskUrl=function(url){
+    if(!url)return '<span style="color:var(--txt-d);font-style:italic">No webhook URL set</span>';
+    const m=url.match(/webhooks\/(\d+)\//);
+    const id=m?m[1]:'…';
+    return 'discord.com/api/webhooks/'+id+'/…';
+  };
+
+  const allKeys=discordCfg.channels.map(function(c){return c.key;});
+
+  const channelRows=discordCfg.channels.map(function(ch){
+    return '<div style="border:1px solid var(--bdr);border-radius:6px;padding:8px;margin-bottom:6px">'+
+      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">'+
+        '<div style="width:8px;height:8px;border-radius:50%;background:'+(ch.enabled?'var(--grn)':'var(--txt-d)')+';flex-shrink:0"></div>'+
+        '<div style="flex:1">'+
+          '<div style="font-size:8px;font-weight:700;color:var(--txt-b)">'+esc(ch.name)+'</div>'+
+          '<div style="font-size:7px;color:var(--txt-d)">'+esc(ch.desc)+'</div>'+
+        '</div>'+
+        '<button onclick="toggleDiscordChannel(\''+ch.key+'\')" class="btn btn-ghost btn-sm" style="font-size:7px;padding:2px 8px">'+
+          (ch.enabled?'Disable':'Enable')+
+        '</button>'+
+        (DISCORD_DEFAULT_CHANNELS.find(function(d){return d.key===ch.key;})?'':
+          '<button onclick="deleteDiscordChannel(\''+ch.key+'\')" class="btn btn-ghost btn-sm" style="font-size:7px;padding:2px 6px;color:var(--red)">✕</button>')+
+      '</div>'+
+      '<div style="display:flex;gap:6px;align-items:center">'+
+        '<input id="discord-url-'+ch.key+'" type="text" value="'+esc(ch.url)+'" placeholder="https://discord.com/api/webhooks/…" style="flex:1;font-size:7px;font-family:\'Share Tech Mono\',monospace;padding:4px 6px;background:var(--bg);border:1px solid var(--bdr);border-radius:3px;color:var(--txt-b)"/>'+
+        '<button onclick="saveDiscordChannelUrl(\''+ch.key+'\')" class="btn btn-grn btn-sm" style="font-size:7px;padding:2px 10px">Save</button>'+
+      '</div>'+
+      (ch.url?'<div style="font-size:6px;color:var(--txt-d);margin-top:4px">'+maskUrl(ch.url)+'</div>':'')+
+    '</div>';
+  }).join('');
+
+  const routingDefs=[
+    {type:'print_complete',  label:'Print completed',    group:'Print Alerts'},
+    {type:'print_failed',    label:'Print failed',        group:'Print Alerts'},
+    {type:'new_order',       label:'New Shopify order',   group:'Orders'},
+    {type:'convention_sale', label:'Convention sale',     group:'Orders'},
+    {type:'low_stock',       label:'Product low stock',   group:'Stock & Filament'},
+    {type:'low_spool',       label:'Spool running low',   group:'Stock & Filament'},
+    {type:'daily_report',    label:'Nightly report',      group:'Daily Summary'},
   ];
-  el.innerHTML='<div class="printer-card">'+
-    '<div style="font-family:\'Orbitron\',monospace;font-size:11px;font-weight:700;color:var(--gold-b);letter-spacing:2px;margin-bottom:8px">💬 DISCORD WEBHOOKS</div>'+
-    '<div style="font-size:8px;color:var(--txt-d);margin-bottom:12px">All 9 Discord channels are configured via Replit Secrets. Webhook-only integration — no bot required.</div>'+
-    '<div style="display:grid;gap:5px">'+
-    channels.map(c=>'<div style="display:flex;align-items:flex-start;gap:8px;padding:6px;border:1px solid var(--bdr);border-radius:4px">'+
-      '<div style="width:8px;height:8px;border-radius:50%;background:var(--grn);flex-shrink:0;margin-top:2px"></div>'+
-      '<div><div style="font-size:8px;font-weight:700;color:var(--txt-b)">'+c.name+'</div><div style="font-size:7px;color:var(--txt-d)">'+c.desc+'</div></div>'+
-    '</div>').join('')+
+
+  const routingRows=routingDefs.map(function(def){
+    const r=discordCfg.routing[def.type]||{enabled:true,channel:'print-alerts'};
+    const chOptions=allKeys.map(function(k){
+      return '<option value="'+k+'"'+(r.channel===k?' selected':'')+'>'+k+'</option>';
+    }).join('');
+    return '<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--bdr2)">'+
+      '<input type="checkbox"'+(r.enabled?' checked':'')+' onchange="saveDiscordRouting(\''+def.type+'\',\'enabled\',this.checked)" style="cursor:pointer"/>'+
+      '<div style="flex:1;font-size:8px;color:var(--txt-b)">'+esc(def.label)+'</div>'+
+      '<div style="font-size:7px;color:var(--txt-d);margin-right:4px">→</div>'+
+      '<select onchange="saveDiscordRouting(\''+def.type+'\',\'channel\',this.value)" style="font-size:7px;background:var(--bg);border:1px solid var(--bdr);border-radius:3px;color:var(--txt-b);padding:2px 4px">'+
+        chOptions+
+      '</select>'+
+    '</div>';
+  }).join('');
+
+  el.innerHTML=
+    '<div style="display:grid;gap:10px">'+
+    '<div class="printer-card">'+
+      '<div style="font-family:\'Orbitron\',monospace;font-size:9px;font-weight:700;color:var(--gold-b);letter-spacing:2px;margin-bottom:10px">💬 DISCORD CHANNELS</div>'+
+      '<div style="font-size:7px;color:var(--txt-d);margin-bottom:10px">Webhook-only — no bot, no OAuth. Each channel posts to one Discord webhook URL. URLs are stored locally on this device.</div>'+
+      channelRows+
+      '<div style="border:1px dashed var(--bdr);border-radius:6px;padding:10px;margin-top:4px">'+
+        '<div style="font-size:7px;font-weight:700;color:var(--txt-b);margin-bottom:8px">+ Add Channel</div>'+
+        '<div style="display:grid;gap:6px">'+
+          '<input id="discord-new-name" type="text" placeholder="#channel-name" style="font-size:8px;padding:5px 8px;background:var(--bg);border:1px solid var(--bdr);border-radius:3px;color:var(--txt-b)"/>'+
+          '<input id="discord-new-url" type="text" placeholder="https://discord.com/api/webhooks/…" style="font-size:7px;font-family:\'Share Tech Mono\',monospace;padding:4px 6px;background:var(--bg);border:1px solid var(--bdr);border-radius:3px;color:var(--txt-b)"/>'+
+          '<button onclick="addDiscordChannel()" class="btn btn-grn btn-sm" style="width:100%;padding:6px">Add Channel</button>'+
+        '</div>'+
+      '</div>'+
     '</div>'+
-  '</div>';
+    '<div class="printer-card">'+
+      '<div style="font-family:\'Orbitron\',monospace;font-size:9px;font-weight:700;color:var(--gold-b);letter-spacing:2px;margin-bottom:10px">⚡ ALERT ROUTING</div>'+
+      '<div style="font-size:7px;color:var(--txt-d);margin-bottom:8px">Control which alerts fire and where they go. Uncheck to silence an alert type entirely.</div>'+
+      routingRows+
+    '</div>'+
+    '</div>';
+}
+
+// ── Discord config ──
+Object.assign(KEYS,{discord:'ha3d_discord_v1'});
+const DISCORD_DEFAULT_CHANNELS=[
+  {key:'print-alerts',    name:'#print-alerts',      desc:'Print finish/fail notifications',    url:'',enabled:true},
+  {key:'orders',          name:'#orders',             desc:'New Shopify and Square order alerts', url:'',enabled:true},
+  {key:'stock-alerts',    name:'#stock-alerts',       desc:'Low stock & spool alerts',           url:'',enabled:true},
+  {key:'daily-report',    name:'#daily-report',       desc:'Nightly summary at 6AM',             url:'',enabled:true},
+  {key:'convention-sales',name:'#convention-sales',   desc:'Real-time convention sales feed',    url:'',enabled:true},
+  {key:'pi-health',       name:'#pi-health',          desc:'Pi service monitoring (5-min)',       url:'',enabled:true},
+  {key:'bambu-restock',   name:'#bambu-restock',      desc:'Bambu filament restock alerts',      url:'',enabled:true},
+  {key:'convention-prep', name:'#convention-prep',    desc:'Event reminders before conventions', url:'',enabled:true},
+  {key:'print-watch',     name:'#print-watch',        desc:'AI failure detection alerts',        url:'',enabled:true},
+];
+const DISCORD_DEFAULT_ROUTING={
+  print_complete:  {enabled:true,channel:'print-alerts'},
+  print_failed:    {enabled:true,channel:'print-alerts'},
+  new_order:       {enabled:true,channel:'orders'},
+  convention_sale: {enabled:true,channel:'convention-sales'},
+  low_stock:       {enabled:true,channel:'stock-alerts'},
+  low_spool:       {enabled:true,channel:'stock-alerts'},
+  daily_report:    {enabled:true,channel:'daily-report'},
+};
+let discordCfg={channels:DISCORD_DEFAULT_CHANNELS.map(c=>({...c})),routing:{...DISCORD_DEFAULT_ROUTING}};
+function loadDiscord(){
+  const stored=gs(KEYS.discord);
+  if(stored){
+    discordCfg.channels=stored.channels||DISCORD_DEFAULT_CHANNELS.map(c=>({...c}));
+    discordCfg.routing=stored.routing||{...DISCORD_DEFAULT_ROUTING};
+    DISCORD_DEFAULT_CHANNELS.forEach(def=>{
+      if(!discordCfg.channels.find(c=>c.key===def.key))discordCfg.channels.push({...def});
+    });
+  }
+}
+function saveDiscord(){ss(KEYS.discord,discordCfg);}
+loadDiscord();
+
+async function postToDiscord(alertType,message,imageUrl){
+  const route=discordCfg.routing[alertType];
+  if(!route||!route.enabled)return;
+  const channel=discordCfg.channels.find(c=>c.key===route.channel);
+  if(!channel||!channel.enabled||!channel.url)return;
+  try{
+    await fetch('/api/discord/notify',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({webhookUrl:channel.url,message,imageUrl:imageUrl||null})
+    });
+  }catch(e){/* never let Discord failure break the main flow */}
+}
+
+async function postDailyReportToDiscord(){
+  const today=new Date().toISOString().split('T')[0];
+  const todayPrints=(prints||[]).filter(p=>p.date===today&&p.success);
+  const todayFails=(prints||[]).filter(p=>p.date===today&&!p.success);
+  const queuedJobs=(queueItems||[]).filter(q=>q.stage==='queued'||q.stage==='inprogress');
+  const queueTotalMins=queuedJobs.reduce((a,q)=>a+(parseFloat(q.hrs||0)*60),0);
+  const queueHours=Math.floor(queueTotalMins/60);
+  const queueRemMins=Math.round(queueTotalMins%60);
+  const totalGrams=todayPrints.reduce((a,p)=>a+(parseFloat(p.filamentUsed||0)),0);
+  const printersRan=[...new Set(todayPrints.map(p=>p.printerName).filter(Boolean))];
+  const totalMins=todayPrints.reduce((a,p)=>{
+    const t=p.printTime||'';const m=t.match(/(\d+)h\s*(\d+)m/);
+    return a+(m?parseInt(m[1])*60+parseInt(m[2]):0);
+  },0);
+  const hrs=Math.floor(totalMins/60);const mins=totalMins%60;
+  const timeStr=hrs>0?hrs+'h '+mins+'m':mins+'m';
+  const dateLabel=new Date().toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'});
+  const lowSpools=(spools||[]).filter(s=>(s.remaining||0)>0&&(s.remaining||0)<100);
+  const lowStockItems=(catalogItems||[]).filter(i=>(i.qty||0)<=(i.lowStockAt!=null?i.lowStockAt:3));
+  const lines=[
+    '📊 LayerDeck Daily Report — '+dateLabel,
+    '──────────────────────────',
+    '🖨️ Prints Completed: '+todayPrints.length+(totalMins>0?' (total '+timeStr+')':''),
+  ];
+  if(printersRan.length)lines.push('   '+printersRan.join(' | '));
+  if(totalGrams>0)lines.push('\n🧵 Filament Used: '+totalGrams.toFixed(0)+'g total');
+  if(todayFails.length){
+    lines.push('\n❌ Print Failures: '+todayFails.length);
+    todayFails.forEach(f=>lines.push('   '+(f.printerName||'')+(f.productName?' — '+f.productName:'')));
+  }
+  if(lowStockItems.length){
+    lines.push('\n⚠️ Low Stock:');
+    lowStockItems.slice(0,5).forEach(i=>lines.push('   '+(i.name||i.productName||'')+' ('+(i.qty||0)+' left)'));
+  }
+  if(lowSpools.length){
+    lines.push('\n🧵 Spools Running Low:');
+    lowSpools.slice(0,3).forEach(s=>lines.push('   '+(s.brand||'')+' '+(s.colorName||s.name||'')+' ~'+Math.round(s.remaining||0)+'g'));
+  }
+  const queueTime=queueHours>0?queueHours+'h '+queueRemMins+'m':queueRemMins+'m';
+  lines.push('\n📋 Queue: '+queuedJobs.length+' jobs pending (~'+queueTime+' total)');
+  lines.push('──────────────────────────');
+  if(!todayFails.length&&!lowStockItems.length&&!lowSpools.length)lines.push('No alerts today ✅');
+  await postToDiscord('daily_report',lines.join('\n'));
+}
+
+function scheduleDailyDiscordReport(){
+  const now=new Date();
+  const next6am=new Date(now);
+  next6am.setHours(6,0,0,0);
+  if(next6am<=now)next6am.setDate(next6am.getDate()+1);
+  const msUntil=next6am-now;
+  setTimeout(function(){
+    postDailyReportToDiscord();
+    setInterval(postDailyReportToDiscord,24*60*60*1000);
+  },msUntil);
+}
+
+// ── Discord settings page helpers ──
+function toggleDiscordChannel(key){
+  const ch=discordCfg.channels.find(c=>c.key===key);
+  if(ch){ch.enabled=!ch.enabled;saveDiscord();renderDiscord();}
+}
+function saveDiscordChannelUrl(key){
+  const input=document.getElementById('discord-url-'+key);
+  if(!input)return;
+  const ch=discordCfg.channels.find(c=>c.key===key);
+  if(ch){ch.url=input.value.trim();saveDiscord();renderDiscord();toast('Webhook saved',ch.name,'success');}
+}
+function deleteDiscordChannel(key){
+  showConfirm('Remove '+key+' channel?','This removes the channel from LayerDeck. The Discord webhook still exists.',function(){
+    discordCfg.channels=discordCfg.channels.filter(c=>c.key!==key);
+    saveDiscord();renderDiscord();
+  });
+}
+function addDiscordChannel(){
+  const name=(document.getElementById('discord-new-name')?.value||'').trim();
+  const url=(document.getElementById('discord-new-url')?.value||'').trim();
+  if(!name){toast('Enter a channel name','','warning');return;}
+  const key=name.replace(/^#/,'').replace(/\s+/g,'-').toLowerCase();
+  if(discordCfg.channels.find(c=>c.key===key)){toast('Channel already exists','','warning');return;}
+  discordCfg.channels.push({key,name:(name.startsWith('#')?name:'#'+name),desc:'Custom channel',url,enabled:true});
+  saveDiscord();renderDiscord();toast('Channel added',name,'success');
+}
+function saveDiscordRouting(type,field,value){
+  if(!discordCfg.routing[type])discordCfg.routing[type]={enabled:true,channel:'print-alerts'};
+  discordCfg.routing[type][field]=field==='enabled'?value:value;
+  saveDiscord();
 }
 
 // ── Social data ──
