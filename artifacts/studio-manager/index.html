@@ -12744,16 +12744,31 @@ function getPiAMSMaterial(amsData){
 
 // ── AMS color swatches ──
 function renderAmsSwatches(amsData){
-  if(!amsData?.ams)return'<span style="font-size:7px;color:var(--txt-d)">No AMS data</span>';
-  let html='<div style="display:flex;gap:4px;flex-wrap:wrap">';
-  amsData.ams.forEach(unit=>{
-    (unit.tray||[]).forEach(tray=>{
-      const col='#'+(tray.tray_color||'888888').slice(0,6);
-      const mat=tray.tray_type||'?';
-      const rem=tray.remain!=null?tray.remain+'%':'?';
-      html+='<div title="'+mat+' '+rem+'" style="width:12px;height:12px;border-radius:50%;background:'+col+';border:1px solid rgba(255,255,255,0.2);flex-shrink:0"></div>';
+  if(!amsData?.ams||!amsData.ams.length)return'<span style="font-size:7px;color:var(--txt-d)">No AMS data</span>';
+  const activeTrayId=String(amsData.tray_now||'');
+  let html='<div style="display:flex;gap:3px;flex-wrap:wrap;align-items:center">';
+  let anyFilled=false;
+  amsData.ams.forEach((unit,ui)=>{
+    const trays=unit.tray||[];
+    const filled=trays.filter(t=>t.tray_type);
+    if(!filled.length)return;
+    anyFilled=true;
+    if(amsData.ams.length>1){
+      html+='<span style="font-size:6px;color:var(--txt-d);margin-right:1px">AMS'+(ui+1)+'</span>';
+    }
+    trays.forEach(tray=>{
+      if(!tray.tray_type)return; // skip empty slots
+      const rawCol=tray.tray_color||'888888';
+      const col='#'+rawCol.slice(0,6);
+      const mat=tray.tray_sub_brands||tray.tray_type||'?';
+      const rem=tray.remain>0?tray.remain+'% left':'';
+      const label='Slot '+(parseInt(tray.id)+1)+': '+mat+(rem?' ('+rem+')':'');
+      const isActive=activeTrayId===String(tray.id);
+      const ring=isActive?'box-shadow:0 0 0 2px var(--grn);':'';
+      html+='<div title="'+label+'" style="width:12px;height:12px;border-radius:50%;background:'+col+';border:1px solid rgba(255,255,255,0.25);flex-shrink:0;'+ring+'"></div>';
     });
   });
+  if(!anyFilled)return'<span style="font-size:7px;color:var(--txt-d)">AMS empty</span>';
   html+='</div>';
   return html;
 }
@@ -12948,17 +12963,22 @@ function updatePiHubStatusDot(online,retryInMs,hint){
 
 function updatePrinterCardLive(name,data,state){
   const id=piId(name);
+  // Use querySelectorAll so both Pi Hub tab and Printers tab cards update in parallel
+  const allId=s=>Array.from(document.querySelectorAll('[id="pi-'+id+'-'+s+'"]'));
   const setState=el=>{if(el){el.textContent=STATE_LABELS[state]||state;el.style.color=STATE_COLORS[state]||STATE_COLORS.OFFLINE;}};
-  const setTxt=(suffix,val)=>{const el=document.getElementById('pi-'+id+'-'+suffix);if(el)el.textContent=val;};
+  const setTxt=(suffix,val)=>{allId(suffix).forEach(el=>{el.textContent=val;});};
 
-  const stateEl=document.getElementById('pi-'+id+'-state');
-  setState(stateEl);
+  allId('state').forEach(setState);
 
   if(!data||state==='OFFLINE'){
     setTxt('progress','—');setTxt('layer','—');setTxt('remaining','—');
     setTxt('nozzle','—');setTxt('bed','—');setTxt('file','—');
     const bar=document.getElementById('pi-'+id+'-bar');
     if(bar)bar.style.width='0%';
+    ['pause','resume','stop'].forEach(s=>{
+      const b=document.getElementById('pi-'+id+'-btn-'+s);
+      if(b){b.style.opacity='0.4';b.style.pointerEvents='none';}
+    });
     return;
   }
 
@@ -12975,19 +12995,20 @@ function updatePrinterCardLive(name,data,state){
   setTxt('bed',fmtTemp(data.bed_temper));
   setTxt('file',(data.subtask_name||'—').replace('.gcode.3mf','').replace('.3mf',''));
 
-  const bar=document.getElementById('pi-'+id+'-bar');
-  if(bar)bar.style.width=pct+'%';
+  allId('bar').forEach(bar=>{bar.style.width=pct+'%';});
 
-  // AMS swatches
-  const swatchEl=document.getElementById('pi-'+id+'-ams');
-  if(swatchEl&&data.ams)swatchEl.innerHTML=renderAmsSwatches(data.ams);
+  // AMS swatches — update all matching containers (Pi Hub tab + Printers tab)
+  if(data.ams){
+    const amsHtml=renderAmsSwatches(data.ams);
+    allId('ams').forEach(el=>{el.innerHTML=amsHtml;});
+  }
 
   // Sync control-button enabled states with live state
   const setBtn=(suffix,enabled)=>{
-    const btn=document.getElementById('pi-'+id+'-btn-'+suffix);
-    if(!btn)return;
-    btn.style.opacity=enabled?'1':'0.4';
-    btn.style.pointerEvents=enabled?'auto':'none';
+    allId('btn-'+suffix).forEach(btn=>{
+      btn.style.opacity=enabled?'1':'0.4';
+      btn.style.pointerEvents=enabled?'auto':'none';
+    });
   };
   const isActive=state==='RUNNING'||state==='PAUSE';
   setBtn('pause', state==='RUNNING');
@@ -13257,10 +13278,17 @@ function renderPiHub(){
           '<div style="height:3px;background:rgba(255,255,255,0.06);border-radius:2px;overflow:hidden;margin-bottom:5px">'+
             '<div id="pi-'+id+'-bar" style="height:100%;background:var(--grn);border-radius:2px;width:0%;transition:width 0.5s"></div>'+
           '</div>'+
-          '<div style="display:flex;gap:6px">'+
+          '<div style="display:flex;gap:6px;margin-bottom:4px">'+
             '<div style="font-size:6px;color:var(--txt-d)">🌡 <span id="pi-'+id+'-nozzle">—</span></div>'+
             '<div style="font-size:6px;color:var(--txt-d)">🛏 <span id="pi-'+id+'-bed">—</span></div>'+
             '<div style="font-size:6px;color:var(--txt-d)">📚 <span id="pi-'+id+'-layer">—</span></div>'+
+          '</div>'+
+          '<div id="pi-'+id+'-ams" style="min-height:4px"></div>'+
+          '<div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:5px">'+
+            '<button id="pi-'+id+'-btn-pause" class="btn btn-ghost btn-xs" onclick="piControl(\''+esc(p.name)+'\',\'pause\')" style="opacity:0.4;pointer-events:none">⏸ Pause</button>'+
+            '<button id="pi-'+id+'-btn-resume" class="btn btn-ghost btn-xs" onclick="piControl(\''+esc(p.name)+'\',\'resume\')" style="opacity:0.4;pointer-events:none">▶ Resume</button>'+
+            '<button id="pi-'+id+'-btn-stop" class="btn btn-xs" style="background:var(--red-d);border:1px solid var(--red-d);color:var(--red-b);opacity:0.4;pointer-events:none" onclick="showConfirm(\'Stop print on '+esc(p.name)+'?\',\'This cannot be undone.\',function(){piControl(\''+esc(p.name)+'\',\'stop\')})">⏹ Stop</button>'+
+            (getCameraUrl(p.name)?'<button class="btn btn-ghost btn-xs" onclick="openCameraFeed(\''+esc(p.name)+'\')">📷 Camera</button>':'')+
           '</div>'+
         '</div>';
       }).join('')+
