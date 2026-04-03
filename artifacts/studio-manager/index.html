@@ -13895,6 +13895,7 @@ function renderDiscord(){
       '<div style="display:flex;gap:6px;align-items:center">'+
         '<input id="discord-url-'+ch.key+'" type="text" value="'+esc(ch.url)+'" placeholder="https://discord.com/api/webhooks/…" style="flex:1;font-size:7px;font-family:\'Share Tech Mono\',monospace;padding:4px 6px;background:var(--bg);border:1px solid var(--bdr);border-radius:3px;color:var(--txt-b)"/>'+
         '<button onclick="saveDiscordChannelUrl(\''+ch.key+'\')" class="btn btn-grn btn-sm" style="font-size:7px;padding:2px 10px">Save</button>'+
+        '<button onclick="testDiscordChannel(\''+ch.key+'\')" class="btn btn-ghost btn-sm" style="font-size:7px;padding:2px 10px">Test</button>'+
       '</div>'+
       (ch.url?'<div style="font-size:6px;color:var(--txt-d);margin-top:4px">'+maskUrl(ch.url)+'</div>':'')+
     '</div>';
@@ -14080,6 +14081,19 @@ function addDiscordChannel(){
   if(discordCfg.channels.find(c=>c.key===key)){toast('Channel already exists','','warning');return;}
   discordCfg.channels.push({key,name:(name.startsWith('#')?name:'#'+name),desc:'Custom channel',url,enabled:true});
   saveDiscord();renderDiscord();toast('Channel added',name,'success');
+}
+async function testDiscordChannel(key){
+  const ch=discordCfg.channels.find(c=>c.key===key);
+  if(!ch||!ch.url){toast('No webhook URL','Paste a webhook URL and save first.','warning');return;}
+  try{
+    const r=await fetch('/api/discord/notify',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({webhookUrl:ch.url,message:'✅ LayerDeck test — '+ch.name+' is connected and working.'})
+    });
+    if(r.ok){toast('Test sent',ch.name+' received the message.','success');}
+    else{const j=await r.json().catch(()=>({}));toast('Test failed','Discord returned an error: '+(j.error||r.status),'error');}
+  }catch(e){toast('Test failed',e.message,'error');}
 }
 function saveDiscordRouting(type,field,value){
   if(!discordCfg.routing[type])discordCfg.routing[type]={enabled:true,channel:'print-alerts'};
