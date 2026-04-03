@@ -28,6 +28,19 @@ export interface Parsed3MF {
   errorMessage?: string;
 }
 
+// Extract a clean, specific filament type from a Bambu preset ID string.
+// "Bambu PLA Basic @BBL X1C" → "PLA Basic"
+// "Generic PLA" → "PLA"
+// Falls back to the raw filament_type value if nothing useful can be parsed.
+function _extractFilamentType(settingsId: string, fallback: string): string {
+  if (!settingsId) return fallback || '';
+  const noSuffix = settingsId.split('@')[0].trim();
+  const cleaned = noSuffix
+    .replace(/^(Bambu|Generic|Polymaker|PolyLite|eSun|Elegoo|Hatchbox|Overture|Prusament|Extrudr|Fiberlogy)\s+/i, '')
+    .trim();
+  return cleaned || fallback || '';
+}
+
 export async function parse3MFFile(file: File): Promise<Parsed3MF> {
   const result: Parsed3MF = {
     id: crypto.randomUUID(),
@@ -66,9 +79,17 @@ export async function parse3MFFile(file: File): Promise<Parsed3MF> {
       try {
         const cfg = JSON.parse(settingsRaw);
         result.printer = cfg.printer_model || cfg.printer_settings_id || '';
-        result.filamentTypes = Array.isArray(cfg.filament_type)
+        // Prefer filament_settings_id for specific names ("PLA Basic", "PLA Matte", etc.)
+        // e.g. "Bambu PLA Basic @BBL X1C" → "PLA Basic"
+        const settingsIds = Array.isArray(cfg.filament_settings_id)
+          ? cfg.filament_settings_id
+          : [cfg.filament_settings_id || ''];
+        const baseTypes = Array.isArray(cfg.filament_type)
           ? cfg.filament_type
           : [cfg.filament_type || ''];
+        result.filamentTypes = settingsIds.map((sid: string, i: number) =>
+          _extractFilamentType(sid, baseTypes[i] || '')
+        );
         result.filamentColors = (
           Array.isArray(cfg.filament_colour)
             ? cfg.filament_colour
@@ -181,6 +202,12 @@ export async function parse3MFFile(file: File): Promise<Parsed3MF> {
           const maxCI = Math.max(...Object.keys(sliceColorByIdx).map(Number));
           const newCols = Array.from({ length: maxCI + 1 }, (_, i) => sliceColorByIdx[i] || result.filamentColors[i] || '');
           if (newCols.some((c) => c && c.length >= 4)) result.filamentColors = newCols;
+        }
+        // Ensure filamentTypes is at least as long as filamentColors (pad with base type)
+        if (result.filamentColors.length > result.filamentTypes.length) {
+          const base = result.filamentTypes[0] || '';
+          while (result.filamentTypes.length < result.filamentColors.length)
+            result.filamentTypes.push(base);
         }
       } catch (e) {
         console.warn('slice_info parse error:', e);

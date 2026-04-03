@@ -12,6 +12,7 @@ const express = require('express');
 const cors    = require('cors');
 const fs      = require('fs');
 const path    = require('path');
+const https   = require('https');
 
 const app = express();
 app.use(cors());
@@ -51,6 +52,44 @@ const CAMERAS = {
 const PI_PORT        = 3000;
 const printerStates  = {};
 const printerClients = {};
+
+// ── Discord alert helpers ──────────────────────────────────────────────────────
+// Webhook URL loaded from config.json (discordWebhookPrintAlerts) or env var.
+let DISCORD_ALERTS_URL = process.env.DISCORD_WEBHOOK_PRINT_ALERTS || '';
+const configPath = path.join(__dirname, 'config.json');
+if (fs.existsSync(configPath)) {
+  try {
+    const cfg = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+    if (cfg.discordWebhookPrintAlerts) DISCORD_ALERTS_URL = cfg.discordWebhookPrintAlerts;
+  } catch (e) { /* ignore */ }
+}
+
+function sendDiscordAlert(content) {
+  if (!DISCORD_ALERTS_URL) return;
+  try {
+    const body = JSON.stringify({ content });
+    const url  = new URL(DISCORD_ALERTS_URL);
+    const req  = https.request({
+      hostname: url.hostname,
+      path:     url.pathname + url.search,
+      method:   'POST',
+      headers:  { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) }
+    }, () => {});
+    req.on('error', () => {});
+    req.write(body);
+    req.end();
+  } catch (e) { /* silent */ }
+}
+
+// Debounce: at most one MQTT alert per printer per 5 minutes to avoid spam
+const _mqttAlertTs = {};
+function mqttAlert(printerName, content) {
+  const now = Date.now();
+  if (_mqttAlertTs[printerName] && now - _mqttAlertTs[printerName] < 5 * 60 * 1000) return;
+  _mqttAlertTs[printerName] = now;
+  sendDiscordAlert(content);
+  console.warn(content);
+}
 
 // ── Section 30: Parse object boundary data from MQTT ──
 function parseObjectData(mqttPayload) {
@@ -113,10 +152,16 @@ PRINTERS.forEach(printer => {
       const mqttPayload = JSON.parse(message.toString());
 
       if (mqttPayload.print) {
-        // Merge MQTT print fields into printerStates
+        // Merge MQTT print fields into printerStates.
+        // Preserve AMS data: incremental updates often omit ams entirely — don't clobber
+        // a good pushall payload with an empty/missing ams from a progress update.
+        const prevAms = printerStates[printer.name].ams;
+        const newAms  = mqttPayload.print.ams;
+        const keepAms = (newAms && newAms.ams && newAms.ams.length > 0) ? newAms : (prevAms || newAms);
         printerStates[printer.name] = {
           ...printerStates[printer.name],
           ...mqttPayload.print,
+          ams:         keepAms,
           online:      true,
           lastUpdated: Date.now()
         };
@@ -190,11 +235,12 @@ PRINTERS.forEach(printer => {
 
   client.on('error', (err) => {
     printerStates[printer.name].online = false;
-    console.error(`${printer.name} MQTT error:`, err.message);
+    mqttAlert(printer.name, `⚠️ **${printer.name}** MQTT error: ${err.message}`);
   });
 
   client.on('offline', () => {
     printerStates[printer.name].online = false;
+    mqttAlert(printer.name, `📡 **${printer.name}** went offline (MQTT disconnected)`);
   });
 });
 

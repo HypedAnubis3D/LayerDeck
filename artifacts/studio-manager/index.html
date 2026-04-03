@@ -3854,12 +3854,18 @@ async function parse3mfFile(file){
       try{
         const cfg=JSON.parse(settingsRaw);
         printer=cfg.printer_model||cfg.printer_settings_id||'';
-        // All filament slots
-        filamentTypes=Array.isArray(cfg.filament_type)?cfg.filament_type:[cfg.filament_type||''];
+        // Extract specific type names from filament_settings_id (e.g. "Bambu PLA Basic @BBL X1C" → "PLA Basic")
+        const _sids=Array.isArray(cfg.filament_settings_id)?cfg.filament_settings_id:[cfg.filament_settings_id||''];
+        const _baseTypes=Array.isArray(cfg.filament_type)?cfg.filament_type:[cfg.filament_type||''];
+        filamentTypes=_sids.map(function(sid,i){
+          if(!sid)return _baseTypes[i]||'';
+          const ns=sid.split('@')[0].trim();
+          return ns.replace(/^(Bambu|Generic|Polymaker|PolyLite|eSun|Elegoo|Hatchbox|Overture|Prusament|Extrudr|Fiberlogy)\s+/i,'').trim()||_baseTypes[i]||'';
+        });
         filamentColors=(Array.isArray(cfg.filament_colour)?cfg.filament_colour:[cfg.filament_colour||''])
           .map(c=>c?c.replace(/[^#a-fA-F0-9]/g,'').slice(0,7):'')
           .filter(c=>c&&c.length>=4);
-        filamentBrands=Array.isArray(cfg.filament_settings_id)?cfg.filament_settings_id:[cfg.filament_settings_id||''];
+        filamentBrands=_sids;
         // Convenience singles for backward compat
         filamentType=filamentTypes[0]||'';
         filamentColor=filamentColors[0]||'';
@@ -3993,6 +3999,9 @@ async function parse3mfFile(file){
           const _newCols=Array.from({length:_maxCI+1},function(_,i){return _sliceColorByIdx[i]||(filamentColors[i]||'');});
           if(_newCols.some(function(c){return c&&c.length>=4;}))filamentColors=_newCols;
         }
+        // Pad filamentTypes/Brands to match rebuilt filamentColors length
+        if(filamentColors.length>filamentTypes.length){const _bt=filamentTypes[0]||'';while(filamentTypes.length<filamentColors.length)filamentTypes.push(_bt);}
+        if(filamentColors.length>filamentBrands.length){const _bb=filamentBrands[0]||'';while(filamentBrands.length<filamentColors.length)filamentBrands.push(_bb);}
       }catch(ex){console.warn('slice_info parse fail:',ex,sliceRaw?sliceRaw.slice(0,300):'(empty)');}
     }
 
@@ -4083,10 +4092,9 @@ function renderTmf(){
     const grams=t.filamentGramsPerColor||[];
     const colorSwatches=colors.map((c,i)=>{
       const type=types[i]||'';
-      const brand=brands[i]||'';
       const g=grams[i];
       if(g===0)return ''; // skip unused slots (0g = not used on this plate/print)
-      const label=[type,brand].filter(Boolean).join(' · ');
+      const label=type;
       return '<div style="display:flex;align-items:center;gap:5px;margin-bottom:3px" title="'+esc(label)+'">'+
         '<div style="width:13px;height:13px;border-radius:50%;background:'+c+';border:2px solid rgba(255,255,255,.18);flex-shrink:0"></div>'+
         '<span style="font-size:6px;color:var(--txt-d)">'+esc(label.slice(0,24))+'</span>'+
