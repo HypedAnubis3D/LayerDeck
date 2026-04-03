@@ -4193,6 +4193,12 @@ function renderQueue(){
         '<div class="kcard-name">'+esc(q.name)+(q.qty>1?' ×'+q.qty:'')+'</div>'+
         '<div class="kcard-meta">'+esc(q.printer||'?')+' · '+(function(){
           if(q.hrs)return q.hrs+'h';
+          // Done items: compute elapsed from startedAt→completedAt when hrs not stored
+          if(st.key==='done'&&q.startedAt&&q.completedAt){
+            var elH=Math.round(((q.completedAt-q.startedAt)/3600000)*10)/10;
+            if(elH>0)return elH+'h';
+          }
+          // In-progress: show remaining time from Pi Hub live data
           if(st.key==='inprogress'&&q.printer&&piPrevStates[q.printer]){
             var remMin=Math.round(piPrevStates[q.printer].mc_remaining_time||0);
             if(remMin>0)return Math.round((remMin/60)*10)/10+'h';
