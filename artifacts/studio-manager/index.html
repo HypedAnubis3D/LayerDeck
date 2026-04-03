@@ -12631,12 +12631,13 @@ const STATE_LABELS={IDLE:'IDLE',RUNNING:'PRINTING',PAUSE:'PAUSED',FAILED:'FAILED
 const PI_DEFAULTS={
   tailscaleIP:'100.88.246.109',
   publicUrl:'https://layerdeck-hub.tail5636e6.ts.net',
+  go2rtcPublicUrl:'',
   hubPort:3000,
   go2rtcPort:1984,
   printers:[
-    {name:'A1',ip:'',serial:'',accessCode:''},
-    {name:'P1S (Closet)',ip:'',serial:'',accessCode:''},
-    {name:'P1S (Room)',ip:'',serial:'',accessCode:''}
+    {name:'A1',hubName:'A1',ip:'',serial:'',accessCode:''},
+    {name:'P1S (Closet)',hubName:'P1 Closet',ip:'',serial:'',accessCode:''},
+    {name:'P1S (Room)',hubName:'P1 Room',ip:'',serial:'',accessCode:''}
   ],
   cameras:{
     'A1':'a1',
@@ -12663,8 +12664,15 @@ async function loadPiHubConfig(){
       if(raw) saved=JSON.parse(raw);
     }catch(e){}
   }
-  // Merge with defaults so new fields (like publicUrl) are always present
+  // Merge top-level with defaults so new fields are always present
   piHubConfig={...PI_DEFAULTS,...(saved||{})};
+  // Deep-merge printers: ensure each saved printer inherits hubName from defaults if missing
+  if(saved?.printers){
+    piHubConfig.printers=(saved.printers||[]).map(sp=>{
+      const def=PI_DEFAULTS.printers.find(d=>d.name===sp.name);
+      return def?{...def,...sp}:{...sp};
+    });
+  }
   localStorage.setItem('ha3d_pihub_local',JSON.stringify(piHubConfig));
   return piHubConfig;
 }
@@ -12691,15 +12699,24 @@ function getPiUrl(){
 }
 function getGo2rtcUrl(){
   if(!piHubConfig)return null;
+  // Prefer public HTTPS URL (required from HTTPS pages — set in Setup)
   if(piHubConfig.go2rtcPublicUrl)return piHubConfig.go2rtcPublicUrl.replace(/\/$/,'');
+  // Local fallback (only works when browser is on same network)
   return 'http://'+piHubConfig.tailscaleIP+':'+(piHubConfig.go2rtcPort||1984);
 }
-function getCameraUrl(printerName){
+function getCameraUrl(printerName,format){
   const g=getGo2rtcUrl();
   if(!g||!piHubConfig)return null;
   const stream=piHubConfig.cameras?.[printerName];
   if(!stream)return null;
-  return g+'/api/stream.mp4?src='+stream;
+  const fmt=format||'hls';
+  if(fmt==='hls') return g+'/api/stream.m3u8?src='+encodeURIComponent(stream);
+  if(fmt==='mp4') return g+'/api/stream.mp4?src='+encodeURIComponent(stream);
+  if(fmt==='jpeg') return g+'/api/frame.jpeg?src='+encodeURIComponent(stream);
+  return g+'/api/stream.m3u8?src='+encodeURIComponent(stream);
+}
+function hasCameraPublicUrl(){
+  return !!(piHubConfig?.go2rtcPublicUrl);
 }
 
 // ── Utility ──
@@ -12871,7 +12888,8 @@ async function fetchPiStatus(){
 
     (piHubConfig?.printers||[]).forEach(printer=>{
       const name=printer.name;
-      const p=data[name];
+      // Match by hubName first (the key the Pi Hub actually uses), fallback to display name
+      const p=data[printer.hubName||name]||data[name];
       if(!p)return;
       const prev=piPrevStates[name]||{};
       const curState=p.online===false?'OFFLINE':(p.gcode_state||'IDLE');
@@ -13109,14 +13127,44 @@ function renderPrinters(){
 
 // ── Camera feed modal ──
 function openCameraFeed(printerName){
-  const url=getCameraUrl(printerName);
-  if(!url){toast('No camera configured for this printer','','error');return;}
+  const stream=piHubConfig?.cameras?.[printerName];
+  if(!stream){toast('No camera configured for '+printerName,'','error');return;}
+  const hasPublic=hasCameraPublicUrl();
   const mod=document.createElement('div');
   mod.id='camera-modal';
-  mod.style='position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.9);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px';
-  mod.innerHTML='<div style="font-family:\'Orbitron\',monospace;font-size:10px;color:var(--gold-b);letter-spacing:2px;margin-bottom:12px">📷 '+esc(printerName)+' — Live Feed</div>'+
-    '<video src="'+url+'" autoplay muted playsinline controls style="max-width:100%;max-height:70vh;border-radius:8px;border:1px solid var(--bdr2)"></video>'+
-    '<button class="btn btn-ghost" style="margin-top:16px" onclick="document.getElementById(\'camera-modal\').remove()">✕ Close</button>';
+  mod.style='position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.93);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px';
+
+  if(!hasPublic){
+    // No public go2rtc URL — show setup instructions
+    mod.innerHTML='<div style="font-family:\'Orbitron\',monospace;font-size:10px;color:var(--gold-b);letter-spacing:2px;margin-bottom:16px">📷 '+esc(printerName)+'</div>'+
+      '<div style="max-width:380px;background:rgba(255,255,255,0.04);border:1px solid var(--bdr);border-radius:8px;padding:16px;text-align:center">'+
+        '<div style="font-size:9px;color:var(--txt-d);line-height:1.8;margin-bottom:12px">'+
+          'Live camera requires a public HTTPS URL for your go2rtc server (port 1984).<br><br>'+
+          'On your Pi, run:<br>'+
+          '<code style="font-family:\'Share Tech Mono\',monospace;color:var(--cyn);font-size:9px">sudo tailscale funnel 1984</code><br><br>'+
+          'Then copy the <strong style="color:var(--txt-b)">https://…</strong> URL and paste it in<br>Pi Hub Setup → Camera Server Public URL'+
+        '</div>'+
+        '<button class="btn btn-gold btn-sm" onclick="document.getElementById(\'camera-modal\').remove();openPiHubSetup()">⚙ Open Setup</button>'+
+      '</div>'+
+      '<button class="btn btn-ghost" style="margin-top:16px" onclick="document.getElementById(\'camera-modal\').remove()">✕ Close</button>';
+  } else {
+    const hlsUrl=getCameraUrl(printerName,'hls');
+    const jpegUrl=getCameraUrl(printerName,'jpeg');
+    mod.innerHTML='<div style="font-family:\'Orbitron\',monospace;font-size:10px;color:var(--gold-b);letter-spacing:2px;margin-bottom:12px">📷 '+esc(printerName)+' — Live Feed</div>'+
+      '<div style="position:relative;max-width:100%;max-height:65vh">'+
+        '<video id="cam-video-'+piId(printerName)+'" autoplay muted playsinline controls '+
+          'style="max-width:100%;max-height:65vh;border-radius:8px;border:1px solid var(--bdr2);display:block">'+
+          '<source src="'+hlsUrl+'" type="application/x-mpegURL">'+
+          '<source src="'+getCameraUrl(printerName,'mp4')+'" type="video/mp4">'+
+          'Your browser doesn\'t support HLS. Try <a href="'+hlsUrl+'" target="_blank">open directly</a>.'+
+        '</video>'+
+        '<div style="position:absolute;bottom:8px;right:8px">'+
+          '<a href="'+jpegUrl+'" target="_blank" style="font-size:7px;color:var(--txt-d);text-decoration:none;background:rgba(0,0,0,0.5);padding:2px 5px;border-radius:3px">📸 Snapshot</a>'+
+        '</div>'+
+      '</div>'+
+      '<div style="font-size:7px;color:var(--txt-d);margin-top:6px">If video doesn\'t load, <a href="'+hlsUrl+'" target="_blank" style="color:var(--cyn)">open stream in new tab</a> or try Safari/desktop Chrome</div>'+
+      '<button class="btn btn-ghost" style="margin-top:12px" onclick="document.getElementById(\'camera-modal\').remove()">✕ Close</button>';
+  }
   document.body.appendChild(mod);
 }
 
@@ -13213,11 +13261,11 @@ function openPiHubSetup(){
     '<div style="border:1px solid var(--bdr);border-radius:5px;padding:8px;margin-bottom:6px" id="pi-setup-printer-'+i+'">'+
       '<div style="font-size:7px;color:var(--txt-d);letter-spacing:1px;margin-bottom:6px">PRINTER '+(i+1)+'</div>'+
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:5px">'+
-        '<input class="srch" placeholder="Name (e.g. A1)" value="'+esc(p.name||'')+'" id="pi-pname-'+i+'"/>'+
+        '<input class="srch" placeholder="Display name (e.g. P1S Room)" value="'+esc(p.name||'')+'" id="pi-pname-'+i+'"/>'+
+        '<input class="srch" placeholder="Hub key (e.g. P1 Room)" value="'+esc(p.hubName||p.name||'')+'" id="pi-phub-'+i+'" title="The exact key your Pi Hub uses — check Pi Hub → /status response"/>'+
         '<input class="srch" placeholder="IP (192.168.x.x)" value="'+esc(p.ip||'')+'" id="pi-pip-'+i+'"/>'+
-        '<input class="srch" placeholder="Serial number" value="'+esc(p.serial||'')+'" id="pi-pser-'+i+'"/>'+
         '<input class="srch" placeholder="Access code" value="'+esc(p.accessCode||'')+'" id="pi-pacc-'+i+'"/>'+
-        '<input class="srch" placeholder="Camera stream (e.g. camera_a1)" value="'+esc((existing.cameras&&existing.cameras[p.name])||'')+'" id="pi-pcam-'+i+'" style="grid-column:1/-1"/>'+
+        '<input class="srch" placeholder="Camera stream (e.g. p1_room)" value="'+esc((existing.cameras&&existing.cameras[p.name])||'')+'" id="pi-pcam-'+i+'" style="grid-column:1/-1"/>'+
       '</div>'+
     '</div>'
   ).join('');
@@ -13247,6 +13295,14 @@ function openPiHubSetup(){
       '<div style="font-size:7px;color:var(--txt-d);letter-spacing:1px;margin-bottom:4px">TAILSCALE IP (fallback, local only)</div>'+
       '<input class="srch" id="pi-tailscale-ip" placeholder="100.x.x.x" value="'+esc(existing.tailscaleIP||'')+'" style="width:100%;box-sizing:border-box"/>'+
     '</div>'+
+    '<div style="background:rgba(0,200,255,0.05);border:1px solid rgba(0,200,255,0.15);border-radius:6px;padding:10px;margin-bottom:12px">'+
+      '<div style="font-size:7px;color:var(--cyn);letter-spacing:1.5px;font-weight:700;margin-bottom:5px">📷 CAMERA SERVER PUBLIC URL</div>'+
+      '<div style="font-size:7px;color:var(--txt-d);line-height:1.6;margin-bottom:6px">'+
+        'For live camera feeds, expose go2rtc via Tailscale Funnel on the Pi:<br>'+
+        '<code style="font-size:7px;color:var(--cyn)">sudo tailscale funnel 1984</code> — paste the <code>https://…</code> URL below.'+
+      '</div>'+
+      '<input class="srch" id="pi-go2rtc-public-url" placeholder="https://… (go2rtc public URL, optional)" value="'+esc(existing.go2rtcPublicUrl||'')+'" style="width:100%;box-sizing:border-box"/>'+
+    '</div>'+
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">'+
       '<div><div style="font-size:7px;color:var(--txt-d);letter-spacing:1px;margin-bottom:4px">HUB PORT</div>'+
         '<input class="srch" id="pi-hub-port" type="number" value="'+(existing.hubPort||3000)+'" style="width:100%;box-sizing:border-box"/></div>'+
@@ -13275,17 +13331,18 @@ function piSetupAddPrinter(){
   div.id='pi-setup-printer-'+i;
   div.innerHTML='<div style="font-size:7px;color:var(--txt-d);letter-spacing:1px;margin-bottom:6px">PRINTER '+(i+1)+'</div>'+
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:5px">'+
-      '<input class="srch" placeholder="Name (e.g. A1)" id="pi-pname-'+i+'"/>'+
+      '<input class="srch" placeholder="Display name (e.g. P1S Room)" id="pi-pname-'+i+'"/>'+
+      '<input class="srch" placeholder="Hub key (e.g. P1 Room)" id="pi-phub-'+i+'" title="The exact key the Pi Hub uses in /status"/>'+
       '<input class="srch" placeholder="IP (192.168.x.x)" id="pi-pip-'+i+'"/>'+
-      '<input class="srch" placeholder="Serial number" id="pi-pser-'+i+'"/>'+
       '<input class="srch" placeholder="Access code" id="pi-pacc-'+i+'"/>'+
-      '<input class="srch" placeholder="Camera stream (e.g. camera_a1)" id="pi-pcam-'+i+'" style="grid-column:1/-1"/>'+
+      '<input class="srch" placeholder="Camera stream name" id="pi-pcam-'+i+'" style="grid-column:1/-1"/>'+
     '</div>';
   list.appendChild(div);
 }
 
 async function savePiHubSetup(){
   const publicUrl=(document.getElementById('pi-public-url')?.value||'').trim();
+  const go2rtcPublicUrl=(document.getElementById('pi-go2rtc-public-url')?.value||'').trim();
   const ip=(document.getElementById('pi-tailscale-ip')?.value||'').trim();
   if(!ip&&!publicUrl){toast('Enter either a Public URL or Tailscale IP','','error');return;}
   const hubPort=parseInt(document.getElementById('pi-hub-port')?.value)||3000;
@@ -13296,18 +13353,18 @@ async function savePiHubSetup(){
   const cameras={};
   for(let i=0;i<count;i++){
     const name=(document.getElementById('pi-pname-'+i)?.value||'').trim();
+    const hubName=(document.getElementById('pi-phub-'+i)?.value||'').trim()||name;
     const pip=(document.getElementById('pi-pip-'+i)?.value||'').trim();
-    const serial=(document.getElementById('pi-pser-'+i)?.value||'').trim();
     const accessCode=(document.getElementById('pi-pacc-'+i)?.value||'').trim();
     const cam=(document.getElementById('pi-pcam-'+i)?.value||'').trim();
     if(name){
-      printers.push({name,ip:pip,serial,accessCode});
+      printers.push({name,hubName,ip:pip,accessCode});
       if(cam)cameras[name]=cam;
       ensurePrinterRecord(name);
     }
   }
 
-  const cfg={tailscaleIP:ip,publicUrl,hubPort,go2rtcPort,printers,cameras};
+  const cfg={tailscaleIP:ip,publicUrl,go2rtcPublicUrl,hubPort,go2rtcPort,printers,cameras};
   await savePiHubConfig(cfg);
   document.getElementById('pihub-setup-modal')?.remove();
   startPiPolling();
