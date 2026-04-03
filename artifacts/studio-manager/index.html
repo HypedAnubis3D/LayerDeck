@@ -4058,9 +4058,13 @@ function renderTmf(){
       '</div>';
     }).join('');
     const totalGrams=grams.length?grams.reduce((a,v)=>a+(v||0),0).toFixed(1):null;
+    // Prefer clean filename-derived name over potentially stale metadata title
+    const _tmfFileClean=(t.filename||'').replace(/\.gcode\.3mf$/i,'').replace(/\.3mf$/i,'').replace(/_/g,' ').trim();
+    const _tmfDisplayName=_tmfFileClean||t.name||'Unknown';
+    const _tmfMeta=(t.name&&t.name!==_tmfDisplayName&&!t.autoAdded)?t.name:null;
     return '<div class="tmf-card'+(isSel?' selected':'')+'" data-selid="'+t.id+'" onclick="if(selectMode===\'tmf\'){event.stopPropagation();toggleSelect(\''+t.id+'\');}">'+
-      '<div class="tmf-name">'+esc(t.name)+(t.autoAdded?'<span style="font-size:6px;background:rgba(0,200,255,.12);color:var(--cyn-b);padding:1px 5px;border-radius:6px;margin-left:5px;vertical-align:middle" title="Auto-added when print started — no 3MF file parsed">auto</span>':'')+'</div>'+
-      '<div class="tmf-sub">'+esc(t.filename)+' · '+new Date(t.uploadedAt).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})+'</div>'+
+      '<div class="tmf-name">'+esc(_tmfDisplayName)+(t.autoAdded?'<span style="font-size:6px;background:rgba(0,200,255,.12);color:var(--cyn-b);padding:1px 5px;border-radius:6px;margin-left:5px;vertical-align:middle" title="Auto-added when print started — no 3MF file parsed">auto</span>':'')+'</div>'+
+      '<div class="tmf-sub">'+(_tmfMeta?'<span style="color:var(--txt-d);font-style:italic">'+esc(_tmfMeta)+'</span> · ':'')+new Date(t.uploadedAt).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})+'</div>'+
       // Printer badge + all filament swatches with grams
       (t.printer||colors.length?
         '<div style="margin-bottom:8px">'+

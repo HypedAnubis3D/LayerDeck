@@ -5,6 +5,7 @@ export interface Parsed3MF {
   filename: string;
   file?: File | null;
   modelName: string;
+  metaTitle?: string;
   objectsCount: number;
   objects: string[];
   printTimeEstimate?: string;
@@ -82,7 +83,9 @@ export async function parse3MFFile(file: File): Promise<Parsed3MF> {
       const titleM =
         modelRaw.match(/name="Title"\s+value="([^"]+)"/) ||
         modelRaw.match(/<metadata name="Title">([^<]+)<\/metadata>/i);
-      if (titleM) result.modelName = titleM[1];
+      // Store metadata title separately — Bambu Studio often leaves a stale project title
+      // from a previous file, so the filename (user-set) is more reliable as the primary name
+      if (titleM) result.metaTitle = titleM[1];
 
       // Bambu format: key="name" value="something.stl"
       const oNames = [
