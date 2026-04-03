@@ -253,24 +253,28 @@ app.post('/ams/set-slot', (req, res) => {
   res.json({ ok: true });
 });
 
-// POST /ams/load — load filament into AMS slot
+// POST /ams/load — load filament from AMS slot or external/virtual spool
+// amsId=255 means external/virtual spool (printer without AMS)
 app.post('/ams/load', (req, res) => {
   const { printer, amsId, trayId } = req.body;
   const p = printerClients[printer];
   if (!p) return res.status(404).json({ error: 'Printer not found' });
+  const isExternal = (amsId === 255 || amsId === -1);
+  const target = isExternal ? 255 : ((amsId || 0) * 4 + (trayId || 0));
   p.client.publish(p.REQUEST_TOPIC, JSON.stringify({
     print: {
       sequence_id: '0',
       command:     'ams_change_filament',
-      target:      trayId,
-      curr_temp:   220,
-      tar_temp:    220
+      target:      target,
+      curr_temp:   0,
+      tar_temp:    0
     }
   }));
   res.json({ ok: true });
 });
 
 // POST /ams/unload — unload current filament
+// Uses ams_control/unload which works for AMS, AMS Lite, and external spool
 app.post('/ams/unload', (req, res) => {
   const { printer } = req.body;
   const p = printerClients[printer];
@@ -278,7 +282,31 @@ app.post('/ams/unload', (req, res) => {
   p.client.publish(p.REQUEST_TOPIC, JSON.stringify({
     print: {
       sequence_id: '0',
-      command:     'ams_unload'
+      command:     'ams_control',
+      param:       'unload'
+    }
+  }));
+  res.json({ ok: true });
+});
+
+// POST /ams/set-ext-spool — set color/type metadata for external/virtual spool
+// Used when a printer has no AMS (e.g. P1S with direct spool)
+app.post('/ams/set-ext-spool', (req, res) => {
+  const { printer, color, type, brand } = req.body;
+  const p = printerClients[printer];
+  if (!p) return res.status(404).json({ error: 'Printer not found' });
+  const col = (color || '#1A1A1A').replace('#', '').toUpperCase().slice(0, 6) + 'FF';
+  p.client.publish(p.REQUEST_TOPIC, JSON.stringify({
+    print: {
+      sequence_id:     '0',
+      command:         'ams_filament_setting',
+      ams_id:          255,
+      tray_id:         254,
+      tray_color:      col,
+      tray_type:       type || 'PLA',
+      tray_sub_brands: brand || '',
+      setting_id:      '',
+      tray_info_idx:   ''
     }
   }));
   res.json({ ok: true });

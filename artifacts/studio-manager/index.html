@@ -9149,8 +9149,11 @@ function piTrayToDisplay(tray,activeTrayId){
 function renderAmsMap(printerName,compact=false){
   const slots=amsMap[printerName]||{};
   const pr=printerRecords.find(p=>p.name===printerName);
-  const piAms=(piLiveData[printerName]||{}).ams;
+  const livePrinterData=piLiveData[printerName]||{};
+  const piAms=livePrinterData.ams;
+  const vtTray=livePrinterData.vt_tray;
   const activeTrayId=piAms?String(piAms.tray_now||''):'';
+  const hasPi=!!piHubConfig;
 
   // Build AMS unit groups from Pi Hub if available, otherwise fall back to flat slot count
   let units=[];
@@ -9162,13 +9165,50 @@ function renderAmsMap(printerName,compact=false){
     });
   } else {
     // Fall back to printerRecords amsSlots (no Pi Hub data)
-    const numSlots=(pr?pr.amsSlots:0)||4;
-    const trays=Array.from({length:Math.min(numSlots,16)},(_,i)=>({tray:null,slotNum:i+1,unitIdx:0,trayIdx:i}));
-    units=[{unitLabel:'',trays}];
+    const numSlots=(pr?pr.amsSlots:0)||0;
+    if(numSlots>0){
+      const trays=Array.from({length:Math.min(numSlots,16)},(_,i)=>({tray:null,slotNum:i+1,unitIdx:0,trayIdx:i}));
+      units=[{unitLabel:'',trays}];
+    }
   }
 
   const totalSlots=units.reduce((s,u)=>s+u.trays.length,0);
-  if(!totalSlots) return '<div style="font-size:6px;color:var(--txt-d);padding:4px 0">No AMS configured</div>';
+
+  // ── External/virtual spool (printer with no AMS e.g. P1S direct spool) ──
+  const hasExtData=vtTray&&vtTray.tray_color&&vtTray.tray_color!=='00000000';
+  if(!totalSlots&&!hasExtData) return '<div style="font-size:6px;color:var(--txt-d);padding:4px 0">No AMS configured</div>';
+
+  if(!totalSlots&&hasExtData){
+    const extCol='#'+(vtTray.tray_color||'888888').slice(0,6);
+    const extMat=vtTray.tray_sub_brands||vtTray.tray_type||'?';
+    const extRemain=vtTray.remain||0;
+    const bc=extRemain>0?barcol(extRemain):'var(--txt-d)';
+    const extKey=_amsSlotKey(printerName,255,254);
+    const isSet=!!(amsSlotMappings[extKey]);
+    if(compact){
+      return '<div class="ams-map-compact">'
+        +'<div class="ams-slot-compact" style="background:'+extCol+'" onclick="openSetFilamentModal(\''+esc(printerName)+'\',255,254)"><div class="ams-tooltip">External: '+esc(extMat)+(extRemain?' ('+extRemain+'%)':'')+'</div></div>'
+        +'</div>';
+    }
+    const btns=hasPi?('<div class="ams-slot-btns" onclick="event.stopPropagation()">'+
+      '<button class="btn btn-xs" style="font-size:5px;padding:2px 4px;background:var(--gold-d);border-color:var(--gold-dim);color:var(--gold-b)" onclick="openSetFilamentModal(\''+esc(printerName)+'\',255,254)">Set</button>'+
+      '<button class="btn btn-xs" style="font-size:5px;padding:2px 4px" onclick="piAmsLoad(\''+esc(printerName)+'\',255,254)">Load</button>'+
+      '<button class="btn btn-xs" style="font-size:5px;padding:2px 4px" onclick="piAmsUnload(\''+esc(printerName)+'\')">Unload</button>'+
+      '</div>'):'';
+    return '<div style="display:grid;gap:8px">'
+      +'<div style="font-size:6px;color:var(--gold-b);letter-spacing:1.5px;font-weight:700;margin-bottom:4px">EXTERNAL SPOOL</div>'
+      +'<div style="display:grid;grid-template-columns:1fr;gap:5px">'
+        +'<div class="ams-slot filled" style="background:'+extCol+'22;border-color:'+extCol+';max-width:100px">'
+          +(isSet?'<div class="ams-slot-badge">✅</div>':'')
+          +'<div class="ams-slot-num">EXT</div>'
+          +'<div style="width:26px;height:26px;border-radius:50%;background:'+extCol+';border:2px solid rgba(255,255,255,0.3);flex-shrink:0"></div>'
+          +'<div class="ams-slot-name">'+esc(extMat)+'</div>'
+          +(extRemain>0?'<div class="ams-slot-pct" style="color:'+bc+'">'+extRemain+'%</div><div class="ams-slot-bar"><div class="ams-slot-bar-fill" style="width:'+extRemain+'%;background:'+bc+'"></div></div>':'')
+          +btns
+        +'</div>'
+      +'</div>'
+    +'</div>';
+  }
   const multiUnit=units.length>1;
   const hasPi=!!piHubConfig;
 
@@ -9231,7 +9271,9 @@ function renderAmsMapDash(printerName){
   const slots=amsMap[printerName]||{};
   const pr=printerRecords.find(function(p){return p.name===printerName;});
   var _liveMap=(typeof piLiveData!=='undefined')?piLiveData:{};
-  const piAms=(_liveMap[printerName]||{}).ams;
+  const livePr=_liveMap[printerName]||{};
+  const piAms=livePr.ams;
+  const vtTray=livePr.vt_tray;
   const activeTrayId=piAms?String(piAms.tray_now||''):'';
 
   // Build tray list: prefer Pi live structure, fall back to printerRecords slot count
@@ -9243,8 +9285,25 @@ function renderAmsMapDash(printerName){
       });
     });
   }else{
-    var numSlots=Math.min((pr?pr.amsSlots:0)||4,16);
+    var numSlots=Math.min((pr?pr.amsSlots:0)||0,16);
     for(var i=0;i<numSlots;i++)trays.push({piTray:null,amsId:0,trayId:i,slotNum:i+1});
+  }
+
+  // External/virtual spool fallback for printers with no AMS
+  var hasExtData=vtTray&&vtTray.tray_color&&vtTray.tray_color!=='00000000';
+  if(!trays.length&&hasExtData){
+    var extCol='#'+(vtTray.tray_color||'888888').slice(0,6);
+    var extMat=vtTray.tray_sub_brands||vtTray.tray_type||'?';
+    var extRemain=vtTray.remain||0;
+    var extBc=extRemain>0?barcol(extRemain):'var(--txt-d)';
+    return '<div class="ams-dash-grid">'
+      +'<div class="ams-dash-slot filled" onclick="openSetFilamentModal(\''+esc(printerName)+'\',255,254)" style="background:'+extCol+'14;border-color:'+extCol+'44">'
+        +'<div class="ams-dash-num">EXT</div>'
+        +'<div class="ams-dash-dot" style="background:'+extCol+';box-shadow:0 0 6px '+extCol+'55"></div>'
+        +'<div class="ams-dash-label" title="'+esc(extMat)+'">'+esc(extMat.split(' ').pop())+'</div>'
+        +(extRemain>0?'<div class="ams-dash-pct" style="color:'+extBc+'">'+extRemain+'%</div>':'<div class="ams-dash-pct" style="color:var(--bdr2)">—</div>')
+      +'</div>'
+    +'</div>';
   }
 
   if(!trays.length)return '<div style="font-size:9px;color:var(--txt-d);padding:6px 0;font-style:italic">No AMS configured</div>';
@@ -9393,33 +9452,36 @@ function openSetFilamentFromAmsModal(){
 const AMS_COLOR_PRESETS=['#1A1A1A','#F5F5F5','#888888','#E63946','#457B9D','#2A9D8F','#F4A261','#E9C46A','#6A0572','#C77DFF','#4CC9F0','#F72585','#FF6B00','#00C08B'];
 
 function openSetFilamentModal(printerName,amsId,trayId){
-  const unitLabel=amsId!==null?'AMS '+(amsId+1)+' ':'';
-  document.getElementById('amsfil-title').textContent='Set Filament — '+unitLabel+'Slot '+(trayId+1);
+  const isExt=(amsId===255);
+  let titleLabel=isExt?'External Spool':'AMS '+(amsId+1)+' Slot '+(trayId+1);
+  document.getElementById('amsfil-title').textContent='Set Filament — '+printerName+' — '+titleLabel;
   document.getElementById('amsfil-printer').value=printerName;
   document.getElementById('amsfil-amsid').value=String(amsId);
   document.getElementById('amsfil-trayid').value=String(trayId);
-  // Show Pi live data for this slot
-  const piAms=(piLiveData[printerName]||{}).ams;
+  // Show Pi live data for this slot (AMS or external)
+  const liveData=piLiveData[printerName]||{};
+  const piAms=liveData.ams;
+  const vtTray=liveData.vt_tray;
   const liveInfo=document.getElementById('amsfil-live-info');
-  if(piAms&&piAms.ams&&piAms.ams[amsId]){
-    const liveTray=(piAms.ams[amsId].tray||[])[trayId];
-    if(liveTray&&liveTray.tray_type){
-      liveInfo.textContent='Pi Hub: '+(liveTray.tray_sub_brands||liveTray.tray_type)+(liveTray.tray_color?' · #'+liveTray.tray_color.slice(0,6):'')+(liveTray.remain?' · '+liveTray.remain+'% left':'');
-      liveInfo.style.display='';
-    }else{liveInfo.style.display='none';}
+  let liveTray=null;
+  if(isExt){
+    liveTray=vtTray;
+  }else if(piAms&&piAms.ams&&piAms.ams[amsId]){
+    liveTray=(piAms.ams[amsId].tray||[])[trayId];
+  }
+  if(liveTray&&liveTray.tray_type){
+    liveInfo.textContent='Pi Hub: '+(liveTray.tray_sub_brands||liveTray.tray_type)+(liveTray.tray_color?' · #'+liveTray.tray_color.slice(0,6):'')+(liveTray.remain?' · '+liveTray.remain+'% left':'');
+    liveInfo.style.display='';
   }else{liveInfo.style.display='none';}
   // Nozzle temp warning
-  const nozzle=(piLiveData[printerName]||{}).nozzle_temper||0;
+  const nozzle=liveData.nozzle_temper||0;
   document.getElementById('amsfil-temp-warn').style.display=(nozzle>0&&nozzle<170)?'':'none';
   // Pre-select color from existing mapping or Pi tray
   const key=_amsSlotKey(printerName,amsId,trayId);
   const existing=amsSlotMappings[key];
   let defColor='#1A1A1A';
   if(existing&&existing.color)defColor=existing.color;
-  else if(piAms&&piAms.ams&&piAms.ams[amsId]){
-    const liveTray=(piAms.ams[amsId].tray||[])[trayId];
-    if(liveTray&&liveTray.tray_color)defColor='#'+liveTray.tray_color.slice(0,6);
-  }
+  else if(liveTray&&liveTray.tray_color)defColor='#'+liveTray.tray_color.slice(0,6);
   document.getElementById('amsfil-color').value=defColor;
   // Reset picker state
   document.getElementById('amsfil-search').value='';
@@ -9481,6 +9543,7 @@ async function piSetFilament(){
   const printerName=document.getElementById('amsfil-printer').value;
   const amsId=parseInt(document.getElementById('amsfil-amsid').value);
   const trayId=parseInt(document.getElementById('amsfil-trayid').value);
+  const isExt=(amsId===255);
   const selName=document.getElementById('amsfil-sel-name');
   const brand=selName.dataset.brand;
   const name=selName.dataset.name;
@@ -9497,10 +9560,15 @@ async function piSetFilament(){
   const btn=document.getElementById('amsfil-set-btn');
   if(btn){btn.disabled=true;btn.textContent='Setting…';}
   try{
-    const res=await fetch('/api/pihub/ams-set-slot?hub='+encodeURIComponent(piUrl),{
+    // External spool uses a different endpoint (ams_id=255 / virtual tray)
+    const endpoint=isExt?'/api/pihub/ams-set-ext-spool':'/api/pihub/ams-set-slot';
+    const body=isExt
+      ?{printer:hubKey,color:'#'+colorHex,type:mat,brand:brand+' '+name}
+      :{printer:hubKey,amsId:amsId,trayId:trayId,filamentType:mat,color:colorMqtt,filamentName:brand+' '+name,nozzleTemp:nozzle,bedTemp:bed};
+    const res=await fetch(endpoint+'?hub='+encodeURIComponent(piUrl),{
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({printer:hubKey,amsId:amsId,trayId:trayId,filamentType:mat,color:colorMqtt,filamentName:brand+' '+name,nozzleTemp:nozzle,bedTemp:bed})
+      body:JSON.stringify(body)
     });
     const j=await res.json().catch(function(){return {};});
     if(j.error){toast('Failed to set filament',j.error,'error');}
@@ -9508,7 +9576,8 @@ async function piSetFilament(){
       const key=_amsSlotKey(printerName,amsId,trayId);
       amsSlotMappings[key]={brand:brand,name:name,material:mat,color:'#'+colorHex,nozzle:nozzle,bed:bed,setAt:Date.now()};
       saveAmsSlotMappings();
-      toast('Filament set',brand+' '+name+' → '+printerName+' AMS '+(amsId+1)+' Slot '+(trayId+1),'success');
+      const slotLabel=isExt?'External Spool':'AMS '+(amsId+1)+' Slot '+(trayId+1);
+      toast('Filament set',brand+' '+name+' → '+printerName+' '+slotLabel,'success');
       closeSetFilamentModal();
       render();
     }
@@ -13307,10 +13376,18 @@ function estimatePiFilament(material,durationMins){
 }
 
 // ── Get primary material from AMS data ──
-function getPiAMSMaterial(amsData){
-  if(!amsData?.ams||!amsData.ams[0]?.tray)return'PLA';
-  const t=amsData.ams[0].tray[0];
-  return t?.tray_type||'PLA';
+// Gets active material from AMS or external/virtual spool
+// Pass the full printer live data object (contains both .ams and .vt_tray)
+function getPiAMSMaterial(printerData){
+  const amsData=printerData&&printerData.ams?printerData.ams:printerData;
+  if(amsData&&amsData.ams&&amsData.ams[0]&&amsData.ams[0].tray){
+    const t=amsData.ams[0].tray[0];
+    if(t&&t.tray_type)return t.tray_type;
+  }
+  // Fallback to virtual/external tray for printers without AMS
+  const vt=printerData&&printerData.vt_tray?printerData.vt_tray:null;
+  if(vt&&vt.tray_type)return vt.tray_type;
+  return'PLA';
 }
 
 // ── AMS color swatches ──
@@ -13389,7 +13466,7 @@ async function onPiPrintStarted(name,data){
 async function onPiPrintFinished(name,data){
   const startTime=piPrintStartTimes[name]||Date.now();
   const durationMins=Math.round((Date.now()-startTime)/60000);
-  const material=getPiAMSMaterial(data.ams);
+  const material=getPiAMSMaterial(data);
   const gramsUsed=estimatePiFilament(material,durationMins);
   const jobName=(data.subtask_name||'').replace('.gcode.3mf','').replace('.3mf','')||'Unknown';
 
@@ -13449,7 +13526,7 @@ async function onPiPrintFinished(name,data){
 async function onPiPrintFailed(name,data){
   const startTime=piPrintStartTimes[name]||Date.now();
   const durationMins=Math.round((Date.now()-startTime)/60000);
-  const material=getPiAMSMaterial(data.ams);
+  const material=getPiAMSMaterial(data);
   const gramsWasted=estimatePiFilament(material,durationMins);
   const jobName=(data.subtask_name||'').replace('.gcode.3mf','').replace('.3mf','')||'Unknown';
 
