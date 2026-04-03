@@ -13239,6 +13239,7 @@ function cameraProxyUrl(go2rtcBase,stream,format){
   var b=encodeURIComponent(go2rtcBase);
   var s=encodeURIComponent(stream);
   if(format==='snapshot') return '/api/camera/snapshot?base='+b+'&src='+s;
+  if(format==='mjpeg') return '/api/camera/mjpeg?base='+b+'&src='+s;
   return '/api/camera/playlist?base='+b+'&src='+s;
 }
 
@@ -13263,20 +13264,23 @@ function openCameraFeed(printerName){
 
   if(hasGo2rtcUrl){
     // Proxy the stream through the Replit API server — browser sees same-origin HTTPS
-    const hlsProxy=cameraProxyUrl(go2rtcUrl,stream,'hls');
+    // MJPEG works natively in all browsers as an <img> src (no HLS.js needed)
+    const mjpegProxy=cameraProxyUrl(go2rtcUrl,stream,'mjpeg');
     const snapshotProxy=cameraProxyUrl(go2rtcUrl,stream,'snapshot');
+    const camId='cam-img-'+piId(printerName);
     mod.innerHTML=title+
-      '<div style="position:relative;max-width:100%">'+
-        '<video id="cam-vid-'+piId(printerName)+'" autoplay muted playsinline controls '+
-          'style="max-width:640px;width:100%;max-height:60vh;border-radius:8px;border:1px solid var(--bdr2);display:block;background:#000">'+
-          '<source src="'+hlsProxy+'" type="application/vnd.apple.mpegurl">'+
-          'HLS not supported — check the snapshot link below.'+
-        '</video>'+
-        '<div style="position:absolute;bottom:8px;right:8px">'+
+      '<div style="position:relative;max-width:640px;width:100%">'+
+        '<img id="'+camId+'" src="'+mjpegProxy+'" '+
+          'style="max-width:640px;width:100%;max-height:60vh;border-radius:8px;border:1px solid var(--bdr2);display:block;background:#111;min-height:160px" '+
+          'onerror="document.getElementById(\'cam-err-'+piId(printerName)+'\').style.display=\'block\';this.style.display=\'none\'"/>'+
+        '<div id="cam-err-'+piId(printerName)+'" style="display:none;padding:20px;text-align:center;color:var(--red-b);font-size:8px;background:#111;border-radius:8px;border:1px solid var(--bdr2)">'+
+          '⚠ Stream failed — check Camera Server URL and stream name in Setup'+
+        '</div>'+
+        '<div style="position:absolute;bottom:8px;right:8px;display:flex;gap:4px">'+
           '<a href="'+snapshotProxy+'" target="_blank" style="font-size:7px;color:var(--txt-d);text-decoration:none;background:rgba(0,0,0,0.6);padding:2px 6px;border-radius:3px">📸 Snapshot</a>'+
         '</div>'+
       '</div>'+
-      '<div style="font-size:7px;color:var(--txt-d);margin-top:6px;text-align:center">Stream proxied through LayerDeck server — if black screen, verify go2rtc URL in Setup</div>'+
+      '<div style="font-size:7px;color:var(--txt-d);margin-top:6px;text-align:center">Live MJPEG · proxied through LayerDeck server</div>'+
       closeBtn;
   } else {
     // No go2rtc URL or wrong URL — show setup instructions

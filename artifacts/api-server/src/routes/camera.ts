@@ -14,85 +14,135 @@ function sanitizeBase(raw: string | undefined): string | null {
   }
 }
 
-async function proxyFetch(url: string, timeoutMs = 10000): Promise<Response> {
-  const ctrl = new AbortController();
-  const t = setTimeout(() => ctrl.abort(), timeoutMs);
-  const res = await fetch(url, { signal: ctrl.signal });
-  clearTimeout(t);
-  return res;
+// Resolve a URL line from an m3u8 relative to the playlist URL it came from
+function resolveM3u8Url(line: string, playlistUrl: string): string {
+  if (line.startsWith('http://') || line.startsWith('https://')) return line;
+  // Root-relative (/api/...)
+  if (line.startsWith('/')) {
+    const u = new URL(playlistUrl);
+    return u.origin + line;
+  }
+  // Path-relative: resolve against the playlist's directory
+  const base = playlistUrl.split('?')[0].replace(/\/[^/]+$/, '/');
+  return base + line;
 }
 
-// ── JPEG snapshot ─────────────────────────────────────────────────────────────
+// Rewrite URI lines in an m3u8 body so they go through /api/camera/segment
+function rewriteM3u8(text: string, playlistUrl: string): string {
+  return text.split('\n').map(line => {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) return line;
+    const absolute = resolveM3u8Url(trimmed, playlistUrl);
+    return `/api/camera/segment?url=${encodeURIComponent(absolute)}`;
+  }).join('\n');
+}
+
+function isM3u8(contentType: string | null, body: string): boolean {
+  if (contentType && (contentType.includes('mpegurl') || contentType.includes('m3u8'))) return true;
+  return body.trimStart().startsWith('#EXTM3U');
+}
+
+// ── JPEG snapshot ──────────────────────────────────────────────────────────
 // GET /api/camera/snapshot?base=<go2rtcUrl>&src=<streamName>
 router.get('/snapshot', async (req, res) => {
   const base = sanitizeBase(req.query.base as string);
   const src = req.query.src as string;
   if (!base || !src) return res.status(400).json({ error: 'Missing base or src' });
 
-  const upstream_url = `${base}/api/frame.jpeg?src=${encodeURIComponent(src)}`;
+  const upstreamUrl = `${base}/api/frame.jpeg?src=${encodeURIComponent(src)}`;
   try {
-    const upstream = await proxyFetch(upstream_url, 8000);
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 8000);
+    const upstream = await fetch(upstreamUrl, { signal: ctrl.signal });
+    clearTimeout(t);
     if (!upstream.ok) return res.status(upstream.status).end();
     const buf = Buffer.from(await upstream.arrayBuffer());
     res.setHeader('Content-Type', upstream.headers.get('Content-Type') || 'image/jpeg');
     res.setHeader('Cache-Control', 'no-cache, no-store');
     return res.send(buf);
   } catch (e: any) {
-    logger.warn({ err: e?.message, upstream_url }, '[Camera] Snapshot failed');
+    logger.warn({ err: e?.message, upstreamUrl }, '[Camera] Snapshot failed');
     return res.status(502).json({ error: 'go2rtc unreachable', detail: e?.message });
   }
 });
 
-// ── HLS playlist (rewrite segment URLs to go through this proxy) ───────────
+// ── MJPEG live stream (piped — works as <img src> in all browsers) ─────────
+// GET /api/camera/mjpeg?base=<go2rtcUrl>&src=<streamName>
+router.get('/mjpeg', async (req, res) => {
+  const base = sanitizeBase(req.query.base as string);
+  const src = req.query.src as string;
+  if (!base || !src) return res.status(400).json({ error: 'Missing base or src' });
+
+  const upstreamUrl = `${base}/api/stream.mjpeg?src=${encodeURIComponent(src)}`;
+  const ctrl = new AbortController();
+
+  // Abort upstream when client disconnects
+  req.on('close', () => ctrl.abort());
+
+  try {
+    const upstream = await fetch(upstreamUrl, { signal: ctrl.signal });
+    if (!upstream.ok) {
+      return res.status(upstream.status).json({ error: 'go2rtc returned ' + upstream.status });
+    }
+    if (!upstream.body) return res.status(502).json({ error: 'No stream body' });
+
+    res.setHeader('Content-Type', upstream.headers.get('Content-Type') || 'multipart/x-mixed-replace;boundary=--boundary');
+    res.setHeader('Cache-Control', 'no-cache, no-store');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+
+    const reader = (upstream.body as ReadableStream<Uint8Array>).getReader();
+    const pump = async () => {
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done || res.writableEnded) break;
+          res.write(Buffer.from(value));
+        }
+      } catch {
+        // Client disconnected or upstream closed — expected
+      } finally {
+        if (!res.writableEnded) res.end();
+      }
+    };
+    pump();
+  } catch (e: any) {
+    if (!res.headersSent) {
+      logger.warn({ err: e?.message, upstreamUrl }, '[Camera] MJPEG stream failed');
+      res.status(502).json({ error: 'go2rtc unreachable', detail: e?.message });
+    }
+  }
+});
+
+// ── HLS master playlist ────────────────────────────────────────────────────
 // GET /api/camera/playlist?base=<go2rtcUrl>&src=<streamName>
 router.get('/playlist', async (req, res) => {
   const base = sanitizeBase(req.query.base as string);
   const src = req.query.src as string;
   if (!base || !src) return res.status(400).json({ error: 'Missing base or src' });
 
-  const upstream_url = `${base}/api/stream.m3u8?src=${encodeURIComponent(src)}`;
+  const upstreamUrl = `${base}/api/stream.m3u8?src=${encodeURIComponent(src)}`;
   try {
-    const upstream = await proxyFetch(upstream_url, 8000);
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 8000);
+    const upstream = await fetch(upstreamUrl, { signal: ctrl.signal });
+    clearTimeout(t);
     if (!upstream.ok) return res.status(upstream.status).end();
-
     const text = await upstream.text();
-
-    // Rewrite each URI line (lines that don't start with # and aren't empty).
-    // go2rtc emits segments as relative paths like "stream000.ts?src=a1" or
-    // absolute paths starting with /api/. Make them absolute then route
-    // through /api/camera/segment?url=<encoded-absolute>.
-    const rewritten = text.split('\n').map(line => {
-      const trimmed = line.trim();
-      if (!trimmed || trimmed.startsWith('#')) return line;
-
-      let absolute: string;
-      if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
-        absolute = trimmed;
-      } else if (trimmed.startsWith('/')) {
-        // Root-relative — combine with go2rtc origin
-        const origin = new URL(base).origin;
-        absolute = origin + trimmed;
-      } else {
-        // Relative to /api/ directory
-        const withSrc = trimmed.includes('src=') ? trimmed : trimmed + (trimmed.includes('?') ? '&' : '?') + 'src=' + encodeURIComponent(src);
-        absolute = `${base}/api/${withSrc}`;
-      }
-
-      return `/api/camera/segment?url=${encodeURIComponent(absolute)}`;
-    }).join('\n');
-
+    const rewritten = rewriteM3u8(text, upstreamUrl);
     res.setHeader('Content-Type', 'application/vnd.apple.mpegurl');
     res.setHeader('Cache-Control', 'no-cache, no-store');
     res.setHeader('Access-Control-Allow-Origin', '*');
     return res.send(rewritten);
   } catch (e: any) {
-    logger.warn({ err: e?.message, upstream_url }, '[Camera] HLS playlist failed');
+    logger.warn({ err: e?.message, upstreamUrl }, '[Camera] HLS playlist failed');
     return res.status(502).json({ error: 'go2rtc unreachable', detail: e?.message });
   }
 });
 
-// ── HLS segment passthrough ────────────────────────────────────────────────
-// GET /api/camera/segment?url=<absoluteSegmentUrl>
+// ── HLS segment / sub-playlist passthrough ─────────────────────────────────
+// GET /api/camera/segment?url=<absoluteUrl>
+// If the upstream response is itself an m3u8, rewrite its URLs too.
 router.get('/segment', async (req, res) => {
   const urlParam = req.query.url as string;
   if (!urlParam) return res.status(400).json({ error: 'Missing url' });
@@ -107,10 +157,28 @@ router.get('/segment', async (req, res) => {
   }
 
   try {
-    const upstream = await proxyFetch(segUrl, 12000);
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 12000);
+    const upstream = await fetch(segUrl, { signal: ctrl.signal });
+    clearTimeout(t);
     if (!upstream.ok) return res.status(upstream.status).end();
+
+    const ct = upstream.headers.get('Content-Type') || '';
+
+    // If this is a sub-playlist (m3u8), rewrite its segment URLs too
+    if (ct.includes('mpegurl') || ct.includes('m3u8') || segUrl.includes('.m3u8')) {
+      const text = await upstream.text();
+      if (isM3u8(ct, text)) {
+        const rewritten = rewriteM3u8(text, segUrl);
+        res.setHeader('Content-Type', 'application/vnd.apple.mpegurl');
+        res.setHeader('Cache-Control', 'no-cache, no-store');
+        return res.send(rewritten);
+      }
+    }
+
+    // Binary segment (video/MP2T or similar)
     const buf = Buffer.from(await upstream.arrayBuffer());
-    res.setHeader('Content-Type', upstream.headers.get('Content-Type') || 'video/MP2T');
+    res.setHeader('Content-Type', ct || 'video/MP2T');
     res.setHeader('Cache-Control', 'no-cache, no-store');
     return res.send(buf);
   } catch (e: any) {
