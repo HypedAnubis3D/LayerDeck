@@ -13939,13 +13939,24 @@ function piCalibrateMenu(printerName){
 }
 
 // ── Light toggle ──────────────────────────────────────────────────────────────
+// Track light state locally — lights_report is not reliably pushed via MQTT
+var piLightStates={};   // {printerName: true=on / false=off}
 function piLightToggle(printerName){
+  // Prefer MQTT-reported state if available, otherwise use local toggle
   var live=piLiveData[printerName]||{};
   var lights=live.lights_report||[];
   var workLight=lights.find(function(l){return l.node==='work_light';});
-  var currentlyOn=workLight?workLight.mode==='on':false;
-  piControl(printerName,currentlyOn?'light_off':'light_on');
-  toast('Light '+(currentlyOn?'off':'on'),printerName,'success');
+  var currentlyOn;
+  if(workLight){
+    currentlyOn=workLight.mode==='on';
+    piLightStates[printerName]=currentlyOn; // sync local state with MQTT truth
+  }else{
+    currentlyOn=piLightStates[printerName]||false;
+  }
+  var newState=!currentlyOn;
+  piLightStates[printerName]=newState;
+  piControl(printerName,newState?'light_on':'light_off');
+  toast('Light '+(newState?'on':'off'),printerName,'success');
 }
 
 // ── Skip Object + Filament Refund Dialog ──
