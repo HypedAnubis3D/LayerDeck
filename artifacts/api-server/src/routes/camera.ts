@@ -44,8 +44,8 @@ router.get('/snapshot', async (req, res) => {
 });
 
 // ── HLS playlist (rewrite segment URLs to go through this proxy) ───────────
-// GET /api/camera/hls.m3u8?base=<go2rtcUrl>&src=<streamName>
-router.get('/hls.m3u8', async (req, res) => {
+// GET /api/camera/playlist?base=<go2rtcUrl>&src=<streamName>
+router.get('/playlist', async (req, res) => {
   const base = sanitizeBase(req.query.base as string);
   const src = req.query.src as string;
   if (!base || !src) return res.status(400).json({ error: 'Missing base or src' });

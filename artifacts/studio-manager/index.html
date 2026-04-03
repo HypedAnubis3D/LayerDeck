@@ -13017,15 +13017,16 @@ function _reschedulePiPoll(intervalMs){
 }
 
 function updatePiHubStatusDot(online,retryInMs,hint){
-  const dot=document.getElementById('pihub-status-dot');
-  const lbl=document.getElementById('pihub-status-lbl');
-  const hintEl=document.getElementById('pihub-status-hint');
-  if(dot){dot.style.background=online?'var(--grn)':'var(--red)';}
-  if(lbl){
+  // querySelectorAll so both the Printers tab card and the Pi Hub tab card update together
+  document.querySelectorAll('[id="pihub-status-dot"]').forEach(function(dot){
+    dot.style.background=online?'var(--grn)':'var(--red)';
+  });
+  document.querySelectorAll('[id="pihub-status-lbl"]').forEach(function(lbl){
     if(online){lbl.textContent='Pi Hub Online';}
     else if(retryInMs>5000){lbl.textContent='Offline — retry in '+(retryInMs/1000|0)+'s';}
     else{lbl.textContent='Pi Hub Offline';}
-  }
+  });
+  const hintEl=document.getElementById('pihub-status-hint');
   if(hintEl){hintEl.textContent=online?'':(hint||'');}
 }
 
@@ -13238,7 +13239,7 @@ function cameraProxyUrl(go2rtcBase,stream,format){
   var b=encodeURIComponent(go2rtcBase);
   var s=encodeURIComponent(stream);
   if(format==='snapshot') return '/api/camera/snapshot?base='+b+'&src='+s;
-  return '/api/camera/hls.m3u8?base='+b+'&src='+s;
+  return '/api/camera/playlist?base='+b+'&src='+s;
 }
 
 function openCameraFeed(printerName){
