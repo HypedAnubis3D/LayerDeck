@@ -4012,7 +4012,7 @@ function renderTmf(){
     }).join('');
     const totalGrams=grams.length?grams.reduce((a,v)=>a+(v||0),0).toFixed(1):null;
     return '<div class="tmf-card'+(isSel?' selected':'')+'" data-selid="'+t.id+'" onclick="if(selectMode===\'tmf\'){event.stopPropagation();toggleSelect(\''+t.id+'\');}">'+
-      '<div class="tmf-name">'+esc(t.name)+'</div>'+
+      '<div class="tmf-name">'+esc(t.name)+(t.autoAdded?'<span style="font-size:6px;background:rgba(0,200,255,.12);color:var(--cyn-b);padding:1px 5px;border-radius:6px;margin-left:5px;vertical-align:middle" title="Auto-added when print started — no 3MF file parsed">auto</span>':'')+'</div>'+
       '<div class="tmf-sub">'+esc(t.filename)+' · '+new Date(t.uploadedAt).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})+'</div>'+
       // Printer badge + all filament swatches with grams
       (t.printer||colors.length?
@@ -13477,6 +13477,39 @@ async function onPiPrintStarted(name,data){
   }
   // Ensure printerRecords has this printer
   ensurePrinterRecord(name);
+
+  // Auto-add to 3MF library if this job isn't already in it
+  // Matches by display name OR filename (case-insensitive, ignoring underscores/spaces)
+  if(jobName&&typeof tmfLib!=='undefined'){
+    var cleanJobName=jobName.replace(/_/g,' ').trim();
+    var jLow=cleanJobName.toLowerCase();
+    var alreadyInLib=tmfLib.some(function(t){
+      var tName=(t.name||'').toLowerCase().trim();
+      var tFile=(t.filename||'').replace(/\.3mf$/i,'').replace(/_/g,' ').toLowerCase().trim();
+      return tName===jLow||tFile===jLow||tName===jLow.replace(/ /g,'_')||tFile===jLow.replace(/ /g,'_');
+    });
+    if(!alreadyInLib){
+      var estHrs=data.mc_remaining_time?Math.round((data.mc_remaining_time/60)*10)/10:null;
+      tmfLib.push({
+        id:uid(),
+        filename:jobName.replace(/ /g,'_')+'.3mf',
+        name:cleanJobName,
+        printer:name,
+        autoAdded:true,
+        uploadedAt:Date.now(),
+        filamentType:'',filamentColor:'',filamentBrand:'',
+        filamentTypes:[],filamentColors:[],filamentBrands:[],
+        filamentGramsPerColor:[],
+        nozzleTemp:null,nozzleDiam:'',bedType:'',layerHeight:null,
+        supportType:'',supports:false,amsUnits:0,
+        objects:[],plates:[],
+        hrs:estHrs,layers:null,profile:'',filamentGrams:[],
+        supportGrams:0,purgeGrams:0,hasGcode:false
+      });
+      saveTmfs();
+      toast('Added to 3MF Library',cleanJobName,'info',3500);
+    }
+  }
 }
 
 async function onPiPrintFinished(name,data){
