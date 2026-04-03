@@ -8171,12 +8171,16 @@ function render(){
   if(curTab==='fildb')      renderFildb();
   if(curTab==='convention') renderConvention();
   if(curTab==='drying')     renderDrying();
+  if(curTab==='square')     renderSquare();
+  if(curTab==='discord')    renderDiscord();
+  if(curTab==='pihub')      renderPiHub();
+  if(curTab==='social')     renderSocial();
   // Post-render: apply visual enhancements
   if(typeof applyDynamicAccents==='function'){
     requestAnimationFrame(()=>{
       applyDynamicAccents();
       initSwipeGestures();
-          });
+    });
   }
 }
 
@@ -12674,12 +12678,15 @@ async function savePiHubConfig(cfg){
 }
 
 // ── Build URLs from config ──
+// Prefers publicUrl (Tailscale Funnel or ngrok) so the server-side proxy can reach the Pi
 function getPiUrl(){
   if(!piHubConfig)return null;
+  if(piHubConfig.publicUrl)return piHubConfig.publicUrl.replace(/\/$/,'');
   return 'http://'+piHubConfig.tailscaleIP+':'+(piHubConfig.hubPort||3000);
 }
 function getGo2rtcUrl(){
   if(!piHubConfig)return null;
+  if(piHubConfig.go2rtcPublicUrl)return piHubConfig.go2rtcPublicUrl.replace(/\/$/,'');
   return 'http://'+piHubConfig.tailscaleIP+':'+(piHubConfig.go2rtcPort||1984);
 }
 function getCameraUrl(printerName){
@@ -12832,12 +12839,12 @@ function ensurePrinterRecord(name){
   }
 }
 
-// ── MAIN POLL FUNCTION ──
+// ── MAIN POLL FUNCTION ── (proxied through API server to avoid mixed content)
 async function fetchPiStatus(){
   const piUrl=getPiUrl();
   if(!piUrl)return;
   try{
-    const res=await fetch(piUrl+'/status',{signal:AbortSignal.timeout(4000)});
+    const res=await fetch('/api/pihub/status?hub='+encodeURIComponent(piUrl),{signal:AbortSignal.timeout(6000)});
     if(!res.ok)return;
     const data=await res.json();
     const now=Date.now();
@@ -12929,12 +12936,12 @@ function stopPiPolling(){
   piPollTimer=null;
 }
 
-// ── Send control command ──
+// ── Send control command (via proxy) ──
 async function piControl(printerName,command){
   const piUrl=getPiUrl();
   if(!piUrl){toast('Pi Hub not configured','','error');return;}
   try{
-    await fetch(piUrl+'/control',{
+    await fetch('/api/pihub/control?hub='+encodeURIComponent(piUrl),{
       method:'POST',
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({printer:printerName,command})
@@ -13084,34 +13091,73 @@ function renderPiHub(){
     return;
   }
   const piUrl=getPiUrl();
+  const hasPublic=!!piHubConfig.publicUrl;
   el.innerHTML='<div style="display:grid;gap:10px">'+
+    // Status card
     '<div class="printer-card">'+
       '<div style="font-family:\'Orbitron\',monospace;font-size:9px;font-weight:700;color:var(--gold-b);letter-spacing:2px;margin-bottom:10px">PI HUB STATUS</div>'+
-      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'+
-        '<div><div style="font-size:7px;color:var(--txt-d);letter-spacing:1px">HUB ADDRESS</div><div style="font-size:9px;color:var(--txt-b);margin-top:2px">'+piUrl+'</div></div>'+
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">'+
+        '<div><div style="font-size:7px;color:var(--txt-d);letter-spacing:1px">HUB URL</div><div style="font-size:8px;color:var(--txt-b);margin-top:2px;word-break:break-all">'+piUrl+'</div></div>'+
         '<div><div style="font-size:7px;color:var(--txt-d);letter-spacing:1px">CONNECTION</div>'+
           '<div style="display:flex;align-items:center;gap:5px;margin-top:2px">'+
             '<div id="pihub-status-dot" style="width:8px;height:8px;border-radius:50%;background:var(--txt-d)"></div>'+
             '<div style="font-size:9px" id="pihub-status-lbl">Checking…</div>'+
           '</div>'+
         '</div>'+
-        '<div><div style="font-size:7px;color:var(--txt-d);letter-spacing:1px">PRINTERS</div><div style="font-size:9px;color:var(--txt-b);margin-top:2px">'+(piHubConfig.printers||[]).length+' connected</div></div>'+
-        '<div><div style="font-size:7px;color:var(--txt-d);letter-spacing:1px">CAMERA SERVER</div><div style="font-size:9px;color:var(--txt-b);margin-top:2px">go2rtc :'+piHubConfig.go2rtcPort+'</div></div>'+
+        '<div><div style="font-size:7px;color:var(--txt-d);letter-spacing:1px">PRINTERS</div><div style="font-size:9px;color:var(--txt-b);margin-top:2px">'+(piHubConfig.printers||[]).length+' configured</div></div>'+
+        '<div><div style="font-size:7px;color:var(--txt-d);letter-spacing:1px">ROUTING</div><div style="font-size:9px;margin-top:2px;color:'+(hasPublic?'var(--grn)':'var(--gold)')+'">'+
+          (hasPublic?'✓ Public HTTPS':'⚠ Local/Tailscale only')+'</div></div>'+
       '</div>'+
-      '<div style="margin-top:10px;display:flex;gap:6px">'+
+      '<div style="display:flex;gap:6px">'+
         '<button class="btn btn-ghost btn-sm" onclick="fetchPiStatus()">🔄 Refresh</button>'+
         '<button class="btn btn-ghost btn-sm" onclick="openPiHubSetup()">⚙ Edit Config</button>'+
       '</div>'+
     '</div>'+
-    '<div class="printer-card">'+
-      '<div style="font-family:\'Orbitron\',monospace;font-size:9px;font-weight:700;color:var(--gold-b);letter-spacing:2px;margin-bottom:8px">TAILSCALE SETUP</div>'+
-      '<div style="font-size:8px;color:var(--txt-d);line-height:1.8">'+
-        'For LayerDeck to reach your Pi Hub, both this browser session and the Pi must be on the same Tailscale network.<br><br>'+
-        '<strong style="color:var(--txt-b)">On the Pi:</strong> Install Tailscale → <code>curl -fsSL https://tailscale.com/install.sh | sh && sudo tailscale up</code><br>'+
-        '<strong style="color:var(--txt-b)">On your phone/browser:</strong> Install the Tailscale app and sign in with the same account<br>'+
-        '<strong style="color:var(--txt-b)">Pi\'s Tailscale IP:</strong> Run <code>tailscale ip -4</code> on the Pi — enter that IP in your hub config<br>'+
+    // Connectivity guide
+    (!hasPublic?
+    '<div class="printer-card" style="border-color:rgba(201,162,39,0.3)">'+
+      '<div style="font-family:\'Orbitron\',monospace;font-size:9px;font-weight:700;color:var(--gold-b);letter-spacing:2px;margin-bottom:8px">⚡ ENABLE REMOTE MONITORING</div>'+
+      '<div style="font-size:8px;color:var(--txt-d);line-height:1.8;margin-bottom:10px">'+
+        'LayerDeck runs on HTTPS servers, which blocks plain HTTP requests to your Pi. Showing as "Offline" even if the Pi is running. '+
+        'Fix this with <strong style="color:var(--txt-b)">Tailscale Funnel</strong> (one command on the Pi):<br><br>'+
+        '<div style="background:rgba(0,0,0,0.3);border:1px solid var(--bdr);border-radius:4px;padding:8px;font-family:\'Share Tech Mono\',monospace;font-size:8px;color:var(--cyn)">'+
+          'sudo tailscale funnel 3000<br>'+
+          '<span style="color:var(--txt-d)"># Then copy the https://… URL shown and paste it in Edit Config → Public HTTPS URL</span>'+
+        '</div>'+
       '</div>'+
-    '</div>'+
+      '<button class="btn btn-gold btn-sm" onclick="openPiHubSetup()">⚙ Add Public URL Now</button>'+
+    '</div>':'') +
+    // Printer live cards (if we have Pi data)
+    ((piHubConfig.printers||[]).length>0?
+    '<div class="printer-card">'+
+      '<div style="font-family:\'Orbitron\',monospace;font-size:9px;font-weight:700;color:var(--gold-b);letter-spacing:2px;margin-bottom:8px">PRINTER LIVE STATUS</div>'+
+      '<div style="display:grid;gap:6px">'+
+      (piHubConfig.printers||[]).map(p=>{
+        const id=piId(p.name);
+        const state=piPrevStates[p.name]?.gcode_state||'OFFLINE';
+        const col=STATE_COLORS[state]||STATE_COLORS.OFFLINE;
+        return '<div style="border:1px solid var(--bdr);border-radius:5px;padding:8px">'+
+          '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">'+
+            '<div style="font-size:8px;font-weight:700;color:var(--txt-b)">'+esc(p.name)+'</div>'+
+            '<span style="font-size:7px;font-family:\'Orbitron\',monospace;color:'+col+';letter-spacing:1px" id="pi-'+id+'-state">'+(STATE_LABELS[state]||state)+'</span>'+
+          '</div>'+
+          '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:4px;margin-bottom:5px">'+
+            '<div><div style="font-size:6px;color:var(--txt-d)">FILE</div><div style="font-size:7px;color:var(--txt-b);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" id="pi-'+id+'-file">—</div></div>'+
+            '<div><div style="font-size:6px;color:var(--txt-d)">PROGRESS</div><div style="font-size:8px;color:var(--grn);font-family:\'Orbitron\',monospace" id="pi-'+id+'-progress">—</div></div>'+
+            '<div><div style="font-size:6px;color:var(--txt-d)">ETA</div><div style="font-size:7px;color:var(--txt-b)" id="pi-'+id+'-remaining">—</div></div>'+
+          '</div>'+
+          '<div style="height:3px;background:rgba(255,255,255,0.06);border-radius:2px;overflow:hidden;margin-bottom:5px">'+
+            '<div id="pi-'+id+'-bar" style="height:100%;background:var(--grn);border-radius:2px;width:0%;transition:width 0.5s"></div>'+
+          '</div>'+
+          '<div style="display:flex;gap:6px">'+
+            '<div style="font-size:6px;color:var(--txt-d)">🌡 <span id="pi-'+id+'-nozzle">—</span></div>'+
+            '<div style="font-size:6px;color:var(--txt-d)">🛏 <span id="pi-'+id+'-bed">—</span></div>'+
+            '<div style="font-size:6px;color:var(--txt-d)">📚 <span id="pi-'+id+'-layer">—</span></div>'+
+          '</div>'+
+        '</div>';
+      }).join('')+
+      '</div>'+
+    '</div>':'') +
   '</div>';
 }
 
@@ -13145,9 +13191,17 @@ function openPiHubSetup(){
   modal.style='position:fixed;inset:0;z-index:9998;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;padding:16px;overflow-y:auto';
   modal.innerHTML='<div style="background:var(--surf);border:1px solid var(--bdr2);border-radius:10px;padding:20px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto">'+
     '<div style="font-family:\'Orbitron\',monospace;font-size:12px;font-weight:700;color:var(--gold-b);letter-spacing:2px;margin-bottom:16px">🍓 PI HUB SETUP</div>'+
-    '<div style="font-size:8px;color:var(--txt-d);margin-bottom:14px">Enter your Raspberry Pi\'s Tailscale IP and printer credentials. These are stored in your account — never hardcoded.</div>'+
+    // ── Public URL (required for remote access) ──
+    '<div style="background:rgba(201,162,39,0.08);border:1px solid rgba(201,162,39,0.25);border-radius:6px;padding:10px;margin-bottom:12px">'+
+      '<div style="font-size:7px;color:var(--gold-b);letter-spacing:1.5px;font-weight:700;margin-bottom:5px">⭐ PUBLIC HTTPS URL (recommended)</div>'+
+      '<div style="font-size:7px;color:var(--txt-d);line-height:1.7;margin-bottom:6px">'+
+        'LayerDeck runs on Replit\'s HTTPS servers. To reach your Pi from here, set up <strong style="color:var(--txt-b)">Tailscale Funnel</strong> on the Pi:<br>'+
+        '<code style="font-size:7px;color:var(--cyn)">tailscale funnel 3000</code> — then paste the <code>https://hostname.tailnetname.ts.net</code> URL below.'+
+      '</div>'+
+      '<input class="srch" id="pi-public-url" placeholder="https://pi.tailnetname.ts.net (or blank if local only)" value="'+esc(existing.publicUrl||'')+'" style="width:100%;box-sizing:border-box"/>'+
+    '</div>'+
     '<div style="margin-bottom:10px">'+
-      '<div style="font-size:7px;color:var(--txt-d);letter-spacing:1px;margin-bottom:4px">TAILSCALE IP (of your Pi)</div>'+
+      '<div style="font-size:7px;color:var(--txt-d);letter-spacing:1px;margin-bottom:4px">TAILSCALE IP (fallback, local only)</div>'+
       '<input class="srch" id="pi-tailscale-ip" placeholder="100.x.x.x" value="'+esc(existing.tailscaleIP||'')+'" style="width:100%;box-sizing:border-box"/>'+
     '</div>'+
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">'+
@@ -13188,8 +13242,9 @@ function piSetupAddPrinter(){
 }
 
 async function savePiHubSetup(){
+  const publicUrl=(document.getElementById('pi-public-url')?.value||'').trim();
   const ip=(document.getElementById('pi-tailscale-ip')?.value||'').trim();
-  if(!ip){document.getElementById('pi-tailscale-ip').focus();return;}
+  if(!ip&&!publicUrl){toast('Enter either a Public URL or Tailscale IP','','error');return;}
   const hubPort=parseInt(document.getElementById('pi-hub-port')?.value)||3000;
   const go2rtcPort=parseInt(document.getElementById('pi-rtc-port')?.value)||1984;
 
@@ -13209,12 +13264,13 @@ async function savePiHubSetup(){
     }
   }
 
-  const cfg={tailscaleIP:ip,hubPort,go2rtcPort,printers,cameras};
+  const cfg={tailscaleIP:ip,publicUrl,hubPort,go2rtcPort,printers,cameras};
   await savePiHubConfig(cfg);
   document.getElementById('pihub-setup-modal')?.remove();
   startPiPolling();
   render();
-  toast('Pi Hub configured!','Connecting to '+ip,'success');
+  const connStr=publicUrl||ip;
+  toast('Pi Hub configured!','Connecting to '+connStr,'success');
 }
 
 // ── Square placeholder ──
