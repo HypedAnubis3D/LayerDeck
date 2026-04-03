@@ -8883,32 +8883,73 @@ function startCountdown(){
 // ════════════════════════════════════════
 // AMS SLOT MAP
 // ════════════════════════════════════════
+
+// Get live Pi Hub tray data for a given 1-indexed slot
+function getPiHubTray(printerName, slotNum){
+  const amsData=(piLiveData[printerName]||{}).ams;
+  if(!amsData?.ams)return null;
+  // Flatten all trays across all AMS units in order
+  const all=[];
+  amsData.ams.forEach(unit=>(unit.tray||[]).forEach(t=>{if(t.tray_type)all.push(t);}));
+  return all[slotNum-1]||null;
+}
+
+// Build a synthetic spool-like object from a Pi Hub tray (for display only)
+function piTrayToDisplay(tray,activeTrayId){
+  if(!tray)return null;
+  return {
+    color:'#'+(tray.tray_color||'888888').slice(0,6),
+    name:(tray.tray_sub_brands||tray.tray_type||'?')+' (Pi Hub)',
+    remain:tray.remain||0,
+    isActive:String(tray.id)===String(activeTrayId)
+  };
+}
+
 function renderAmsMap(printerName,compact=false){
   const slots=amsMap[printerName]||{};
   const pr=printerRecords.find(p=>p.name===printerName);
   const numSlots=pr?pr.amsSlots:4;
-  if(!numSlots)return '<div style="font-size:6px;color:var(--txt-d);padding:4px 0">No AMS configured</div>';
-  const count=Math.min(numSlots,4);
+  // Fall back to Pi Hub tray count if no amsSlots configured
+  const piAms=(piLiveData[printerName]||{}).ams;
+  const piSlotCount=piAms?piAms.ams.reduce((s,u)=>s+(u.tray||[]).filter(t=>t.tray_type).length,0):0;
+  const effectiveSlots=numSlots||piSlotCount||0;
+  if(!effectiveSlots)return '<div style="font-size:6px;color:var(--txt-d);padding:4px 0">No AMS configured</div>';
+  const count=Math.min(effectiveSlots,16);
+  const activeTrayId=piAms?String(piAms.tray_now||''):'';
   if(compact){
-    return `<div class="ams-map-compact">${Array.from({length:count},(_,i)=>{
-      const n=i+1;const sp=slots[n]?spools.find(s=>s.id===slots[n]):null;
-      const col=sp?sp.color:'var(--bdr2)';
-      const tip=sp?`Slot ${n}: ${sp.name} (${pct(sp)}%)`:`Slot ${n}: Empty`;
-      return `<div class="ams-slot-compact" style="background:${col}" onclick="openAmsModal('${esc(printerName)}',${n})"><div class="ams-tooltip">${tip}</div></div>`;
-    }).join('')}</div>`;
+    return '<div class="ams-map-compact">'+Array.from({length:count},(_,i)=>{
+      const n=i+1;
+      const sp=slots[n]?spools.find(s=>s.id===slots[n]):null;
+      const piTray=sp?null:getPiHubTray(printerName,n);
+      const col=sp?sp.color:piTray?('#'+(piTray.tray_color||'888888').slice(0,6)):'var(--bdr2)';
+      const tip=sp?('Slot '+n+': '+sp.name+' ('+pct(sp)+'%)')
+                :piTray?('Slot '+n+': '+(piTray.tray_sub_brands||piTray.tray_type)+' [Pi Hub]')
+                :('Slot '+n+': Empty');
+      return '<div class="ams-slot-compact" style="background:'+col+'" onclick="openAmsModal(\''+esc(printerName)+'\','+n+')"><div class="ams-tooltip">'+tip+'</div></div>';
+    }).join('')+'</div>';
   }
-  return `<div class="ams-map">${Array.from({length:count},(_,i)=>{
-    const n=i+1;const sp=slots[n]?spools.find(s=>s.id===slots[n]):null;
-    const p=sp?pct(sp):0;const bc=sp?barcol(p):'var(--bdr2)';
-    return `<div class="ams-slot${sp?'':' empty'}" onclick="openAmsModal('${esc(printerName)}',${n})" style="${sp?'background:'+sp.color+'18;border-color:'+sp.color+'44':''}">
-      <div class="ams-slot-num">Slot ${n}</div>
-      <div class="ams-slot-dot" style="background:${sp?sp.color:'var(--bdr2)'};${sp?'box-shadow:0 0 6px '+sp.color+'55':''}"></div>
-      ${sp?`<div class="ams-slot-name">${esc(sp.name.split(' ').slice(-1)[0])}</div>
-        <div class="ams-slot-pct" style="color:${bc}">${p}%</div>
-        <div class="ams-slot-bar"><div class="ams-slot-bar-fill" style="width:${p}%;background:${bc}"></div></div>`
-      :`<div style="font-size:6px;color:var(--bdr2);letter-spacing:1px">EMPTY</div>`}
-    </div>`;
-  }).join('')}</div>`;
+  return '<div class="ams-map">'+Array.from({length:count},(_,i)=>{
+    const n=i+1;
+    const sp=slots[n]?spools.find(s=>s.id===slots[n]):null;
+    const piTray=sp?null:getPiHubTray(printerName,n);
+    const disp=sp||piTrayToDisplay(piTray,activeTrayId);
+    const fromPi=!sp&&!!piTray;
+    const p=disp?(sp?pct(sp):(disp.remain||0)):0;
+    const bc=disp?barcol(p):'var(--bdr2)';
+    const col=disp?disp.color:'var(--bdr2)';
+    const isActive=fromPi&&disp&&disp.isActive;
+    const activeRing=isActive?'box-shadow:0 0 0 2px var(--grn),0 0 6px '+col+'55;':'box-shadow:0 0 6px '+col+'55;';
+    return '<div class="ams-slot'+(disp?'':' empty')+'" onclick="openAmsModal(\''+esc(printerName)+'\','+n+')" style="'+(disp?'background:'+col+'18;border-color:'+col+(fromPi?'66':'44'):'')+'">'+
+      '<div class="ams-slot-num">Slot '+n+(fromPi?' ·':''+(isActive?' ▶':''))+'</div>'+
+      '<div class="ams-slot-dot" style="background:'+col+';'+(disp?activeRing:'')+'"></div>'+
+      (disp?
+        '<div class="ams-slot-name">'+esc((fromPi?(piTray.tray_sub_brands||piTray.tray_type):disp.name.split(' ').slice(-1)[0]))+
+          (isActive?'<span style="color:var(--grn);margin-left:2px">▶</span>':'')+'</div>'+
+        (p>0?'<div class="ams-slot-pct" style="color:'+bc+'">'+p+'%</div>'+
+          '<div class="ams-slot-bar"><div class="ams-slot-bar-fill" style="width:'+p+'%;background:'+bc+'"></div></div>':'')
+      :'<div style="font-size:6px;color:var(--bdr2);letter-spacing:1px">EMPTY</div>')+
+    '</div>';
+  }).join('')+'</div>';
 }
 
 function renderAmsMapDash(printerName){
