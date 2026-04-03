@@ -1,5 +1,10 @@
 import JSZip from 'jszip';
 
+export interface PlateFilamentData {
+  plateId: number | null;
+  filGrams: Record<number, number>;
+}
+
 export interface Parsed3MF {
   id: string;
   filename: string;
@@ -13,6 +18,8 @@ export interface Parsed3MF {
   filamentColors: string[];
   filamentTypes: string[];
   filamentGramsPerColor: number[];
+  plateFilamentGrams?: PlateFilamentData[];
+  purgeGrams?: number;
   supportGrams?: number;
   layerHeight?: number | null;
   nozzleDiam?: string;
@@ -107,7 +114,7 @@ export async function parse3MFFile(file: File): Promise<Parsed3MF> {
       }
     }
 
-    // ── Metadata/slice_info.config (XML) — print time + grams + support ──
+    // ── Metadata/slice_info.config (XML) — print time + per-plate grams + support ──
     if (sliceRaw) {
       try {
         const siDoc = new DOMParser().parseFromString(sliceRaw, 'application/xml');
@@ -116,23 +123,64 @@ export async function parse3MFFile(file: File): Promise<Parsed3MF> {
           const sec = parseInt(predEl.getAttribute('value') || '0');
           if (sec > 0) hrs = sec / 3600;
         }
-        const filEls = [...siDoc.querySelectorAll('filament')];
-        const SUPPORT_TYPES = ['supp', 'pva', 'bvoh', 'hips'];
-        if (filEls.length) {
-          let supportG = 0;
-          const modelGrams: number[] = [];
-          filEls.forEach((f) => {
+        let supG = 0, purG = 0;
+        const sliceColorByIdx: Record<number, string> = {};
+        const plateFilamentGrams: PlateFilamentData[] = [];
+
+        function parseFilEls(fels: Element[], gramMap: Record<number, number> | null) {
+          fels.forEach((f) => {
             const g = parseFloat(f.getAttribute('used_g') || f.getAttribute('weight') || '0');
-            const ftype = (f.getAttribute('type') || '').toLowerCase();
-            const isSupport = SUPPORT_TYPES.some((s) => ftype.includes(s));
-            if (isSupport) {
-              supportG += g;
-            } else if (g > 0) {
-              modelGrams.push(parseFloat(g.toFixed(2)));
+            const ft = (f.getAttribute('type') || '').toLowerCase();
+            const fid = parseInt(f.getAttribute('id') || '-1');
+            const fcol = ('#' + (f.getAttribute('color') || '').replace(/[^a-fA-F0-9]/g, '')).slice(0, 7);
+            if (ft.includes('support') || ft.includes('interface')) {
+              if (g > 0) supG += g;
+            } else if (ft.includes('flush')) {
+              if (g > 0) purG += g;
+            } else if (fid >= 0) {
+              if (fcol && fcol.length === 7 && !sliceColorByIdx[fid]) sliceColorByIdx[fid] = fcol;
+              if (gramMap) gramMap[fid] = (gramMap[fid] || 0) + g;
             }
           });
-          filamentGramsPerColor = modelGrams;
-          if (supportG > 0) result.supportGrams = parseFloat(supportG.toFixed(2));
+        }
+
+        const plateEls = [...siDoc.querySelectorAll('plate')];
+        if (plateEls.length) {
+          plateEls.forEach((pl) => {
+            const pidMeta = pl.querySelector('metadata[key="plater_id"]');
+            const plateId = pidMeta ? parseInt(pidMeta.getAttribute('value') || '-1') : null;
+            const filGrams: Record<number, number> = {};
+            parseFilEls([...pl.querySelectorAll('filament')], filGrams);
+            if (Object.keys(filGrams).length) plateFilamentGrams.push({ plateId, filGrams });
+          });
+          const combined: Record<number, number> = {};
+          plateFilamentGrams.forEach((p) => {
+            Object.entries(p.filGrams).forEach(([id, g]) => {
+              const i = parseInt(id); combined[i] = (combined[i] || 0) + g;
+            });
+          });
+          const maxIdx = Object.keys(combined).length ? Math.max(...Object.keys(combined).map(Number)) : -1;
+          if (maxIdx >= 0) {
+            for (let i = 0; i <= maxIdx; i++) filamentGramsPerColor[i] = combined[i] ? parseFloat(combined[i].toFixed(2)) : 0;
+          }
+        } else {
+          const gmap: Record<number, number> = {};
+          parseFilEls([...siDoc.querySelectorAll('filament')], gmap);
+          const maxI = Object.keys(gmap).length ? Math.max(...Object.keys(gmap).map(Number)) : -1;
+          if (maxI >= 0) {
+            for (let i = 0; i <= maxI; i++) filamentGramsPerColor[i] = gmap[i] ? parseFloat(gmap[i].toFixed(2)) : 0;
+          }
+        }
+
+        if (supG > 0) result.supportGrams = parseFloat(supG.toFixed(2));
+        if (purG > 0) result.purgeGrams = parseFloat(purG.toFixed(2));
+        if (plateFilamentGrams.length) result.plateFilamentGrams = plateFilamentGrams;
+
+        // Override filamentColors with slice_info data (slot-indexed, more accurate)
+        if (Object.keys(sliceColorByIdx).length) {
+          const maxCI = Math.max(...Object.keys(sliceColorByIdx).map(Number));
+          const newCols = Array.from({ length: maxCI + 1 }, (_, i) => sliceColorByIdx[i] || result.filamentColors[i] || '');
+          if (newCols.some((c) => c && c.length >= 4)) result.filamentColors = newCols;
         }
       } catch (e) {
         console.warn('slice_info parse error:', e);
