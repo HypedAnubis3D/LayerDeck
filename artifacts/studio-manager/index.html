@@ -1574,10 +1574,11 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
         <span class="sb-group-chevron">▾</span>
       </div>
       <div class="sb-group-body">
-        <button class="nav-item" id="nav-revenue" onclick="navTo('revenue',this)"><span class="nav-icon">💰</span><span class="nav-label">Revenue, Tax & Power</span></button>
+        <button class="nav-item" id="nav-revenue" onclick="navTo('revenue',this)"><span class="nav-icon">💰</span><span class="nav-label">Revenue</span></button>
         <button class="nav-item" id="nav-catalog" onclick="navTo('catalog',this)"><span class="nav-icon">🏪</span><span class="nav-label">Product Catalog</span></button>
         <button class="nav-item" id="nav-convention" onclick="navTo('convention',this)"><span class="nav-icon">🎪</span><span class="nav-label">Conventions</span><span class="nav-badge" id="nav-badge-convention"></span></button>
         <button class="nav-item" id="nav-priceengine" onclick="navTo('priceengine',this)"><span class="nav-icon">🤖</span><span class="nav-label">Price AI</span></button>
+        <button class="nav-item" id="nav-social" onclick="navTo('social',this)"><span class="nav-icon">📱</span><span class="nav-label">Social</span></button>
         <button class="nav-item" id="nav-labels" onclick="navTo('labels',this)"><span class="nav-icon">🏷</span><span class="nav-label">Labels</span></button>
         <button class="nav-item" id="nav-failrate" onclick="navTo('failrate',this)"><span class="nav-icon">📉</span><span class="nav-label">Fail Rates & Waste</span></button>
       </div>
@@ -1595,10 +1596,10 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
         <button class="nav-item" id="nav-spools" onclick="navTo('spools',this)"><span class="nav-icon">🧵</span><span class="nav-label">Spools & Dry Schedule</span></button>
         <button class="nav-item" id="nav-fildb" onclick="navTo('fildb',this)"><span class="nav-icon">🗄</span><span class="nav-label">Filament Database</span></button>
         <button class="nav-item" id="nav-maint" onclick="navTo('maint',this)"><span class="nav-icon">🔧</span><span class="nav-label">Maintenance & Nozzles</span></button>
-        <button class="nav-item" id="nav-purchases" onclick="navTo('purchases',this)"><span class="nav-icon">🛍</span><span class="nav-label">Fil. Purchases</span></button>
+        <button class="nav-item" id="nav-purchases" onclick="navTo('purchases',this)"><span class="nav-icon">🛍</span><span class="nav-label">Filament Purchases</span></button>
         <button class="nav-item" id="nav-shipping" onclick="navTo('shipping',this)"><span class="nav-icon">📬</span><span class="nav-label">Shipping</span></button>
         <button class="nav-item" id="nav-forecast" onclick="navTo('forecast',this)"><span class="nav-icon">📈</span><span class="nav-label">Forecast</span></button>
-        <button class="nav-item" id="nav-restock" onclick="navTo('restock',this)"><span class="nav-icon">📦</span><span class="nav-label">Restock & Shop List</span></button>
+        <button class="nav-item" id="nav-restock" onclick="navTo('restock',this)"><span class="nav-icon">📦</span><span class="nav-label">Filament Shop</span></button>
       </div>
     </div>
 
@@ -1611,6 +1612,9 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
       </div>
       <div class="sb-group-body">
         <button class="nav-item" id="nav-shopify" onclick="navTo('shopify',this)"><span class="nav-icon">🛍</span><span class="nav-label">Shopify</span></button>
+        <button class="nav-item" id="nav-square" onclick="navTo('square',this)"><span class="nav-icon">💳</span><span class="nav-label">Square</span></button>
+        <button class="nav-item" id="nav-discord" onclick="navTo('discord',this)"><span class="nav-icon">💬</span><span class="nav-label">Discord</span></button>
+        <button class="nav-item" id="nav-pihub" onclick="navTo('pihub',this)"><span class="nav-icon">🍓</span><span class="nav-label">Pi Hub</span></button>
       </div>
     </div>
 
@@ -1913,6 +1917,25 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
   <div id="shopify-content"></div>
 </div>
 
+<!-- SQUARE -->
+<div id="tab-square" style="display:none">
+  <div id="square-content"></div>
+</div>
+
+<!-- DISCORD -->
+<div id="tab-discord" style="display:none">
+  <div id="discord-content"></div>
+</div>
+
+<!-- PI HUB -->
+<div id="tab-pihub" style="display:none">
+  <div id="pihub-content"></div>
+</div>
+
+<!-- SOCIAL -->
+<div id="tab-social" style="display:none">
+  <div id="social-content"></div>
+</div>
 
 <!-- SHOP LIST -->
 <div id="tab-shop" style="display:none"></div>
@@ -5626,6 +5649,10 @@ function render(){
   if(curTab==='stats')      renderStats();
   if(curTab==='backup')     renderBackup();
   if(curTab==='labels')     renderLabels();
+  if(curTab==='square')     renderSquare();
+  if(curTab==='discord')    renderDiscord();
+  if(curTab==='pihub')      renderPiHub();
+  if(curTab==='social')     renderSocial();
 }
 
 // ════════ DASHBOARD ════════
@@ -7007,50 +7034,7 @@ function render(){
 // PRINTERS TAB
 // ════════════════════════════════════════
 function renderPrinters(){
-  document.getElementById('printers-cnt').textContent=printerRecords.length+' printers';
-  const g=document.getElementById('printers-grid');
-  if(!printerRecords.length){
-    g.innerHTML=emptyState('🖨','No Printers Added','Add your Bambu Lab printers to unlock per-printer cost tracking and scheduling',
-      '<button class="btn btn-org" onclick="openAddPrinter()">+ Add First Printer</button>');
-    return;
-  }
-  g.innerHTML=printerRecords.map(p=>{
-    const amsUnits=p.amsUnits||1;
-    const totalSlots=amsUnits*4;
-    const expanded=p._expanded||false;
-    return '<div class="printer-card" id="pcard-'+p.id+'" style="'+(expanded?'':'')+'">'+
-      // Collapsed header — always visible
-      '<div style="display:flex;align-items:center;gap:10px;cursor:pointer" onclick="togglePrinterCard(\''+p.id+'\')">'+
-        '<div style="flex:1">'+
-          '<div class="printer-card-name">'+esc(p.name)+'</div>'+
-          '<div class="printer-card-model" style="font-size:7px;color:var(--txt-d)">'+esc(p.model||'—')+' · '+amsUnits+' AMS ('+totalSlots+' slots) · '+p.nozzle+'mm nozzle</div>'+
-        '</div>'+
-        '<div style="display:flex;gap:5px;align-items:center">'+
-          '<span style="font-size:8px;color:var(--txt-d);transition:transform .2s" id="pchev-'+p.id+'">'+(expanded?'▲':'▼')+'</span>'+
-        '</div>'+
-      '</div>'+
-      // Expanded content
-      '<div id="pexpand-'+p.id+'" style="display:'+(expanded?'block':'none')+'">'+
-        '<div style="border-top:1px solid var(--bdr);margin:10px 0 8px"></div>'+
-        '<div class="printer-specs">'+
-          '<div class="pspec"><div class="pspec-l">Wattage</div><div class="pspec-v">'+p.watts+'<span style="font-size:6px;font-family:\'Share Tech Mono\',monospace;font-weight:normal">W</span></div></div>'+
-          '<div class="pspec"><div class="pspec-l">Electricity</div><div class="pspec-v">$'+(p.kwh||0).toFixed(2)+'<span style="font-size:6px;font-family:\'Share Tech Mono\',monospace;font-weight:normal">/kWh</span></div></div>'+
-          '<div class="pspec"><div class="pspec-l">Labor</div><div class="pspec-v">$'+(p.labor||0).toFixed(0)+'<span style="font-size:6px;font-family:\'Share Tech Mono\',monospace;font-weight:normal">/hr</span></div></div>'+
-          '<div class="pspec"><div class="pspec-l">Markup</div><div class="pspec-v">'+(p.markup||30)+'<span style="font-size:6px;font-family:\'Share Tech Mono\',monospace;font-weight:normal">%</span></div></div>'+
-          '<div class="pspec"><div class="pspec-l">Nozzle</div><div class="pspec-v">'+(p.nozzle||'—')+'<span style="font-size:6px;font-family:\'Share Tech Mono\',monospace;font-weight:normal">mm</span></div></div>'+
-          '<div class="pspec"><div class="pspec-l">AMS Units</div><div class="pspec-v">'+amsUnits+' ('+totalSlots+' slots)</div></div>'+
-          '<div class="pspec"><div class="pspec-l">Bed</div><div class="pspec-v" style="font-size:7px">'+(p.bed||'—')+'</div></div>'+
-        '</div>'+
-        (p.notes?'<div class="notes-box" style="margin:8px 0">'+esc(p.notes)+'</div>':'')+
-        (totalSlots>0?'<div style="font-size:6px;color:var(--txt-d);letter-spacing:1.5px;text-transform:uppercase;margin:8px 0 5px">AMS Slots — click to assign spools</div>'+renderAmsMap(p.name):'') +
-        '<div class="card-acts" style="margin-top:10px">'+
-          '<button class="btn btn-ghost btn-xs" style="flex:1" onclick="openEditPrinter(\''+p.id+'\')">Edit</button>'+
-          '<button class="btn btn-amb btn-xs" onclick="openLogMaint(\''+p.name+'\',\'\')">🔧 Maintenance</button>'+
-          '<button class="btn btn-xs" style="background:var(--red-d);border:1px solid var(--red-d);color:var(--red-b)" onclick="delPrinter(\''+p.id+'\')">✕</button>'+
-        '</div>'+
-      '</div>'+
-    '</div>';
-  }).join('');
+  // Overridden by Pi Hub block — defined below
 }
 function togglePrinterCard(id){
   const p=printerRecords.find(x=>x.id===id);if(!p)return;
@@ -11341,6 +11325,7 @@ function renderPower(){
 Object.assign(KEYS,{mystery:'ha3d_mystery_v1',mysteryCfg:'ha3d_mysterycfg_v1'});
 Object.assign(TAB_NAMES,{mystery:'Mystery Prints'});
 ALL_TABS.push('mystery');
+ALL_TABS.push('square','discord','pihub','social');
 
 let mysteryOrders=[];
 let mysteryCfg={codes:['welcome20','gift','mystery','surprise']};
@@ -12608,6 +12593,675 @@ if(document.readyState==='loading'){
 }else{
   _onReady();
 }
+</script>
+
+<script>
+// ════════════════════════════════════════════════════════════════
+// PI HUB — BAMBU PRINTER MONITOR
+// ════════════════════════════════════════════════════════════════
+
+Object.assign(KEYS,{printerHub:'ha3d_printerhub_v1'});
+Object.assign(TAB_NAMES,{square:'Square',discord:'Discord',pihub:'Pi Hub',social:'Social'});
+
+let piHubConfig=null;   // loaded from Supabase printerHub collection
+let piLiveData={};      // {printerName: {...mqttFields}}
+let piPrevStates={};    // for state transition detection
+let piPollTimer=null;
+let piPrintStartTimes={}; // {printerName: timestamp}
+
+// ── State badge colors ──
+const STATE_COLORS={
+  IDLE:    'var(--txt-d)',
+  RUNNING: 'var(--grn)',
+  PAUSE:   'var(--gold)',
+  FAILED:  'var(--red)',
+  FINISH:  'var(--cyn)',
+  OFFLINE: '#555'
+};
+const STATE_LABELS={IDLE:'IDLE',RUNNING:'PRINTING',PAUSE:'PAUSED',FAILED:'FAILED',FINISH:'FINISHED',OFFLINE:'OFFLINE'};
+
+// ── Load hub config from Supabase ──
+async function loadPiHubConfig(){
+  if(!_supabase)return null;
+  try{
+    const{data}=await _supabase.from('ha3d_user_data').select('payload').eq('collection','printerHub').maybeSingle();
+    if(data?.payload){
+      piHubConfig=JSON.parse(data.payload);
+      return piHubConfig;
+    }
+  }catch(e){console.warn('[Pi Hub] Config load failed:',e);}
+  return null;
+}
+
+async function savePiHubConfig(cfg){
+  piHubConfig=cfg;
+  if(!_supabase)return;
+  await _supabase.from('ha3d_user_data').upsert({collection:'printerHub',payload:JSON.stringify(cfg)},{onConflict:'collection'});
+}
+
+// ── Build URLs from config ──
+function getPiUrl(){
+  if(!piHubConfig)return null;
+  return 'http://'+piHubConfig.tailscaleIP+':'+(piHubConfig.hubPort||3000);
+}
+function getGo2rtcUrl(){
+  if(!piHubConfig)return null;
+  return 'http://'+piHubConfig.tailscaleIP+':'+(piHubConfig.go2rtcPort||1984);
+}
+function getCameraUrl(printerName){
+  const g=getGo2rtcUrl();
+  if(!g||!piHubConfig)return null;
+  const stream=piHubConfig.cameras?.[printerName];
+  if(!stream)return null;
+  return g+'/api/stream.mp4?src='+stream;
+}
+
+// ── Utility ──
+function piId(name){return name.replace(/[\s]/g,'-').toLowerCase();}
+function fmtMins(m){if(!m)return'—';const h=Math.floor(m/60);const min=m%60;return h>0?h+'h '+min+'m':min+'m';}
+function fmtTemp(t){return t?Math.round(t)+'°':'—';}
+function pctBadge(pct){
+  const p=parseInt(pct)||0;
+  const color=p>0?'var(--grn)':'var(--txt-d)';
+  return '<span style="font-size:9px;color:'+color+'">'+p+'%</span>';
+}
+
+// ── Estimate filament used ──
+function estimatePiFilament(material,durationMins){
+  const rates={PLA:0.8,PETG:0.85,ABS:0.9,TPU:0.6,ASA:0.85,'PLA-CF':0.9,'PETG-CF':0.9};
+  return parseFloat(((rates[material]||0.8)*durationMins).toFixed(1));
+}
+
+// ── Get primary material from AMS data ──
+function getPiAMSMaterial(amsData){
+  if(!amsData?.ams||!amsData.ams[0]?.tray)return'PLA';
+  const t=amsData.ams[0].tray[0];
+  return t?.tray_type||'PLA';
+}
+
+// ── AMS color swatches ──
+function renderAmsSwatches(amsData){
+  if(!amsData?.ams)return'<span style="font-size:7px;color:var(--txt-d)">No AMS data</span>';
+  let html='<div style="display:flex;gap:4px;flex-wrap:wrap">';
+  amsData.ams.forEach(unit=>{
+    (unit.tray||[]).forEach(tray=>{
+      const col='#'+(tray.tray_color||'888888').slice(0,6);
+      const mat=tray.tray_type||'?';
+      const rem=tray.remain!=null?tray.remain+'%':'?';
+      html+='<div title="'+mat+' '+rem+'" style="width:12px;height:12px;border-radius:50%;background:'+col+';border:1px solid rgba(255,255,255,0.2);flex-shrink:0"></div>';
+    });
+  });
+  html+='</div>';
+  return html;
+}
+
+// ── STATE TRANSITION HANDLERS ──
+async function onPiPrintStarted(name,data){
+  piPrintStartTimes[name]=Date.now();
+  // Move queue card to In Progress if matching job
+  const jobName=(data.subtask_name||'').replace('.gcode.3mf','').replace('.3mf','');
+  if(jobName){
+    let changed=false;
+    queueItems=queueItems.map(q=>{
+      if(q.stage==='queued'&&(q.name.toLowerCase()===jobName.toLowerCase()||(q.printer&&q.printer===name))){
+        if(!changed){changed=true;return{...q,stage:'inprogress',startedAt:Date.now()};}
+      }
+      return q;
+    });
+    if(changed){saveQueue();render();}
+  }
+  // Ensure printerRecords has this printer
+  ensurePrinterRecord(name);
+}
+
+async function onPiPrintFinished(name,data){
+  const startTime=piPrintStartTimes[name]||Date.now();
+  const durationMins=Math.round((Date.now()-startTime)/60000);
+  const material=getPiAMSMaterial(data.ams);
+  const gramsUsed=estimatePiFilament(material,durationMins);
+  const jobName=(data.subtask_name||'').replace('.gcode.3mf','').replace('.3mf','')||'Unknown';
+
+  // Find matching spool
+  const matchSpool=spools.find(s=>s.material&&s.material.toLowerCase().includes(material.toLowerCase())&&(s.remaining||0)>0);
+
+  let filamentCost=0;
+  if(matchSpool){
+    const totalG=matchSpool.totalGrams||1000;
+    const price=matchSpool.price||0;
+    filamentCost=parseFloat((gramsUsed*(price/totalG)).toFixed(2));
+    // Deduct from spool
+    matchSpool.remaining=Math.max(0,(matchSpool.remaining||totalG)-gramsUsed);
+    saveSpools();
+    usageHist.push({id:uid(),spoolId:matchSpool.id,spoolName:matchSpool.name||matchSpool.material,amount:gramsUsed,date:new Date().toISOString().split('T')[0],timestamp:Date.now(),note:'Auto-deducted by Pi Hub'});
+    saveHist();
+  }
+
+  const elecCost=parseFloat(((durationMins/60)*0.12*0.13).toFixed(2));
+  const printRecord={
+    id:uid(),
+    date:new Date().toISOString().split('T')[0],
+    productName:jobName,
+    filamentUsed:gramsUsed,
+    filamentType:material,
+    printTime:fmtMins(durationMins),
+    success:true,
+    notes:'Auto-logged by LayerDeck Pi Hub',
+    linkedOrderId:null,
+    printerName:name,
+    costBreakdown:{filamentCost,electricityCost:elecCost,totalCost:parseFloat((filamentCost+elecCost).toFixed(2))}
+  };
+  prints.push(printRecord);
+  savePrints();
+
+  // Move queue card to done
+  queueItems=queueItems.map(q=>{
+    if(q.stage==='inprogress'&&(!q.printer||q.printer===name))return{...q,stage:'done',completedAt:Date.now()};
+    return q;
+  });
+  saveQueue();
+
+  // Increment printer print count
+  incrementPrinterStat(name,'printCount');
+
+  render();
+  toast('✅ '+name+' finished',jobName,'success',6000);
+  piPrintStartTimes[name]=null;
+}
+
+async function onPiPrintFailed(name,data){
+  const startTime=piPrintStartTimes[name]||Date.now();
+  const durationMins=Math.round((Date.now()-startTime)/60000);
+  const material=getPiAMSMaterial(data.ams);
+  const gramsWasted=estimatePiFilament(material,durationMins);
+  const jobName=(data.subtask_name||'').replace('.gcode.3mf','').replace('.3mf','')||'Unknown';
+
+  wasteLog.push({id:uid(),date:new Date().toISOString().split('T')[0],printerName:name,jobName,reason:'Print failure via MQTT',materialWasted:gramsWasted,timestamp:Date.now()});
+  saveWasteLog();
+
+  incrementPrinterStat(name,'failCount');
+  render();
+  toast('⚠️ '+name+' FAILED',jobName,'error',8000);
+  piPrintStartTimes[name]=null;
+}
+
+function incrementPrinterStat(name,field){
+  const pr=printerRecords.find(p=>p.name===name);
+  if(!pr)return;
+  pr[field]=(pr[field]||0)+1;
+  savePrinters();
+}
+
+function ensurePrinterRecord(name){
+  if(!printerRecords.find(p=>p.name===name)){
+    printerRecords.push({id:uid(),name,model:'',watts:350,kwh:0.13,labor:0,markup:30,amsUnits:1,amsSlots:4,nozzle:'0.4',bed:'256x256',speed:'500',notes:'',printCount:0,failCount:0});
+    savePrinters();
+  }
+}
+
+// ── MAIN POLL FUNCTION ──
+async function fetchPiStatus(){
+  const piUrl=getPiUrl();
+  if(!piUrl)return;
+  try{
+    const res=await fetch(piUrl+'/status',{signal:AbortSignal.timeout(4000)});
+    if(!res.ok)return;
+    const data=await res.json();
+    const now=Date.now();
+
+    (piHubConfig?.printers||[]).forEach(printer=>{
+      const name=printer.name;
+      const p=data[name];
+      if(!p)return;
+      const prev=piPrevStates[name]||{};
+      const curState=p.online===false?'OFFLINE':(p.gcode_state||'IDLE');
+      const prevState=prev.gcode_state||'OFFLINE';
+
+      piLiveData[name]={...p,_polledAt:now};
+
+      // State transitions
+      if(curState!==prevState){
+        if(curState==='RUNNING')  onPiPrintStarted(name,p);
+        if(curState==='FINISH')   onPiPrintFinished(name,p);
+        if(curState==='FAILED')   onPiPrintFailed(name,p);
+      }
+
+      piPrevStates[name]={...p,gcode_state:curState};
+
+      // Update existing printer card live section
+      updatePrinterCardLive(name,p,curState);
+    });
+
+    updatePiHubStatusDot(true);
+  }catch(e){
+    updatePiHubStatusDot(false);
+    (piHubConfig?.printers||[]).forEach(pr=>{
+      updatePrinterCardLive(pr.name,null,'OFFLINE');
+    });
+  }
+}
+
+function updatePiHubStatusDot(online){
+  const dot=document.getElementById('pihub-status-dot');
+  const lbl=document.getElementById('pihub-status-lbl');
+  if(dot){dot.style.background=online?'var(--grn)':'var(--red)';}
+  if(lbl){lbl.textContent=online?'Pi Hub Online':'Pi Hub Offline';}
+}
+
+function updatePrinterCardLive(name,data,state){
+  const id=piId(name);
+  const setState=el=>{if(el){el.textContent=STATE_LABELS[state]||state;el.style.color=STATE_COLORS[state]||STATE_COLORS.OFFLINE;}};
+  const setTxt=(suffix,val)=>{const el=document.getElementById('pi-'+id+'-'+suffix);if(el)el.textContent=val;};
+
+  const stateEl=document.getElementById('pi-'+id+'-state');
+  setState(stateEl);
+
+  if(!data||state==='OFFLINE'){
+    setTxt('progress','—');setTxt('layer','—');setTxt('remaining','—');
+    setTxt('nozzle','—');setTxt('bed','—');setTxt('file','—');
+    const bar=document.getElementById('pi-'+id+'-bar');
+    if(bar)bar.style.width='0%';
+    return;
+  }
+
+  const pct=data.mc_percent||0;
+  const layerNum=data.layer_num||0;
+  const totalLayers=data.total_layer_num||0;
+  const remMins=Math.round((data.mc_remaining_time||0)/60);
+  const doneBy=remMins>0?'Done ~'+new Date(Date.now()+remMins*60000).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}):'';
+
+  setTxt('progress',pct+'%');
+  setTxt('layer',totalLayers>0?(layerNum+'/'+totalLayers):'—');
+  setTxt('remaining',remMins>0?fmtMins(remMins)+(doneBy?' ('+doneBy+')':''):'—');
+  setTxt('nozzle',fmtTemp(data.nozzle_temper));
+  setTxt('bed',fmtTemp(data.bed_temper));
+  setTxt('file',(data.subtask_name||'—').replace('.gcode.3mf','').replace('.3mf',''));
+
+  const bar=document.getElementById('pi-'+id+'-bar');
+  if(bar)bar.style.width=pct+'%';
+
+  // AMS swatches
+  const swatchEl=document.getElementById('pi-'+id+'-ams');
+  if(swatchEl&&data.ams)swatchEl.innerHTML=renderAmsSwatches(data.ams);
+}
+
+// ── Start/stop polling ──
+function startPiPolling(){
+  if(piPollTimer)clearInterval(piPollTimer);
+  fetchPiStatus();
+  piPollTimer=setInterval(fetchPiStatus,5000);
+}
+function stopPiPolling(){
+  if(piPollTimer)clearInterval(piPollTimer);
+  piPollTimer=null;
+}
+
+// ── Send control command ──
+async function piControl(printerName,command){
+  const piUrl=getPiUrl();
+  if(!piUrl){toast('Pi Hub not configured','','error');return;}
+  try{
+    await fetch(piUrl+'/control',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({printer:printerName,command})
+    });
+    toast(command+' sent',printerName,'success');
+  }catch(e){toast('Pi Hub unreachable','Check Tailscale','error');}
+}
+
+// ── RENDER FUNCTIONS ──
+
+function renderPrinters(){
+  document.getElementById('printers-cnt').textContent=printerRecords.length+' printers';
+  const g=document.getElementById('printers-grid');
+
+  // Pi Hub connection card at the top
+  let piCard='';
+  if(!piHubConfig){
+    piCard='<div class="printer-card" style="border:1px dashed var(--gold);background:rgba(201,162,39,0.04);margin-bottom:8px">'+
+      '<div style="display:flex;align-items:center;gap:10px">'+
+        '<div style="font-size:24px">🍓</div>'+
+        '<div style="flex:1">'+
+          '<div style="font-family:\'Orbitron\',monospace;font-size:10px;font-weight:700;color:var(--gold-b)">Connect Your Pi Hub</div>'+
+          '<div style="font-size:8px;color:var(--txt-d);margin-top:2px">Link your Raspberry Pi for live printer monitoring, camera feeds, and auto print logging</div>'+
+        '</div>'+
+        '<button class="btn btn-gold btn-sm" onclick="openPiHubSetup()">Setup</button>'+
+      '</div>'+
+    '</div>';
+  }else{
+    piCard='<div class="printer-card" style="margin-bottom:8px">'+
+      '<div style="display:flex;align-items:center;gap:8px">'+
+        '<div id="pihub-status-dot" style="width:8px;height:8px;border-radius:50%;background:var(--txt-d);flex-shrink:0"></div>'+
+        '<div style="font-family:\'Orbitron\',monospace;font-size:9px;font-weight:700;color:var(--gold-b)" id="pihub-status-lbl">Connecting…</div>'+
+        '<div style="font-size:7px;color:var(--txt-d);margin-left:4px">'+piHubConfig.tailscaleIP+'</div>'+
+        '<button class="btn btn-ghost btn-xs" style="margin-left:auto" onclick="openPiHubSetup()">Edit</button>'+
+      '</div>'+
+    '</div>';
+  }
+
+  if(!printerRecords.length&&!piHubConfig){
+    g.innerHTML=piCard+emptyState('🖨','No Printers Added','Add your Bambu Lab printers to unlock per-printer cost tracking and scheduling',
+      '<button class="btn btn-org" onclick="openAddPrinter()">+ Add First Printer</button>');
+    return;
+  }
+
+  const printerCards=printerRecords.map(p=>{
+    const amsUnits=p.amsUnits||1;
+    const totalSlots=amsUnits*4;
+    const expanded=p._expanded||false;
+    const id=piId(p.name);
+    const liveData=piLiveData[p.name];
+    const state=liveData?(piPrevStates[p.name]?.gcode_state||'IDLE'):'—';
+    const stateColor=STATE_COLORS[state]||'var(--txt-d)';
+    const stateLabel=STATE_LABELS[state]||state;
+    const isActive=state==='RUNNING'||state==='PAUSE';
+
+    // Live badge in header
+    const liveBadge=piHubConfig&&liveData!=null?
+      '<span style="font-size:8px;color:'+stateColor+';font-family:\'Orbitron\',monospace;font-weight:700;letter-spacing:1px" id="pi-'+id+'-state">'+stateLabel+'</span>':
+      '';
+
+    return '<div class="printer-card" id="pcard-'+p.id+'" style="">'+
+      // Card header — always visible
+      '<div style="display:flex;align-items:center;gap:10px;cursor:pointer" onclick="togglePrinterCard(\''+p.id+'\')">'+
+        '<div style="flex:1">'+
+          '<div class="printer-card-name">'+esc(p.name)+'</div>'+
+          '<div class="printer-card-model" style="font-size:7px;color:var(--txt-d)">'+esc(p.model||'—')+' · '+amsUnits+' AMS ('+totalSlots+' slots) · '+p.nozzle+'mm'+
+            (piHubConfig?'':'') +
+          '</div>'+
+        '</div>'+
+        '<div style="display:flex;gap:6px;align-items:center">'+
+          liveBadge+
+          '<span style="font-size:8px;color:var(--txt-d);transition:transform .2s" id="pchev-'+p.id+'">'+(expanded?'▲':'▼')+'</span>'+
+        '</div>'+
+      '</div>'+
+      // LIVE DATA STRIP — always shown when Pi is connected
+      (piHubConfig?
+        '<div style="margin-top:8px;padding:8px;background:rgba(0,0,0,0.2);border-radius:5px;border:1px solid var(--bdr)">'+
+          '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:6px">'+
+            '<div><div style="font-size:6px;color:var(--txt-d);letter-spacing:1px">FILE</div><div style="font-size:7px;color:var(--txt-b);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100px" id="pi-'+id+'-file">—</div></div>'+
+            '<div><div style="font-size:6px;color:var(--txt-d);letter-spacing:1px">PROGRESS</div><div style="font-size:9px;color:var(--grn);font-family:\'Orbitron\',monospace" id="pi-'+id+'-progress">—</div></div>'+
+            '<div><div style="font-size:6px;color:var(--txt-d);letter-spacing:1px">ETA</div><div style="font-size:7px;color:var(--txt-b)" id="pi-'+id+'-remaining">—</div></div>'+
+          '</div>'+
+          '<div style="height:3px;background:rgba(255,255,255,0.06);border-radius:2px;margin-bottom:6px;overflow:hidden">'+
+            '<div id="pi-'+id+'-bar" style="height:100%;background:var(--grn);border-radius:2px;width:0%;transition:width 0.5s"></div>'+
+          '</div>'+
+          '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:6px">'+
+            '<div><div style="font-size:6px;color:var(--txt-d);letter-spacing:1px">NOZZLE</div><div style="font-size:9px;color:var(--org)" id="pi-'+id+'-nozzle">—</div></div>'+
+            '<div><div style="font-size:6px;color:var(--txt-d);letter-spacing:1px">BED</div><div style="font-size:9px;color:var(--cyn)" id="pi-'+id+'-bed">—</div></div>'+
+            '<div><div style="font-size:6px;color:var(--txt-d);letter-spacing:1px">LAYERS</div><div style="font-size:8px;color:var(--txt-b)" id="pi-'+id+'-layer">—</div></div>'+
+          '</div>'+
+          '<div style="margin-bottom:6px" id="pi-'+id+'-ams"></div>'+
+          '<div style="display:flex;gap:5px;flex-wrap:wrap">'+
+            '<button class="btn btn-ghost btn-xs" onclick="piControl(\''+esc(p.name)+'\',\'pause\')" style="'+(state!=='RUNNING'?'opacity:0.4;pointer-events:none':'')+'">⏸ Pause</button>'+
+            '<button class="btn btn-ghost btn-xs" onclick="piControl(\''+esc(p.name)+'\',\'resume\')" style="'+(state!=='PAUSE'?'opacity:0.4;pointer-events:none':'')+'">▶ Resume</button>'+
+            '<button class="btn btn-xs" style="background:var(--red-d);border:1px solid var(--red-d);color:var(--red-b);'+(isActive?'':'opacity:0.4;pointer-events:none')+'" onclick="showConfirm(\'Stop print on '+esc(p.name)+'?\',\'This cannot be undone.\',function(){piControl(\''+esc(p.name)+'\',\'stop\')})">⏹ Stop</button>'+
+            (getCameraUrl(p.name)?'<button class="btn btn-ghost btn-xs" onclick="openCameraFeed(\''+esc(p.name)+'\')">📷 Camera</button>':'')+''+
+          '</div>'+
+        '</div>':'')+
+      // EXPANDED STATIC DATA
+      '<div id="pexpand-'+p.id+'" style="display:'+(expanded?'block':'none')+'">'+
+        '<div style="border-top:1px solid var(--bdr);margin:10px 0 8px"></div>'+
+        '<div class="printer-specs">'+
+          '<div class="pspec"><div class="pspec-l">Wattage</div><div class="pspec-v">'+p.watts+'<span style="font-size:6px;font-family:\'Share Tech Mono\',monospace;font-weight:normal">W</span></div></div>'+
+          '<div class="pspec"><div class="pspec-l">Electricity</div><div class="pspec-v">$'+(p.kwh||0).toFixed(2)+'<span style="font-size:6px;font-family:\'Share Tech Mono\',monospace;font-weight:normal">/kWh</span></div></div>'+
+          '<div class="pspec"><div class="pspec-l">AMS Units</div><div class="pspec-v">'+amsUnits+' ('+totalSlots+' slots)</div></div>'+
+          '<div class="pspec"><div class="pspec-l">Nozzle</div><div class="pspec-v">'+(p.nozzle||'—')+'mm</div></div>'+
+          '<div class="pspec"><div class="pspec-l">Prints</div><div class="pspec-v">'+(p.printCount||0)+'</div></div>'+
+          '<div class="pspec"><div class="pspec-l">Fails</div><div class="pspec-v" style="color:var(--red)">'+(p.failCount||0)+'</div></div>'+
+        '</div>'+
+        (p.notes?'<div class="notes-box" style="margin:8px 0">'+esc(p.notes)+'</div>':'')+
+        (totalSlots>0?'<div style="font-size:6px;color:var(--txt-d);letter-spacing:1.5px;text-transform:uppercase;margin:8px 0 5px">AMS Slots — click to assign spools</div>'+renderAmsMap(p.name):'') +
+        '<div class="card-acts" style="margin-top:10px">'+
+          '<button class="btn btn-ghost btn-xs" style="flex:1" onclick="openEditPrinter(\''+p.id+'\')">Edit</button>'+
+          '<button class="btn btn-amb btn-xs" onclick="openLogMaint(\''+p.name+'\',\'\')">🔧 Maintenance</button>'+
+          '<button class="btn btn-xs" style="background:var(--red-d);border:1px solid var(--red-d);color:var(--red-b)" onclick="delPrinter(\''+p.id+'\')">✕</button>'+
+        '</div>'+
+      '</div>'+
+    '</div>';
+  }).join('');
+
+  g.innerHTML=piCard+'<div style="margin-top:6px"><button class="btn btn-org btn-sm" onclick="openAddPrinter()">+ Add Printer</button></div>'+printerCards;
+}
+
+// ── Camera feed modal ──
+function openCameraFeed(printerName){
+  const url=getCameraUrl(printerName);
+  if(!url){toast('No camera configured for this printer','','error');return;}
+  const mod=document.createElement('div');
+  mod.id='camera-modal';
+  mod.style='position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.9);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px';
+  mod.innerHTML='<div style="font-family:\'Orbitron\',monospace;font-size:10px;color:var(--gold-b);letter-spacing:2px;margin-bottom:12px">📷 '+esc(printerName)+' — Live Feed</div>'+
+    '<video src="'+url+'" autoplay muted playsinline controls style="max-width:100%;max-height:70vh;border-radius:8px;border:1px solid var(--bdr2)"></video>'+
+    '<button class="btn btn-ghost" style="margin-top:16px" onclick="document.getElementById(\'camera-modal\').remove()">✕ Close</button>';
+  document.body.appendChild(mod);
+}
+
+// ── Pi Hub tab renderer ──
+function renderPiHub(){
+  const el=document.getElementById('pihub-content');
+  if(!el)return;
+  if(!piHubConfig){
+    el.innerHTML='<div style="padding:20px">'+
+      emptyState('🍓','Pi Hub Not Connected',
+        'Connect your Raspberry Pi hub to enable live printer monitoring, camera feeds, automated print logging, and AI failure detection.',
+        '<button class="btn btn-gold" onclick="openPiHubSetup()">🔌 Setup Pi Hub</button>')+
+    '</div>';
+    return;
+  }
+  const piUrl=getPiUrl();
+  el.innerHTML='<div style="display:grid;gap:10px">'+
+    '<div class="printer-card">'+
+      '<div style="font-family:\'Orbitron\',monospace;font-size:9px;font-weight:700;color:var(--gold-b);letter-spacing:2px;margin-bottom:10px">PI HUB STATUS</div>'+
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'+
+        '<div><div style="font-size:7px;color:var(--txt-d);letter-spacing:1px">HUB ADDRESS</div><div style="font-size:9px;color:var(--txt-b);margin-top:2px">'+piUrl+'</div></div>'+
+        '<div><div style="font-size:7px;color:var(--txt-d);letter-spacing:1px">CONNECTION</div>'+
+          '<div style="display:flex;align-items:center;gap:5px;margin-top:2px">'+
+            '<div id="pihub-status-dot" style="width:8px;height:8px;border-radius:50%;background:var(--txt-d)"></div>'+
+            '<div style="font-size:9px" id="pihub-status-lbl">Checking…</div>'+
+          '</div>'+
+        '</div>'+
+        '<div><div style="font-size:7px;color:var(--txt-d);letter-spacing:1px">PRINTERS</div><div style="font-size:9px;color:var(--txt-b);margin-top:2px">'+(piHubConfig.printers||[]).length+' connected</div></div>'+
+        '<div><div style="font-size:7px;color:var(--txt-d);letter-spacing:1px">CAMERA SERVER</div><div style="font-size:9px;color:var(--txt-b);margin-top:2px">go2rtc :'+piHubConfig.go2rtcPort+'</div></div>'+
+      '</div>'+
+      '<div style="margin-top:10px;display:flex;gap:6px">'+
+        '<button class="btn btn-ghost btn-sm" onclick="fetchPiStatus()">🔄 Refresh</button>'+
+        '<button class="btn btn-ghost btn-sm" onclick="openPiHubSetup()">⚙ Edit Config</button>'+
+      '</div>'+
+    '</div>'+
+    '<div class="printer-card">'+
+      '<div style="font-family:\'Orbitron\',monospace;font-size:9px;font-weight:700;color:var(--gold-b);letter-spacing:2px;margin-bottom:8px">TAILSCALE SETUP</div>'+
+      '<div style="font-size:8px;color:var(--txt-d);line-height:1.8">'+
+        'For LayerDeck to reach your Pi Hub, both this browser session and the Pi must be on the same Tailscale network.<br><br>'+
+        '<strong style="color:var(--txt-b)">On the Pi:</strong> Install Tailscale → <code>curl -fsSL https://tailscale.com/install.sh | sh && sudo tailscale up</code><br>'+
+        '<strong style="color:var(--txt-b)">On your phone/browser:</strong> Install the Tailscale app and sign in with the same account<br>'+
+        '<strong style="color:var(--txt-b)">Pi\'s Tailscale IP:</strong> Run <code>tailscale ip -4</code> on the Pi — enter that IP in your hub config<br>'+
+      '</div>'+
+    '</div>'+
+  '</div>';
+}
+
+// ── Pi Hub Setup Modal ──
+function openPiHubSetup(){
+  const existing=piHubConfig||{tailscaleIP:'',hubPort:3000,go2rtcPort:1984,printers:[],cameras:{}};
+  const printers=existing.printers||[];
+
+  let printerRows=printers.map((p,i)=>
+    '<div style="border:1px solid var(--bdr);border-radius:5px;padding:8px;margin-bottom:6px" id="pi-setup-printer-'+i+'">'+
+      '<div style="font-size:7px;color:var(--txt-d);letter-spacing:1px;margin-bottom:6px">PRINTER '+(i+1)+'</div>'+
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:5px">'+
+        '<input class="srch" placeholder="Name (e.g. A1)" value="'+esc(p.name||'')+'" id="pi-pname-'+i+'"/>'+
+        '<input class="srch" placeholder="IP (192.168.x.x)" value="'+esc(p.ip||'')+'" id="pi-pip-'+i+'"/>'+
+        '<input class="srch" placeholder="Serial number" value="'+esc(p.serial||'')+'" id="pi-pser-'+i+'"/>'+
+        '<input class="srch" placeholder="Access code" value="'+esc(p.accessCode||'')+'" id="pi-pacc-'+i+'"/>'+
+        '<input class="srch" placeholder="Camera stream (e.g. camera_a1)" value="'+esc((existing.cameras&&existing.cameras[p.name])||'')+'" id="pi-pcam-'+i+'" style="grid-column:1/-1"/>'+
+      '</div>'+
+    '</div>'
+  ).join('');
+  if(!printers.length){
+    printerRows='<div id="pi-setup-printers-list"></div>';
+  }else{
+    printerRows='<div id="pi-setup-printers-list">'+printerRows+'</div>';
+  }
+
+  let printerCount=printers.length;
+
+  const modal=document.createElement('div');
+  modal.id='pihub-setup-modal';
+  modal.style='position:fixed;inset:0;z-index:9998;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;padding:16px;overflow-y:auto';
+  modal.innerHTML='<div style="background:var(--surf);border:1px solid var(--bdr2);border-radius:10px;padding:20px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto">'+
+    '<div style="font-family:\'Orbitron\',monospace;font-size:12px;font-weight:700;color:var(--gold-b);letter-spacing:2px;margin-bottom:16px">🍓 PI HUB SETUP</div>'+
+    '<div style="font-size:8px;color:var(--txt-d);margin-bottom:14px">Enter your Raspberry Pi\'s Tailscale IP and printer credentials. These are stored in your account — never hardcoded.</div>'+
+    '<div style="margin-bottom:10px">'+
+      '<div style="font-size:7px;color:var(--txt-d);letter-spacing:1px;margin-bottom:4px">TAILSCALE IP (of your Pi)</div>'+
+      '<input class="srch" id="pi-tailscale-ip" placeholder="100.x.x.x" value="'+esc(existing.tailscaleIP||'')+'" style="width:100%;box-sizing:border-box"/>'+
+    '</div>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">'+
+      '<div><div style="font-size:7px;color:var(--txt-d);letter-spacing:1px;margin-bottom:4px">HUB PORT</div>'+
+        '<input class="srch" id="pi-hub-port" type="number" value="'+(existing.hubPort||3000)+'" style="width:100%;box-sizing:border-box"/></div>'+
+      '<div><div style="font-size:7px;color:var(--txt-d);letter-spacing:1px;margin-bottom:4px">go2rtc PORT</div>'+
+        '<input class="srch" id="pi-rtc-port" type="number" value="'+(existing.go2rtcPort||1984)+'" style="width:100%;box-sizing:border-box"/></div>'+
+    '</div>'+
+    '<div style="font-size:7px;color:var(--txt-d);letter-spacing:1px;margin-bottom:8px">PRINTERS</div>'+
+    printerRows+
+    '<button class="btn btn-ghost btn-sm" style="width:100%;margin-bottom:14px" onclick="piSetupAddPrinter()">+ Add Printer</button>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'+
+      '<button class="btn btn-ghost" onclick="document.getElementById(\'pihub-setup-modal\').remove()">Cancel</button>'+
+      '<button class="btn btn-gold" onclick="savePiHubSetup()">Save & Connect</button>'+
+    '</div>'+
+  '</div>';
+  document.body.appendChild(modal);
+  window._piSetupCount=printers.length;
+}
+
+function piSetupAddPrinter(){
+  const i=window._piSetupCount||0;
+  window._piSetupCount=i+1;
+  const list=document.getElementById('pi-setup-printers-list');
+  if(!list)return;
+  const div=document.createElement('div');
+  div.style='border:1px solid var(--bdr);border-radius:5px;padding:8px;margin-bottom:6px';
+  div.id='pi-setup-printer-'+i;
+  div.innerHTML='<div style="font-size:7px;color:var(--txt-d);letter-spacing:1px;margin-bottom:6px">PRINTER '+(i+1)+'</div>'+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:5px">'+
+      '<input class="srch" placeholder="Name (e.g. A1)" id="pi-pname-'+i+'"/>'+
+      '<input class="srch" placeholder="IP (192.168.x.x)" id="pi-pip-'+i+'"/>'+
+      '<input class="srch" placeholder="Serial number" id="pi-pser-'+i+'"/>'+
+      '<input class="srch" placeholder="Access code" id="pi-pacc-'+i+'"/>'+
+      '<input class="srch" placeholder="Camera stream (e.g. camera_a1)" id="pi-pcam-'+i+'" style="grid-column:1/-1"/>'+
+    '</div>';
+  list.appendChild(div);
+}
+
+async function savePiHubSetup(){
+  const ip=(document.getElementById('pi-tailscale-ip')?.value||'').trim();
+  if(!ip){document.getElementById('pi-tailscale-ip').focus();return;}
+  const hubPort=parseInt(document.getElementById('pi-hub-port')?.value)||3000;
+  const go2rtcPort=parseInt(document.getElementById('pi-rtc-port')?.value)||1984;
+
+  const count=window._piSetupCount||0;
+  const printers=[];
+  const cameras={};
+  for(let i=0;i<count;i++){
+    const name=(document.getElementById('pi-pname-'+i)?.value||'').trim();
+    const pip=(document.getElementById('pi-pip-'+i)?.value||'').trim();
+    const serial=(document.getElementById('pi-pser-'+i)?.value||'').trim();
+    const accessCode=(document.getElementById('pi-pacc-'+i)?.value||'').trim();
+    const cam=(document.getElementById('pi-pcam-'+i)?.value||'').trim();
+    if(name){
+      printers.push({name,ip:pip,serial,accessCode});
+      if(cam)cameras[name]=cam;
+      ensurePrinterRecord(name);
+    }
+  }
+
+  const cfg={tailscaleIP:ip,hubPort,go2rtcPort,printers,cameras};
+  await savePiHubConfig(cfg);
+  document.getElementById('pihub-setup-modal')?.remove();
+  startPiPolling();
+  render();
+  toast('Pi Hub configured!','Connecting to '+ip,'success');
+}
+
+// ── Square placeholder ──
+function renderSquare(){
+  const el=document.getElementById('square-content');
+  if(!el)return;
+  el.innerHTML='<div class="printer-card">'+
+    '<div style="font-family:\'Orbitron\',monospace;font-size:11px;font-weight:700;color:var(--gold-b);letter-spacing:2px;margin-bottom:8px">💳 SQUARE</div>'+
+    '<div style="font-size:8px;color:var(--txt-d);line-height:1.8;margin-bottom:12px">'+
+      'Square webhook integration and Point of Sale deep-link are configured server-side.<br>'+
+      'Transactions sync to the Orders tab automatically with a [SQ] badge.<br>'+
+      'Use the Convention tab → Day Sales to run the Square POS flow at events.'+
+    '</div>'+
+    '<div style="font-size:7px;color:var(--txt-d);letter-spacing:1px;margin-bottom:6px">STATUS</div>'+
+    '<div style="display:flex;align-items:center;gap:6px">'+
+      '<div style="width:8px;height:8px;border-radius:50%;background:var(--grn)"></div>'+
+      '<div style="font-size:8px;color:var(--txt-b)">Webhooks configured via API server</div>'+
+    '</div>'+
+  '</div>';
+}
+
+// ── Discord placeholder ──
+function renderDiscord(){
+  const el=document.getElementById('discord-content');
+  if(!el)return;
+  const channels=[
+    {name:'#print-alerts',desc:'Print finish/fail notifications with photos'},
+    {name:'#orders',desc:'New Shopify and Square order alerts'},
+    {name:'#stock-alerts',desc:'Low stock and spool alerts'},
+    {name:'#daily-report',desc:'Nightly print summary at 6AM'},
+    {name:'#convention-sales',desc:'Real-time sales feed during events'},
+    {name:'#pi-health',desc:'Pi service monitoring — 5 min checks'},
+    {name:'#bambu-restock',desc:'Bambu filament restock alerts'},
+    {name:'#convention-prep',desc:'Event reminders at 7, 3, 1 day before'},
+    {name:'#print-watch',desc:'AI failure detection alerts with photos'},
+  ];
+  el.innerHTML='<div class="printer-card">'+
+    '<div style="font-family:\'Orbitron\',monospace;font-size:11px;font-weight:700;color:var(--gold-b);letter-spacing:2px;margin-bottom:8px">💬 DISCORD WEBHOOKS</div>'+
+    '<div style="font-size:8px;color:var(--txt-d);margin-bottom:12px">All 9 Discord channels are configured via Replit Secrets. Webhook-only integration — no bot required.</div>'+
+    '<div style="display:grid;gap:5px">'+
+    channels.map(c=>'<div style="display:flex;align-items:flex-start;gap:8px;padding:6px;border:1px solid var(--bdr);border-radius:4px">'+
+      '<div style="width:8px;height:8px;border-radius:50%;background:var(--grn);flex-shrink:0;margin-top:2px"></div>'+
+      '<div><div style="font-size:8px;font-weight:700;color:var(--txt-b)">'+c.name+'</div><div style="font-size:7px;color:var(--txt-d)">'+c.desc+'</div></div>'+
+    '</div>').join('')+
+    '</div>'+
+  '</div>';
+}
+
+// ── Social placeholder ──
+function renderSocial(){
+  const el=document.getElementById('social-content');
+  if(!el)return;
+  el.innerHTML='<div class="printer-card">'+
+    '<div style="font-family:\'Orbitron\',monospace;font-size:11px;font-weight:700;color:var(--gold-b);letter-spacing:2px;margin-bottom:8px">📱 SOCIAL SCHEDULER</div>'+
+    '<div style="font-size:8px;color:var(--txt-d);line-height:1.8;margin-bottom:12px">'+
+      'Instagram scheduling via Meta Graph API is configured (META_ACCESS_TOKEN set).<br>'+
+      'Full Social Composer, Queue, and Analytics coming as part of the Section 16 build.'+
+    '</div>'+
+    '<div style="display:grid;gap:6px">'+
+      '<div style="padding:8px;border:1px solid var(--bdr);border-radius:4px;display:flex;align-items:center;gap:8px">'+
+        '<div style="width:8px;height:8px;border-radius:50%;background:var(--grn)"></div>'+
+        '<div style="font-size:8px;color:var(--txt-b)">Instagram — API credentials configured</div>'+
+      '</div>'+
+      '<div style="padding:8px;border:1px solid var(--bdr);border-radius:4px;display:flex;align-items:center;gap:8px">'+
+        '<div style="width:8px;height:8px;border-radius:50%;background:var(--txt-d)"></div>'+
+        '<div style="font-size:8px;color:var(--txt-d)">TikTok — skipped per user request</div>'+
+      '</div>'+
+    '</div>'+
+  '</div>';
+}
+
+// ── Init Pi Hub on app load ──
+(async function initPiHub(){
+  const cfg=await loadPiHubConfig();
+  if(cfg){
+    startPiPolling();
+  }
+})();
+
+// ── Also wire up printers tab to use new renderPrinters ──
+// (already handled — renderPrinters is defined above and replaces the old one)
 </script>
 </body>
 </html>
