@@ -4108,7 +4108,7 @@ function renderQueue(){
       // Done by time for In Progress cards — pulled from live Pi data
       var doneByHtml='';
       if(st.key==='inprogress'&&q.printer&&piPrevStates[q.printer]){
-        var liveRemMins=Math.round((piPrevStates[q.printer].mc_remaining_time||0)/60);
+        var liveRemMins=Math.round(piPrevStates[q.printer].mc_remaining_time||0);
         var doneByStr=getDoneByTime(liveRemMins);
         if(doneByStr)doneByHtml='<div style="font-size:7px;color:var(--cyn);margin-top:3px">Done by '+doneByStr+'</div>';
       }
@@ -4164,7 +4164,7 @@ function qDropCol(ev,stageKey){
         return q;
       });
       saveQueue();render();
-      showToast('Moved to In Progress');
+      toast('Moved to In Progress','','info',2000);
     }
   } else if(stageKey==='queued'){
     // Drop on column body (not a card) → move to end of queued list
@@ -4197,7 +4197,7 @@ function qDrop(ev){
       return q;
     });
     saveQueue();render();
-    showToast('Moved to In Progress');
+    toast('Moved to In Progress','','info',2000);
     _qDragId=null;return;
   }
   // Reorder within queued stage only
@@ -12835,14 +12835,20 @@ const STATE_COLORS={
 const STATE_LABELS={IDLE:'IDLE',RUNNING:'PRINTING',PAUSE:'PAUSED',PAUSED:'PAUSED',FAILED:'FAILED',FINISH:'FINISHED',OFFLINE:'OFFLINE'};
 
 // ── Printer badge colors for queue cards ──
-const PRINTER_BADGE_COLORS={
-  'A1':        {bg:'#1565C0',label:'A1'},
-  'P1 Room':   {bg:'#2E7D32',label:'P1 Room'},
-  'P1 Closet': {bg:'#E65100',label:'P1 Closet'}
-};
+// Preset badge colors by slot — first 3 printers get distinct brand colors, rest cycle
+var BADGE_PALETTE=['#1565C0','#2E7D32','#E65100','#6A1B9A','#00695C','#C62828','#1565A0'];
 function getPrinterBadgeHtml(printerName){
-  var cfg=PRINTER_BADGE_COLORS[printerName]||{bg:'#424242',label:'Unassigned'};
-  return '<span style="display:inline-block;padding:1px 6px;border-radius:10px;font-size:7px;font-weight:700;background:'+cfg.bg+';color:#fff;letter-spacing:0.5px">'+esc(cfg.label)+'</span>';
+  if(!printerName){return '<span style="display:inline-block;padding:1px 6px;border-radius:10px;font-size:7px;font-weight:700;background:#424242;color:#fff;letter-spacing:0.5px">Unassigned</span>';}
+  // Look up color by position in printerRecords
+  var idx=(printerRecords||[]).findIndex(function(p){return p.name===printerName;});
+  // If not in printerRecords, try matching via piHubConfig.printers (name field)
+  if(idx<0&&window.piHubConfig&&piHubConfig.printers){
+    var piIdx=(piHubConfig.printers||[]).findIndex(function(p){return p.name===printerName;});
+    if(piIdx>=0)idx=piIdx;
+  }
+  var bg=idx>=0?BADGE_PALETTE[idx%BADGE_PALETTE.length]:'#424242';
+  var label=printerName;
+  return '<span style="display:inline-block;padding:1px 6px;border-radius:10px;font-size:7px;font-weight:700;background:'+bg+';color:#fff;letter-spacing:0.5px">'+esc(label)+'</span>';
 }
 function getDoneByTime(remainingMinutes){
   if(!remainingMinutes||remainingMinutes<=0)return null;
@@ -13017,10 +13023,11 @@ async function onPiPrintStarted(name,data){
     // No matching queue item — auto-create one as In Progress (test print / restock / manual start)
     var alreadyInProgress=queueItems.some(function(q){return q.stage==='inprogress'&&q.printer===name&&q.autoFromPi;});
     if(!alreadyInProgress){
-      var autoItem={id:uid(),name:displayName,category:'Other',printer:name,hrs:0,qty:1,priority:'normal',stage:'inprogress',startedAt:Date.now(),timestamp:Date.now(),notes:'Auto-added from Pi Hub',autoFromPi:true};
+      var autoHrs=data.mc_remaining_time?Math.round((data.mc_remaining_time/60)*10)/10:0;
+      var autoItem={id:uid(),name:displayName,category:'Other',printer:name,hrs:autoHrs,qty:1,priority:'normal',stage:'inprogress',startedAt:Date.now(),timestamp:Date.now(),notes:'Auto-added from Pi Hub',autoFromPi:true};
       queueItems.push(autoItem);
       saveQueue();render();
-      showToast('\uD83D\uDDA8\uFE0F Auto-added to In Progress: '+displayName);
+      toast('Auto-added to In Progress',displayName,'info',3000);
     }
   }
   // Ensure printerRecords has this printer
@@ -13224,7 +13231,7 @@ function updatePrinterCardLive(name,data,state){
   const pct=data.mc_percent||0;
   const layerNum=data.layer_num||0;
   const totalLayers=data.total_layer_num||0;
-  const remMins=Math.round((data.mc_remaining_time||0)/60);
+  const remMins=Math.round(data.mc_remaining_time||0);
   const doneByStr=getDoneByTime(remMins);
   const doneBy=doneByStr?'Done by '+doneByStr:'';
 
