@@ -9175,11 +9175,13 @@ function renderAmsMap(printerName,compact=false){
   const totalSlots=units.reduce((s,u)=>s+u.trays.length,0);
 
   // ── External/virtual spool (printer with no AMS e.g. P1S direct spool) ──
-  const hasExtData=vtTray&&vtTray.tray_color&&vtTray.tray_color!=='00000000';
+  // Detect by tray_type (not tray_color — Bambu reports 00000000 even when loaded)
+  const hasExtData=!!(vtTray&&vtTray.tray_type);
   if(!totalSlots&&!hasExtData) return '<div style="font-size:6px;color:var(--txt-d);padding:4px 0">No AMS configured</div>';
 
   if(!totalSlots&&hasExtData){
-    const extCol='#'+(vtTray.tray_color||'888888').slice(0,6);
+    const rawCol=(vtTray.tray_color||'').replace(/^#/,'');
+    const extCol='#'+(rawCol&&rawCol!=='00000000'?rawCol.slice(0,6):'888888');
     const extMat=vtTray.tray_sub_brands||vtTray.tray_type||'?';
     const extRemain=vtTray.remain||0;
     const bc=extRemain>0?barcol(extRemain):'var(--txt-d)';
@@ -9289,9 +9291,11 @@ function renderAmsMapDash(printerName){
   }
 
   // External/virtual spool fallback for printers with no AMS
-  var hasExtData=vtTray&&vtTray.tray_color&&vtTray.tray_color!=='00000000';
+  // Detect by tray_type — tray_color can be 00000000 even when filament is loaded
+  var hasExtData=!!(vtTray&&vtTray.tray_type);
   if(!trays.length&&hasExtData){
-    var extCol='#'+(vtTray.tray_color||'888888').slice(0,6);
+    var rawExtCol=(vtTray.tray_color||'').replace(/^#/,'');
+    var extCol='#'+(rawExtCol&&rawExtCol!=='00000000'?rawExtCol.slice(0,6):'888888');
     var extMat=vtTray.tray_sub_brands||vtTray.tray_type||'?';
     var extRemain=vtTray.remain||0;
     var extBc=extRemain>0?barcol(extRemain):'var(--txt-d)';

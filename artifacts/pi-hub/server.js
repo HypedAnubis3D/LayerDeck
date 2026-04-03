@@ -274,7 +274,7 @@ app.post('/ams/load', (req, res) => {
 });
 
 // POST /ams/unload — unload current filament
-// Uses ams_control/unload which works for AMS, AMS Lite, and external spool
+// target=255 is the universal Bambu unload signal (AMS, AMS Lite, external spool)
 app.post('/ams/unload', (req, res) => {
   const { printer } = req.body;
   const p = printerClients[printer];
@@ -282,8 +282,10 @@ app.post('/ams/unload', (req, res) => {
   p.client.publish(p.REQUEST_TOPIC, JSON.stringify({
     print: {
       sequence_id: '0',
-      command:     'ams_control',
-      param:       'unload'
+      command:     'ams_change_filament',
+      target:      255,
+      curr_temp:   220,
+      tar_temp:    220
     }
   }));
   res.json({ ok: true });
