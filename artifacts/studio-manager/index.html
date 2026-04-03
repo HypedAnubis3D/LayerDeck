@@ -13256,6 +13256,7 @@ try{var _s=localStorage.getItem('piPrevStateKeys');if(_s){var _r=JSON.parse(_s)|
 try{var _ha=localStorage.getItem('hmsLastAlerted');window._hmsLastAlerted=_ha?JSON.parse(_ha):{};}catch(e){window._hmsLastAlerted={};}
 let piPollTimer=null;
 let piPrintStartTimes={}; // {printerName: timestamp}
+let piAmsStartRemain={};  // {printerName: {"ui_ti": pct, "ext": pct}} — AMS remain% at print start
 let piPollInFlight=false;  // in-flight lock — never send 2 requests at once
 let piConsecutiveFails=0;  // for exponential backoff
 const PI_POLL_INTERVALS=[5000,10000,20000,30000,60000]; // backoff ladder
@@ -13481,6 +13482,17 @@ async function onPiPrintStarted(name,data){
   }else{
     piPrintStartTimes[name]=Date.now();
   }
+  // Snapshot AMS remain% per slot so we can compute per-color grams at print end
+  var _snap={};
+  if(data.ams&&data.ams.ams){
+    data.ams.ams.forEach(function(unit,ui){
+      (unit.tray||[]).forEach(function(tray,ti){
+        if(tray.tray_type&&tray.remain!=null)_snap[ui+'_'+ti]=tray.remain;
+      });
+    });
+  }
+  if(data.vt_tray&&data.vt_tray.remain!=null)_snap['ext']=data.vt_tray.remain;
+  piAmsStartRemain[name]=_snap;
   // Move queue card to In Progress if matching job
   var jobName=(data.subtask_name||'').replace('.gcode.3mf','').replace('.3mf','');
   var displayName=jobName||('Print on '+name);
@@ -13550,42 +13562,85 @@ async function onPiPrintFinished(name,data){
   const gramsUsed=estimatePiFilament(material,durationMins);
   const jobName=(data.subtask_name||'').replace('.gcode.3mf','').replace('.3mf','')||'Unknown';
 
-  // Find matching spool — first try AMS slot mapping, then fallback to material match
-  const extKey=_amsSlotKey(name,255,254);
-  const extSpoolId=amsSlotMappings[extKey];
-  const matchSpool=spools.find(s=>s.id===extSpoolId)
-    ||spools.find(s=>s.material&&s.material.toLowerCase().includes(material.toLowerCase())&&(s.remaining||0)>0);
+  // ── Per-slot filament tracking via AMS remain% delta ──────────────────
+  // Compare remain% at print start (snapshot) vs now to compute per-color grams used.
+  // Falls back to single-spool estimation when AMS data isn't available.
+  const startSnap=piAmsStartRemain[name]||{};
+  const filamentSlots=[]; // [{spoolId, grams, mat, col, slotKey}]
+  let spoolsChanged=false;
 
-  let filamentCost=0;
-  if(matchSpool){
-    const totalG=matchSpool.totalGrams||1000;
-    const price=matchSpool.price||0;
-    filamentCost=parseFloat((gramsUsed*(price/totalG)).toFixed(2));
-    matchSpool.remaining=Math.max(0,(matchSpool.remaining||totalG)-gramsUsed);
-    saveSpools();
-    if((matchSpool.remaining||0)<100){
-      postToDiscord('low_spool',
-        '🧵 Spool Running Low — '+(matchSpool.brand||'')+' '+(matchSpool.colorName||matchSpool.name||'')+'\nRemaining: ~'+Math.round(matchSpool.remaining||0)+'g\nPrinter: '+name);
+  if(data.ams&&data.ams.ams&&data.ams.ams.length){
+    data.ams.ams.forEach(function(unit,ui){
+      (unit.tray||[]).forEach(function(tray,ti){
+        const snapKey=ui+'_'+ti;
+        const startPct=startSnap[snapKey];
+        if(!tray.tray_type||startPct==null||tray.remain==null)return;
+        const delta=startPct-tray.remain; // positive = filament consumed
+        if(delta<1)return; // ignore noise
+        const slotKey=_amsSlotKey(name,ui,ti);
+        const mappedId=amsSlotMappings[slotKey];
+        const spool=spools.find(s=>s.id===mappedId);
+        const totalG=spool?(spool.totalGrams||1000):1000;
+        const grams=Math.max(1,Math.round(delta/100*totalG));
+        const mat=tray.tray_sub_brands||tray.tray_type||'PLA';
+        const rawCol=tray.tray_color||'888888';
+        const col='#'+rawCol.slice(0,6);
+        filamentSlots.push({spoolId:mappedId||'',grams,mat,col,spool});
+        if(spool){
+          spool.remaining=Math.max(0,(spool.remaining||totalG)-grams);
+          spoolsChanged=true;
+          usageHist.push({id:uid(),spoolId:spool.id,spoolName:spool.name||spool.material,amount:grams,date:new Date().toISOString().split('T')[0],timestamp:Date.now(),note:'Pi Hub — '+jobName+' (AMS slot '+(ui*4+ti+1)+')'});
+          if((spool.remaining||0)<100){
+            postToDiscord('low_spool','🧵 Spool Running Low — '+(spool.brand||'')+' '+(spool.colorName||spool.name||'')+'\nRemaining: ~'+Math.round(spool.remaining||0)+'g\nPrinter: '+name);
+          }
+        }
+      });
+    });
+  }
+  // External spool
+  if(data.vt_tray&&data.vt_tray.tray_type&&startSnap.ext!=null&&data.vt_tray.remain!=null){
+    const extDelta=startSnap.ext-data.vt_tray.remain;
+    if(extDelta>=1){
+      const extKey=_amsSlotKey(name,255,254);
+      const extSpoolId=amsSlotMappings[extKey];
+      const extSpool=spools.find(s=>s.id===extSpoolId);
+      const totalG=extSpool?(extSpool.totalGrams||1000):1000;
+      const grams=Math.max(1,Math.round(extDelta/100*totalG));
+      const mat=data.vt_tray.tray_sub_brands||data.vt_tray.tray_type||material;
+      filamentSlots.push({spoolId:extSpoolId||'',grams,mat,col:'#888888',spool:extSpool});
+      if(extSpool){
+        extSpool.remaining=Math.max(0,(extSpool.remaining||totalG)-grams);
+        spoolsChanged=true;
+        usageHist.push({id:uid(),spoolId:extSpool.id,spoolName:extSpool.name||extSpool.material,amount:grams,date:new Date().toISOString().split('T')[0],timestamp:Date.now(),note:'Pi Hub — '+jobName+' (Ext spool)'});
+        if((extSpool.remaining||0)<100){
+          postToDiscord('low_spool','🧵 Spool Running Low — '+(extSpool.brand||'')+' '+(extSpool.colorName||extSpool.name||'')+'\nRemaining: ~'+Math.round(extSpool.remaining||0)+'g\nPrinter: '+name);
+        }
+      }
     }
   }
 
-  // Always log filament usage — even without a spool, we want to track the material used
-  usageHist.push({
-    id:uid(),
-    spoolId:matchSpool?matchSpool.id:'unassigned',
-    spoolName:matchSpool?(matchSpool.name||matchSpool.material):('~'+material+' (unassigned)'),
-    amount:gramsUsed,
-    date:new Date().toISOString().split('T')[0],
-    timestamp:Date.now(),
-    note:'Auto-logged by Pi Hub — '+jobName+(matchSpool?'':' (no spool matched)')
-  });
+  // Fallback: no AMS delta data — use duration-based estimate for single slot
+  if(!filamentSlots.length){
+    const extKey2=_amsSlotKey(name,255,254);
+    const fallbackSpool=spools.find(s=>s.id===amsSlotMappings[extKey2])
+      ||spools.find(s=>s.material&&s.material.toLowerCase().includes(material.toLowerCase())&&(s.remaining||0)>0);
+    if(fallbackSpool){
+      fallbackSpool.remaining=Math.max(0,(fallbackSpool.remaining||fallbackSpool.totalGrams||1000)-gramsUsed);
+      spoolsChanged=true;
+      if((fallbackSpool.remaining||0)<100){
+        postToDiscord('low_spool','🧵 Spool Running Low — '+(fallbackSpool.brand||'')+' '+(fallbackSpool.colorName||fallbackSpool.name||'')+'\nRemaining: ~'+Math.round(fallbackSpool.remaining||0)+'g\nPrinter: '+name);
+      }
+    }
+    filamentSlots.push({spoolId:fallbackSpool?fallbackSpool.id:'',grams:gramsUsed,mat:material,col:'#888888',spool:fallbackSpool});
+    usageHist.push({id:uid(),spoolId:fallbackSpool?fallbackSpool.id:'unassigned',spoolName:fallbackSpool?(fallbackSpool.name||fallbackSpool.material):('~'+material+' (unassigned)'),amount:gramsUsed,date:new Date().toISOString().split('T')[0],timestamp:Date.now(),note:'Pi Hub — '+jobName+(fallbackSpool?'':' (no spool matched)')});
+  }
+
+  if(spoolsChanged)saveSpools();
   saveHist();
 
   const elecCost=parseFloat(((durationMins/60)*(cfg.electricityRate||0.12)*0.13).toFixed(2));
   const actualHrs=Math.round((durationMins/60)*100)/100;
-  const filamentEntry=matchSpool
-    ?{spoolId:matchSpool.id,grams:gramsUsed}
-    :{spoolId:'',grams:gramsUsed,material};
+  const filamentEntries=filamentSlots.map(s=>({spoolId:s.spoolId,grams:s.grams}));
   const printRecord={
     id:uid(),
     name:jobName,
@@ -13593,7 +13648,7 @@ async function onPiPrintFinished(name,data){
     printer:name,
     hrs:actualHrs,
     qty:1,
-    filaments:[filamentEntry],
+    filaments:filamentEntries,
     status:'done',
     finishedAt:Date.now(),
     timestamp:Date.now(),
@@ -13616,8 +13671,9 @@ async function onPiPrintFinished(name,data){
   render();
   toast('✅ '+name+' finished',jobName,'success',6000);
   piPrintStartTimes[name]=null;
+  piAmsStartRemain[name]={};
   postToDiscord('print_complete',
-    '✅ Print Complete — '+name+'\nJob: '+jobName+'\nDuration: '+fmtMins(durationMins)+'\nFilament: ~'+gramsUsed+'g '+material);
+    '✅ Print Complete — '+name+'\nJob: '+jobName+'\nDuration: '+fmtMins(durationMins)+'\nFilament: ~'+(filamentSlots.reduce(function(a,s){return a+s.grams;},0)||gramsUsed)+'g '+material);
 }
 
 async function onPiPrintFailed(name,data){
@@ -13945,15 +14001,21 @@ function updatePrinterCardLive(name,data,state){
   allId('btn-skip').forEach(function(btn){
     btn.style.display=(isActive&&hasObjData)?'':'none';
   });
-  // Object info line
+  // Object info line (also shows hint when printing local/SD and "by object" data is absent)
   allId('obj-info').forEach(function(el){
     if(isActive&&hasObjData&&effectiveObjData.totalObjects>0){
       var objIdx=(effectiveObjData.currentObjectIdx||0)+1;
       var total=effectiveObjData.totalObjects||0;
       var objName=effectiveObjData.objectList&&effectiveObjData.objectList[effectiveObjData.currentObjectIdx||0]?
         effectiveObjData.objectList[effectiveObjData.currentObjectIdx||0].name||'':'';
-      el.textContent='Object '+objIdx+' of '+total+(objName?' — '+objName:'');
+      el.innerHTML='Object '+objIdx+' of '+total+(objName?' — <em>'+esc(objName)+'</em>':'');
       el.style.display='';
+      el.style.color='';
+    }else if(isActive&&data.print_type==='local'){
+      // SD card prints don't carry obj_list in MQTT — show a helpful note
+      el.innerHTML='⬆ Send via <strong>LAN</strong> (not SD card) to enable Skip Object';
+      el.style.display='';
+      el.style.color='var(--txt-d)';
     }else{
       el.style.display='none';
       el.textContent='';
