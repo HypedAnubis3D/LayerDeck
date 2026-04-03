@@ -14413,6 +14413,52 @@ function renderPrinters(){
     const stateLabel=STATE_LABELS[state]||state;
     const isActive=state==='RUNNING'||state==='PAUSE'||state==='PAUSED';
 
+    // ── 3MF Filament Plan — shown in live strip when printing ──
+    const _liveJobRaw=liveData?(liveData.subtask_name||'').replace(/\.gcode\.3mf$/i,'').replace(/\.3mf$/i,''):'';
+    const _liveJobNorm=_liveJobRaw.replace(/_/g,' ').toLowerCase().trim();
+    const _liveJobBase=_liveJobNorm.replace(/\s+plate\s+\d+$/i,'').trim();
+    const _liveTmf=(isActive&&_liveJobNorm&&typeof tmfLib!=='undefined')?tmfLib.find(function(t){
+      const tN=(t.name||'').toLowerCase().trim();
+      const tF=(t.filename||'').replace(/\.gcode\.3mf$/i,'').replace(/\.3mf$/i,'').replace(/_/g,' ').toLowerCase().trim();
+      return tN===_liveJobNorm||tF===_liveJobNorm||tN===_liveJobBase||tF===_liveJobBase;
+    }):null;
+    const _liveTmfG=_liveTmf&&_liveTmf.filamentGramsPerColor&&_liveTmf.filamentGramsPerColor.length?_liveTmf.filamentGramsPerColor:null;
+    const filPlanHtml=_liveTmfG?(function(){
+      const cols=_liveTmf.filamentColors||[];
+      const mats=_liveTmf.filamentTypes||[];
+      const supG=_liveTmf.supportGrams||0;
+      const purG=_liveTmf.purgeGrams||0;
+      const modelG=_liveTmfG.reduce(function(a,v){return a+(v||0);},0);
+      const totalG=parseFloat((modelG+supG+purG).toFixed(1));
+      const _slots=amsMap[p.name]||{};
+      const rows=_liveTmfG.map(function(g,i){
+        const col=cols[i]||'#888888';
+        const mat=(mats[i]||'PLA').slice(0,9);
+        const assignedId=_slots[i+1]||'';
+        const assignedSp=assignedId?spools.find(function(s){return s.id===assignedId;}):null;
+        return '<div style="display:flex;align-items:center;gap:6px;padding:3px 0;border-bottom:1px solid rgba(255,255,255,0.04)">'
+          +'<div style="width:11px;height:11px;border-radius:50%;background:'+col+';border:1.5px solid rgba(255,255,255,0.2);flex-shrink:0"></div>'
+          +'<span style="font-size:6px;color:var(--txt-d);min-width:30px">'+esc(mat)+'</span>'
+          +'<span style="font-size:7px;font-family:Orbitron,monospace;color:var(--gold-b);min-width:38px">'+(g||0).toFixed(1)+'g</span>'
+          +(assignedSp
+            ?'<span style="font-size:6px;color:var(--grn);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+esc(assignedSp.name)+'">→ '+esc(assignedSp.name)+'</span>'
+            :'<button class="btn btn-xs" style="font-size:5px;padding:1px 5px;background:var(--gold-d);color:var(--gold-b);border-color:var(--gold-dim);flex:1" onclick="event.stopPropagation();openAmsModal(\''+esc(p.name)+'\','+(i+1)+')">Assign Spool</button>'
+          )
+          +'</div>';
+      }).join('');
+      const wasteRow=(supG||purG)
+        ?'<div style="display:flex;gap:8px;margin-top:4px;padding-top:3px;border-top:1px solid rgba(255,255,255,0.06)">'
+          +(supG?'<span style="font-size:6px;color:var(--txt-d)">Support <span style="color:var(--amb)">'+supG.toFixed(1)+'g</span></span>':'')
+          +(purG?'<span style="font-size:6px;color:var(--txt-d)">Purge/Waste <span style="color:var(--amb)">'+purG.toFixed(1)+'g</span></span>':'')
+          +'<span style="font-size:6px;color:var(--txt-d);margin-left:auto">Total <span style="color:var(--gold-b)">'+totalG+'g</span></span>'
+          +'</div>'
+        :'<div style="font-size:6px;color:var(--txt-d);margin-top:3px;text-align:right">Total <span style="color:var(--gold-b)">'+totalG+'g</span></div>';
+      return '<div style="margin-top:6px;padding:7px 8px;background:rgba(0,0,0,0.2);border-radius:4px;border:1px solid rgba(255,165,0,0.15)">'
+        +'<div style="font-size:6px;color:var(--gold-b);letter-spacing:1.5px;font-weight:700;text-transform:uppercase;margin-bottom:5px">📦 Filament Plan — '+esc((_liveJobRaw||'').replace(/_/g,' '))+'</div>'
+        +rows+wasteRow
+        +'</div>';
+    })():'';
+
     // Live badge in header
     const liveBadge=piHubConfig&&liveData!=null?
       '<span style="font-size:8px;color:'+stateColor+';font-family:\'Orbitron\',monospace;font-weight:700;letter-spacing:1px" id="pi-'+id+'-state">'+stateLabel+'</span>':
@@ -14448,6 +14494,7 @@ function renderPrinters(){
             '<div><div style="font-size:6px;color:var(--txt-d);letter-spacing:1px">LAYERS</div><div style="font-size:8px;color:var(--txt-b)" id="pi-'+id+'-layer">—</div></div>'+
           '</div>'+
           '<div style="margin-bottom:6px" id="pi-'+id+'-ams"></div>'+
+          filPlanHtml+
           '<div id="pi-'+id+'-obj-info" style="display:none;font-size:7px;color:var(--txt-d);margin-bottom:5px"></div>'+
           '<div style="display:flex;gap:5px;flex-wrap:wrap">'+
             '<button id="pi-'+id+'-btn-pause" class="btn btn-ghost btn-xs" onclick="piControl(\''+esc(p.name)+'\',\'pause\')" style="'+(state!=='RUNNING'?'opacity:0.4;pointer-events:none':'')+'">⏸ Pause</button>'+
