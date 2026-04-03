@@ -1,7 +1,7 @@
 {
-  "name": "LayerStack Studio Manager",
-  "short_name": "LayerStack",
-  "description": "3D printing studio management for collectibles businesses",
+  "name": "LayerDeck",
+  "short_name": "LayerDeck",
+  "description": "3D printing studio management powered by HypedAnubis3D",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0f0f19",

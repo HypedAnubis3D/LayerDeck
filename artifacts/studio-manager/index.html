@@ -3,13 +3,13 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>LayerStack</title>
+<title>LayerDeck</title>
 <link rel="icon" href="/favicon.svg" type="image/svg+xml"/>
 <link rel="icon" href="/icon-192.png" type="image/png"/>
 <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png"/>
 <link rel="manifest" href="/manifest.json"/>
-<meta name="application-name" content="LayerStack"/>
-<meta name="apple-mobile-web-app-title" content="LayerStack"/>
+<meta name="application-name" content="LayerDeck"/>
+<meta name="apple-mobile-web-app-title" content="LayerDeck"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
 <meta name="theme-color" content="#0f0f19"/>
@@ -1465,8 +1465,8 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
 <div id="auth-screen" style="display:none;position:fixed;inset:0;z-index:9000;background:var(--bg);align-items:center;justify-content:center;padding:24px;overflow-y:auto">
   <div style="width:100%;max-width:340px;margin:auto">
     <div style="text-align:center;margin-bottom:28px">
-      <img src="/layerstack-logo.png" alt="LayerStack" style="width:160px;height:auto;filter:drop-shadow(0 0 14px rgba(201,162,39,.55));margin-bottom:4px"/>
-      <div style="font-family:'Orbitron',monospace;font-size:7px;color:var(--txt-d);letter-spacing:3px">STUDIO MANAGER</div>
+      <img src="/layerdeck-logo.png" alt="LayerDeck" style="width:160px;height:auto;filter:drop-shadow(0 0 14px rgba(201,162,39,.55));margin-bottom:4px"/>
+      <div style="font-size:9px;font-weight:400;color:rgba(201,162,39,0.6);letter-spacing:0.5px;text-align:center;margin-top:2px;">powered by HypedAnubis3D</div>
     </div>
     <div style="display:flex;border:1px solid var(--bdr2);border-radius:6px;overflow:hidden;margin-bottom:20px">
       <button id="auth-tab-login" onclick="switchAuthTab('login')" style="flex:1;padding:9px;background:var(--gold);color:#000;font-family:'Orbitron',monospace;font-size:8px;font-weight:700;border:none;cursor:pointer;letter-spacing:1px">SIGN IN</button>
@@ -1525,9 +1525,9 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
 <!-- SIDEBAR -->
 <div class="sidebar" id="sidebar">
   <div class="sidebar-logo" style="padding:14px 12px 10px;flex-direction:column;align-items:center;gap:4px;">
-    <img src="/layerstack-logo.png" alt="LayerStack" style="width:150px;height:auto;filter:drop-shadow(0 0 10px rgba(201,162,39,.5));"/>
-    <div style="font-family:'Orbitron',monospace;font-size:11px;font-weight:900;color:var(--gold-b);letter-spacing:2px;text-align:center;">LAYERSTACK</div>
-    <div style="font-family:'Orbitron',monospace;font-size:6px;color:var(--txt-d);letter-spacing:2px;text-align:center;">STUDIO MANAGER</div>
+    <img src="/layerdeck-logo.png" alt="LayerDeck" style="width:150px;height:auto;filter:drop-shadow(0 0 10px rgba(201,162,39,.5));"/>
+    <div style="font-family:'Orbitron',monospace;font-size:11px;font-weight:900;color:var(--gold-b);letter-spacing:2px;text-align:center;">LAYERDECK</div>
+    <div style="font-size:8px;font-weight:400;color:rgba(201,162,39,0.55);letter-spacing:0.5px;text-align:center;margin-top:1px;">powered by HypedAnubis3D</div>
   </div>
   <div class="sidebar-body" id="sidebar-body">
 
@@ -1658,10 +1658,10 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
     <span></span><span></span><span></span>
   </button>
   <div style="display:flex;align-items:center;gap:10px;flex-shrink:0;cursor:pointer" onclick="navTo('dashboard',document.getElementById('nav-dashboard'))" title="Go to Dashboard">
-    <img src="/layerstack-logo.png" alt="LayerStack" style="height:72px;width:auto;filter:drop-shadow(0 0 10px rgba(201,162,39,.55));"/>
+    <img src="/layerdeck-logo.png" alt="LayerDeck" style="height:72px;width:auto;filter:drop-shadow(0 0 10px rgba(201,162,39,.55));"/>
     <div style="display:flex;flex-direction:column;line-height:1.1;">
-      <span id="ls-brand-name" style="font-family:'Orbitron',monospace;font-size:15px;font-weight:900;color:var(--gold-b);letter-spacing:2px;">LAYERSTACK</span>
-      <span id="ls-header-sub" style="font-family:'Orbitron',monospace;font-size:7px;color:var(--txt-d);letter-spacing:2.5px;margin-top:2px;">STUDIO MANAGER</span>
+      <span id="ls-brand-name" style="font-family:'Orbitron',monospace;font-size:15px;font-weight:900;color:var(--gold-b);letter-spacing:2px;">LAYERDECK</span>
+      <span id="ls-header-sub" style="font-size:8px;font-weight:400;color:rgba(201,162,39,0.6);letter-spacing:0.5px;margin-top:2px;">powered by HypedAnubis3D</span>
     </div>
   </div>
   <span class="header-tab-name" id="header-tab-name">Dashboard</span>
@@ -2357,7 +2357,7 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
 <!-- ONBOARDING WIZARD -->
 <div class="onboarding-overlay" id="onboarding-overlay" style="display:none">
 <div class="onboarding-modal">
-  <div class="ob-logo"><img id="ob-logo-img" src="" alt="LayerStack" style="width:110px;height:auto;filter:drop-shadow(0 0 10px rgba(201,162,39,.4));"/></div>
+  <div class="ob-logo"><img id="ob-logo-img" src="" alt="LayerDeck" style="width:110px;height:auto;filter:drop-shadow(0 0 10px rgba(201,162,39,.4));"/></div>
   <div class="ob-step-indicator" id="ob-steps"></div>
   <div id="ob-content"></div>
   <button class="ob-skip" onclick="skipOnboarding()">Skip — I'll set up later</button>
@@ -2369,8 +2369,8 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
 <div class="invoice-modal">
   <div class="mtitle">Generate Invoice</div>
   <div class="fr2">
-    <div class="field"><div class="fl">Your Business Name</div><input type="text" id="inv-biz" placeholder="LayerStack"/></div>
-    <div class="field"><div class="fl">Your Email</div><input type="text" id="inv-email" placeholder="hello@layerstack.io"/></div>
+    <div class="field"><div class="fl">Your Business Name</div><input type="text" id="inv-biz" placeholder="LayerDeck"/></div>
+    <div class="field"><div class="fl">Your Email</div><input type="text" id="inv-email" placeholder="hello@layerdeck.app"/></div>
   </div>
   <div class="field"><div class="fl">Invoice Note (optional)</div><input type="text" id="inv-note" placeholder="Thank you for your order!"/></div>
   <div id="invoice-preview-wrap" style="max-height:400px;overflow-y:auto;"></div>
@@ -6295,7 +6295,7 @@ async function runPriceAnalysis(){
   });
   const products=Object.values(productCosts).filter(p=>p.costs.length>0||p.sales.length>0).slice(0,10);
   if(!products.length){el.innerHTML='<div class="empty">No print or sales data yet — log some prints and sales first to get recommendations</div>';return;}
-  const prompt=`You are a pricing analyst for LayerStack, a 3D printing business selling collector figures, themed balls, ducks, and cosplay items.
+  const prompt=`You are a pricing analyst for LayerDeck, a 3D printing business selling collector figures, themed balls, ducks, and cosplay items.
 
 Here is their product data:
 ${JSON.stringify(products,null,2)}
@@ -6361,7 +6361,7 @@ function exportData(){
   const blob=new Blob([JSON.stringify(backup,null,2)],{type:'application/json'});
   const url=URL.createObjectURL(blob);
   const a=document.createElement('a');
-  a.href=url;a.download=`LayerStack_Backup_${new Date().toISOString().split('T')[0]}.json`;
+  a.href=url;a.download=`LayerDeck_Backup_${new Date().toISOString().split('T')[0]}.json`;
   a.click();URL.revokeObjectURL(url);
 }
 function importData(event){
@@ -6370,7 +6370,7 @@ function importData(event){
   reader.onload=e=>{
     try{
       const data=JSON.parse(e.target.result);
-      if(!data.version||!data.version.startsWith('ha3d')){alert('This doesn\'t look like a LayerStack backup file.');return;}
+      if(!data.version||!data.version.startsWith('ha3d')){alert('This doesn\'t look like a LayerDeck backup file.');return;}
       // Merge — add only new records by ID
       const merge=(existing,incoming)=>{const ids=new Set(existing.map(x=>x.id));return[...existing,...(incoming||[]).filter(x=>!ids.has(x.id))];};
       spools=merge(spools,data.spools);
@@ -7736,7 +7736,7 @@ function _moveShopifyQueueItemToInProgress(printId){
 // V10 DATA & INIT
 // ════════════════════════════════════════
 Object.assign(KEYS,{waste:'ha3d_waste_v1',goal:'ha3d_goal_v1',theme:'ha3d_theme_v1',onboarded:'ha3d_onboarded_v1',lastBackup:'ha3d_lastbackup_v1',bizInfo:'ha3d_bizinfo_v1'});
-let wasteLog=[],monthlyGoal=0,bizInfo={name:'LayerStack',email:''},lightMode=false;
+let wasteLog=[],monthlyGoal=0,bizInfo={name:'LayerDeck',email:''},lightMode=false;
 
 function loadV10(){
   wasteLog=gs(KEYS.waste);
@@ -7843,14 +7843,14 @@ function openInvoice(orderId){
   const o=orders.find(x=>x.id===orderId||x.orderId===orderId);
   if(!o){toast('Order not found','','error');return;}
   currentInvoiceOrder=o;
-  document.getElementById('inv-biz').value=bizInfo.name||'LayerStack';
+  document.getElementById('inv-biz').value=bizInfo.name||'LayerDeck';
   document.getElementById('inv-email').value=bizInfo.email||'';
   document.getElementById('inv-note').value='Thank you for your order! We appreciate your support.';
   renderInvoicePreview(o);
   document.getElementById('mod-invoice').style.display='flex';
 }
 function renderInvoicePreview(o){
-  const bizName=document.getElementById('inv-biz').value||'LayerStack';
+  const bizName=document.getElementById('inv-biz').value||'LayerDeck';
   const bizEmail=document.getElementById('inv-email').value||'';
   const note=document.getElementById('inv-note').value||'';
   const total=(o.items||[]).reduce((a,i)=>a+parseFloat(i.price||0)*parseInt(i.qty||1),0)+(parseFloat(o.shipping)||0);
@@ -7860,7 +7860,7 @@ function renderInvoicePreview(o){
   document.getElementById('invoice-preview-wrap').innerHTML=`
     <div class="invoice-preview" id="invoice-print-area">
       <div class="inv-header">
-        <div>${logoSrc?`<img src="${logoSrc}" class="inv-logo" alt="logo"/>`:`<div style="font-family:Orbitron,monospace;font-size:16px;font-weight:900;color:#c9a227">LAYERSTACK</div>`}</div>
+        <div>${logoSrc?`<img src="${logoSrc}" class="inv-logo" alt="logo"/>`:`<div style="font-family:Orbitron,monospace;font-size:16px;font-weight:900;color:#c9a227">LAYERDECK</div>`}</div>
         <div style="text-align:right">
           <div class="inv-title">INVOICE</div>
           <div class="inv-meta">Invoice #INV-${o.orderId||Date.now().toString().slice(-6)}<br>Date: ${new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'})}<br>Order: ${esc(o.orderId||'—')}</div>
@@ -7876,7 +7876,7 @@ function renderInvoicePreview(o){
         <tr class="inv-total-row"><td colspan="3" style="text-align:right">Total</td><td style="text-align:right;color:#c9a227;font-family:Orbitron,monospace">$${total.toFixed(2)}</td></tr></tbody>
       </table>
       ${note?`<div style="font-size:9px;color:#666;padding:8px;background:#f9f5ec;border-radius:4px;border-left:3px solid #c9a227;margin-top:10px">${esc(note)}</div>`:''}
-      <div class="inv-footer">LAYERSTACK · Printing Dreams${bizEmail?' · '+esc(bizEmail):''}</div>
+      <div class="inv-footer">LAYERDECK · Printing Dreams${bizEmail?' · '+esc(bizEmail):''}</div>
     </div>`;
   bizInfo={name:bizName,email:bizEmail};
   ss(KEYS.bizInfo,bizInfo);
@@ -7965,7 +7965,7 @@ function exportData(){
   const blob=new Blob([JSON.stringify(backup,null,2)],{type:'application/json'});
   const url=URL.createObjectURL(blob);
   const a=document.createElement('a');
-  a.href=url;a.download=`LayerStack_Backup_${new Date().toISOString().split('T')[0]}.json`;
+  a.href=url;a.download=`LayerDeck_Backup_${new Date().toISOString().split('T')[0]}.json`;
   a.click();URL.revokeObjectURL(url);
   localStorage.setItem(KEYS.lastBackup,Date.now().toString());
   localStorage.removeItem('ha3d_backup_dismissed');
@@ -8200,7 +8200,7 @@ function render(){
 // ONBOARDING WIZARD
 // ════════════════════════════════════════
 const OB_STEPS=[
-  {id:'welcome',title:'Welcome to LayerStack',sub:'Your all-in-one 3D printing business manager. Let\'s get you set up in a few quick steps.'},
+  {id:'welcome',title:'Welcome to LayerDeck',sub:'Your all-in-one 3D printing business manager. Let\'s get you set up in a few quick steps.'},
   {id:'printer',title:'Add Your Printer',sub:'Tell the app about your Bambu Lab printer so costs calculate accurately.'},
   {id:'spool',title:'Add Your First Spool',sub:'Add a spool of filament to get started. You can add more later from the Spools tab.'},
   {id:'store',title:'Connect Your Store',sub:'Optionally connect Shopify or Etsy to pull in orders automatically.'},
@@ -8289,7 +8289,7 @@ function skipOnboarding(){
   localStorage.setItem(KEYS.onboarded,'1');
   document.getElementById('onboarding-overlay').style.display='none';
   render();
-  toast('Welcome to LayerStack!','Your workspace is ready','success',4000);
+  toast('Welcome to LayerDeck!','Your workspace is ready','success',4000);
 }
 
 // ════════════════════════════════════════
@@ -10332,10 +10332,10 @@ function exportTaxReport(){
   const cogs=activeQ.sales.reduce((a,s)=>a+(s.cost||0)*(s.qty||1),0);
   const profit=revenue-cogs;
   const tax=Math.max(0,profit*taxRate);
-  const lines=[`LayerStack Tax Report — ${activeQ.key}`,`Generated: ${new Date().toLocaleDateString()}`,``,`REVENUE: $${revenue.toFixed(2)}`,`COGS: $${cogs.toFixed(2)}`,`NET PROFIT: $${profit.toFixed(2)}`,`TAX RATE: ${(taxRate*100).toFixed(0)}%`,`ESTIMATED TAX: $${tax.toFixed(2)}`,``,`--- SALES DETAIL ---`,...activeQ.sales.map(s=>`${s.date||''} | ${s.name} x${s.qty||1} | $${((s.price||0)*(s.qty||1)).toFixed(2)} | Platform: ${s.platform||'—'}`)];
+  const lines=[`LayerDeck Tax Report — ${activeQ.key}`,`Generated: ${new Date().toLocaleDateString()}`,``,`REVENUE: $${revenue.toFixed(2)}`,`COGS: $${cogs.toFixed(2)}`,`NET PROFIT: $${profit.toFixed(2)}`,`TAX RATE: ${(taxRate*100).toFixed(0)}%`,`ESTIMATED TAX: $${tax.toFixed(2)}`,``,`--- SALES DETAIL ---`,...activeQ.sales.map(s=>`${s.date||''} | ${s.name} x${s.qty||1} | $${((s.price||0)*(s.qty||1)).toFixed(2)} | Platform: ${s.platform||'—'}`)];
   const blob=new Blob([lines.join('\n')],{type:'text/plain'});
   const url=URL.createObjectURL(blob);
-  const a=document.createElement('a');a.href=url;a.download=`LayerStack_Tax_${activeQ.key.replace(' ','_')}.txt`;a.click();URL.revokeObjectURL(url);
+  const a=document.createElement('a');a.href=url;a.download=`LayerDeck_Tax_${activeQ.key.replace(' ','_')}.txt`;a.click();URL.revokeObjectURL(url);
   toast('Tax Report Exported','','success');
 }
 
