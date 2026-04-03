@@ -14011,9 +14011,10 @@ function updatePrinterCardLive(name,data,state){
       el.innerHTML='Object '+objIdx+' of '+total+(objName?' — <em>'+esc(objName)+'</em>':'');
       el.style.display='';
       el.style.color='';
-    }else if(isActive&&data.print_type==='local'){
-      // SD card prints don't carry obj_list in MQTT — show a helpful note
-      el.innerHTML='⬆ Send via <strong>LAN</strong> (not SD card) to enable Skip Object';
+    }else if(isActive){
+      // obj_list only populates when multiple INDEPENDENT objects exist on the plate
+      // (e.g. 5 separate models). Single multi-color models have no per-object list to skip.
+      el.innerHTML='Skip Object available when multiple independent models are on the plate';
       el.style.display='';
       el.style.color='var(--txt-d)';
     }else{
