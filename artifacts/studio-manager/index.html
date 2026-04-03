@@ -12853,7 +12853,13 @@ async function fetchPiStatus(){
   piPollInFlight=true;
   try{
     const res=await fetch('/api/pihub/status?hub='+encodeURIComponent(piUrl),{signal:AbortSignal.timeout(8000)});
-    if(!res.ok)throw new Error('HTTP '+res.status);
+    if(!res.ok){
+      let hint='';
+      try{const j=await res.json();hint=j.hint||'';}catch(_){}
+      const err=new Error('HTTP '+res.status);
+      (err as any)._piHubHint=hint;
+      throw err;
+    }
     const data=await res.json();
     const now=Date.now();
 
@@ -12888,7 +12894,12 @@ async function fetchPiStatus(){
   }catch(e){
     piConsecutiveFails++;
     const interval=PI_POLL_INTERVALS[Math.min(piConsecutiveFails,PI_POLL_INTERVALS.length-1)];
-    updatePiHubStatusDot(false,interval);
+    // Try to read the structured error hint from the proxy's JSON body
+    let hint='';
+    try{
+      if(e&&e._piHubHint) hint=e._piHubHint;
+    }catch(_){}
+    updatePiHubStatusDot(false,interval,hint);
     _reschedulePiPoll(interval);
     (piHubConfig?.printers||[]).forEach(pr=>{
       updatePrinterCardLive(pr.name,null,'OFFLINE');
@@ -12904,15 +12915,17 @@ function _reschedulePiPoll(intervalMs){
   piPollTimer=setInterval(fetchPiStatus,ms);
 }
 
-function updatePiHubStatusDot(online,retryInMs){
+function updatePiHubStatusDot(online,retryInMs,hint){
   const dot=document.getElementById('pihub-status-dot');
   const lbl=document.getElementById('pihub-status-lbl');
+  const hintEl=document.getElementById('pihub-status-hint');
   if(dot){dot.style.background=online?'var(--grn)':'var(--red)';}
   if(lbl){
     if(online){lbl.textContent='Pi Hub Online';}
     else if(retryInMs>5000){lbl.textContent='Offline — retry in '+(retryInMs/1000|0)+'s';}
     else{lbl.textContent='Pi Hub Offline';}
   }
+  if(hintEl){hintEl.textContent=online?'':(hint||'');}
 }
 
 function updatePrinterCardLive(name,data,state){
@@ -13132,6 +13145,7 @@ function renderPiHub(){
             '<div id="pihub-status-dot" style="width:8px;height:8px;border-radius:50%;background:var(--txt-d)"></div>'+
             '<div style="font-size:9px" id="pihub-status-lbl">Checking…</div>'+
           '</div>'+
+          '<div id="pihub-status-hint" style="font-size:7px;color:var(--gold);margin-top:3px;line-height:1.4;word-break:break-word;max-width:200px"></div>'+
         '</div>'+
         '<div><div style="font-size:7px;color:var(--txt-d);letter-spacing:1px">PRINTERS</div><div style="font-size:9px;color:var(--txt-b);margin-top:2px">'+(piHubConfig.printers||[]).length+' configured</div></div>'+
         '<div><div style="font-size:7px;color:var(--txt-d);letter-spacing:1px">ROUTING</div><div style="font-size:9px;margin-top:2px;color:'+(hasPublic?'var(--grn)':'var(--gold)')+'">'+

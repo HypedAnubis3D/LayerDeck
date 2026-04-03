@@ -3,9 +3,28 @@ import { logger } from '../lib/logger';
 
 const router = Router();
 
+function classifyError(e: any): { hint: string; code: string } {
+  const msg = (e?.message || '').toLowerCase();
+  const cause = (e?.cause?.message || e?.cause?.code || '').toLowerCase();
+  const combined = msg + ' ' + cause;
+
+  if (combined.includes('eof') || combined.includes('unexpected') || combined.includes('tls') || combined.includes('ssl')) {
+    return { code: 'funnel_down', hint: 'Tailscale Funnel is not running on the Pi. Run: sudo tailscale funnel --bg 3000' };
+  }
+  if (combined.includes('econnrefused') || combined.includes('connection refused')) {
+    return { code: 'refused', hint: 'Pi Hub server is not running on port 3000. Check your Pi Hub service.' };
+  }
+  if (combined.includes('abort') || combined.includes('timeout')) {
+    return { code: 'timeout', hint: 'Request timed out — Pi may be sleeping or Funnel is slow.' };
+  }
+  if (combined.includes('enotfound') || combined.includes('getaddrinfo') || combined.includes('dns')) {
+    return { code: 'dns', hint: 'Cannot resolve Pi Hub hostname. Check your Tailscale Funnel URL.' };
+  }
+  return { code: 'unreachable', hint: 'Pi Hub unreachable.' };
+}
+
 // Proxy Pi Hub status through the server to avoid mixed-content browser blocks.
-// Timeout is 7.5s — slightly under the frontend's 8s so the server always responds
-// before the browser gives up and treats it as an in-flight request still pending.
+// Timeout is 7.5s — slightly under the frontend's 8s so the server always responds.
 router.get('/status', async (req, res) => {
   const hubUrl = req.query.hub as string;
   if (!hubUrl) {
@@ -22,8 +41,9 @@ router.get('/status', async (req, res) => {
     const data = await upstream.json();
     return res.json(data);
   } catch (e: any) {
-    logger.warn({ err: e?.message }, '[PiHub] Status proxy failed');
-    return res.status(502).json({ error: 'Pi Hub unreachable', detail: e?.message });
+    const { hint, code } = classifyError(e);
+    logger.warn({ err: e?.message, cause: e?.cause?.message || e?.cause?.code, code }, '[PiHub] Status proxy failed');
+    return res.status(502).json({ error: 'Pi Hub unreachable', code, hint, detail: e?.message });
   }
 });
 
@@ -46,8 +66,9 @@ router.post('/control', async (req, res) => {
     const data = await upstream.json().catch(() => ({ ok: true }));
     return res.json(data);
   } catch (e: any) {
-    logger.warn({ err: e?.message }, '[PiHub] Control proxy failed');
-    return res.status(502).json({ error: 'Pi Hub unreachable', detail: e?.message });
+    const { hint, code } = classifyError(e);
+    logger.warn({ err: e?.message, cause: e?.cause?.message || e?.cause?.code, code }, '[PiHub] Control proxy failed');
+    return res.status(502).json({ error: 'Pi Hub unreachable', code, hint });
   }
 });
 
