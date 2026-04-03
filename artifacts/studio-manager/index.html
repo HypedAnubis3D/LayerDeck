@@ -12981,6 +12981,18 @@ function updatePrinterCardLive(name,data,state){
   // AMS swatches
   const swatchEl=document.getElementById('pi-'+id+'-ams');
   if(swatchEl&&data.ams)swatchEl.innerHTML=renderAmsSwatches(data.ams);
+
+  // Sync control-button enabled states with live state
+  const setBtn=(suffix,enabled)=>{
+    const btn=document.getElementById('pi-'+id+'-btn-'+suffix);
+    if(!btn)return;
+    btn.style.opacity=enabled?'1':'0.4';
+    btn.style.pointerEvents=enabled?'auto':'none';
+  };
+  const isActive=state==='RUNNING'||state==='PAUSE';
+  setBtn('pause', state==='RUNNING');
+  setBtn('resume',state==='PAUSE');
+  setBtn('stop',  isActive);
 }
 
 // ── Start/stop polling ──
@@ -13000,12 +13012,17 @@ function stopPiPolling(){
 async function piControl(printerName,command){
   const piUrl=getPiUrl();
   if(!piUrl){toast('Pi Hub not configured','','error');return;}
+  // Resolve the hub key (hubName) the Pi Hub actually uses — not the display name
+  const printerCfg=(piHubConfig?.printers||[]).find(p=>p.name===printerName);
+  const hubKey=printerCfg?.hubName||printerName;
   try{
-    await fetch('/api/pihub/control?hub='+encodeURIComponent(piUrl),{
+    const res=await fetch('/api/pihub/control?hub='+encodeURIComponent(piUrl),{
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({printer:printerName,command})
+      body:JSON.stringify({printer:hubKey,command})
     });
+    const j=await res.json().catch(()=>({}));
+    if(j.error){toast('Command failed',j.error,'error');return;}
     toast(command+' sent',printerName,'success');
   }catch(e){toast('Pi Hub unreachable','Check Tailscale','error');}
 }
@@ -13094,9 +13111,9 @@ function renderPrinters(){
           '</div>'+
           '<div style="margin-bottom:6px" id="pi-'+id+'-ams"></div>'+
           '<div style="display:flex;gap:5px;flex-wrap:wrap">'+
-            '<button class="btn btn-ghost btn-xs" onclick="piControl(\''+esc(p.name)+'\',\'pause\')" style="'+(state!=='RUNNING'?'opacity:0.4;pointer-events:none':'')+'">⏸ Pause</button>'+
-            '<button class="btn btn-ghost btn-xs" onclick="piControl(\''+esc(p.name)+'\',\'resume\')" style="'+(state!=='PAUSE'?'opacity:0.4;pointer-events:none':'')+'">▶ Resume</button>'+
-            '<button class="btn btn-xs" style="background:var(--red-d);border:1px solid var(--red-d);color:var(--red-b);'+(isActive?'':'opacity:0.4;pointer-events:none')+'" onclick="showConfirm(\'Stop print on '+esc(p.name)+'?\',\'This cannot be undone.\',function(){piControl(\''+esc(p.name)+'\',\'stop\')})">⏹ Stop</button>'+
+            '<button id="pi-'+id+'-btn-pause" class="btn btn-ghost btn-xs" onclick="piControl(\''+esc(p.name)+'\',\'pause\')" style="'+(state!=='RUNNING'?'opacity:0.4;pointer-events:none':'')+'">⏸ Pause</button>'+
+            '<button id="pi-'+id+'-btn-resume" class="btn btn-ghost btn-xs" onclick="piControl(\''+esc(p.name)+'\',\'resume\')" style="'+(state!=='PAUSE'?'opacity:0.4;pointer-events:none':'')+'">▶ Resume</button>'+
+            '<button id="pi-'+id+'-btn-stop" class="btn btn-xs" style="background:var(--red-d);border:1px solid var(--red-d);color:var(--red-b);'+(isActive?'':'opacity:0.4;pointer-events:none')+'" onclick="showConfirm(\'Stop print on '+esc(p.name)+'?\',\'This cannot be undone.\',function(){piControl(\''+esc(p.name)+'\',\'stop\')})">⏹ Stop</button>'+
             (getCameraUrl(p.name)?'<button class="btn btn-ghost btn-xs" onclick="openCameraFeed(\''+esc(p.name)+'\')">📷 Camera</button>':'')+''+
           '</div>'+
         '</div>':'')+
