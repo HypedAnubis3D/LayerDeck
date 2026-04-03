@@ -4098,11 +4098,19 @@ function renderTmf(){
       const type=types[i]||'';
       const g=grams[i];
       if(g===0)return ''; // skip unused slots (0g = not used on this plate/print)
-      const label=type;
-      return '<div style="display:flex;align-items:center;gap:5px;margin-bottom:3px" title="'+esc(label)+'">'+
+      // Try to match hex color against spool library for real color name
+      const normHex=c.replace(/^#/,'').toLowerCase().slice(0,6);
+      const matchSp=normHex?spools.find(function(s){return s.color&&s.color.replace(/^#/,'').toLowerCase().slice(0,6)===normHex;}):null;
+      const colorName=matchSp?matchSp.name:'';
+      const mainLabel=colorName||type;
+      const subLabel=colorName&&type?type:'';
+      return '<div style="display:flex;align-items:center;gap:5px;margin-bottom:3px" title="'+esc(mainLabel+(subLabel?' — '+subLabel:''))+'">'+
         '<div style="width:13px;height:13px;border-radius:50%;background:'+c+';border:2px solid rgba(255,255,255,.18);flex-shrink:0"></div>'+
-        '<span style="font-size:6px;color:var(--txt-d)">'+esc(label.slice(0,24))+'</span>'+
-        (g!=null?'<span style="font-size:6px;font-family:Orbitron,monospace;color:var(--gold-b);margin-left:auto;white-space:nowrap">'+g+'g</span>':'<span style="font-size:6px;color:var(--bdr2);margin-left:auto">—g</span>')+
+        '<div style="display:flex;flex-direction:column;flex:1;min-width:0">'+
+          '<span style="font-size:6px;color:var(--txt-b);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(mainLabel.slice(0,28))+'</span>'+
+          (subLabel?'<span style="font-size:5px;color:var(--txt-d)">'+esc(subLabel)+'</span>':'')+
+        '</div>'+
+        (g!=null?'<span style="font-size:6px;font-family:Orbitron,monospace;color:var(--gold-b);margin-left:auto;white-space:nowrap;flex-shrink:0">'+g+'g</span>':'<span style="font-size:6px;color:var(--bdr2);margin-left:auto;flex-shrink:0">—g</span>')+
       '</div>';
     }).join('');
     const totalGrams=grams.filter(v=>v>0).reduce((a,v)=>a+(v||0),0).toFixed(1);
@@ -9356,7 +9364,16 @@ function renderAmsMap(printerName,compact=false){
         const bc=disp?barcol(p):'var(--txt-d)';
         const col=disp?disp.color:'transparent';
         const isActive=fromPi&&disp&&disp.isActive;
-        const matName=disp?(fromPi?(piTray.tray_sub_brands||piTray.tray_type||'?'):disp.name.split(' ').pop()):'';
+        // Build display name + sub-label (material type) for the slot
+        let slotMain='',slotSub='';
+        if(disp){
+          if(fromPi){
+            const _ph=(piTray.tray_color||'').replace(/^#/,'').toLowerCase().slice(0,6);
+            const _pm=_ph&&_ph!=='00000000'?spools.find(function(s){return s.color&&s.color.replace(/^#/,'').toLowerCase().slice(0,6)===_ph;}):null;
+            if(_pm){slotMain=_pm.name;slotSub=piTray.tray_sub_brands||piTray.tray_type||'';}
+            else{slotMain=piTray.tray_sub_brands||piTray.tray_type||'?';}
+          }else{slotMain=sp.name||'?';slotSub=sp.material||'';}
+        }
         const mappingKey=_amsSlotKey(printerName,unitIdx,trayIdx);
         const isLayerDeckSet=!!(amsSlotMappings[mappingKey]);
         // Action buttons (only shown when Pi is connected)
@@ -9369,7 +9386,8 @@ function renderAmsMap(printerName,compact=false){
           '<div class="ams-slot-num">'+n+(fromPi&&!isActive?' ·':isActive?' ▶':'')+'</div>'+
           '<div style="width:26px;height:26px;border-radius:50%;background:'+col+';border:2px solid '+(disp?'rgba(255,255,255,0.3)':'var(--bdr2)')+';flex-shrink:0;'+(isActive?'box-shadow:0 0 0 2px var(--grn),0 0 8px '+col+'88':'')+'"></div>'+
           (disp?
-            '<div class="ams-slot-name">'+esc(matName)+(isActive?'<span style="color:var(--grn)"> ▶</span>':'')+'</div>'+
+            '<div class="ams-slot-name">'+esc(slotMain)+(isActive?'<span style="color:var(--grn)"> ▶</span>':'')+'</div>'+
+            (slotSub?'<div class="ams-slot-meta">'+esc(slotSub)+'</div>':'')+
             (p>0?'<div class="ams-slot-pct" style="color:'+bc+'">'+p+'%</div><div class="ams-slot-bar"><div class="ams-slot-bar-fill" style="width:'+p+'%;background:'+bc+'"></div></div>':'')
           :'<div style="font-size:6px;color:var(--bdr2);letter-spacing:1px">EMPTY</div>')+
           btns+
@@ -9420,7 +9438,7 @@ function renderAmsMapDash(printerName){
       +'<div class="ams-dash-slot filled" onclick="openExtSpoolModal(\''+esc(printerName)+'\')" style="background:'+extCol+'14;border-color:'+extCol+'44">'
         +'<div class="ams-dash-num">EXT</div>'
         +'<div class="ams-dash-dot" style="background:'+extCol+';box-shadow:0 0 6px '+extCol+'55"></div>'
-        +'<div class="ams-dash-label" title="'+esc(extMat)+'">'+esc(extMat.split(' ').pop())+'</div>'
+        +'<div class="ams-dash-label" title="'+esc(extMat)+'">'+esc(extMat)+'</div>'
         +(extRemain>0?'<div class="ams-dash-pct" style="color:'+extBc+'">'+extRemain+'%</div>':'<div class="ams-dash-pct" style="color:var(--bdr2)">—</div>')
       +'</div>'
     +'</div>';
@@ -9437,13 +9455,22 @@ function renderAmsMapDash(printerName){
     var col=sp?sp.color:piTray?('#'+(piTray.tray_color||'888888').slice(0,6)):'var(--bdr2)';
     var p=sp?pct(sp):piTray?(piTray.remain||0):0;
     var bc=p>0?barcol(p):'var(--txt-d)';
-    var label=sp?esc(sp.name.split(' ').pop()):piTray?esc((piTray.tray_sub_brands||piTray.tray_type||'?').split(' ').pop()):'—';
+    // Resolve display name: full spool name for assigned spools; try color-match for Pi trays
+    var dashMain,dashSub='';
+    if(sp){dashMain=sp.name;dashSub=sp.material||'';}
+    else if(piTray){
+      var _dh=(piTray.tray_color||'').replace(/^#/,'').toLowerCase().slice(0,6);
+      var _dm=_dh&&_dh!=='00000000'?spools.find(function(s){return s.color&&s.color.replace(/^#/,'').toLowerCase().slice(0,6)===_dh;}):null;
+      if(_dm){dashMain=_dm.name;dashSub=piTray.tray_sub_brands||piTray.tray_type||'';}
+      else{dashMain=piTray.tray_sub_brands||piTray.tray_type||'?';}
+    }else{dashMain='—';}
     var filled=sp||piTray;
     var isActive=piTray&&String(piTray.id)===activeTrayId;
     return '<div class="ams-dash-slot'+(filled?' filled':'')+'" onclick="openAmsModal(\''+esc(printerName)+'\','+n+')" style="'+(filled?'background:'+col+'14;border-color:'+col+'44;':'')+(isActive?'outline:2px solid var(--grn);':'')+'">'+
       '<div class="ams-dash-num">'+n+(isActive?' ▶':'')+'</div>'+
       '<div class="ams-dash-dot" style="background:'+col+';'+(filled?'box-shadow:0 0 6px '+col+'55':'')+'"></div>'+
-      '<div class="ams-dash-label" title="'+(filled?(sp?esc(sp.name):esc((piTray.tray_sub_brands||piTray.tray_type||'?'))):'Empty')+'">'+label+'</div>'+
+      '<div class="ams-dash-label" title="'+esc(dashMain+(dashSub?' — '+dashSub:''))+'">'+esc(dashMain)+'</div>'+
+      (dashSub?'<div style="font-size:4.5px;color:var(--txt-d);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%;padding:0 2px">'+esc(dashSub)+'</div>':'')+
       (p>0?'<div class="ams-dash-pct" style="color:'+bc+'">'+p+'%</div>':'<div class="ams-dash-pct" style="color:var(--bdr2)">—</div>')+
     '</div>';
   }).join('')+'</div>';
