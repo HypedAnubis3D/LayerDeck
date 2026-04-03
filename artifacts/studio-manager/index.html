@@ -13263,24 +13263,16 @@ function openCameraFeed(printerName){
   const mono='font-family:\'Share Tech Mono\',monospace;font-size:8px;color:var(--cyn)';
 
   if(hasGo2rtcUrl){
-    // Proxy the stream through the Replit API server — browser sees same-origin HTTPS
-    // MJPEG works natively in all browsers as an <img> src (no HLS.js needed)
-    const mjpegProxy=cameraProxyUrl(go2rtcUrl,stream,'mjpeg');
-    const snapshotProxy=cameraProxyUrl(go2rtcUrl,stream,'snapshot');
-    const camId='cam-img-'+piId(printerName);
+    // Embed go2rtc's built-in stream viewer directly in an iframe
+    const streamHtmlUrl=go2rtcUrl+'/stream.html?src='+encodeURIComponent(stream);
     mod.innerHTML=title+
-      '<div style="position:relative;max-width:640px;width:100%">'+
-        '<img id="'+camId+'" src="'+mjpegProxy+'" '+
-          'style="max-width:640px;width:100%;max-height:60vh;border-radius:8px;border:1px solid var(--bdr2);display:block;background:#111;min-height:160px" '+
-          'onerror="document.getElementById(\'cam-err-'+piId(printerName)+'\').style.display=\'block\';this.style.display=\'none\'"/>'+
-        '<div id="cam-err-'+piId(printerName)+'" style="display:none;padding:20px;text-align:center;color:var(--red-b);font-size:8px;background:#111;border-radius:8px;border:1px solid var(--bdr2)">'+
-          '⚠ Stream failed — check Camera Server URL and stream name in Setup'+
-        '</div>'+
-        '<div style="position:absolute;bottom:8px;right:8px;display:flex;gap:4px">'+
-          '<a href="'+snapshotProxy+'" target="_blank" style="font-size:7px;color:var(--txt-d);text-decoration:none;background:rgba(0,0,0,0.6);padding:2px 6px;border-radius:3px">📸 Snapshot</a>'+
-        '</div>'+
+      '<div style="position:relative;width:100%;max-width:700px">'+
+        '<iframe src="'+streamHtmlUrl+'" '+
+          'style="width:100%;height:420px;border:1px solid var(--bdr2);border-radius:8px;background:#000;display:block" '+
+          'allow="autoplay" allowfullscreen>'+
+        '</iframe>'+
       '</div>'+
-      '<div style="font-size:7px;color:var(--txt-d);margin-top:6px;text-align:center">Live MJPEG · proxied through LayerDeck server</div>'+
+      '<div style="font-size:7px;color:var(--txt-d);margin-top:6px;text-align:center">'+esc(stream)+' · via go2rtc viewer</div>'+
       closeBtn;
   } else {
     // No go2rtc URL or wrong URL — show setup instructions
