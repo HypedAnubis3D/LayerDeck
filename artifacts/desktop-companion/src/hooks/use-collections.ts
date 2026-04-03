@@ -111,8 +111,6 @@ export function useAddToLibrary() {
       if (!user) throw new Error("Not authenticated");
 
       const existing = await fetchLibrary(user.id);
-      const alreadyIn = existing.some((e: any) => e.filename === file.filename);
-      if (alreadyIn) return;
 
       const hrs = file.hrs ?? null;
 
@@ -137,7 +135,9 @@ export function useAddToLibrary() {
         uploadedAt: Date.now(),
       };
 
-      await saveLibrary(user.id, [...existing, newItem]);
+      // Replace existing entry with same filename (re-sync overwrites stale data)
+      const withoutStale = existing.filter((e: any) => e.filename !== file.filename);
+      await saveLibrary(user.id, [...withoutStale, newItem]);
       return newItem;
     },
     onSuccess: () => {
@@ -156,10 +156,9 @@ export function useAddAllToLibrary() {
       if (!user) throw new Error("Not authenticated");
 
       const existing = await fetchLibrary(user.id);
-      const existingNames = new Set(existing.map((e: any) => e.filename));
 
       const newItems = files
-        .filter(f => f.status === 'ready' && !existingNames.has(f.filename))
+        .filter(f => f.status === 'ready')
         .map(f => {
           const hrs = f.hrs ?? null;
           return {
@@ -186,7 +185,10 @@ export function useAddAllToLibrary() {
 
       if (newItems.length === 0) return { added: 0 };
 
-      await saveLibrary(user.id, [...existing, ...newItems]);
+      // Replace existing entries with same filename (re-sync always overwrites stale data)
+      const syncedFilenames = new Set(newItems.map(i => i.filename));
+      const withoutStale = existing.filter((e: any) => !syncedFilenames.has(e.filename));
+      await saveLibrary(user.id, [...withoutStale, ...newItems]);
       return { added: newItems.length };
     },
     onSuccess: () => {

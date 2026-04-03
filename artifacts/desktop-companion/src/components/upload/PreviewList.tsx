@@ -93,11 +93,11 @@ export function PreviewList({ files, onFileUpdated, onRemoveCard }: PreviewListP
                 ${file.status === 'parsing' ? 'bg-muted animate-pulse' : ''}
               `} />
 
-              {/* Dismiss card button */}
+              {/* Dismiss card button — always visible */}
               {onRemoveCard && file.status !== 'parsing' && (
                 <button
                   onClick={() => onRemoveCard(file.id)}
-                  className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded text-muted-foreground/30 hover:text-muted-foreground/80"
+                  className="absolute top-3 right-3 p-1 rounded text-muted-foreground/40 hover:text-muted-foreground transition-colors"
                   title="Remove from session"
                 >
                   <X className="h-3.5 w-3.5" />
@@ -124,13 +124,22 @@ export function PreviewList({ files, onFileUpdated, onRemoveCard }: PreviewListP
                   </div>
 
                   {/* Action button */}
-                  <div className="shrink-0">
+                  <div className="shrink-0 flex flex-col items-end gap-1">
                     {file.status === 'parsing' && <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />}
                     {file.status === 'error' && <AlertCircle className="h-6 w-6 text-destructive" title={file.errorMessage} />}
                     {file.status === 'added' && (
-                      <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-primary">
-                        <CheckCircle className="h-5 w-5" />
-                      </div>
+                      <>
+                        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-primary">
+                          <CheckCircle className="h-5 w-5" />
+                        </div>
+                        <button
+                          onClick={() => handleAdd(file)}
+                          disabled={isAddingOne}
+                          className="text-[10px] text-muted-foreground/50 hover:text-primary transition-colors underline underline-offset-2"
+                        >
+                          Re-sync
+                        </button>
+                      </>
                     )}
                     {file.status === 'ready' && (
                       <Button

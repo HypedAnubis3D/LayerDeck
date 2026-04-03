@@ -74,24 +74,22 @@ export default function Dashboard() {
   }, [libraryItems]);
 
   const handleFilesAccepted = useCallback(async (newFiles: File[]) => {
-    const existingFilenames = new Set(parsedFiles.map(f => f.filename));
-    const fresh = newFiles.filter(f => !existingFilenames.has(f.name));
-    if (!fresh.length) {
-      toast({ title: 'Already loaded', description: 'All dropped files are already in your session.' });
-      return;
-    }
-    const initialEntries: Parsed3MF[] = fresh.map(file => ({
+    // Remove existing parsed entries with the same filename so re-uploads always re-parse
+    const incomingNames = new Set(newFiles.map(f => f.name));
+    setParsedFiles(prev => prev.filter(p => !incomingNames.has(p.filename)));
+
+    const initialEntries: Parsed3MF[] = newFiles.map(file => ({
       id: crypto.randomUUID(), filename: file.name, file,
       modelName: file.name.replace(/\.3mf$/i, ''), objectsCount: 0, objects: [],
       filamentColors: [], filamentTypes: [], filamentGramsPerColor: [], status: 'parsing',
     }));
-    setParsedFiles(prev => [...initialEntries, ...prev]);
+    setParsedFiles(prev => [...initialEntries, ...prev.filter(p => !incomingNames.has(p.filename))]);
     for (const entry of initialEntries) {
       const parsed = await parse3MFFile(entry.file!);
       parsed.id = entry.id;
       setParsedFiles(prev => prev.map(p => p.id === entry.id ? parsed : p));
     }
-  }, [parsedFiles, toast]);
+  }, [toast]);
 
   const handleFileUpdated = useCallback((id: string, updates: Partial<Parsed3MF>) => {
     setParsedFiles(prev => prev.map(p => p.id === id ? { ...p, ...updates } : p));
