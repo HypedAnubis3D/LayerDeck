@@ -3876,6 +3876,8 @@ async function parse3mfFile(file){
     }
 
     // ── 3D/3dmodel.model (XML) ── title, plates, objects
+    // Also build id→name map for cross-referencing plate configs
+    const objIdToName={};
     if(modelRaw){
       const titleM=modelRaw.match(/name="Title"\s+value="([^"]+)"/)||modelRaw.match(/<metadata name="Title">([^<]+)<\/metadata>/i);
       if(titleM)title=titleM[1];
@@ -3885,6 +3887,41 @@ async function parse3mfFile(file){
       objects=[...new Set(oNames)];
       const lcM=modelRaw.match(/layer_count[^\d]*(\d+)/i);
       if(lcM)layers=parseInt(lcM[1]);
+      // Build id→name map from <object id="N"> + nearest key="name" metadata
+      const objBlocks=[...modelRaw.matchAll(/<object[^>]*\bid="(\d+)"[^>]*/g)];
+      objBlocks.forEach(m=>{
+        const nearbyXml=modelRaw.slice(m.index,m.index+600);
+        const nm=nearbyXml.match(/key="name"\s+value="([^"]+)"/);
+        if(nm){const rawN=nm[1].replace(/\.stl$/i,'').trim();if(rawN)objIdToName[m[1]]=rawN;}
+      });
+    }
+
+    // ── model_settings.config (Bambu-specific object metadata) ──
+    const modelSettingsRaw=await readFile('Metadata/model_settings.config');
+    if(modelSettingsRaw){
+      try{
+        const ms=JSON.parse(modelSettingsRaw);
+        (Array.isArray(ms.objects)?ms.objects:[]).forEach(function(o){
+          if(o.id!=null&&o.name){objIdToName[String(o.id)]=o.name.replace(/\.stl$/i,'').trim();}
+        });
+      }catch(ex){}
+    }
+
+    // ── Per-plate object lists (Metadata/plate_N.config) ──
+    // Gives us object names per-plate for display during printing
+    let plateObjects=[];
+    for(let pi=1;pi<=16;pi++){
+      const pcRaw=await readFile('Metadata/plate_'+pi+'.config');
+      if(!pcRaw)break;
+      try{
+        const pc=JSON.parse(pcRaw);
+        const metaArr=Array.isArray(pc.metadata)?pc.metadata:[];
+        const pNameMeta=metaArr.find(function(m){return m.key==='plater_name';});
+        const plateName=pNameMeta?pNameMeta.value:('Plate '+pi);
+        const plateObjIds=(Array.isArray(pc.objects)?pc.objects:[]).map(function(o){return String(o.id||o.identify_id||'');});
+        const plateObjNames=[...new Set(plateObjIds.map(function(id){return objIdToName[id]||null;}).filter(Boolean))];
+        if(plateObjNames.length>0){plateObjects.push({plateName,objects:plateObjNames,plateIdx:pi});}
+      }catch(ex){}
     }
 
     // ── Print time + per-color grams ──
@@ -3976,7 +4013,7 @@ async function parse3mfFile(file){
         filamentTypes,filamentColors,filamentBrands,
         filamentGramsPerColor,
         nozzleTemp,nozzleDiam,bedType,layerHeight,
-        supportType,supports,amsUnits,objects,plates,
+        supportType,supports,amsUnits,objects,plates,plateObjects,
         hrs:hrs?parseFloat(hrs.toFixed(2)):null,
         layers,profile,filamentGrams:[],
         supportGrams,purgeGrams,
@@ -13257,6 +13294,7 @@ try{var _ha=localStorage.getItem('hmsLastAlerted');window._hmsLastAlerted=_ha?JS
 let piPollTimer=null;
 let piPrintStartTimes={}; // {printerName: timestamp}
 let piAmsStartRemain={};  // {printerName: {"ui_ti": pct, "ext": pct}} — AMS remain% at print start
+let piTmfObjData={};      // {printerName: {objectList,totalObjects,fromTmf,plateName}} — fallback from 3MF library
 let piPollInFlight=false;  // in-flight lock — never send 2 requests at once
 let piConsecutiveFails=0;  // for exponential backoff
 const PI_POLL_INTERVALS=[5000,10000,20000,30000,60000]; // backoff ladder
@@ -13551,6 +13589,37 @@ async function onPiPrintStarted(name,data){
       });
       saveTmfs();
       toast('Added to 3MF Library',cleanJobName,'info',3500);
+    }
+
+    // ── Populate piTmfObjData from matched 3MF library entry ──
+    // If MQTT obj_list is empty, use the library's per-plate object names for display
+    var jLow2=(jobName||'').replace(/_/g,' ').toLowerCase().trim();
+    var matchedTmf=tmfLib.find(function(t){
+      var tName=(t.name||'').toLowerCase().trim();
+      var tFile=(t.filename||'').replace(/\.gcode\.3mf$/i,'').replace(/\.3mf$/i,'').replace(/_/g,' ').toLowerCase().trim();
+      return tName===jLow2||tFile===jLow2;
+    });
+    if(matchedTmf){
+      // Determine which plate — subtask_name often ends in _plate_N
+      var plateMatch=jobName.match(/_plate_(\d+)$/i);
+      var targetPlateIdx=plateMatch?parseInt(plateMatch[1]):1;
+      var tmfObjs=null;
+      // Prefer per-plate data
+      if(Array.isArray(matchedTmf.plateObjects)&&matchedTmf.plateObjects.length){
+        var plateDat=matchedTmf.plateObjects.find(function(p){return p.plateIdx===targetPlateIdx;})
+          ||matchedTmf.plateObjects[0];
+        if(plateDat&&plateDat.objects&&plateDat.objects.length){
+          tmfObjs={objectList:plateDat.objects.map(function(n,i){return{name:n,skipped:false,idx:i};}),totalObjects:plateDat.objects.length,plateName:plateDat.plateName};
+        }
+      }
+      // Fall back to flat objects array
+      if(!tmfObjs&&Array.isArray(matchedTmf.objects)&&matchedTmf.objects.length){
+        var flatObjs=matchedTmf.objects.filter(Boolean);
+        if(flatObjs.length){tmfObjs={objectList:flatObjs.map(function(n,i){return{name:n,skipped:false,idx:i};}),totalObjects:flatObjs.length,plateName:''};}
+      }
+      if(tmfObjs){
+        piTmfObjData[name]={...tmfObjs,fromTmf:true,tmfName:matchedTmf.name};
+      }
     }
   }
 }
