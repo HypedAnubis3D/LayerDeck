@@ -2461,7 +2461,11 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
   </div>
   <div class="fr2">
     <div class="field"><div class="fl">Sale Price ($)</div><input type="number" id="ec-price" min="0" step="0.01" placeholder="24.99"/></div>
-    <div class="field"><div class="fl">Cost to Make ($)</div><input type="number" id="ec-cost" min="0" step="0.01" placeholder="8.50"/></div>
+    <div class="field">
+      <div class="fl">Cost to Make ($)</div>
+      <input type="number" id="ec-cost" min="0" step="0.01" placeholder="8.50"/>
+      <div id="ec-cost-hint" style="font-size:7px;color:var(--txt-d);margin-top:3px;line-height:1.6"></div>
+    </div>
   </div>
   <div class="fr2">
     <div class="field"><div class="fl">Qty In Stock</div><input type="number" id="ec-stock" min="0" placeholder="0" style="font-size:9px"/></div>
@@ -10657,11 +10661,68 @@ function updateTmfInfo(forcedId){
   const id=forcedId||document.getElementById('ec-tmf')?.value;
   const info=document.getElementById('ec-tmf-info');
   if(!info)return;
-  if(!id){info.textContent='';return;}
+  if(!id){info.textContent='';updateCatalogCostHint(null,false);return;}
   const t=tmfLib.find(x=>x.id===id);
-  if(!t){info.textContent='';return;}
+  if(!t){info.textContent='';updateCatalogCostHint(null,false);return;}
   const parts=[t.printer,t.filamentType,t.layerHeight?t.layerHeight+'mm layer':null,t.hrs?formatHms(t.hrs):null].filter(Boolean);
   info.innerHTML='<span style="color:var(--org-b)">'+esc(parts.join(' · '))+'</span>';
+  // autoFill=true only when user actively changes the dropdown (forcedId is undefined)
+  updateCatalogCostHint(t, forcedId===undefined);
+}
+
+function updateCatalogCostHint(t, autoFill){
+  const hint=document.getElementById('ec-cost-hint');
+  if(!hint)return;
+  if(!t){hint.innerHTML='';return;}
+  const grams=t.filamentGramsPerColor||[];
+  const colors=t.filamentColors||[];
+  const types=t.filamentTypes||[];
+  const usedSlots=grams.map((g,i)=>({g,i})).filter(x=>x.g>0);
+  if(!usedSlots.length){
+    hint.innerHTML='<span style="color:var(--bdr2)">No filament gram data in this 3MF — re-sync to update</span>';
+    return;
+  }
+  // Check if any spools have cost data at all
+  const hasCostSpools=spools.some(s=>s.cost>0&&s.total>0);
+  if(!hasCostSpools){
+    hint.innerHTML='<span style="color:var(--bdr2)">⬡ Add spool prices to auto-calculate cost</span>';
+    return;
+  }
+  let total=0, matched=0;
+  const lines=[];
+  usedSlots.forEach(({g,i})=>{
+    // Normalize hex to 6 lowercase chars for matching
+    const rawHex=(colors[i]||'').replace('#','').toLowerCase();
+    const hex6=rawHex.slice(0,6);
+    const typ=(types[i]||'').toLowerCase();
+    // 1) exact color match
+    let sp=hex6?spools.find(s=>s.cost>0&&s.total>0&&(s.color||'').replace('#','').toLowerCase()===hex6):null;
+    // 2) material type match (first word of type)
+    if(!sp&&typ){
+      const baseType=typ.split(' ')[0];
+      sp=spools.find(s=>s.cost>0&&s.total>0&&(s.material||'').toLowerCase().includes(baseType));
+    }
+    const col=colors[i]?('#'+(colors[i].replace('#','').slice(0,6))):'#888888';
+    if(sp){
+      const c=(sp.cost/sp.total)*g;
+      total+=c; matched++;
+      lines.push('<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:'+col+';vertical-align:middle;margin-right:3px"></span>'+g+'g '+esc(types[i]||'')+'<span style="color:var(--grn-b);margin-left:4px">$'+c.toFixed(2)+'</span>');
+    } else {
+      lines.push('<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:'+col+';vertical-align:middle;margin-right:3px;opacity:.4"></span>'+g+'g '+esc(types[i]||'')+'<span style="color:var(--bdr2);margin-left:4px">no spool matched</span>');
+    }
+  });
+  if(matched===0){
+    hint.innerHTML='<span style="color:var(--bdr2)">⬡ No matching spool colors found — assign spools to calculate</span>';
+    return;
+  }
+  hint.innerHTML='<div style="margin-bottom:3px">'+lines.join('&nbsp;&nbsp;')+'</div>'
+    +'<span style="color:var(--cyn)">⬡ Filament cost: <b>$'+total.toFixed(2)+'</b></span>'
+    +(matched<usedSlots.length?'<span style="color:var(--bdr2)"> ('+matched+'/'+usedSlots.length+' slots matched)</span>':'');
+  // Auto-fill ec-cost when user actively changed the 3MF dropdown and cost is empty or was previously auto-filled
+  if(autoFill){
+    const costEl=document.getElementById('ec-cost');
+    if(costEl){costEl.value=total.toFixed(2);}
+  }
 }
 function saveCatalogItem(){
   const name=document.getElementById('ec-name').value.trim();
