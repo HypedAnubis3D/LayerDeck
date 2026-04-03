@@ -3774,9 +3774,14 @@ function renderPrints(){
       :`<span class="status-pill sp-printing">⟳ Printing</span>`;
     const cc=st==='done'?'card-done':st==='failed'?'card-failed':'';
     // Support legacy Pi Hub records that used productName/date instead of name/timestamp
-    const displayName=p.name||p.productName||'Unknown';
+    // Prefer human-readable 3MF name over raw gcode job name
+    const _rawJobName=(p.name||p.productName||'').replace(/\.gcode\.3mf$/i,'').replace(/\.3mf$/i,'');
+    const _tmfTitle=(p.tmfName||'').replace(/\.gcode\.3mf$/i,'').replace(/\.3mf$/i,'').trim();
+    const displayName=_tmfTitle||_rawJobName||'Unknown';
     const displayCategory=p.category||'Other';
     const displayPrinter=p.printer||p.printerName||'—';
+    // Show raw job name in subtitle when it differs from the 3MF title
+    const jobNameNote=(_tmfTitle&&_rawJobName&&_rawJobName!==_tmfTitle)?` · <span style="color:var(--txt-d);font-style:italic">${esc(_rawJobName)}</span>`:'';
     const ts=p.timestamp||(p.date?new Date(p.date).getTime():null)||Date.now();
     const d=new Date(ts);
     const finD=p.finishedAt?new Date(p.finishedAt):null;
@@ -3785,7 +3790,7 @@ function renderPrints(){
       <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:5px;margin-bottom:2px">
         <div class="pname">${esc(displayName)}${p.qty>1?' ×'+p.qty:''}</div>${pill}
       </div>
-      <div class="pcat">${esc(displayCategory)} · ${esc(displayPrinter)} · <span class="print-time-display" style="display:inline-flex;font-size:8px;padding:2px 6px">${formatHms(p.hrs||p.printTime)||'—'}</span> · ${d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}${p.tmfName?` · 📦 ${esc(p.tmfName)}`:''}${(st==='done'||st==='failed')?`<span style="color:var(--txt-d)">${finLabel}</span>`:''}</div>
+      <div class="pcat">${esc(displayCategory)} · ${esc(displayPrinter)} · <span class="print-time-display" style="display:inline-flex;font-size:8px;padding:2px 6px">${formatHms(p.hrs||p.printTime)||'—'}</span> · ${d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}${jobNameNote}${(st==='done'||st==='failed')?`<span style="color:var(--txt-d)">${finLabel}</span>`:''}</div>
       ${chips?`<div class="pc-colors">${chips}</div>`:''}
       <div class="cost-box">
         <div class="cb-title">Cost Breakdown</div>
@@ -13719,6 +13724,14 @@ async function onPiPrintFinished(name,data){
   const elecCost=parseFloat(((durationMins/60)*(cfg.electricityRate||0.12)*0.13).toFixed(2));
   const actualHrs=Math.round((durationMins/60)*100)/100;
   const filamentEntries=filamentSlots.map(s=>({spoolId:s.spoolId,grams:s.grams}));
+  // Find matching 3MF library entry for the human-readable display name
+  const _jLowFin=jobName.replace(/_/g,' ').toLowerCase().trim();
+  const _jLowFinBase=_jLowFin.replace(/\s+plate\s+\d+$/i,'').trim();
+  const _finTmf=typeof tmfLib!=='undefined'?tmfLib.find(function(t){
+    const tName=(t.name||'').toLowerCase().trim();
+    const tFile=(t.filename||'').replace(/\.gcode\.3mf$/i,'').replace(/\.3mf$/i,'').replace(/_/g,' ').toLowerCase().trim();
+    return tName===_jLowFin||tFile===_jLowFin||tName===_jLowFinBase||tFile===_jLowFinBase;
+  }):null;
   const printRecord={
     id:uid(),
     name:jobName,
@@ -13731,7 +13744,8 @@ async function onPiPrintFinished(name,data){
     finishedAt:Date.now(),
     timestamp:Date.now(),
     notes:'Auto-logged by LayerDeck Pi Hub',
-    autoFromPi:true
+    autoFromPi:true,
+    tmfName:_finTmf?_finTmf.name:undefined
   };
   prints.push(printRecord);
   savePrints();
