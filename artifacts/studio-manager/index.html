@@ -13839,19 +13839,38 @@ function updatePrinterCardLive(name,data,state){
   setBtn('resume',isPaused);
   setBtn('stop',  isActive);
 
-  // Skip Object button — show only when printer is active AND object data is present
-  const objData=data.objectData||null;
-  const hasObjData=objData&&objData.hasObjectData===true;
+  // Skip Object button — show when active AND object data is present.
+  // Two sources: parsed objectData from Pi server (Section 30), OR raw obj_list/s_obj
+  // fields that Bambu merges into the top-level state via pushall.  The fallback means
+  // this works even when running an older Pi server that lacks Section 30.
+  var _rawObjList=Array.isArray(data.obj_list)?data.obj_list:[];
+  var _sObj=typeof data.s_obj==='number'?data.s_obj:0;
+  var objData=data.objectData||null;
+  // Build effective object data: prefer server-computed, fall back to raw fields
+  var effectiveObjData=null;
+  if(objData&&objData.hasObjectData===true){
+    effectiveObjData=objData;
+  }else if(_rawObjList.length>0){
+    effectiveObjData={
+      hasObjectData:    true,
+      objectList:       _rawObjList,
+      currentObjectIdx: _sObj,
+      currentObjectId:  _rawObjList[_sObj]?_rawObjList[_sObj].id:null,
+      totalObjects:     _rawObjList.length,
+      rawSOBJ:          _sObj
+    };
+  }
+  var hasObjData=!!effectiveObjData;
   allId('btn-skip').forEach(function(btn){
     btn.style.display=(isActive&&hasObjData)?'':'none';
   });
   // Object info line
   allId('obj-info').forEach(function(el){
-    if(isActive&&hasObjData&&objData.totalObjects>0){
-      var objIdx=(objData.currentObjectIdx||0)+1;
-      var total=objData.totalObjects||0;
-      var objName=objData.objectList&&objData.objectList[objData.currentObjectIdx||0]?
-        objData.objectList[objData.currentObjectIdx||0].name||'':'';
+    if(isActive&&hasObjData&&effectiveObjData.totalObjects>0){
+      var objIdx=(effectiveObjData.currentObjectIdx||0)+1;
+      var total=effectiveObjData.totalObjects||0;
+      var objName=effectiveObjData.objectList&&effectiveObjData.objectList[effectiveObjData.currentObjectIdx||0]?
+        effectiveObjData.objectList[effectiveObjData.currentObjectIdx||0].name||'':'';
       el.textContent='Object '+objIdx+' of '+total+(objName?' — '+objName:'');
       el.style.display='';
     }else{
@@ -13933,8 +13952,18 @@ function piLightToggle(printerName){
 function handleSkipObject(printerName){
   const liveData=piLiveData[printerName];
   if(!liveData){toast('No live data','Pi Hub not connected','error');return;}
-  const objData=liveData.objectData;
-  if(!objData||!objData.hasObjectData){toast('No object data','Print-by-object not enabled','warning');return;}
+  // Build effective object data: prefer server-parsed, fall back to raw MQTT fields
+  var _rawList=Array.isArray(liveData.obj_list)?liveData.obj_list:[];
+  var _sObjIdx=typeof liveData.s_obj==='number'?liveData.s_obj:0;
+  var objData=liveData.objectData||null;
+  if(objData&&objData.hasObjectData){
+    // use server-computed objectData as-is
+  }else if(_rawList.length>0){
+    objData={hasObjectData:true,objectList:_rawList,currentObjectIdx:_sObjIdx,
+      currentObjectId:_rawList[_sObjIdx]?_rawList[_sObjIdx].id:null,
+      totalObjects:_rawList.length,rawSOBJ:_sObjIdx};
+  }
+  if(!objData||!objData.hasObjectData){toast('No object data','Print-by-object not active','warning');return;}
 
   showConfirm(
     'Skip current object?',

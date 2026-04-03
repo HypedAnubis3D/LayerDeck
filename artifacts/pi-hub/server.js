@@ -124,11 +124,38 @@ PRINTERS.forEach(printer => {
         // Section 30: parse and store object boundary data on every message
         const objData = parseObjectData(mqttPayload);
         if (objData) {
-          // Only update if we got real data — preserve last known data during brief gaps
+          // Current message had obj_list — store it
           printerStates[printer.name].objectData = objData;
-        } else if (!printerStates[printer.name].objectData) {
-          // Only set false if we've never had object data for this print
-          printerStates[printer.name].objectData = { hasObjectData: false };
+        } else {
+          // Current message didn't have obj_list — try accumulated state
+          // (obj_list is only sent in pushall; incremental updates only have s_obj)
+          const accList = printerStates[printer.name].obj_list;
+          if (Array.isArray(accList) && accList.length > 0) {
+            const sObj = printerStates[printer.name].s_obj;
+            const curIdx = typeof sObj === 'number' ? sObj : 0;
+            const existing = printerStates[printer.name].objectData;
+            if (!existing || !existing.hasObjectData) {
+              // First time building from accumulated state
+              printerStates[printer.name].objectData = {
+                objectList:       accList,
+                currentObjectId:  accList[curIdx] ? accList[curIdx].id : null,
+                currentObjectIdx: curIdx,
+                totalObjects:     accList.length,
+                hasObjectData:    true,
+                rawSOBJ:          sObj
+              };
+            } else if (typeof sObj === 'number' && sObj !== existing.rawSOBJ) {
+              // s_obj changed — update current object pointer
+              printerStates[printer.name].objectData = {
+                ...existing,
+                currentObjectIdx: sObj,
+                currentObjectId:  accList[sObj] ? accList[sObj].id : null,
+                rawSOBJ:          sObj
+              };
+            }
+          } else if (!printerStates[printer.name].objectData) {
+            printerStates[printer.name].objectData = { hasObjectData: false };
+          }
         }
 
         // Section 30: snapshot full state on FAILED for post-failure dialog
