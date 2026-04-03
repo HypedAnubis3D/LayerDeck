@@ -3504,7 +3504,7 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
       <div id="amsfil-color-presets" style="display:flex;gap:3px;flex-wrap:wrap;flex:1"></div>
     </div>
   </div>
-  <div id="amsfil-temp-warn" style="display:none;font-size:8px;background:rgba(255,160,0,0.08);border:1px solid rgba(255,160,0,0.3);border-radius:5px;padding:6px 8px;margin-bottom:8px;color:var(--gold-b)">⚠ Nozzle is cold — heat to printing temperature before loading filament.</div>
+  <div id="amsfil-temp-warn" style="display:none;font-size:8px;background:rgba(255,160,0,0.08);border:1px solid rgba(255,160,0,0.3);border-radius:5px;padding:6px 8px;margin-bottom:8px;color:var(--gold-b)">ℹ Nozzle is cold — printer will automatically heat up then load/unload (like Bambu Handy).</div>
   <div class="macts">
     <button class="btn btn-gold" id="amsfil-set-btn" onclick="piSetFilament()">✅ Set Filament</button>
     <button class="btn btn-ghost" onclick="closeSetFilamentModal()">Cancel</button>
@@ -9520,7 +9520,6 @@ async function piAmsLoad(printerName,amsId,trayId){
   const piUrl=getPiUrl();
   if(!piUrl){toast('Pi Hub not configured','','error');return;}
   const nozzle=(piLiveData[printerName]||{}).nozzle_temper||0;
-  if(nozzle>0&&nozzle<170){toast('Nozzle too cold','Heat to printing temperature before loading filament','warning',4000);return;}
   const printerCfg=(piHubConfig&&piHubConfig.printers?piHubConfig.printers:[]).find(function(p){return p.name===printerName;});
   const hubKey=(printerCfg&&printerCfg.hubName)?printerCfg.hubName:printerName;
   try{
@@ -9530,7 +9529,7 @@ async function piAmsLoad(printerName,amsId,trayId){
     });
     const j=await res.json().catch(function(){return {};});
     if(j.error)toast('Load failed',j.error,'error');
-    else toast('Load sent','AMS '+(amsId+1)+' Slot '+(trayId+1)+' on '+printerName,'success');
+    else toast('Loading filament',nozzle>0&&nozzle<170?'Printer will heat nozzle then load':'AMS '+(amsId+1)+' Slot '+(trayId+1)+' on '+printerName,'success');
   }catch(e){toast('Pi Hub unreachable','','error');}
 }
 
@@ -9538,7 +9537,6 @@ async function piAmsUnload(printerName){
   const piUrl=getPiUrl();
   if(!piUrl){toast('Pi Hub not configured','','error');return;}
   const nozzle=(piLiveData[printerName]||{}).nozzle_temper||0;
-  if(nozzle>0&&nozzle<170){toast('Nozzle too cold','Heat to printing temperature before unloading filament','warning',4000);return;}
   const printerCfg=(piHubConfig&&piHubConfig.printers?piHubConfig.printers:[]).find(function(p){return p.name===printerName;});
   const hubKey=(printerCfg&&printerCfg.hubName)?printerCfg.hubName:printerName;
   try{
@@ -9548,7 +9546,7 @@ async function piAmsUnload(printerName){
     });
     const j=await res.json().catch(function(){return {};});
     if(j.error)toast('Unload failed',j.error,'error');
-    else toast('Unload sent',printerName,'success');
+    else toast('Unloading filament',nozzle>0&&nozzle<170?'Printer will heat nozzle then unload':printerName,'success');
   }catch(e){toast('Pi Hub unreachable','','error');}
 }
 
@@ -13348,7 +13346,17 @@ function renderAmsSwatches(amsData){
 
 // ── STATE TRANSITION HANDLERS ──
 async function onPiPrintStarted(name,data){
-  piPrintStartTimes[name]=Date.now();
+  // Estimate actual print start time from mc_percent + mc_remaining_time so
+  // duration is correct even when LayerDeck connects mid-print
+  var pct=data.mc_percent||0;
+  var remMins=data.mc_remaining_time||0;
+  if(pct>0&&pct<100&&remMins>0){
+    var estimatedTotalMins=remMins/(1-pct/100);
+    var estimatedElapsedMins=estimatedTotalMins*(pct/100);
+    piPrintStartTimes[name]=Date.now()-(estimatedElapsedMins*60000);
+  }else{
+    piPrintStartTimes[name]=Date.now();
+  }
   // Move queue card to In Progress if matching job
   var jobName=(data.subtask_name||'').replace('.gcode.3mf','').replace('.3mf','');
   var displayName=jobName||('Print on '+name);
