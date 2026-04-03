@@ -192,22 +192,23 @@ export function PreviewList({ files, onFileUpdated, onRemoveCard }: PreviewListP
                       const grams = file.filamentGramsPerColor[i] ?? 0;
                       if (grams === 0) return null;
                       return (
-                      <div key={i} className="flex items-center gap-1.5">
-                        <div
-                          className="h-4 w-4 rounded-full border border-white/20 shadow-sm"
-                          style={{ backgroundColor: color }}
-                          title={`${file.filamentTypes[i] || 'Filament'} — ${color}`}
-                        />
-                        <span className="text-[10px] font-mono text-muted-foreground/70">
-                          {grams}g
-                        </span>
-                        {file.filamentTypes[i] && (
-                          <span className="text-[10px] text-muted-foreground/50">
-                            {file.filamentTypes[i]}
+                        <div key={i} className="flex items-center gap-1.5">
+                          <div
+                            className="h-4 w-4 rounded-full border border-white/20 shadow-sm"
+                            style={{ backgroundColor: color }}
+                            title={`${file.filamentTypes[i] || 'Filament'} — ${color}`}
+                          />
+                          <span className="text-[10px] font-mono text-muted-foreground/70">
+                            {grams}g
                           </span>
-                        )}
-                      </div>
-                    ))}
+                          {file.filamentTypes[i] && (
+                            <span className="text-[10px] text-muted-foreground/50">
+                              {file.filamentTypes[i]}
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>
