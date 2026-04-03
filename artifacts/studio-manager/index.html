@@ -13233,85 +13233,74 @@ function renderPrinters(){
 }
 
 // ── Camera feed modal ──
+// Returns proxy URLs routed through our API server (avoids mixed-content issues)
+function cameraProxyUrl(go2rtcBase,stream,format){
+  var b=encodeURIComponent(go2rtcBase);
+  var s=encodeURIComponent(stream);
+  if(format==='snapshot') return '/api/camera/snapshot?base='+b+'&src='+s;
+  return '/api/camera/hls.m3u8?base='+b+'&src='+s;
+}
+
 function openCameraFeed(printerName){
   const stream=piHubConfig?.cameras?.[printerName];
   if(!stream){toast('No camera configured for '+printerName,'Set a camera stream name in Pi Hub Setup','error');return;}
 
-  const go2rtcUrl=piHubConfig.go2rtcPublicUrl?(piHubConfig.go2rtcPublicUrl.replace(/\/$/,'')):null;
-  const piHubPublicUrl=piHubConfig.publicUrl?(piHubConfig.publicUrl.replace(/\/$/,'')):null;
-  const tailscaleIP=piHubConfig.tailscaleIP||'';
-  const go2rtcPort=piHubConfig.go2rtcPort||1984;
-  // Direct Tailscale VPN URL for go2rtc (HTTP — can open in new tab but not embed)
-  const go2rtcLocalUrl=tailscaleIP?('http://'+tailscaleIP+':'+go2rtcPort):null;
+  const go2rtcUrl=(piHubConfig.go2rtcPublicUrl||'').replace(/\/$/,'');
+  const piHubPublicUrl=(piHubConfig.publicUrl||'').replace(/\/$/,'');
 
-  // Detect misconfig: user entered Pi Hub URL as camera URL
+  // Misconfig: user pasted Pi Hub URL instead of go2rtc URL
   const isSameAsHub=go2rtcUrl&&piHubPublicUrl&&go2rtcUrl===piHubPublicUrl;
-  const isHttp=go2rtcUrl&&go2rtcUrl.startsWith('http://');
-  // go2rtc HTTPS URL is valid only if different from Pi Hub URL and is HTTPS
-  const hasValidHttps=!!(go2rtcUrl&&!isSameAsHub&&!isHttp);
+  const hasGo2rtcUrl=!!(go2rtcUrl&&!isSameAsHub);
 
   const mod=document.createElement('div');
   mod.id='camera-modal';
-  mod.style='position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.93);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px';
-
-  const hlsUrl=hasValidHttps?(go2rtcUrl+'/api/stream.m3u8?src='+encodeURIComponent(stream)):null;
-  const jpegUrl=hasValidHttps?(go2rtcUrl+'/api/frame.jpeg?src='+encodeURIComponent(stream)):null;
-  const go2rtcWebUi=go2rtcLocalUrl||(go2rtcUrl||'');
+  mod.style='position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.93);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px;gap:0';
 
   const closeBtn='<button class="btn btn-ghost" style="margin-top:12px" onclick="document.getElementById(\'camera-modal\').remove()">✕ Close</button>';
   const title='<div style="font-family:\'Orbitron\',monospace;font-size:10px;color:var(--gold-b);letter-spacing:2px;margin-bottom:12px">📷 '+esc(printerName)+'</div>';
   const mono='font-family:\'Share Tech Mono\',monospace;font-size:8px;color:var(--cyn)';
 
-  if(hasValidHttps){
-    // Valid HTTPS go2rtc URL — try HLS embed
+  if(hasGo2rtcUrl){
+    // Proxy the stream through the Replit API server — browser sees same-origin HTTPS
+    const hlsProxy=cameraProxyUrl(go2rtcUrl,stream,'hls');
+    const snapshotProxy=cameraProxyUrl(go2rtcUrl,stream,'snapshot');
     mod.innerHTML=title+
-      '<div style="position:relative;max-width:100%;max-height:60vh">'+
+      '<div style="position:relative;max-width:100%">'+
         '<video id="cam-vid-'+piId(printerName)+'" autoplay muted playsinline controls '+
           'style="max-width:640px;width:100%;max-height:60vh;border-radius:8px;border:1px solid var(--bdr2);display:block;background:#000">'+
-          '<source src="'+hlsUrl+'" type="application/x-mpegURL">'+
-          'HLS not supported in this browser.'+
+          '<source src="'+hlsProxy+'" type="application/vnd.apple.mpegurl">'+
+          'HLS not supported — check the snapshot link below.'+
         '</video>'+
+        '<div style="position:absolute;bottom:8px;right:8px">'+
+          '<a href="'+snapshotProxy+'" target="_blank" style="font-size:7px;color:var(--txt-d);text-decoration:none;background:rgba(0,0,0,0.6);padding:2px 6px;border-radius:3px">📸 Snapshot</a>'+
+        '</div>'+
       '</div>'+
-      '<div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;justify-content:center">'+
-        '<a href="'+hlsUrl+'" target="_blank" class="btn btn-ghost btn-sm">▶ Open stream</a>'+
-        (jpegUrl?'<a href="'+jpegUrl+'" target="_blank" class="btn btn-ghost btn-sm">📸 Snapshot</a>':'')+
-        (go2rtcWebUi?'<a href="'+go2rtcWebUi+'" target="_blank" class="btn btn-ghost btn-sm">🔗 go2rtc UI</a>':'')+
-      '</div>'+
-      '<div style="font-size:7px;color:var(--txt-d);margin-top:6px;text-align:center">HLS may not play in all browsers — use the links above as fallback</div>'+
+      '<div style="font-size:7px;color:var(--txt-d);margin-top:6px;text-align:center">Stream proxied through LayerDeck server — if black screen, verify go2rtc URL in Setup</div>'+
       closeBtn;
   } else {
-    // No valid HTTPS URL — explain and offer direct go2rtc access
-    const wrongUrlMsg=isSameAsHub?
-      '<div style="font-size:8px;color:var(--red-b);background:rgba(255,60,60,0.08);border:1px solid var(--red-d);border-radius:5px;padding:8px;margin-bottom:10px">'+
-        '⚠ Camera URL is the same as your Pi Hub URL. go2rtc runs on port <strong>1984</strong>, not 3000 — these need separate URLs.'+
-      '</div>':
-      '';
-    const localBlock=go2rtcLocalUrl?
-      '<div style="margin-top:10px">'+
-        '<div style="font-size:7px;color:var(--txt-d);margin-bottom:5px">Your go2rtc is accessible on your Tailscale network right now:</div>'+
-        '<a href="'+go2rtcLocalUrl+'" target="_blank" class="btn btn-gold btn-sm" style="display:inline-block;margin-bottom:8px">🔗 Open go2rtc Web UI</a>'+
-        '<div style="font-size:7px;color:var(--txt-d)">Opens go2rtc\'s built-in viewer in a new tab — works when your Tailscale app is active</div>'+
+    // No go2rtc URL or wrong URL — show setup instructions
+    const wrongUrlBanner=isSameAsHub?
+      '<div style="font-size:8px;color:var(--red-b);background:rgba(255,60,60,0.08);border:1px solid rgba(255,60,60,0.3);border-radius:5px;padding:8px 10px;margin-bottom:12px;line-height:1.6">'+
+        '⚠ Camera Server URL is the same as your Pi Hub URL.<br>'+
+        'go2rtc runs on port <strong>1984</strong> and needs its own public URL.'+
       '</div>':'';
     mod.innerHTML=title+
-      '<div style="max-width:400px;background:rgba(255,255,255,0.04);border:1px solid var(--bdr);border-radius:8px;padding:16px">'+
-        wrongUrlMsg+
-        '<div style="font-size:8px;font-weight:700;color:var(--txt-b);margin-bottom:8px">Camera stream: <span style="color:var(--cyn)">'+esc(stream)+'</span></div>'+
-        localBlock+
-        '<div style="border-top:1px solid var(--bdr);margin-top:12px;padding-top:12px">'+
-          '<div style="font-size:7px;color:var(--txt-d);margin-bottom:8px">To embed live video in LayerDeck, expose go2rtc over HTTPS. On your Pi:</div>'+
-          '<div style="background:rgba(0,0,0,0.3);border:1px solid var(--bdr);border-radius:4px;padding:8px;margin-bottom:8px">'+
-            '<div style="'+mono+'"># Stop current funnel first</div>'+
-            '<div style="'+mono+'">sudo tailscale funnel reset</div>'+
-            '<div style="'+mono+';margin-top:5px"># Serve Pi Hub on /hub, go2rtc on /camera</div>'+
-            '<div style="'+mono+'">sudo tailscale serve --bg --set-path /hub http://localhost:3000</div>'+
-            '<div style="'+mono+'">sudo tailscale serve --bg --set-path /camera http://localhost:1984</div>'+
-            '<div style="'+mono+'">sudo tailscale funnel --bg 443</div>'+
-            '<div style="'+mono+';margin-top:5px;color:var(--txt-d)"># Then in Setup:</div>'+
-            '<div style="'+mono+';color:var(--txt-d)"># Pi Hub URL → https://…/hub</div>'+
-            '<div style="'+mono+';color:var(--txt-d)"># Camera URL → https://…/camera</div>'+
-          '</div>'+
+      '<div style="max-width:420px;background:rgba(255,255,255,0.04);border:1px solid var(--bdr);border-radius:8px;padding:16px;width:100%;box-sizing:border-box">'+
+        wrongUrlBanner+
+        '<div style="font-size:8px;font-weight:700;color:var(--txt-b);margin-bottom:12px">Stream: <span style="color:var(--cyn)">'+esc(stream)+'</span></div>'+
+        '<div style="font-size:8px;color:var(--txt-d);margin-bottom:8px;line-height:1.6">'+
+          'LayerDeck proxies camera streams through its own server so there\'s no mixed-content issue. '+
+          'You just need go2rtc\'s Tailscale Funnel URL — run this on your Pi:'+
         '</div>'+
-        '<button class="btn btn-gold btn-sm" onclick="document.getElementById(\'camera-modal\').remove();openPiHubSetup()">⚙ Edit Setup</button>'+
+        '<div style="background:rgba(0,0,0,0.35);border:1px solid var(--bdr);border-radius:5px;padding:10px;margin-bottom:12px">'+
+          '<div style="'+mono+'">sudo tailscale funnel --bg 1984</div>'+
+          '<div style="'+mono+';color:var(--txt-d);margin-top:6px"># Copy the https://… URL it prints</div>'+
+          '<div style="'+mono+';color:var(--txt-d)"># Paste into Pi Hub Setup → Camera Server URL</div>'+
+        '</div>'+
+        '<div style="font-size:7px;color:var(--txt-d);margin-bottom:12px;line-height:1.6">'+
+          'Note: if your Pi Hub is also using a Tailscale Funnel on port 3000, running a second funnel on 1984 may replace it. In that case, use Tailscale Serve to combine both under one URL (ask for instructions).'+
+        '</div>'+
+        '<button class="btn btn-gold btn-sm" onclick="document.getElementById(\'camera-modal\').remove();openPiHubSetup()">⚙ Open Pi Hub Setup</button>'+
       '</div>'+
       closeBtn;
   }
