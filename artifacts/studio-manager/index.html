@@ -3752,7 +3752,7 @@ function renderPrints(){
   const fst=document.getElementById('pr-st').value;
   const f=prints.filter(p=>{
     if(fc&&p.category!==fc)return false;
-    if(fst&&(p.status||'printing')!==fst)return false;
+    if(fst&&(p.status||(p.success===true?'done':'printing'))!==fst)return false;
     if(q&&!(p.name+p.category+p.printer+(p.notes||'')).toLowerCase().includes(q))return false;
     return true;
   });
@@ -3768,7 +3768,7 @@ function renderPrints(){
       const gl=(p.status==='failed'&&f.actualGrams!=null)?`${f.actualGrams}g`:`${f.grams}g`;
       return `<div class="pc-chip"><div class="pc-dot" style="background:${col};box-shadow:0 0 3px ${col}55"></div><span style="color:var(--txt-d);font-size:8px">${esc(nm)} · ${gl}</span></div>`;
     }).join('');
-    const st=p.status||'printing';
+    const st=p.status||(p.success===true?'done':'printing');
     const pill=st==='done'?`<span class="status-pill sp-done">✓ Done</span>`
       :st==='failed'?`<span class="status-pill sp-failed">✕ Failed${p.failPct!=null?' '+p.failPct.toFixed(0)+'%':''}</span>`
       :`<span class="status-pill sp-printing">⟳ Printing</span>`;
@@ -5900,7 +5900,7 @@ function renderDashboard(){
   const monthSales=sales.filter(s=>new Date(s.date||s.timestamp).getTime()>=monthStart);
   const monthRev=monthSales.reduce((a,s)=>a+(s.price||0)*(s.qty||1),0);
   const monthProfit=monthSales.reduce((a,s)=>a+((s.price||0)-(s.cost||0))*(s.qty||1),0);
-  const activePrints=prints.filter(p=>(p.status||'printing')==='printing');
+  const activePrints=prints.filter(p=>(p.status||(p.success===true?'done':'printing'))==='printing');
   const pendingOrds=orders.filter(o=>o.status==='pending'||o.status==='printing');
   const lowSpools=spools.filter(s=>pct(s)<30);
   const printers=printerRecords.map(p=>p.name);
@@ -6854,7 +6854,7 @@ function renderDashboard(){
   const monthSales=sales.filter(s=>new Date(s.date||s.timestamp).getTime()>=monthStart);
   const monthRev=monthSales.reduce((a,s)=>a+(s.price||0)*(s.qty||1),0);
   const monthProfit=monthSales.reduce((a,s)=>a+((s.price||0)-(s.cost||0))*(s.qty||1),0);
-  const activePrints=prints.filter(p=>(p.status||'printing')==='printing');
+  const activePrints=prints.filter(p=>(p.status||(p.success===true?'done':'printing'))==='printing');
   const pendingOrds=orders.filter(o=>o.status==='pending'||o.status==='printing');
   const lowSpools=spools.filter(s=>pct(s)<30);
   const printers=printerRecords.map(p=>p.name);
@@ -8271,7 +8271,7 @@ function renderDashboard(){
   const monthSales=sales.filter(s=>new Date(s.date||s.timestamp).getTime()>=monthStart);
   const monthRev=monthSales.reduce((a,s)=>a+(s.price||0)*(s.qty||1),0);
   const monthProfit=monthSales.reduce((a,s)=>a+((s.price||0)-(s.cost||0))*(s.qty||1),0);
-  const activePrints=prints.filter(p=>(p.status||'printing')==='printing');
+  const activePrints=prints.filter(p=>(p.status||(p.success===true?'done':'printing'))==='printing');
   const pendingOrds=orders.filter(o=>o.status==='pending'||o.status==='printing');
   const lowSpools=spools.filter(s=>pct(s)<30);
   const printers=printerRecords.map(p=>p.name);
@@ -13556,6 +13556,13 @@ async function onPiPrintStarted(name,data){
 }
 
 async function onPiPrintFinished(name,data){
+  // Dedup guard — if another Pi Hub finish event already fired for this same job within the
+  // last 10 minutes, skip creating a duplicate record (handles rapid state transitions / reloads)
+  const jobNameCheck=(data.subtask_name||'').replace('.gcode.3mf','').replace('.3mf','')||'Unknown';
+  const recentDup=prints.find(function(r){
+    return r.autoFromPi&&r.printer===name&&r.name===jobNameCheck&&(Date.now()-(r.finishedAt||r.timestamp||0))<600000;
+  });
+  if(recentDup){return;}
   const startTime=piPrintStartTimes[name]||Date.now();
   const durationMins=Math.round((Date.now()-startTime)/60000);
   const material=getPiAMSMaterial(data);
@@ -14305,7 +14312,7 @@ function renderPrinters(){
           '<div class="pspec"><div class="pspec-l">Fails</div><div class="pspec-v" style="color:var(--red)">'+(p.failCount||0)+'</div></div>'+
         '</div>'+
         (p.notes?'<div class="notes-box" style="margin:8px 0">'+esc(p.notes)+'</div>':'')+
-        (totalSlots>0?'<div style="font-size:6px;color:var(--txt-d);letter-spacing:1.5px;text-transform:uppercase;margin:8px 0 5px">AMS Slots — click to assign spools</div>'+renderAmsMap(p.name):'') +
+        (totalSlots>0||liveHasExt?'<div style="font-size:6px;color:var(--txt-d);letter-spacing:1.5px;text-transform:uppercase;margin:8px 0 5px">'+(totalSlots>0?'AMS Slots — click to assign spools':'External Spool')+'</div>'+renderAmsMap(p.name):'') +
         '<div class="card-acts" style="margin-top:10px">'+
           '<button class="btn btn-ghost btn-xs" style="flex:1" onclick="openEditPrinter(\''+p.id+'\')">Edit</button>'+
           '<button class="btn btn-amb btn-xs" onclick="openLogMaint(\''+p.name+'\',\'\')">🔧 Maintenance</button>'+
