@@ -4124,7 +4124,14 @@ function renderQueue(){
           (isQueued?'<span style="color:var(--txt-d);font-size:13px;line-height:1;cursor:grab;margin-left:auto;user-select:none">⠿</span>':'')+
         '</div>'+
         '<div class="kcard-name">'+esc(q.name)+(q.qty>1?' ×'+q.qty:'')+'</div>'+
-        '<div class="kcard-meta">'+esc(q.printer||'?')+' · '+(q.hrs||'?')+'h'+(q.orderId?' · '+esc(q.orderId):'')+' </div>'+
+        '<div class="kcard-meta">'+esc(q.printer||'?')+' · '+(function(){
+          if(q.hrs)return q.hrs+'h';
+          if(st.key==='inprogress'&&q.printer&&piPrevStates[q.printer]){
+            var remMin=Math.round(piPrevStates[q.printer].mc_remaining_time||0);
+            if(remMin>0)return Math.round((remMin/60)*10)/10+'h';
+          }
+          return'?h';
+        }())+(q.orderId?' · '+esc(q.orderId):'')+' </div>'+
         doneByHtml+
         (q.notes?'<div style="font-size:6px;color:var(--txt-d);margin-top:3px">'+esc(q.notes)+'</div>':'')+
         (q.stage==='done'&&q.outcome?'<div style="font-size:6px;font-weight:bold;letter-spacing:1px;margin-top:4px;color:'+(q.outcome==='failed'?'var(--red)':'var(--grn)')+'\">'+(q.outcome==='failed'?'✕ FAILED':'✓ SUCCEEDED')+'</div>':'')+
