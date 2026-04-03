@@ -3082,7 +3082,7 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
   </div>
   <div class="fr2">
     <div class="field"><div class="fl">Printer</div>
-      <select id="eq-printer"><option>X1C</option><option>X1E</option><option>P1S</option><option>P1P</option><option>A1</option><option>A1 Mini</option><option>H2D</option></select>
+      <select id="eq-printer"></select>
     </div>
     <div class="field"><div class="fl">Est. Time (hrs)</div><input type="number" id="eq-hrs" min="0" step="0.25" placeholder="3.5"/></div>
   </div>
@@ -4154,15 +4154,28 @@ function qDragStart(ev,id){
 }
 function qDropCol(ev,stageKey){
   ev.preventDefault();
-  if(stageKey!=='queued'||!_qDragId)return;
-  // If dropped on the column body (not a card), move to end of queued list
-  var queued=queueItems.filter(function(q){return (q.stage||'queued')==='queued';});
-  queued=queued.slice().sort(function(a,b){return (a.sortOrder==null?9999:a.sortOrder)-(b.sortOrder==null?9999:b.sortOrder);});
-  var draggedIdx=queued.findIndex(function(q){return q.id===_qDragId;});
-  if(draggedIdx===-1)return;
-  var item=queued.splice(draggedIdx,1)[0];
-  queued.push(item);
-  saveQueueReorder(queued);
+  if(!_qDragId)return;
+  if(stageKey==='inprogress'){
+    // Drag from Queued → In Progress: promote the card
+    var target=queueItems.find(function(q){return q.id===_qDragId;});
+    if(target&&target.stage==='queued'){
+      queueItems=queueItems.map(function(q){
+        if(q.id===_qDragId)return Object.assign({},q,{stage:'inprogress',startedAt:Date.now()});
+        return q;
+      });
+      saveQueue();render();
+      showToast('Moved to In Progress');
+    }
+  } else if(stageKey==='queued'){
+    // Drop on column body (not a card) → move to end of queued list
+    var queued=queueItems.filter(function(q){return (q.stage||'queued')==='queued';});
+    queued=queued.slice().sort(function(a,b){return (a.sortOrder==null?9999:a.sortOrder)-(b.sortOrder==null?9999:b.sortOrder);});
+    var draggedIdx=queued.findIndex(function(q){return q.id===_qDragId;});
+    if(draggedIdx===-1){_qDragId=null;return;}
+    var item=queued.splice(draggedIdx,1)[0];
+    queued.push(item);
+    saveQueueReorder(queued);
+  }
   _qDragId=null;
 }
 function qDrop(ev){
@@ -4173,7 +4186,22 @@ function qDrop(ev){
   var targetCard=ev.target.closest('[data-qid]');
   var targetId=targetCard?targetCard.dataset.qid:null;
   if(!targetId||targetId===_qDragId){_qDragId=null;return;}
-  // Only reorder within queued stage
+  // Check if the target card is in a different stage
+  var targetItem=queueItems.find(function(q){return q.id===targetId;});
+  var draggedItem=queueItems.find(function(q){return q.id===_qDragId;});
+  if(!targetItem||!draggedItem){_qDragId=null;return;}
+  // Dragged card dropped onto an In Progress card → promote dragged card
+  if(draggedItem.stage==='queued'&&targetItem.stage==='inprogress'){
+    queueItems=queueItems.map(function(q){
+      if(q.id===_qDragId)return Object.assign({},q,{stage:'inprogress',startedAt:Date.now()});
+      return q;
+    });
+    saveQueue();render();
+    showToast('Moved to In Progress');
+    _qDragId=null;return;
+  }
+  // Reorder within queued stage only
+  if(draggedItem.stage!=='queued'||targetItem.stage!=='queued'){_qDragId=null;return;}
   var queued=queueItems.filter(function(q){return (q.stage||'queued')==='queued';});
   queued=queued.slice().sort(function(a,b){return (a.sortOrder==null?9999:a.sortOrder)-(b.sortOrder==null?9999:b.sortOrder);});
   var fromIdx=queued.findIndex(function(q){return q.id===_qDragId;});
@@ -5221,10 +5249,18 @@ function syncSP(){const v=document.getElementById('es-col').value;if(/^#[0-9a-fA
 // ════════════════════════════════════════
 function openAddQueue(){
   document.getElementById('queue-modal-title').textContent='Add to Queue';
-  ['eq-id','eq-name','eq-notes','eq-order'].forEach(i=>document.getElementById(i).value='');
-  document.getElementById('eq-cat').value='Themed Balls';document.getElementById('eq-printer').value='X1C';
+  ['eq-id','eq-name','eq-notes','eq-order'].forEach(function(i){document.getElementById(i).value='';});
+  document.getElementById('eq-cat').value='Themed Balls';
   document.getElementById('eq-hrs').value='';document.getElementById('eq-qty').value='1';
   document.getElementById('eq-priority').value='normal';
+  // Populate printer dropdown from printerRecords + any Pi Hub printers seen in status
+  var piPrinterNames=[];
+  if(window.piStatus&&piStatus.printers){piPrinterNames=Object.keys(piStatus.printers);}
+  var allPrinters=[...new Set([...(printerRecords||[]).map(function(p){return p.name;}), ...piPrinterNames])].filter(Boolean);
+  if(!allPrinters.length){allPrinters=['X1C','X1E','P1S','P1P','A1','A1 Mini','H2D'];}
+  var sel=document.getElementById('eq-printer');
+  sel.innerHTML=allPrinters.map(function(p){return '<option>'+esc(p)+'</option>';}).join('');
+  if(allPrinters.length){sel.value=allPrinters[0];}
   document.getElementById('mod-queue').style.display='flex';
 }
 function saveQueueItem(){
@@ -12964,16 +13000,28 @@ function renderAmsSwatches(amsData){
 async function onPiPrintStarted(name,data){
   piPrintStartTimes[name]=Date.now();
   // Move queue card to In Progress if matching job
-  const jobName=(data.subtask_name||'').replace('.gcode.3mf','').replace('.3mf','');
+  var jobName=(data.subtask_name||'').replace('.gcode.3mf','').replace('.3mf','');
+  var displayName=jobName||('Print on '+name);
+  var changed=false;
   if(jobName){
-    let changed=false;
-    queueItems=queueItems.map(q=>{
-      if(q.stage==='queued'&&(q.name.toLowerCase()===jobName.toLowerCase()||(q.printer&&q.printer===name))){
-        if(!changed){changed=true;return{...q,stage:'inprogress',startedAt:Date.now()};}
+    queueItems=queueItems.map(function(q){
+      if(q.stage==='queued'&&!changed&&(q.name.toLowerCase()===jobName.toLowerCase()||(q.printer&&q.printer===name))){
+        changed=true;return Object.assign({},q,{stage:'inprogress',startedAt:Date.now()});
       }
       return q;
     });
-    if(changed){saveQueue();render();}
+  }
+  if(changed){
+    saveQueue();render();
+  } else {
+    // No matching queue item — auto-create one as In Progress (test print / restock / manual start)
+    var alreadyInProgress=queueItems.some(function(q){return q.stage==='inprogress'&&q.printer===name&&q.autoFromPi;});
+    if(!alreadyInProgress){
+      var autoItem={id:uid(),name:displayName,category:'Other',printer:name,hrs:0,qty:1,priority:'normal',stage:'inprogress',startedAt:Date.now(),timestamp:Date.now(),notes:'Auto-added from Pi Hub',autoFromPi:true};
+      queueItems.push(autoItem);
+      saveQueue();render();
+      showToast('\uD83D\uDDA8\uFE0F Auto-added to In Progress: '+displayName);
+    }
   }
   // Ensure printerRecords has this printer
   ensurePrinterRecord(name);
