@@ -13683,11 +13683,22 @@ async function onPiPrintFinished(name,data){
     return r.autoFromPi&&r.printer===name&&r.name===jobNameCheck&&(Date.now()-(r.finishedAt||r.timestamp||0))<600000;
   });
   if(recentDup){return;}
-  const startTime=piPrintStartTimes[name]||Date.now();
-  const durationMins=Math.round((Date.now()-startTime)/60000);
-  const material=getPiAMSMaterial(data);
-  const gramsUsed=estimatePiFilament(material,durationMins);
   const jobName=(data.subtask_name||'').replace('.gcode.3mf','').replace('.3mf','')||'Unknown';
+  const material=getPiAMSMaterial(data);
+  // Early 3MF lookup — used as fallback for duration & filament when app loads post-print
+  // (app sees FINISH before RUNNING so piPrintStartTimes / piAmsStartRemain are empty)
+  const _jLowEarly=jobName.replace(/_/g,' ').toLowerCase().trim();
+  const _jLowEarlyBase=_jLowEarly.replace(/\s+plate\s+\d+$/i,'').trim();
+  const _earlyTmf=typeof tmfLib!=='undefined'?tmfLib.find(function(t){
+    const tN=(t.name||'').toLowerCase().trim();
+    const tF=(t.filename||'').replace(/\.gcode\.3mf$/i,'').replace(/\.3mf$/i,'').replace(/_/g,' ').toLowerCase().trim();
+    return tN===_jLowEarly||tF===_jLowEarly||tN===_jLowEarlyBase||tF===_jLowEarlyBase;
+  }):null;
+  const startTime=piPrintStartTimes[name]||0;
+  const wallDurationMins=startTime?Math.round((Date.now()-startTime)/60000):0;
+  // Fall back to 3MF estimated hours when we never saw the print start
+  const durationMins=wallDurationMins||((_earlyTmf&&_earlyTmf.hrs)?Math.round(_earlyTmf.hrs*60):0);
+  const gramsUsed=estimatePiFilament(material,durationMins);
 
   // ── Per-slot filament tracking via AMS remain% delta ──────────────────
   // Compare remain% at print start (snapshot) vs now to compute per-color grams used.
@@ -13746,20 +13757,30 @@ async function onPiPrintFinished(name,data){
     }
   }
 
-  // Fallback: no AMS delta data — use duration-based estimate for single slot
+  // Fallback: no AMS delta data — prefer 3MF per-color grams, else duration-based estimate
   if(!filamentSlots.length){
+    const tmfGramsArr=_earlyTmf&&_earlyTmf.filamentGramsPerColor&&_earlyTmf.filamentGramsPerColor.length?_earlyTmf.filamentGramsPerColor:null;
+    const totalFallbackG=tmfGramsArr?tmfGramsArr.reduce(function(a,v){return a+(v||0);},0):gramsUsed;
     const extKey2=_amsSlotKey(name,255,254);
     const fallbackSpool=spools.find(s=>s.id===amsSlotMappings[extKey2])
       ||spools.find(s=>s.material&&s.material.toLowerCase().includes(material.toLowerCase())&&(s.remaining||0)>0);
-    if(fallbackSpool){
-      fallbackSpool.remaining=Math.max(0,(fallbackSpool.remaining||fallbackSpool.totalGrams||1000)-gramsUsed);
+    if(fallbackSpool&&totalFallbackG>0){
+      fallbackSpool.remaining=Math.max(0,(fallbackSpool.remaining||fallbackSpool.totalGrams||1000)-totalFallbackG);
       spoolsChanged=true;
       if((fallbackSpool.remaining||0)<100){
         postToDiscord('low_spool','🧵 Spool Running Low — '+(fallbackSpool.brand||'')+' '+(fallbackSpool.colorName||fallbackSpool.name||'')+'\nRemaining: ~'+Math.round(fallbackSpool.remaining||0)+'g\nPrinter: '+name);
       }
     }
-    filamentSlots.push({spoolId:fallbackSpool?fallbackSpool.id:'',grams:gramsUsed,mat:material,col:'#888888',spool:fallbackSpool});
-    usageHist.push({id:uid(),spoolId:fallbackSpool?fallbackSpool.id:'unassigned',spoolName:fallbackSpool?(fallbackSpool.name||fallbackSpool.material):('~'+material+' (unassigned)'),amount:gramsUsed,date:new Date().toISOString().split('T')[0],timestamp:Date.now(),note:'Pi Hub — '+jobName+(fallbackSpool?'':' (no spool matched)')});
+    if(tmfGramsArr){
+      const tmfCols=(_earlyTmf.filamentColors||[]);
+      const tmfMats=(_earlyTmf.filamentTypes||[]);
+      tmfGramsArr.forEach(function(g,i){
+        if((g||0)>0)filamentSlots.push({spoolId:fallbackSpool&&i===0?fallbackSpool.id:'',grams:g,mat:tmfMats[i]||material,col:tmfCols[i]||'#888888',spool:fallbackSpool&&i===0?fallbackSpool:null});
+      });
+    } else {
+      filamentSlots.push({spoolId:fallbackSpool?fallbackSpool.id:'',grams:gramsUsed,mat:material,col:'#888888',spool:fallbackSpool});
+    }
+    usageHist.push({id:uid(),spoolId:fallbackSpool?fallbackSpool.id:'unassigned',spoolName:fallbackSpool?(fallbackSpool.name||fallbackSpool.material):('~'+material+' (unassigned)'),amount:totalFallbackG||gramsUsed,date:new Date().toISOString().split('T')[0],timestamp:Date.now(),note:'Pi Hub \u2014 '+jobName+(fallbackSpool?'':' (no spool matched)')+(tmfGramsArr?' [3MF grams]':'')});
   }
 
   if(spoolsChanged)saveSpools();
@@ -13768,14 +13789,7 @@ async function onPiPrintFinished(name,data){
   const elecCost=parseFloat(((durationMins/60)*(cfg.electricityRate||0.12)*0.13).toFixed(2));
   const actualHrs=Math.round((durationMins/60)*100)/100;
   const filamentEntries=filamentSlots.map(s=>({spoolId:s.spoolId,grams:s.grams}));
-  // Find matching 3MF library entry for the human-readable display name
-  const _jLowFin=jobName.replace(/_/g,' ').toLowerCase().trim();
-  const _jLowFinBase=_jLowFin.replace(/\s+plate\s+\d+$/i,'').trim();
-  const _finTmf=typeof tmfLib!=='undefined'?tmfLib.find(function(t){
-    const tName=(t.name||'').toLowerCase().trim();
-    const tFile=(t.filename||'').replace(/\.gcode\.3mf$/i,'').replace(/\.3mf$/i,'').replace(/_/g,' ').toLowerCase().trim();
-    return tName===_jLowFin||tFile===_jLowFin||tName===_jLowFinBase||tFile===_jLowFinBase;
-  }):null;
+  const _finTmf=_earlyTmf; // already matched above
   const printRecord={
     id:uid(),
     name:jobName,
