@@ -12857,7 +12857,7 @@ async function fetchPiStatus(){
       let hint='';
       try{const j=await res.json();hint=j.hint||'';}catch(_){}
       const err=new Error('HTTP '+res.status);
-      (err as any)._piHubHint=hint;
+      err._piHubHint=hint;
       throw err;
     }
     const data=await res.json();
