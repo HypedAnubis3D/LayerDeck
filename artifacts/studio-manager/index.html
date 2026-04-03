@@ -3450,6 +3450,40 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
 </div>
 </div>
 
+<!-- SKIP OBJECT REFUND DIALOG -->
+<div class="overlay" id="mod-skip-refund" style="display:none" onclick="if(event.target.id==='mod-skip-refund')closeSkipRefund()">
+<div class="modal narrow">
+  <div class="mtitle">Filament Refund — Skipped Object</div>
+  <div style="font-size:9px;color:var(--txt-d);margin-bottom:14px">
+    <span id="skip-refund-printer">—</span> · Skipped at <span id="skip-refund-pct">0%</span> completion
+  </div>
+
+  <div style="background:var(--bg);border:1px solid var(--bdr);border-radius:8px;padding:12px;margin-bottom:12px">
+    <div style="font-size:7px;color:var(--txt-d);letter-spacing:1px;text-transform:uppercase;margin-bottom:8px">Filament Refund Preview</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--bdr2)">
+      <div style="font-size:9px;color:var(--txt-b)" id="skip-refund-name">—</div>
+      <div style="font-size:8px;color:var(--txt-d)">
+        <span id="skip-refund-used">0g</span> used / <span id="skip-refund-total-g">0g</span> total
+      </div>
+      <div style="font-size:10px;color:var(--grn);font-weight:700" id="skip-refund-amount">+0g</div>
+    </div>
+    <div id="skip-refund-warn" style="display:none;margin-top:8px;font-size:7px;color:var(--gold)">
+      ⚠ Estimated proportionally — per-object filament data not available
+    </div>
+  </div>
+
+  <div style="display:flex;align-items:center;justify-content:space-between;background:var(--bg);border:1px solid var(--bdr);border-radius:8px;padding:10px 12px;margin-bottom:14px">
+    <div style="font-size:8px;color:var(--txt-d)">Total refund</div>
+    <div style="font-size:13px;color:var(--grn);font-weight:700" id="skip-refund-amount-total"></div>
+  </div>
+
+  <div class="macts">
+    <button class="btn btn-grn" onclick="confirmSkipRefund()">Confirm &amp; Log Refund</button>
+    <button class="btn btn-ghost" onclick="closeSkipRefund()">Dismiss</button>
+  </div>
+</div>
+</div>
+
 <script>
 // ════════════════════════════════════════
 // STORAGE
@@ -4052,44 +4086,113 @@ function delTmf(id){
 
 // ─── QUEUE ───
 function renderQueue(){
-  const stages=[{key:'queued',label:'Queued',color:'var(--pur)'},{key:'inprogress',label:'In Progress',color:'var(--cyn)'},{key:'done',label:'Done',color:'var(--grn)'}];
-  const active=queueItems.filter(q=>q.stage!=='done').length;
+  var stages=[{key:'queued',label:'Queued',color:'var(--pur)'},{key:'inprogress',label:'In Progress',color:'var(--cyn)'},{key:'done',label:'Done',color:'var(--grn)'}];
+  var active=queueItems.filter(function(q){return q.stage!=='done';}).length;
   document.getElementById('q-cnt').textContent=active+' active';
-  document.getElementById('kanban-board').innerHTML=stages.map(st=>{
-    const items=queueItems.filter(q=>(q.stage||'queued')===st.key);
-    const cards=items.map(q=>{
-      const isShopify=q.fromShopify;
-      const isMystery=q.fromMystery;
-      const isWarn=q.noTmf;
-      const isSel=selectedIds.includes(q.id);
-      const prioIcon=q.priority==='high'?'🔴':q.priority==='low'?'🔵':'';
-      const prevStage=st.key==='inprogress'?'queued':st.key==='done'?'inprogress':null;
-      const nextStage=st.key==='queued'?'inprogress':st.key==='inprogress'?'done':null;
-      return `<div class="kcard${isShopify?' kc-shopify':''}${isWarn?' kc-warn':''}${isSel?' selected':''}" data-selid="${q.id}" onclick="if(selectMode==='queue'){event.stopPropagation();toggleSelect('${q.id}');}">
-        <input type="checkbox" class="sel-checkbox"${isSel?' checked':''} onclick="event.stopPropagation();toggleSelect('${q.id}')"/>
-        ${prioIcon?`<div class="k-priority">${prioIcon}</div>`:''}
-        ${isMystery?`<div style="font-size:6px;color:var(--pur-b);letter-spacing:1px;margin-bottom:3px">🎁 MYSTERY GIFT</div>`:''}
-        ${isShopify&&!isMystery?`<div style="font-size:6px;color:var(--shopify);letter-spacing:1px;margin-bottom:3px">🛍 SHOPIFY ORDER</div>`:''}
-        ${isWarn?`<div style="font-size:6px;color:var(--amb);letter-spacing:1px;margin-bottom:3px">⚠ NO 3MF ON FILE</div>`:''}
-        <div class="kcard-name">${esc(q.name)}${q.qty>1?' ×'+q.qty:''}</div>
-        <div class="kcard-meta">${esc(q.printer||'?')} · ${q.hrs||'?'}h${q.orderId?' · '+esc(q.orderId):''}</div>
-        ${q.notes?`<div style="font-size:6px;color:var(--txt-d);margin-top:3px">${esc(q.notes)}</div>`:''}
-        ${q.stage==='done'&&q.outcome?`<div style="font-size:6px;font-weight:bold;letter-spacing:1px;margin-top:4px;color:${q.outcome==='failed'?'var(--red)':'var(--grn)'}">${q.outcome==='failed'?'✕ FAILED':'✓ SUCCEEDED'}</div>`:''}
-        <div class="kcard-actions">
-          ${prevStage?`<button class="k-move-btn" onclick="event.stopPropagation();moveQueue('${q.id}','${prevStage}')">← Back</button>`:''}
-          ${nextStage?`<button class="k-move-btn" style="color:${st.key==='queued'?'var(--cyn)':'var(--grn)'};border-color:${st.key==='queued'?'var(--cyn-d)':'var(--grn-d)'}" onclick="event.stopPropagation();moveQueue('${q.id}','${nextStage}')">${st.key==='queued'?'Start →':'✓ Done'}</button>`:''}
-          <button class="k-move-btn" style="color:var(--red);border-color:var(--red-d)" onclick="event.stopPropagation();delQueue('${q.id}')">✕</button>
-        </div>
-      </div>`;
+  document.getElementById('kanban-board').innerHTML=stages.map(function(st){
+    var items=queueItems.filter(function(q){return (q.stage||'queued')===st.key;});
+    // Sort queued section by sortOrder ascending
+    if(st.key==='queued'){
+      items=items.slice().sort(function(a,b){return (a.sortOrder==null?9999:a.sortOrder)-(b.sortOrder==null?9999:b.sortOrder);});
+    }
+    var cards=items.map(function(q){
+      var isShopify=q.fromShopify;
+      var isMystery=q.fromMystery;
+      var isWarn=q.noTmf;
+      var isSel=selectedIds.includes(q.id);
+      var prioIcon=q.priority==='high'?'🔴':q.priority==='low'?'🔵':'';
+      var prevStage=st.key==='inprogress'?'queued':st.key==='done'?'inprogress':null;
+      var nextStage=st.key==='queued'?'inprogress':st.key==='inprogress'?'done':null;
+      var isQueued=st.key==='queued';
+      var printerBadge=getPrinterBadgeHtml(q.printer||null);
+      // Done by time for In Progress cards — pulled from live Pi data
+      var doneByHtml='';
+      if(st.key==='inprogress'&&q.printer&&piPrevStates[q.printer]){
+        var liveRemMins=Math.round((piPrevStates[q.printer].mc_remaining_time||0)/60);
+        var doneByStr=getDoneByTime(liveRemMins);
+        if(doneByStr)doneByHtml='<div style="font-size:7px;color:var(--cyn);margin-top:3px">Done by '+doneByStr+'</div>';
+      }
+      var dragAttrs=isQueued?' draggable="true" ondragstart="qDragStart(event,\''+q.id+'\')" ondragover="event.preventDefault()" ondrop="qDrop(event)"':'';
+      return '<div class="kcard'+(isShopify?' kc-shopify':'')+(isWarn?' kc-warn':'')+(isSel?' selected':'')+'" data-selid="'+q.id+'" data-qid="'+q.id+'"'+dragAttrs+' onclick="if(selectMode===\'queue\'){event.stopPropagation();toggleSelect(\''+q.id+'\');}">'+
+        '<input type="checkbox" class="sel-checkbox"'+(isSel?' checked':'')+' onclick="event.stopPropagation();toggleSelect(\''+q.id+'\')"/>'+
+        (prioIcon?'<div class="k-priority">'+prioIcon+'</div>':'')+
+        (isMystery?'<div style="font-size:6px;color:var(--pur-b);letter-spacing:1px;margin-bottom:3px">🎁 MYSTERY GIFT</div>':'')+
+        (isShopify&&!isMystery?'<div style="font-size:6px;color:var(--shopify);letter-spacing:1px;margin-bottom:3px">🛍 SHOPIFY ORDER</div>':'')+
+        (isWarn?'<div style="font-size:6px;color:var(--amb);letter-spacing:1px;margin-bottom:3px">⚠ NO 3MF ON FILE</div>':'')+
+        '<div style="display:flex;align-items:center;gap:4px;margin-bottom:3px">'+
+          printerBadge+
+          (isQueued?'<span style="color:var(--txt-d);font-size:13px;line-height:1;cursor:grab;margin-left:auto;user-select:none">⠿</span>':'')+
+        '</div>'+
+        '<div class="kcard-name">'+esc(q.name)+(q.qty>1?' ×'+q.qty:'')+'</div>'+
+        '<div class="kcard-meta">'+esc(q.printer||'?')+' · '+(q.hrs||'?')+'h'+(q.orderId?' · '+esc(q.orderId):'')+' </div>'+
+        doneByHtml+
+        (q.notes?'<div style="font-size:6px;color:var(--txt-d);margin-top:3px">'+esc(q.notes)+'</div>':'')+
+        (q.stage==='done'&&q.outcome?'<div style="font-size:6px;font-weight:bold;letter-spacing:1px;margin-top:4px;color:'+(q.outcome==='failed'?'var(--red)':'var(--grn)')+'\">'+(q.outcome==='failed'?'✕ FAILED':'✓ SUCCEEDED')+'</div>':'')+
+        '<div class="kcard-actions">'+
+          (prevStage?'<button class="k-move-btn" onclick="event.stopPropagation();moveQueue(\''+q.id+'\',\''+prevStage+'\')">← Back</button>':'')+
+          (nextStage?'<button class="k-move-btn" style="color:'+(st.key==='queued'?'var(--cyn)':'var(--grn)')+';border-color:'+(st.key==='queued'?'var(--cyn-d)':'var(--grn-d)')+'" onclick="event.stopPropagation();moveQueue(\''+q.id+'\',\''+nextStage+'\')">'+(st.key==='queued'?'Start →':'✓ Done')+'</button>':'')+
+          '<button class="k-move-btn" style="color:var(--red);border-color:var(--red-d)" onclick="event.stopPropagation();delQueue(\''+q.id+'\')">✕</button>'+
+        '</div>'+
+      '</div>';
     }).join('');
-    return `<div class="kanban-col">
-      <div class="kanban-hdr">
-        <div class="kanban-title" style="color:${st.color}">${st.label}</div>
-        <div class="kanban-cnt" style="color:${st.color}">${items.length}</div>
-      </div>
-      <div class="kanban-body">${cards||`<div class="empty-col">Empty</div>`}</div>
-    </div>`;
+    return '<div class="kanban-col" id="kanban-col-'+st.key+'" ondragover="event.preventDefault()" ondrop="qDropCol(event,\''+st.key+'\')">'+
+      '<div class="kanban-hdr">'+
+        '<div class="kanban-title" style="color:'+st.color+'">'+st.label+'</div>'+
+        '<div class="kanban-cnt" style="color:'+st.color+'">'+items.length+'</div>'+
+      '</div>'+
+      '<div class="kanban-body" id="kanban-body-'+st.key+'">'+( cards||'<div class="empty-col">Empty</div>')+'</div>'+
+    '</div>';
   }).join('');
+}
+
+// ── Queue drag-to-reorder (Queued section only) ──
+var _qDragId=null;
+function qDragStart(ev,id){
+  _qDragId=id;
+  ev.dataTransfer.effectAllowed='move';
+  ev.dataTransfer.setData('text/plain',id);
+}
+function qDropCol(ev,stageKey){
+  ev.preventDefault();
+  if(stageKey!=='queued'||!_qDragId)return;
+  // If dropped on the column body (not a card), move to end of queued list
+  var queued=queueItems.filter(function(q){return (q.stage||'queued')==='queued';});
+  queued=queued.slice().sort(function(a,b){return (a.sortOrder==null?9999:a.sortOrder)-(b.sortOrder==null?9999:b.sortOrder);});
+  var draggedIdx=queued.findIndex(function(q){return q.id===_qDragId;});
+  if(draggedIdx===-1)return;
+  var item=queued.splice(draggedIdx,1)[0];
+  queued.push(item);
+  saveQueueReorder(queued);
+  _qDragId=null;
+}
+function qDrop(ev){
+  ev.preventDefault();
+  ev.stopPropagation();
+  if(!_qDragId)return;
+  // Find target card id
+  var targetCard=ev.target.closest('[data-qid]');
+  var targetId=targetCard?targetCard.dataset.qid:null;
+  if(!targetId||targetId===_qDragId){_qDragId=null;return;}
+  // Only reorder within queued stage
+  var queued=queueItems.filter(function(q){return (q.stage||'queued')==='queued';});
+  queued=queued.slice().sort(function(a,b){return (a.sortOrder==null?9999:a.sortOrder)-(b.sortOrder==null?9999:b.sortOrder);});
+  var fromIdx=queued.findIndex(function(q){return q.id===_qDragId;});
+  var toIdx=queued.findIndex(function(q){return q.id===targetId;});
+  if(fromIdx===-1||toIdx===-1){_qDragId=null;return;}
+  var item=queued.splice(fromIdx,1)[0];
+  queued.splice(toIdx,0,item);
+  saveQueueReorder(queued);
+  _qDragId=null;
+}
+function saveQueueReorder(reorderedQueued){
+  // Assign new sortOrder values and merge back into queueItems
+  reorderedQueued.forEach(function(q,i){q.sortOrder=i;});
+  queueItems=queueItems.map(function(q){
+    var updated=reorderedQueued.find(function(r){return r.id===q.id;});
+    return updated||q;
+  });
+  saveQueue();
+  renderQueue();
 }
 
 function moveQueue(id,stage){
@@ -12695,6 +12798,22 @@ const STATE_COLORS={
 };
 const STATE_LABELS={IDLE:'IDLE',RUNNING:'PRINTING',PAUSE:'PAUSED',PAUSED:'PAUSED',FAILED:'FAILED',FINISH:'FINISHED',OFFLINE:'OFFLINE'};
 
+// ── Printer badge colors for queue cards ──
+const PRINTER_BADGE_COLORS={
+  'A1':        {bg:'#1565C0',label:'A1'},
+  'P1 Room':   {bg:'#2E7D32',label:'P1 Room'},
+  'P1 Closet': {bg:'#E65100',label:'P1 Closet'}
+};
+function getPrinterBadgeHtml(printerName){
+  var cfg=PRINTER_BADGE_COLORS[printerName]||{bg:'#424242',label:'Unassigned'};
+  return '<span style="display:inline-block;padding:1px 6px;border-radius:10px;font-size:7px;font-weight:700;background:'+cfg.bg+';color:#fff;letter-spacing:0.5px">'+esc(cfg.label)+'</span>';
+}
+function getDoneByTime(remainingMinutes){
+  if(!remainingMinutes||remainingMinutes<=0)return null;
+  var doneAt=new Date(Date.now()+remainingMinutes*60*1000);
+  return doneAt.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',hour12:true});
+}
+
 // ── Default config (your Pi — pre-seeded, editable via Setup) ──
 const PI_DEFAULTS={
   tailscaleIP:'100.88.246.109',
@@ -13048,6 +13167,9 @@ function updatePrinterCardLive(name,data,state){
       const b=document.getElementById('pi-'+id+'-btn-'+s);
       if(b){b.style.opacity='0.4';b.style.pointerEvents='none';}
     });
+    // Hide skip button and object info on offline
+    allId('btn-skip').forEach(function(b){b.style.display='none';});
+    allId('obj-info').forEach(function(el){el.style.display='none';el.textContent='';});
     return;
   }
 
@@ -13055,11 +13177,12 @@ function updatePrinterCardLive(name,data,state){
   const layerNum=data.layer_num||0;
   const totalLayers=data.total_layer_num||0;
   const remMins=Math.round((data.mc_remaining_time||0)/60);
-  const doneBy=remMins>0?'Done ~'+new Date(Date.now()+remMins*60000).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}):'';
+  const doneByStr=getDoneByTime(remMins);
+  const doneBy=doneByStr?'Done by '+doneByStr:'';
 
   setTxt('progress',pct+'%');
   setTxt('layer',totalLayers>0?(layerNum+'/'+totalLayers):'—');
-  setTxt('remaining',remMins>0?fmtMins(remMins)+(doneBy?' ('+doneBy+')':''):'—');
+  setTxt('remaining',remMins>0?fmtMins(remMins)+(doneBy?' — '+doneBy:''):'—');
   setTxt('nozzle',fmtTemp(data.nozzle_temper));
   setTxt('bed',fmtTemp(data.bed_temper));
   setTxt('file',(data.subtask_name||'—').replace('.gcode.3mf','').replace('.3mf',''));
@@ -13084,6 +13207,27 @@ function updatePrinterCardLive(name,data,state){
   setBtn('pause', state==='RUNNING');
   setBtn('resume',isPaused);
   setBtn('stop',  isActive);
+
+  // Skip Object button — show only when printer is active AND object data is present
+  const objData=data.objectData||null;
+  const hasObjData=objData&&objData.hasObjectData===true;
+  allId('btn-skip').forEach(function(btn){
+    btn.style.display=(isActive&&hasObjData)?'':'none';
+  });
+  // Object info line
+  allId('obj-info').forEach(function(el){
+    if(isActive&&hasObjData&&objData.totalObjects>0){
+      var objIdx=(objData.currentObjectIdx||0)+1;
+      var total=objData.totalObjects||0;
+      var objName=objData.objectList&&objData.objectList[objData.currentObjectIdx||0]?
+        objData.objectList[objData.currentObjectIdx||0].name||'':'';
+      el.textContent='Object '+objIdx+' of '+total+(objName?' — '+objName:'');
+      el.style.display='';
+    }else{
+      el.style.display='none';
+      el.textContent='';
+    }
+  });
 }
 
 // ── Start/stop polling ──
@@ -13100,22 +13244,103 @@ function stopPiPolling(){
 }
 
 // ── Send control command (via proxy) ──
-async function piControl(printerName,command){
+async function piControl(printerName,command,extraBody){
   const piUrl=getPiUrl();
   if(!piUrl){toast('Pi Hub not configured','','error');return;}
   // Resolve the hub key (hubName) the Pi Hub actually uses — not the display name
   const printerCfg=(piHubConfig?.printers||[]).find(p=>p.name===printerName);
   const hubKey=printerCfg?.hubName||printerName;
   try{
+    const body=Object.assign({printer:hubKey,command},extraBody||{});
     const res=await fetch('/api/pihub/control?hub='+encodeURIComponent(piUrl),{
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({printer:hubKey,command})
+      body:JSON.stringify(body)
     });
     const j=await res.json().catch(()=>({}));
     if(j.error){toast('Command failed',j.error,'error');return;}
     toast(command+' sent',printerName,'success');
   }catch(e){toast('Pi Hub unreachable','Check Tailscale','error');}
+}
+
+// ── Skip Object + Filament Refund Dialog ──
+function handleSkipObject(printerName){
+  const liveData=piLiveData[printerName];
+  if(!liveData){toast('No live data','Pi Hub not connected','error');return;}
+  const objData=liveData.objectData;
+  if(!objData||!objData.hasObjectData){toast('No object data','Print-by-object not enabled','warning');return;}
+
+  showConfirm(
+    'Skip current object?',
+    'Skip object '+(( objData.currentObjectIdx||0)+1)+' of '+objData.totalObjects+' and move to next? This cannot be undone.',
+    async function(){
+      await piControl(printerName,'skip',{objectId:objData.currentObjectId});
+      toast('Object skipped','Printing next object','success');
+      openSkipRefundDialog(printerName,objData,liveData.mc_percent||0,liveData.totalFilamentEstimate||null);
+    },
+    'Skip Object','btn-gold'
+  );
+}
+
+function openSkipRefundDialog(printerName,objData,mcPercent,totalFilamentG){
+  const skippedIdx=objData.currentObjectIdx||0;
+  const total=objData.totalObjects||1;
+  const objList=objData.objectList||[];
+  const skippedObj=objList[skippedIdx]||{id:objData.currentObjectId,name:'Object '+(skippedIdx+1)};
+
+  // Estimate filament refund
+  const perObjFilament=skippedObj.filament_g||null;
+  const totalG=totalFilamentG||200;
+  const objFilament=perObjFilament||(totalG/total);
+  const completionFrac=(mcPercent||0)/100;
+  const usedG=Math.round(objFilament*completionFrac);
+  const refundG=Math.round(objFilament*(1-completionFrac));
+  const isProportional=!perObjFilament;
+
+  // Store refund data for confirm
+  window._skipRefund={printerName,skippedObj,mcPercent,objFilament,usedG,refundG,isProportional,skippedIdx};
+
+  const objName=skippedObj.name||('Object '+(skippedIdx+1));
+  const pctStr=Math.round(mcPercent)+'%';
+
+  document.getElementById('skip-refund-printer').textContent=printerName;
+  document.getElementById('skip-refund-pct').textContent=pctStr;
+  document.getElementById('skip-refund-name').textContent=objName;
+  document.getElementById('skip-refund-used').textContent=usedG+'g';
+  document.getElementById('skip-refund-total-g').textContent=Math.round(objFilament)+'g';
+  document.getElementById('skip-refund-amount').textContent='+'+refundG+'g';
+  document.getElementById('skip-refund-amount-total').textContent='+'+refundG+'g';
+  document.getElementById('skip-refund-warn').style.display=isProportional?'':'none';
+  document.getElementById('mod-skip-refund').style.display='flex';
+}
+
+function closeSkipRefund(){
+  document.getElementById('mod-skip-refund').style.display='none';
+  window._skipRefund=null;
+}
+
+async function confirmSkipRefund(){
+  const r=window._skipRefund;
+  if(!r){closeSkipRefund();return;}
+  // Log skipped object to the matching In Progress print record
+  const inProg=queueItems.find(function(q){return q.stage==='inprogress'&&q.printer===r.printerName;});
+  if(inProg&&inProg.printId){
+    prints=prints.map(function(p){
+      if(p.id!==inProg.printId)return p;
+      var skipped=(p.skippedObjects||[]).concat([{
+        objectId:r.skippedObj.id||null,
+        name:r.skippedObj.name||('Object '+(r.skippedIdx+1)),
+        estimatedGramsRefunded:r.refundG,
+        percentComplete:r.mcPercent,
+        isProportionalEstimate:r.isProportional,
+        skippedAt:new Date().toISOString()
+      }]);
+      return Object.assign({},p,{skippedObjects:skipped,filamentRefunded:(p.filamentRefunded||0)+r.refundG});
+    });
+    savePrints();
+  }
+  toast('Refund logged','+'+r.refundG+'g saved to print record','success');
+  closeSkipRefund();
 }
 
 // ── RENDER FUNCTIONS ──
@@ -13201,10 +13426,12 @@ function renderPrinters(){
             '<div><div style="font-size:6px;color:var(--txt-d);letter-spacing:1px">LAYERS</div><div style="font-size:8px;color:var(--txt-b)" id="pi-'+id+'-layer">—</div></div>'+
           '</div>'+
           '<div style="margin-bottom:6px" id="pi-'+id+'-ams"></div>'+
+          '<div id="pi-'+id+'-obj-info" style="display:none;font-size:7px;color:var(--txt-d);margin-bottom:5px"></div>'+
           '<div style="display:flex;gap:5px;flex-wrap:wrap">'+
             '<button id="pi-'+id+'-btn-pause" class="btn btn-ghost btn-xs" onclick="piControl(\''+esc(p.name)+'\',\'pause\')" style="'+(state!=='RUNNING'?'opacity:0.4;pointer-events:none':'')+'">⏸ Pause</button>'+
             '<button id="pi-'+id+'-btn-resume" class="btn btn-ghost btn-xs" onclick="piControl(\''+esc(p.name)+'\',\'resume\')" style="'+(state!=='PAUSE'?'opacity:0.4;pointer-events:none':'')+'">▶ Resume</button>'+
             '<button id="pi-'+id+'-btn-stop" class="btn btn-xs" style="background:var(--red-d);border:1px solid var(--red-d);color:var(--red-b);'+(isActive?'':'opacity:0.4;pointer-events:none')+'" onclick="showConfirm(\'Stop print on '+esc(p.name)+'?\',\'This cannot be undone.\',function(){piControl(\''+esc(p.name)+'\',\'stop\')})">⏹ Stop</button>'+
+            '<button id="pi-'+id+'-btn-skip" class="btn btn-ghost btn-xs" style="display:none;color:var(--gold);border-color:var(--gold-d)" onclick="handleSkipObject(\''+esc(p.name)+'\')">⏭ Skip Object</button>'+
             (getCameraUrl(p.name)?'<button class="btn btn-ghost btn-xs" onclick="openCameraFeed(\''+esc(p.name)+'\')">📷 Camera</button>':'')+''+
           '</div>'+
         '</div>':'')+
