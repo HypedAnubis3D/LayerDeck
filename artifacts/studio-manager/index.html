@@ -9425,6 +9425,14 @@ function renderAmsMap(printerName,compact=false){
   return html;
 }
 
+// Per-printer AMS unit page state for dashboard (which unit is currently visible)
+var _dashAmsUnit={};
+function setDashAmsUnit(printerName,unitIdx){
+  _dashAmsUnit[printerName]=unitIdx;
+  var el=document.getElementById('dash-ams-'+piId(printerName));
+  if(el)el.innerHTML=renderAmsMapDash(printerName);
+}
+
 function renderAmsMapDash(printerName){
   const slots=amsMap[printerName]||{};
   const pr=printerRecords.find(function(p){return p.name===printerName;});
@@ -9434,26 +9442,28 @@ function renderAmsMapDash(printerName){
   const vtTray=livePr.vt_tray;
   const activeTrayId=piAms?String(piAms.tray_now||''):'';
 
-  // Build tray list: prefer Pi live structure, fall back to printerRecords slot count
-  var trays=[];
-  var hasPiDataDash=!!_liveMap[printerName]; // true = Pi Hub has data for this printer
+  // Build AMS unit groups: prefer Pi live structure, fall back to printerRecords slot count
+  var units=[];
+  var hasPiDataDash=!!_liveMap[printerName];
   if(piAms&&piAms.ams&&piAms.ams.length){
     piAms.ams.forEach(function(unit,ui){
-      (unit.tray||[]).forEach(function(t,ti){
-        trays.push({piTray:t,amsId:ui,trayId:ti,slotNum:trays.length+1});
-      });
+      var ut=[];
+      (unit.tray||[]).forEach(function(t,ti){ut.push({piTray:t,amsId:ui,trayId:ti,slotNum:ui*4+ti+1});});
+      if(ut.length)units.push({label:'AMS '+(ui+1),trays:ut});
     });
   }else if(!hasPiDataDash){
-    // Only fall back to configured slots when Pi Hub has NO data for this printer at all
-    // If Pi has data but ams.ams is empty → printer has no AMS, show ext spool instead
     var numSlots=Math.min((pr?pr.amsSlots:0)||0,16);
-    for(var i=0;i<numSlots;i++)trays.push({piTray:null,amsId:0,trayId:i,slotNum:i+1});
+    var numUnits=Math.max(1,Math.ceil(numSlots/4));
+    for(var u=0;u<numUnits;u++){
+      var ut=[];
+      for(var i=0;i<4&&u*4+i<numSlots;i++)ut.push({piTray:null,amsId:u,trayId:i,slotNum:u*4+i+1});
+      if(ut.length)units.push({label:'AMS '+(u+1),trays:ut});
+    }
   }
 
   // External/virtual spool fallback for printers with no AMS
-  // Detect by tray_type — tray_color can be 00000000 even when filament is loaded
   var hasExtData=!!(vtTray&&vtTray.tray_type);
-  if(!trays.length&&hasExtData){
+  if(!units.length&&hasExtData){
     var rawExtCol=(vtTray.tray_color||'').replace(/^#/,'');
     var extCol='#'+(rawExtCol&&rawExtCol!=='00000000'?rawExtCol.slice(0,6):'888888');
     var extMat=vtTray.tray_sub_brands||vtTray.tray_type||'?';
@@ -9469,18 +9479,19 @@ function renderAmsMapDash(printerName){
     +'</div>';
   }
 
-  if(!trays.length)return '<div style="font-size:9px;color:var(--txt-d);padding:6px 0;font-style:italic">No AMS configured</div>';
+  if(!units.length)return '<div style="font-size:9px;color:var(--txt-d);padding:6px 0;font-style:italic">No AMS configured</div>';
 
-  // Show first 4 slots as mini grid
-  var show=trays.slice(0,4);
-  return '<div class="ams-dash-grid">'+show.map(function(item){
+  // Current unit (stays stable across polling refreshes)
+  var curUnit=Math.min(_dashAmsUnit[printerName]||0,units.length-1);
+  var unit=units[curUnit];
+
+  var gridHtml='<div class="ams-dash-grid">'+unit.trays.map(function(item){
     var n=item.slotNum;
     var sp=slots[n]?spools.find(function(s){return s.id===slots[n];}):null;
     var piTray=item.piTray&&item.piTray.tray_type?item.piTray:null;
     var col=sp?sp.color:piTray?('#'+(piTray.tray_color||'888888').slice(0,6)):'var(--bdr2)';
     var p=sp?pct(sp):piTray?(piTray.remain||0):0;
     var bc=p>0?barcol(p):'var(--txt-d)';
-    // Resolve display name: full spool name for assigned spools; fuzzy color-match for Pi trays
     var dashMain,dashSub='';
     if(sp){dashMain=sp.name;dashSub=sp.material||'';}
     else if(piTray){
@@ -9498,6 +9509,20 @@ function renderAmsMapDash(printerName){
       (p>0?'<div class="ams-dash-pct" style="color:'+bc+'">'+p+'%</div>':'<div class="ams-dash-pct" style="color:var(--bdr2)">—</div>')+
     '</div>';
   }).join('')+'</div>';
+
+  // AMS unit navigation — only shown when printer has multiple AMS units
+  var navHtml='';
+  if(units.length>1){
+    navHtml='<div style="display:flex;align-items:center;justify-content:center;gap:4px;margin-top:5px" onclick="event.stopPropagation()">';
+    units.forEach(function(u,ui){
+      var isCur=ui===curUnit;
+      navHtml+='<div onclick="setDashAmsUnit(\''+esc(printerName)+'\','+ui+')" title="'+esc(u.label)+'" style="width:'+(isCur?'14':'7')+'px;height:7px;border-radius:4px;background:'+(isCur?'var(--gold)':'var(--bdr2)')+';cursor:pointer;transition:all .2s;flex-shrink:0"></div>';
+    });
+    navHtml+='<span style="font-size:6px;color:var(--txt-d);margin-left:2px">'+esc(unit.label)+'</span>';
+    navHtml+='</div>';
+  }
+
+  return gridHtml+navHtml;
 }
 
 function openExtSpoolModal(printerName){
