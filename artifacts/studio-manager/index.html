@@ -8884,14 +8884,15 @@ function startCountdown(){
 // AMS SLOT MAP
 // ════════════════════════════════════════
 
-// Get live Pi Hub tray data for a given 1-indexed slot
+// Get live Pi Hub tray data for a given 1-indexed slot (includes empty slots for correct positioning)
 function getPiHubTray(printerName, slotNum){
   const amsData=(piLiveData[printerName]||{}).ams;
   if(!amsData?.ams)return null;
-  // Flatten all trays across all AMS units in order
+  // Flatten ALL trays (including empty) to maintain correct positional index
   const all=[];
-  amsData.ams.forEach(unit=>(unit.tray||[]).forEach(t=>{if(t.tray_type)all.push(t);}));
-  return all[slotNum-1]||null;
+  amsData.ams.forEach(unit=>(unit.tray||[]).forEach(t=>all.push(t)));
+  const tray=all[slotNum-1]||null;
+  return (tray&&tray.tray_type)?tray:null; // null = empty slot
 }
 
 // Build a synthetic spool-like object from a Pi Hub tray (for display only)
@@ -8908,48 +8909,73 @@ function piTrayToDisplay(tray,activeTrayId){
 function renderAmsMap(printerName,compact=false){
   const slots=amsMap[printerName]||{};
   const pr=printerRecords.find(p=>p.name===printerName);
-  const numSlots=pr?pr.amsSlots:4;
-  // Fall back to Pi Hub tray count if no amsSlots configured
   const piAms=(piLiveData[printerName]||{}).ams;
-  const piSlotCount=piAms?piAms.ams.reduce((s,u)=>s+(u.tray||[]).filter(t=>t.tray_type).length,0):0;
-  const effectiveSlots=numSlots||piSlotCount||0;
-  if(!effectiveSlots)return '<div style="font-size:6px;color:var(--txt-d);padding:4px 0">No AMS configured</div>';
-  const count=Math.min(effectiveSlots,16);
   const activeTrayId=piAms?String(piAms.tray_now||''):'';
+
+  // Build AMS unit groups from Pi Hub if available, otherwise fall back to flat slot count
+  let units=[];
+  if(piAms&&piAms.ams&&piAms.ams.length){
+    let slotIdx=0;
+    piAms.ams.forEach((unit,ui)=>{
+      const trays=(unit.tray||[]).map((t,ti)=>{slotIdx++;return{tray:t,slotNum:slotIdx,unitIdx:ui};});
+      units.push({unitLabel:'AMS '+(ui+1),trays});
+    });
+  } else {
+    // Fall back to printerRecords amsSlots (no Pi Hub data)
+    const numSlots=(pr?pr.amsSlots:0)||4;
+    const trays=Array.from({length:Math.min(numSlots,16)},(_,i)=>({tray:null,slotNum:i+1,unitIdx:0}));
+    units=[{unitLabel:'',trays}];
+  }
+
+  const totalSlots=units.reduce((s,u)=>s+u.trays.length,0);
+  if(!totalSlots) return '<div style="font-size:6px;color:var(--txt-d);padding:4px 0">No AMS configured</div>';
+  const multiUnit=units.length>1;
+
   if(compact){
-    return '<div class="ams-map-compact">'+Array.from({length:count},(_,i)=>{
-      const n=i+1;
+    const allTrays=units.flatMap(u=>u.trays);
+    return '<div class="ams-map-compact">'+allTrays.map(({tray,slotNum})=>{
+      const n=slotNum;
       const sp=slots[n]?spools.find(s=>s.id===slots[n]):null;
-      const piTray=sp?null:getPiHubTray(printerName,n);
+      const piTray=sp?null:(tray&&tray.tray_type?tray:null);
       const col=sp?sp.color:piTray?('#'+(piTray.tray_color||'888888').slice(0,6)):'var(--bdr2)';
       const tip=sp?('Slot '+n+': '+sp.name+' ('+pct(sp)+'%)')
-                :piTray?('Slot '+n+': '+(piTray.tray_sub_brands||piTray.tray_type)+' [Pi Hub]')
+                :piTray?('Slot '+n+': '+(piTray.tray_sub_brands||piTray.tray_type)+' [Pi]')
                 :('Slot '+n+': Empty');
       return '<div class="ams-slot-compact" style="background:'+col+'" onclick="openAmsModal(\''+esc(printerName)+'\','+n+')"><div class="ams-tooltip">'+tip+'</div></div>';
     }).join('')+'</div>';
   }
-  return '<div class="ams-map">'+Array.from({length:count},(_,i)=>{
-    const n=i+1;
-    const sp=slots[n]?spools.find(s=>s.id===slots[n]):null;
-    const piTray=sp?null:getPiHubTray(printerName,n);
-    const disp=sp||piTrayToDisplay(piTray,activeTrayId);
-    const fromPi=!sp&&!!piTray;
-    const p=disp?(sp?pct(sp):(disp.remain||0)):0;
-    const bc=disp?barcol(p):'var(--bdr2)';
-    const col=disp?disp.color:'var(--bdr2)';
-    const isActive=fromPi&&disp&&disp.isActive;
-    const activeRing=isActive?'box-shadow:0 0 0 2px var(--grn),0 0 6px '+col+'55;':'box-shadow:0 0 6px '+col+'55;';
-    return '<div class="ams-slot'+(disp?'':' empty')+'" onclick="openAmsModal(\''+esc(printerName)+'\','+n+')" style="'+(disp?'background:'+col+'18;border-color:'+col+(fromPi?'66':'44'):'')+'">'+
-      '<div class="ams-slot-num">Slot '+n+(fromPi?' ·':''+(isActive?' ▶':''))+'</div>'+
-      '<div class="ams-slot-dot" style="background:'+col+';'+(disp?activeRing:'')+'"></div>'+
-      (disp?
-        '<div class="ams-slot-name">'+esc((fromPi?(piTray.tray_sub_brands||piTray.tray_type):disp.name.split(' ').slice(-1)[0]))+
-          (isActive?'<span style="color:var(--grn);margin-left:2px">▶</span>':'')+'</div>'+
-        (p>0?'<div class="ams-slot-pct" style="color:'+bc+'">'+p+'%</div>'+
-          '<div class="ams-slot-bar"><div class="ams-slot-bar-fill" style="width:'+p+'%;background:'+bc+'"></div></div>':'')
-      :'<div style="font-size:6px;color:var(--bdr2);letter-spacing:1px">EMPTY</div>')+
+
+  // Full expanded view — render each AMS unit as a labelled row of 4
+  let html='<div style="display:grid;gap:8px">';
+  units.forEach(unit=>{
+    const label=multiUnit?('<div style="font-size:6px;color:var(--gold-b);letter-spacing:1.5px;font-weight:700;margin-bottom:4px">'+esc(unit.unitLabel)+'</div>'):'';
+    const slotsHtml='<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:5px">'+
+      unit.trays.map(({tray,slotNum})=>{
+        const n=slotNum;
+        const sp=slots[n]?spools.find(s=>s.id===slots[n]):null;
+        const piTray=sp?null:(tray&&tray.tray_type?tray:null);
+        const disp=sp||(piTray?piTrayToDisplay(piTray,activeTrayId):null);
+        const fromPi=!sp&&!!piTray;
+        const p=disp?(sp?pct(sp):(disp.remain||0)):0;
+        const bc=disp?barcol(p):'var(--txt-d)';
+        const col=disp?disp.color:'transparent';
+        const isActive=fromPi&&disp&&disp.isActive;
+        const matName=disp?(fromPi?(piTray.tray_sub_brands||piTray.tray_type||'?'):disp.name.split(' ').pop()):'';
+        return '<div class="ams-slot'+(disp?'':' empty')+'" onclick="openAmsModal(\''+esc(printerName)+'\','+n+')" style="'+(disp?'background:'+col+'22;border-color:'+col+(isActive?';box-shadow:0 0 0 2px var(--grn)':''):'')+'">'+
+          '<div class="ams-slot-num">'+n+(fromPi&&!isActive?' ·':isActive?' ▶':'')+'</div>'+
+          // Big color dot — the hero element
+          '<div style="width:26px;height:26px;border-radius:50%;background:'+col+';border:2px solid '+(disp?'rgba(255,255,255,0.3)':'var(--bdr2)')+';flex-shrink:0;'+(isActive?'box-shadow:0 0 0 2px var(--grn),0 0 8px '+col+'88':'')+'"></div>'+
+          (disp?
+            '<div class="ams-slot-name">'+esc(matName)+(isActive?'<span style="color:var(--grn)"> ▶</span>':'')+'</div>'+
+            (p>0?'<div class="ams-slot-pct" style="color:'+bc+'">'+p+'%</div><div class="ams-slot-bar"><div class="ams-slot-bar-fill" style="width:'+p+'%;background:'+bc+'"></div></div>':'')
+          :'<div style="font-size:6px;color:var(--bdr2);letter-spacing:1px">EMPTY</div>')+
+        '</div>';
+      }).join('')+
     '</div>';
-  }).join('')+'</div>';
+    html+=label+slotsHtml;
+  });
+  html+='</div>';
+  return html;
 }
 
 function renderAmsMapDash(printerName){
@@ -12662,11 +12688,12 @@ const STATE_COLORS={
   IDLE:    'var(--txt-d)',
   RUNNING: 'var(--grn)',
   PAUSE:   'var(--gold)',
+  PAUSED:  'var(--gold)',
   FAILED:  'var(--red)',
   FINISH:  'var(--cyn)',
   OFFLINE: '#555'
 };
-const STATE_LABELS={IDLE:'IDLE',RUNNING:'PRINTING',PAUSE:'PAUSED',FAILED:'FAILED',FINISH:'FINISHED',OFFLINE:'OFFLINE'};
+const STATE_LABELS={IDLE:'IDLE',RUNNING:'PRINTING',PAUSE:'PAUSED',PAUSED:'PAUSED',FAILED:'FAILED',FINISH:'FINISHED',OFFLINE:'OFFLINE'};
 
 // ── Default config (your Pi — pre-seeded, editable via Setup) ──
 const PI_DEFAULTS={
@@ -13051,9 +13078,10 @@ function updatePrinterCardLive(name,data,state){
       btn.style.pointerEvents=enabled?'auto':'none';
     });
   };
-  const isActive=state==='RUNNING'||state==='PAUSE';
+  const isPaused=state==='PAUSE'||state==='PAUSED';
+  const isActive=state==='RUNNING'||isPaused;
   setBtn('pause', state==='RUNNING');
-  setBtn('resume',state==='PAUSE');
+  setBtn('resume',isPaused);
   setBtn('stop',  isActive);
 }
 
@@ -13134,7 +13162,7 @@ function renderPrinters(){
     const state=liveData?(piPrevStates[p.name]?.gcode_state||'IDLE'):'—';
     const stateColor=STATE_COLORS[state]||'var(--txt-d)';
     const stateLabel=STATE_LABELS[state]||state;
-    const isActive=state==='RUNNING'||state==='PAUSE';
+    const isActive=state==='RUNNING'||state==='PAUSE'||state==='PAUSED';
 
     // Live badge in header
     const liveBadge=piHubConfig&&liveData!=null?
