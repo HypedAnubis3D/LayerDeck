@@ -13410,7 +13410,7 @@ function openPiHubSetup(){
         '<input class="srch" placeholder="Hub key (e.g. P1 Room)" value="'+esc(p.hubName||p.name||'')+'" id="pi-phub-'+i+'" title="The exact key your Pi Hub uses — check Pi Hub → /status response"/>'+
         '<input class="srch" placeholder="IP (192.168.x.x)" value="'+esc(p.ip||'')+'" id="pi-pip-'+i+'"/>'+
         '<input class="srch" placeholder="Access code" value="'+esc(p.accessCode||'')+'" id="pi-pacc-'+i+'"/>'+
-        '<input class="srch" placeholder="Camera stream (e.g. p1_room)" value="'+esc((existing.cameras&&existing.cameras[p.name])||'')+'" id="pi-pcam-'+i+'" style="grid-column:1/-1"/>'+
+        '<input class="srch" placeholder="go2rtc stream name (e.g. camera_a1)" value="'+esc((existing.cameras&&existing.cameras[p.name])||'')+'" id="pi-pcam-'+i+'" style="grid-column:1/-1"/>'+
       '</div>'+
     '</div>'
   ).join('');
