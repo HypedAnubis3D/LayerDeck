@@ -13593,11 +13593,13 @@ async function onPiPrintStarted(name,data){
 
     // ── Populate piTmfObjData from matched 3MF library entry ──
     // If MQTT obj_list is empty, use the library's per-plate object names for display
+    // subtask_name may be "ProjectName_plate_2" — strip _plate_N for the base-name match too
     var jLow2=(jobName||'').replace(/_/g,' ').toLowerCase().trim();
+    var jLow2Base=jLow2.replace(/\s+plate\s+\d+$/i,'').trim();
     var matchedTmf=tmfLib.find(function(t){
       var tName=(t.name||'').toLowerCase().trim();
       var tFile=(t.filename||'').replace(/\.gcode\.3mf$/i,'').replace(/\.3mf$/i,'').replace(/_/g,' ').toLowerCase().trim();
-      return tName===jLow2||tFile===jLow2;
+      return tName===jLow2||tFile===jLow2||tName===jLow2Base||tFile===jLow2Base;
     });
     if(matchedTmf){
       // Determine which plate — subtask_name often ends in _plate_N
@@ -13748,6 +13750,7 @@ async function onPiPrintFinished(name,data){
   toast('✅ '+name+' finished',jobName,'success',6000);
   piPrintStartTimes[name]=null;
   piAmsStartRemain[name]={};
+  piTmfObjData[name]=null;
   postToDiscord('print_complete',
     '✅ Print Complete — '+name+'\nJob: '+jobName+'\nDuration: '+fmtMins(durationMins)+'\nFilament: ~'+(filamentSlots.reduce(function(a,s){return a+s.grams;},0)||gramsUsed)+'g '+material);
 }
@@ -13766,6 +13769,7 @@ async function onPiPrintFailed(name,data){
   render();
   toast('⚠️ '+name+' FAILED',jobName,'error',8000);
   piPrintStartTimes[name]=null;
+  piTmfObjData[name]=null;
   postToDiscord('print_failed',
     '❌ Print Failed — '+name+'\nJob: '+jobName+'\nTime into print: '+fmtMins(durationMins)+'\nMaterial: '+material);
 }
@@ -14052,14 +14056,14 @@ function updatePrinterCardLive(name,data,state){
   setBtn('resume',isPaused);
   setBtn('stop',  isActive);
 
-  // Skip Object button — show when active AND object data is present.
-  // Two sources: parsed objectData from Pi server (Section 30), OR raw obj_list/s_obj
-  // fields that Bambu merges into the top-level state via pushall.  The fallback means
-  // this works even when running an older Pi server that lacks Section 30.
+  // Skip Object button — show when active AND LIVE object data is present.
+  // Three sources in priority order:
+  //   1. server-computed objectData from Pi Hub (parsed from MQTT pushall)
+  //   2. raw obj_list/s_obj fields from MQTT
+  //   3. piTmfObjData[name] — object names extracted from uploaded 3MF library (display-only)
   var _rawObjList=Array.isArray(data.obj_list)?data.obj_list:[];
   var _sObj=typeof data.s_obj==='number'?data.s_obj:0;
   var objData=data.objectData||null;
-  // Build effective object data: prefer server-computed, fall back to raw fields
   var effectiveObjData=null;
   if(objData&&objData.hasObjectData===true){
     effectiveObjData=objData;
@@ -14072,19 +14076,33 @@ function updatePrinterCardLive(name,data,state){
       totalObjects:     _rawObjList.length,
       rawSOBJ:          _sObj
     };
+  }else{
+    // Fallback: 3MF library object data — display only, no skip IDs
+    var _tmfObjD=(typeof piTmfObjData!=='undefined')?piTmfObjData[name]:null;
+    if(_tmfObjD&&_tmfObjD.totalObjects>0)effectiveObjData=_tmfObjD;
   }
+  var hasLiveObjData=!!(effectiveObjData&&!effectiveObjData.fromTmf);
   var hasObjData=!!effectiveObjData;
+  // Skip button only shown for LIVE MQTT data (needs object IDs for the skip command)
   allId('btn-skip').forEach(function(btn){
-    btn.style.display=(isActive&&hasObjData)?'':'none';
+    btn.style.display=(isActive&&hasLiveObjData)?'':'none';
   });
-  // Object info line (also shows hint when printing local/SD and "by object" data is absent)
+  // Object info line — show name list, with note when sourced from library
   allId('obj-info').forEach(function(el){
     if(isActive&&hasObjData&&effectiveObjData.totalObjects>0){
-      var objIdx=(effectiveObjData.currentObjectIdx||0)+1;
       var total=effectiveObjData.totalObjects||0;
-      var objName=effectiveObjData.objectList&&effectiveObjData.objectList[effectiveObjData.currentObjectIdx||0]?
-        effectiveObjData.objectList[effectiveObjData.currentObjectIdx||0].name||'':'';
-      el.innerHTML='Object '+objIdx+' of '+total+(objName?' — <em>'+esc(objName)+'</em>':'');
+      if(effectiveObjData.fromTmf){
+        // Library data: list all object names without current-index tracking
+        var nameList=effectiveObjData.objectList.map(function(o){return esc(o.name);}).join(', ');
+        var plLabel=effectiveObjData.plateName?(' · '+esc(effectiveObjData.plateName)):'';
+        el.innerHTML='📦 '+total+' objects'+plLabel+': <em>'+nameList+'</em> <span style="color:var(--txt-d)">(from 3MF library — live tracking unavailable)</span>';
+        el.style.color='';
+      }else{
+        var objIdx=(effectiveObjData.currentObjectIdx||0)+1;
+        var objName=effectiveObjData.objectList&&effectiveObjData.objectList[effectiveObjData.currentObjectIdx||0]?
+          effectiveObjData.objectList[effectiveObjData.currentObjectIdx||0].name||'':'';
+        el.innerHTML='Object '+objIdx+' of '+total+(objName?' — <em>'+esc(objName)+'</em>':'');
+      }
       el.style.display='';
       el.style.color='';
     }else if(isActive){
