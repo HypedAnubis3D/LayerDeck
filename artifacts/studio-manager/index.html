@@ -13289,16 +13289,18 @@ function openCameraFeed(printerName){
         wrongUrlBanner+
         '<div style="font-size:8px;font-weight:700;color:var(--txt-b);margin-bottom:12px">Stream: <span style="color:var(--cyn)">'+esc(stream)+'</span></div>'+
         '<div style="font-size:8px;color:var(--txt-d);margin-bottom:8px;line-height:1.6">'+
-          'LayerDeck proxies camera streams through its own server so there\'s no mixed-content issue. '+
-          'You just need go2rtc\'s Tailscale Funnel URL — run this on your Pi:'+
+          'Run these on your Pi to serve both the Pi Hub and go2rtc under one URL:'+
         '</div>'+
         '<div style="background:rgba(0,0,0,0.35);border:1px solid var(--bdr);border-radius:5px;padding:10px;margin-bottom:12px">'+
-          '<div style="'+mono+'">sudo tailscale funnel --bg 1984</div>'+
-          '<div style="'+mono+';color:var(--txt-d);margin-top:6px"># Copy the https://… URL it prints</div>'+
-          '<div style="'+mono+';color:var(--txt-d)"># Paste into Pi Hub Setup → Camera Server URL</div>'+
-        '</div>'+
-        '<div style="font-size:7px;color:var(--txt-d);margin-bottom:12px;line-height:1.6">'+
-          'Note: if your Pi Hub is also using a Tailscale Funnel on port 3000, running a second funnel on 1984 may replace it. In that case, use Tailscale Serve to combine both under one URL (ask for instructions).'+
+          '<div style="'+mono+'">sudo tailscale funnel reset</div>'+
+          '<div style="'+mono+'">sudo tailscale serve --bg \\</div>'+
+          '<div style="'+mono+';padding-left:12px">--set-path /hub http://localhost:3000</div>'+
+          '<div style="'+mono+'">sudo tailscale serve --bg \\</div>'+
+          '<div style="'+mono+';padding-left:12px">--set-path /camera http://localhost:1984</div>'+
+          '<div style="'+mono+'">sudo tailscale funnel --bg 443</div>'+
+          '<div style="'+mono+';color:var(--txt-d);margin-top:8px"># Then in Pi Hub Setup:</div>'+
+          '<div style="'+mono+';color:var(--txt-d)"># Pi Hub URL → https://layerdeck-hub.tail5636e6.ts.net/hub</div>'+
+          '<div style="'+mono+';color:var(--txt-d)"># Camera URL → https://layerdeck-hub.tail5636e6.ts.net/camera</div>'+
         '</div>'+
         '<button class="btn btn-gold btn-sm" onclick="document.getElementById(\'camera-modal\').remove();openPiHubSetup()">⚙ Open Pi Hub Setup</button>'+
       '</div>'+
