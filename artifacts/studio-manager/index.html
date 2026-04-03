@@ -9157,14 +9157,16 @@ function renderAmsMap(printerName,compact=false){
 
   // Build AMS unit groups from Pi Hub if available, otherwise fall back to flat slot count
   let units=[];
+  const hasPiData=!!piLiveData[printerName]; // true = Pi Hub connected & has data for this printer
   if(piAms&&piAms.ams&&piAms.ams.length){
     let slotIdx=0;
     piAms.ams.forEach((unit,ui)=>{
       const trays=(unit.tray||[]).map((t,ti)=>{slotIdx++;return{tray:t,slotNum:slotIdx,unitIdx:ui,trayIdx:ti};});
       units.push({unitLabel:'AMS '+(ui+1),trays});
     });
-  } else {
-    // Fall back to printerRecords amsSlots (no Pi Hub data)
+  } else if(!hasPiData){
+    // Only fall back to configured slot count when Pi Hub has NO data at all for this printer
+    // (when Pi has data but ams.ams is empty, the printer has no AMS — show ext spool instead)
     const numSlots=(pr?pr.amsSlots:0)||0;
     if(numSlots>0){
       const trays=Array.from({length:Math.min(numSlots,16)},(_,i)=>({tray:null,slotNum:i+1,unitIdx:0,trayIdx:i}));
@@ -9279,13 +9281,16 @@ function renderAmsMapDash(printerName){
 
   // Build tray list: prefer Pi live structure, fall back to printerRecords slot count
   var trays=[];
+  var hasPiDataDash=!!_liveMap[printerName]; // true = Pi Hub has data for this printer
   if(piAms&&piAms.ams&&piAms.ams.length){
     piAms.ams.forEach(function(unit,ui){
       (unit.tray||[]).forEach(function(t,ti){
         trays.push({piTray:t,amsId:ui,trayId:ti,slotNum:trays.length+1});
       });
     });
-  }else{
+  }else if(!hasPiDataDash){
+    // Only fall back to configured slots when Pi Hub has NO data for this printer at all
+    // If Pi has data but ams.ams is empty → printer has no AMS, show ext spool instead
     var numSlots=Math.min((pr?pr.amsSlots:0)||0,16);
     for(var i=0;i<numSlots;i++)trays.push({piTray:null,amsId:0,trayId:i,slotNum:i+1});
   }
@@ -13974,11 +13979,18 @@ function renderPrinters(){
   }
 
   const printerCards=printerRecords.map(p=>{
-    const amsUnits=p.amsUnits||1;
+    const amsUnits=p.amsUnits!==undefined?p.amsUnits:1;
     const totalSlots=amsUnits*4;
     const expanded=p._expanded||false;
     const id=piId(p.name);
     const liveData=piLiveData[p.name];
+    // Determine AMS display: prefer live Pi Hub data over configured value
+    const liveAmsArr=liveData&&liveData.ams?liveData.ams.ams:undefined;
+    const liveHasAms=Array.isArray(liveAmsArr)&&liveAmsArr.length>0;
+    const liveHasExt=liveData&&!liveHasAms&&liveData.vt_tray&&liveData.vt_tray.tray_type;
+    const amsDisplay=liveData
+      ?(liveHasAms?liveAmsArr.length+' AMS ('+liveAmsArr.length*4+' slots)':(liveHasExt?'Ext Spool':'No AMS'))
+      :(amsUnits?amsUnits+' AMS ('+totalSlots+' slots)':'No AMS');
     const state=liveData?(piPrevStates[p.name]?.gcode_state||'IDLE'):'—';
     const stateColor=STATE_COLORS[state]||'var(--txt-d)';
     const stateLabel=STATE_LABELS[state]||state;
@@ -13994,8 +14006,7 @@ function renderPrinters(){
       '<div style="display:flex;align-items:center;gap:10px;cursor:pointer" onclick="togglePrinterCard(\''+p.id+'\')">'+
         '<div style="flex:1">'+
           '<div class="printer-card-name">'+esc(p.name)+'</div>'+
-          '<div class="printer-card-model" style="font-size:7px;color:var(--txt-d)">'+esc(p.model||'—')+' · '+amsUnits+' AMS ('+totalSlots+' slots) · '+p.nozzle+'mm'+
-            (piHubConfig?'':'') +
+          '<div class="printer-card-model" style="font-size:7px;color:var(--txt-d)">'+esc(p.model||'—')+' · '+amsDisplay+' · '+p.nozzle+'mm'+
           '</div>'+
         '</div>'+
         '<div style="display:flex;gap:6px;align-items:center">'+
