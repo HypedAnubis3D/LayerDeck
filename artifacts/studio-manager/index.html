@@ -13173,6 +13173,93 @@ async function onPiPrintFailed(name,data){
     '❌ Print Failed — '+name+'\nJob: '+jobName+'\nTime into print: '+fmtMins(durationMins)+'\nMaterial: '+material);
 }
 
+// ── HMS code → human readable description ────────────────────────────────────
+var HMS_CODES={
+  // Filament / AMS
+  '0C000001':'AMS out of filament — slot empty',
+  '0C00001E':'AMS filament runout',
+  '0C00000F':'AMS filament feed failure',
+  '0C000016':'AMS cannot detect filament at slot',
+  '0C00000A':'AMS filament tangled — motor stalled',
+  '0C00000B':'AMS filament jammed',
+  '0C000009':'AMS spool holder failure',
+  '0C000019':'AMS slot out of sync',
+  '07008001':'External spool out of filament',
+  '07000006':'Filament runout (external)',
+  // Hotend / extruder / nozzle
+  '05000003':'Nozzle clog detected',
+  '05000004':'Nozzle temperature out of range',
+  '05000006':'Nozzle thermistor failure',
+  '05000001':'Hotend temperature too high',
+  '0500000E':'Hotend fan failure',
+  '0700000F':'Extruder motor stalled',
+  '07000009':'First layer inspection failed (spaghetti detected)',
+  '0700000C':'Print head collision detected',
+  '07000017':'Cutter jammed',
+  // Door / enclosure
+  '03000001':'Front door opened during print',
+  '03000002':'Upper door opened during print',
+  '03000004':'Cover knocked off / enclosure open',
+  // Bed / axes
+  '01000001':'Heatbed temperature out of range',
+  '01000003':'Heatbed thermistor failure',
+  '02000001':'Z-axis motor stalled',
+  '02000003':'Z-axis limit switch fault',
+  '04000001':'X-axis motor stalled',
+  '04000002':'Y-axis motor stalled',
+  // Generic
+  '00000001':'Vibration too high',
+  '00000002':'Enclosure temperature too high',
+};
+
+function hmsCodeToString(entry){
+  if(!entry)return 'Unknown error';
+  var code=entry.code||entry.attr||0;
+  var hex=code.toString(16).toUpperCase().padStart(8,'0');
+  var key=hex.slice(0,8);
+  return HMS_CODES[key]||HMS_CODES[hex]||('Error code 0x'+hex);
+}
+
+// ── Pause alert (RUNNING → PAUSE transition) ──────────────────────────────────
+async function onPiPrintPaused(name,data){
+  var jobName=(data.subtask_name||'').replace('.gcode.3mf','').replace('.3mf','')||'Unknown';
+  var pct=data.mc_percent||0;
+  var reason='';
+  // Surface most recent HMS if present
+  if(data.hms&&data.hms.length>0){
+    reason='\nReason: '+hmsCodeToString(data.hms[data.hms.length-1]);
+  }
+  toast('⏸ '+name+' PAUSED',jobName+' — needs attention','warning',8000);
+  postToDiscord('print_failed',
+    '⏸ Print Paused — '+name+
+    '\nJob: '+jobName+
+    '\nProgress: '+pct+'%'+
+    reason+
+    '\nCheck printer — manual intervention required');
+}
+
+// ── HMS / hardware alert ──────────────────────────────────────────────────────
+async function onPiHmsAlert(name,data,newEntries){
+  if(!newEntries||newEntries.length===0)return;
+  var jobName=(data.subtask_name||'').replace('.gcode.3mf','').replace('.3mf','')||'Unknown';
+  var descriptions=newEntries.map(hmsCodeToString);
+
+  // Deduplicate: only fire if this exact description hasn't been alerted in the last 5 minutes
+  var alertKey='hms_'+name+'_'+descriptions.join(',');
+  var now=Date.now();
+  if(window._hmsLastAlerted&&window._hmsLastAlerted[alertKey]&&now-window._hmsLastAlerted[alertKey]<5*60*1000)return;
+  if(!window._hmsLastAlerted)window._hmsLastAlerted={};
+  window._hmsLastAlerted[alertKey]=now;
+
+  var lines=['⚠️ Printer Alert — '+name];
+  if(jobName&&jobName!=='Unknown')lines.push('Job: '+jobName);
+  descriptions.forEach(function(d){lines.push('• '+d);});
+  lines.push('Printer paused — check for filament or hardware issue');
+
+  toast('⚠️ '+name,descriptions[0],'warning',8000);
+  postToDiscord('print_failed',lines.join('\n'));
+}
+
 function incrementPrinterStat(name,field){
   const pr=printerRecords.find(p=>p.name===name);
   if(!pr)return;
@@ -13228,6 +13315,15 @@ async function fetchPiStatus(){
         if(curState==='RUNNING')  onPiPrintStarted(name,p);
         if(curState==='FINISH')   onPiPrintFinished(name,p);
         if(curState==='FAILED')   onPiPrintFailed(name,p);
+        if((curState==='PAUSE'||curState==='PAUSED')&&(prevState==='RUNNING'))
+          onPiPrintPaused(name,p);
+      }
+
+      // HMS (Hardware Message System) alert detection — fires on new entries
+      var prevHms=prev.hms||[];
+      var curHms=p.hms||[];
+      if(curHms.length>prevHms.length){
+        onPiHmsAlert(name,p,curHms.slice(prevHms.length));
       }
 
       piPrevStates[name]={...p,gcode_state:curState};
