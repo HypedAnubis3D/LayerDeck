@@ -296,4 +296,44 @@ app.get('/health', (req, res) => {
   });
 });
 
+// POST /health/cron — update the pi-health.js crontab frequency from LayerDeck
+app.post('/health/cron', (req, res) => {
+  const { frequency } = req.body; // '5' | '15' | '30' | '60' | 'off'
+  const { execSync } = require('child_process');
+
+  const valid = ['5', '15', '30', '60', 'off'];
+  if (!valid.includes(String(frequency))) {
+    return res.status(400).json({ error: 'Invalid frequency. Use: 5, 15, 30, 60, off' });
+  }
+
+  try {
+    let currentCron = '';
+    try { currentCron = execSync('crontab -l', { encoding: 'utf8' }); }
+    catch (e) { currentCron = ''; }
+
+    // Remove existing pi-health.js entries so we can cleanly re-add them
+    const lines = currentCron
+      .split('\n')
+      .filter(l => !l.includes('pi-health.js') && l.trim() !== '');
+
+    // Always keep the daily 7AM health report (even when frequency is 'off')
+    lines.push('0 7 * * * node ~/bambu-hub/pi-health.js daily');
+
+    // Add the polling interval entry unless disabled
+    if (frequency !== 'off') {
+      const expr = frequency === '60' ? '0 * * * *' : `*/${frequency} * * * *`;
+      lines.push(`${expr} node ~/bambu-hub/pi-health.js`);
+    }
+
+    const newCron = lines.join('\n') + '\n';
+    execSync(`echo "${newCron.replace(/"/g, '\\"')}" | crontab -`);
+
+    console.log(`Health check frequency updated: ${frequency}`);
+    res.json({ ok: true, frequency });
+  } catch (e) {
+    console.error('Failed to update crontab:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.listen(PI_PORT, () => console.log(`🚀 LayerDeck Hub on port ${PI_PORT}`));

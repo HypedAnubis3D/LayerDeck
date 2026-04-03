@@ -72,4 +72,27 @@ router.post('/control', async (req, res) => {
   }
 });
 
+// Proxy health-cron update to Pi Hub
+router.post('/health-cron', async (req, res) => {
+  const hubUrl = req.query.hub as string;
+  if (!hubUrl) return res.status(400).json({ error: 'Missing hub URL' });
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 7500);
+    const upstream = await fetch(`${hubUrl}/health/cron`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(req.body),
+      signal: controller.signal,
+    });
+    clearTimeout(timer);
+    const data = await upstream.json().catch(() => ({ ok: true }));
+    return res.json(data);
+  } catch (e: any) {
+    const { hint, code } = classifyError(e);
+    logger.warn({ err: e?.message, cause: e?.cause?.message }, '[PiHub] health-cron proxy failed');
+    return res.status(502).json({ error: 'Pi Hub unreachable', code, hint });
+  }
+});
+
 export default router;

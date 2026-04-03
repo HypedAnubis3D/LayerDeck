@@ -13942,6 +13942,18 @@ function renderDiscord(){
       '</div>'+
     '</div>'+
     '<div class="printer-card">'+
+      '<div style="font-family:\'Orbitron\',monospace;font-size:9px;font-weight:700;color:var(--gold-b);letter-spacing:2px;margin-bottom:8px">🍓 PI HEALTH CHECK FREQUENCY</div>'+
+      '<div style="font-size:7px;color:var(--txt-d);margin-bottom:10px">How often the Pi checks its own services and posts to #pi-health. The daily 7AM summary always runs regardless of this setting.</div>'+
+      '<div style="display:flex;align-items:center;gap:8px">'+
+        '<select onchange="setHealthCronFrequency(this.value)" style="flex:1;font-size:8px;background:var(--bg);border:1px solid var(--bdr);border-radius:4px;color:var(--txt-b);padding:5px 8px">'+
+          ['5','15','30','60','off'].map(function(v){
+            var labels={'5':'Every 5 minutes','15':'Every 15 minutes','30':'Every 30 minutes','60':'Every hour','off':'Off (daily 7AM report only)'};
+            return '<option value="'+v+'"'+(discordCfg.piHealthFreq===v?' selected':'')+'>'+labels[v]+'</option>';
+          }).join('')+
+        '</select>'+
+      '</div>'+
+    '</div>'+
+    '<div class="printer-card">'+
       '<div style="font-family:\'Orbitron\',monospace;font-size:9px;font-weight:700;color:var(--gold-b);letter-spacing:2px;margin-bottom:10px">⚡ ALERT ROUTING</div>'+
       '<div style="font-size:7px;color:var(--txt-d);margin-bottom:8px">Control which alerts fire and where they go. Uncheck to silence an alert type entirely.</div>'+
       routingRows+
@@ -13971,12 +13983,13 @@ const DISCORD_DEFAULT_ROUTING={
   low_spool:       {enabled:true,channel:'stock-alerts'},
   daily_report:    {enabled:true,channel:'daily-report'},
 };
-let discordCfg={channels:DISCORD_DEFAULT_CHANNELS.map(c=>({...c})),routing:{...DISCORD_DEFAULT_ROUTING}};
+let discordCfg={channels:DISCORD_DEFAULT_CHANNELS.map(c=>({...c})),routing:{...DISCORD_DEFAULT_ROUTING},piHealthFreq:'5'};
 function loadDiscord(){
   const stored=gs(KEYS.discord);
   if(stored){
     discordCfg.channels=stored.channels||DISCORD_DEFAULT_CHANNELS.map(c=>({...c}));
     discordCfg.routing=stored.routing||{...DISCORD_DEFAULT_ROUTING};
+    discordCfg.piHealthFreq=stored.piHealthFreq||'5';
     DISCORD_DEFAULT_CHANNELS.forEach(def=>{
       if(!discordCfg.channels.find(c=>c.key===def.key))discordCfg.channels.push({...def});
     });
@@ -14099,6 +14112,28 @@ function saveDiscordRouting(type,field,value){
   if(!discordCfg.routing[type])discordCfg.routing[type]={enabled:true,channel:'print-alerts'};
   discordCfg.routing[type][field]=field==='enabled'?value:value;
   saveDiscord();
+}
+async function setHealthCronFrequency(freq){
+  discordCfg.piHealthFreq=freq;
+  saveDiscord();
+  const piUrl=getPiUrl();
+  if(!piUrl){toast('Pi Hub not configured','Frequency saved locally — connect Pi Hub to sync.','warning');return;}
+  try{
+    const r=await fetch('/api/pihub/health-cron?hub='+encodeURIComponent(piUrl),{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({frequency:freq})
+    });
+    const j=await r.json().catch(()=>({}));
+    if(r.ok&&j.ok){
+      const labels={'5':'every 5 min','15':'every 15 min','30':'every 30 min','60':'every hour','off':'disabled'};
+      toast('Pi health check updated',labels[freq]||freq,'success');
+    }else{
+      toast('Saved locally','Could not reach Pi Hub to update crontab: '+(j.error||r.status),'warning');
+    }
+  }catch(e){
+    toast('Saved locally','Pi Hub unreachable — crontab will update on next Pi server deploy.','warning');
+  }
 }
 
 // ── Social data ──
