@@ -8247,6 +8247,10 @@ function executeReset(){
   },1000);
 }
 
+// piId is also defined in the Pi Hub script block below, but needs to be
+// available here for renderDashboard which lives in this (earlier) script block
+function piId(name){return name.replace(/[\s]/g,'-').toLowerCase();}
+
 // ════════════════════════════════════════
 // renderDashboard — single consolidated definition with goal widget
 // ════════════════════════════════════════
@@ -13234,7 +13238,11 @@ Object.assign(TAB_NAMES,{square:'Square',discord:'Discord',pihub:'Pi Hub',social
 
 let piHubConfig=null;   // loaded from Supabase printerHub collection
 let piLiveData={};      // {printerName: {...mqttFields}}
-let piPrevStates={};    // for state transition detection
+let piPrevStates={};    // for state transition detection — persisted to survive page refresh
+// Restore compact state snapshot (gcode_state + hms only) from localStorage to prevent re-firing alerts on reload
+try{var _s=localStorage.getItem('piPrevStateKeys');if(_s){var _r=JSON.parse(_s)||{};Object.keys(_r).forEach(function(k){piPrevStates[k]=_r[k];});}}catch(e){}
+// Restore HMS dedup timestamps so the 5-min dedupe window survives page reloads
+try{var _ha=localStorage.getItem('hmsLastAlerted');window._hmsLastAlerted=_ha?JSON.parse(_ha):{};}catch(e){window._hmsLastAlerted={};}
 let piPollTimer=null;
 let piPrintStartTimes={}; // {printerName: timestamp}
 let piPollInFlight=false;  // in-flight lock — never send 2 requests at once
@@ -13510,9 +13518,10 @@ async function onPiPrintFinished(name,data){
   prints.push(printRecord);
   savePrints();
 
-  // Move queue card to done
+  // Move queue card to done — write actual elapsed hrs so "?h" shows real time
+  const actualHrs=Math.round((durationMins/60)*100)/100;
   queueItems=queueItems.map(q=>{
-    if(q.stage==='inprogress'&&(!q.printer||q.printer===name))return{...q,stage:'done',completedAt:Date.now()};
+    if(q.stage==='inprogress'&&(!q.printer||q.printer===name))return{...q,stage:'done',completedAt:Date.now(),hrs:actualHrs};
     return q;
   });
   saveQueue();
@@ -13626,6 +13635,7 @@ async function onPiHmsAlert(name,data,newEntries){
   if(window._hmsLastAlerted&&window._hmsLastAlerted[alertKey]&&now-window._hmsLastAlerted[alertKey]<5*60*1000)return;
   if(!window._hmsLastAlerted)window._hmsLastAlerted={};
   window._hmsLastAlerted[alertKey]=now;
+  try{localStorage.setItem('hmsLastAlerted',JSON.stringify(window._hmsLastAlerted));}catch(e){}
 
   var lines=['⚠️ Printer Alert — '+name];
   if(jobName&&jobName!=='Unknown')lines.push('Job: '+jobName);
@@ -13686,13 +13696,27 @@ async function fetchPiStatus(){
 
       piLiveData[name]={...p,_polledAt:now};
 
+      // Auto-sync AMS unit count from live Pi Hub data so display stays accurate
+      var _pr=printerRecords.find(function(r){return r.name===name;});
+      if(_pr&&p.ams&&Array.isArray(p.ams.ams)){
+        var _liveUnits=p.ams.ams.length;
+        if(typeof _pr.amsUnits==='number'&&_pr.amsUnits!==_liveUnits){
+          _pr.amsUnits=_liveUnits;
+          _pr.amsSlots=_liveUnits*4;
+          savePrinters();
+        }
+      }
+
       // State transitions
       if(curState!==prevState){
         if(curState==='RUNNING')  onPiPrintStarted(name,p);
         if(curState==='FINISH')   onPiPrintFinished(name,p);
         if(curState==='FAILED')   onPiPrintFailed(name,p);
-        if((curState==='PAUSE'||curState==='PAUSED')&&(prevState==='RUNNING'))
-          onPiPrintPaused(name,p);
+        // Fire pause alert on ANY transition into pause (not just RUNNING→PAUSE)
+        // This catches: app-restarted-while-paused (OFFLINE→PAUSE), filament runout mid-print, etc.
+        var prevPaused=prevState==='PAUSE'||prevState==='PAUSED';
+        var curPaused=curState==='PAUSE'||curState==='PAUSED';
+        if(curPaused&&!prevPaused) onPiPrintPaused(name,p);
       }
 
       // HMS (Hardware Message System) alert detection — fires on new entries
@@ -13703,6 +13727,14 @@ async function fetchPiStatus(){
       }
 
       piPrevStates[name]={...p,gcode_state:curState};
+      // Persist compact state to localStorage — prevents re-firing alerts on page reload
+      try{
+        var _persist={};
+        Object.keys(piPrevStates).forEach(function(k){
+          _persist[k]={gcode_state:piPrevStates[k].gcode_state,hms:piPrevStates[k].hms||[],subtask_name:piPrevStates[k].subtask_name||''};
+        });
+        localStorage.setItem('piPrevStateKeys',JSON.stringify(_persist));
+      }catch(e){}
       updatePrinterCardLive(name,p,curState);
     });
 
@@ -13860,6 +13892,41 @@ async function piControl(printerName,command,extraBody){
     if(j.error){toast('Command failed',j.error,'error');return;}
     toast(command+' sent',printerName,'success');
   }catch(e){toast('Pi Hub unreachable','Check Tailscale','error');}
+}
+
+// ── Calibration menu (multi-option chooser) ──────────────────────────────────
+function piCalibrateMenu(printerName){
+  document.querySelectorAll('.calibrate-toast').forEach(function(el){el.remove();});
+  const container=document.getElementById('toast-container');
+  const el=document.createElement('div');
+  el.className='toast t-info calibrate-toast';
+  el.style.cssText='border-left:3px solid var(--gold);max-width:290px;';
+  el.dataset.printer=printerName;
+  el.innerHTML=
+    '<div class="toast-icon" style="font-size:16px">🔧</div>'+
+    '<div class="toast-body" style="flex:1">'+
+      '<div class="toast-title">Calibrate — '+esc(printerName)+'</div>'+
+      '<div class="toast-text" style="margin-bottom:7px;font-size:8px">Printer should be idle. Each option runs automatically.</div>'+
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-bottom:4px">'+
+        '<button class="btn btn-ghost btn-xs" style="text-align:left" onclick="piControl(this.closest(\'.calibrate-toast\').dataset.printer,\'calibration\',{option:1});this.closest(\'.calibrate-toast\').remove();toast(\'Calibrating\',\'Bed leveling started\',\'info\')">📐 Bed Level</button>'+
+        '<button class="btn btn-ghost btn-xs" style="text-align:left" onclick="piControl(this.closest(\'.calibrate-toast\').dataset.printer,\'calibration\',{option:2});this.closest(\'.calibrate-toast\').remove();toast(\'Calibrating\',\'Vibration comp started\',\'info\')">〰 Vibration</button>'+
+        '<button class="btn btn-ghost btn-xs" style="text-align:left" onclick="piControl(this.closest(\'.calibrate-toast\').dataset.printer,\'calibration\',{option:4});this.closest(\'.calibrate-toast\').remove();toast(\'Calibrating\',\'Flow cal started\',\'info\')">💧 Flow Cal</button>'+
+        '<button class="btn btn-ghost btn-xs" style="text-align:left;color:var(--gold-b);border-color:var(--gold-d)" onclick="piControl(this.closest(\'.calibrate-toast\').dataset.printer,\'calibration\',{option:7});this.closest(\'.calibrate-toast\').remove();toast(\'Calibrating\',\'Full calibration started\',\'info\')">⭐ Full Cal</button>'+
+      '</div>'+
+      '<button class="btn btn-ghost btn-xs" style="width:100%;font-size:8px" onclick="this.closest(\'.calibrate-toast\').remove()">✕ Cancel</button>'+
+    '</div>';
+  container.appendChild(el);
+  setTimeout(function(){if(el.parentElement)el.remove();},15000);
+}
+
+// ── Light toggle ──────────────────────────────────────────────────────────────
+function piLightToggle(printerName){
+  var live=piLiveData[printerName]||{};
+  var lights=live.lights_report||[];
+  var workLight=lights.find(function(l){return l.node==='work_light';});
+  var currentlyOn=workLight?workLight.mode==='on':false;
+  piControl(printerName,currentlyOn?'light_off':'light_on');
+  toast('Light '+(currentlyOn?'off':'on'),printerName,'success');
 }
 
 // ── Skip Object + Filament Refund Dialog ──
@@ -14037,7 +14104,9 @@ function renderPrinters(){
             '<button id="pi-'+id+'-btn-resume" class="btn btn-ghost btn-xs" onclick="piControl(\''+esc(p.name)+'\',\'resume\')" style="'+(state!=='PAUSE'?'opacity:0.4;pointer-events:none':'')+'">▶ Resume</button>'+
             '<button id="pi-'+id+'-btn-stop" class="btn btn-xs" style="background:var(--red-d);border:1px solid var(--red-d);color:var(--red-b);'+(isActive?'':'opacity:0.4;pointer-events:none')+'" onclick="showConfirm(\'Stop print on '+esc(p.name)+'?\',\'This cannot be undone.\',function(){piControl(\''+esc(p.name)+'\',\'stop\')})">⏹ Stop</button>'+
             '<button id="pi-'+id+'-btn-skip" class="btn btn-ghost btn-xs" style="display:none;color:var(--gold);border-color:var(--gold-d)" onclick="handleSkipObject(\''+esc(p.name)+'\')">⏭ Skip Object</button>'+
-            (getCameraUrl(p.name)?'<button class="btn btn-ghost btn-xs" onclick="openCameraFeed(\''+esc(p.name)+'\')">📷 Camera</button>':'')+''+
+            (getCameraUrl(p.name)?'<button class="btn btn-ghost btn-xs" onclick="openCameraFeed(\''+esc(p.name)+'\')">📷 Camera</button>':'')+
+            '<button class="btn btn-ghost btn-xs" style="color:var(--cyn-b)" onclick="piLightToggle(\''+esc(p.name)+'\')">💡 Light</button>'+
+            '<button class="btn btn-ghost btn-xs" style="color:var(--gold-b)" onclick="piCalibrateMenu(\''+esc(p.name)+'\')">🔧 Calibrate</button>'+
           '</div>'+
         '</div>':'')+
       // EXPANDED STATIC DATA
@@ -14221,6 +14290,8 @@ function renderPiHub(){
             '<button id="pi-'+id+'-btn-resume" class="btn btn-ghost btn-xs" onclick="piControl(\''+esc(p.name)+'\',\'resume\')" style="opacity:0.4;pointer-events:none">▶ Resume</button>'+
             '<button id="pi-'+id+'-btn-stop" class="btn btn-xs" style="background:var(--red-d);border:1px solid var(--red-d);color:var(--red-b);opacity:0.4;pointer-events:none" onclick="showConfirm(\'Stop print on '+esc(p.name)+'?\',\'This cannot be undone.\',function(){piControl(\''+esc(p.name)+'\',\'stop\')})">⏹ Stop</button>'+
             (getCameraUrl(p.name)?'<button class="btn btn-ghost btn-xs" onclick="openCameraFeed(\''+esc(p.name)+'\')">📷 Camera</button>':'')+
+            '<button class="btn btn-ghost btn-xs" style="color:var(--cyn-b)" onclick="piLightToggle(\''+esc(p.name)+'\')">💡 Light</button>'+
+            '<button class="btn btn-ghost btn-xs" style="color:var(--gold-b)" onclick="piCalibrateMenu(\''+esc(p.name)+'\')">🔧 Calibrate</button>'+
           '</div>'+
         '</div>';
       }).join('')+

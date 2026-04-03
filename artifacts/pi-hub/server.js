@@ -202,11 +202,12 @@ app.get('/status/:name', (req, res) => {
 // GET /cameras — camera stream name map
 app.get('/cameras', (req, res) => res.json(CAMERAS));
 
-// POST /control — pause | resume | stop | skip
+// POST /control — pause | resume | stop | skip | calibration | light_on | light_off
 app.post('/control', (req, res) => {
-  const { printer, command, objectId } = req.body;
+  const { printer, command, objectId, option } = req.body;
 
-  if (!['pause', 'resume', 'stop', 'skip'].includes(command)) {
+  const VALID = ['pause','resume','stop','skip','calibration','light_on','light_off'];
+  if (!VALID.includes(command)) {
     return res.status(400).json({ error: 'Invalid command' });
   }
 
@@ -218,10 +219,20 @@ app.post('/control', (req, res) => {
   if (command === 'skip') {
     if (!objectId) return res.status(400).json({ error: 'objectId required for skip' });
     payload = JSON.stringify({
-      print: {
+      print: { sequence_id: '0', command: 'skip_objects', obj_list: [objectId] }
+    });
+  } else if (command === 'calibration') {
+    // option bitmask: 1=bed leveling, 2=vibration compensation, 4=flow calibration, 7=all
+    payload = JSON.stringify({
+      print: { sequence_id: '0', command: 'calibration', option: option || 7 }
+    });
+  } else if (command === 'light_on' || command === 'light_off') {
+    payload = JSON.stringify({
+      system: {
         sequence_id: '0',
-        command:     'skip_objects',
-        obj_list:    [objectId]
+        command:  'ledctrl',
+        led_node: 'work_light',
+        led_mode: command === 'light_on' ? 'on' : 'off'
       }
     });
   } else {
@@ -231,7 +242,7 @@ app.post('/control', (req, res) => {
   }
 
   p.client.publish(p.REQUEST_TOPIC, payload);
-  console.log(`Control: ${printer} → ${command}${objectId ? ' obj:'+objectId : ''}`);
+  console.log(`Control: ${printer} → ${command}${objectId ? ' obj:'+objectId : ''}${option ? ' opt:'+option : ''}`);
   res.json({ ok: true, sent: command, printer });
 });
 
