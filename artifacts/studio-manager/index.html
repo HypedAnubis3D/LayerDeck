@@ -13451,7 +13451,7 @@ let piAmsStartRemain={};  // {printerName: {"ui_ti": pct, "ext": pct}} — AMS r
 let piTmfObjData={};      // {printerName: {objectList,totalObjects,fromTmf,plateName}} — fallback from 3MF library
 let piPollInFlight=false;  // in-flight lock — never send 2 requests at once
 let piConsecutiveFails=0;  // for exponential backoff
-const PI_POLL_INTERVALS=[5000,10000,20000,30000,60000]; // backoff ladder
+const PI_POLL_INTERVALS=[5000,10000,20000,30000,30000]; // backoff ladder — max 30s, keeps retrying
 
 // ── State badge colors ──
 const STATE_COLORS={
@@ -14135,16 +14135,17 @@ async function fetchPiStatus(){
   }catch(e){
     piConsecutiveFails++;
     const interval=PI_POLL_INTERVALS[Math.min(piConsecutiveFails,PI_POLL_INTERVALS.length-1)];
-    // Try to read the structured error hint from the proxy's JSON body
     let hint='';
-    try{
-      if(e&&e._piHubHint) hint=e._piHubHint;
-    }catch(_){}
-    updatePiHubStatusDot(false,interval,hint);
+    try{if(e&&e._piHubHint) hint=e._piHubHint;}catch(_){}
+    // Only flip to full "Offline" after 2+ consecutive failures to avoid single-hiccup false alarms
+    const showOffline=piConsecutiveFails>=2;
+    updatePiHubStatusDot(false,interval,hint,!showOffline);
     _reschedulePiPoll(interval);
-    (piHubConfig?.printers||[]).forEach(pr=>{
-      updatePrinterCardLive(pr.name,null,'OFFLINE');
-    });
+    if(showOffline){
+      (piHubConfig?.printers||[]).forEach(pr=>{
+        updatePrinterCardLive(pr.name,null,'OFFLINE');
+      });
+    }
   }finally{
     piPollInFlight=false;
   }
@@ -14156,18 +14157,19 @@ function _reschedulePiPoll(intervalMs){
   piPollTimer=setInterval(fetchPiStatus,ms);
 }
 
-function updatePiHubStatusDot(online,retryInMs,hint){
+function updatePiHubStatusDot(online,retryInMs,hint,isChecking){
   // querySelectorAll so both the Printers tab card and the Pi Hub tab card update together
   document.querySelectorAll('[id="pihub-status-dot"]').forEach(function(dot){
-    dot.style.background=online?'var(--grn)':'var(--red)';
+    dot.style.background=online?'var(--grn)':isChecking?'var(--gold)':'var(--red)';
   });
   document.querySelectorAll('[id="pihub-status-lbl"]').forEach(function(lbl){
     if(online){lbl.textContent='Pi Hub Online';}
+    else if(isChecking){lbl.textContent='Pi Hub — checking…';}
     else if(retryInMs>5000){lbl.textContent='Offline — retry in '+(retryInMs/1000|0)+'s';}
     else{lbl.textContent='Pi Hub Offline';}
   });
   const hintEl=document.getElementById('pihub-status-hint');
-  if(hintEl){hintEl.textContent=online?'':(hint||'');}
+  if(hintEl){hintEl.textContent=online||isChecking?'':(hint||'');}
 }
 
 function updatePrinterCardLive(name,data,state){
@@ -14307,6 +14309,14 @@ function stopPiPolling(){
   piPollTimer=null;
   piPollInFlight=false;
 }
+// Retry immediately when user comes back to the tab — avoids stale "offline" state
+document.addEventListener('visibilitychange',function(){
+  if(document.visibilityState==='visible'&&piPollTimer!==null){
+    piPollInFlight=false; // clear any stuck in-flight flag
+    fetchPiStatus();      // immediate retry
+    _reschedulePiPoll(PI_POLL_INTERVALS[0]); // reset to fast interval
+  }
+});
 
 // ── Send control command (via proxy) ──
 async function piControl(printerName,command,extraBody){
