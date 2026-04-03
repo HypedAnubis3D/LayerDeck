@@ -12620,23 +12620,57 @@ const STATE_COLORS={
 };
 const STATE_LABELS={IDLE:'IDLE',RUNNING:'PRINTING',PAUSE:'PAUSED',FAILED:'FAILED',FINISH:'FINISHED',OFFLINE:'OFFLINE'};
 
-// ── Load hub config from Supabase ──
+// ── Default config (your Pi — pre-seeded, editable via Setup) ──
+const PI_DEFAULTS={
+  tailscaleIP:'100.88.246.109',
+  hubPort:3000,
+  go2rtcPort:1984,
+  printers:[
+    {name:'A1',ip:'',serial:'',accessCode:''},
+    {name:'P1S (Closet)',ip:'',serial:'',accessCode:''},
+    {name:'P1S (Room)',ip:'',serial:'',accessCode:''}
+  ],
+  cameras:{
+    'A1':'a1',
+    'P1S (Closet)':'p1_closet',
+    'P1S (Room)':'p1_room'
+  }
+};
+
+// ── Load hub config from Supabase (falls back to defaults) ──
 async function loadPiHubConfig(){
-  if(!_supabase)return null;
+  // Try Supabase first
+  if(supabaseClient&&currentUser){
+    try{
+      const{data}=await supabaseClient.from('ha3d_user_data').select('payload').eq('user_id',currentUser.id).eq('collection','printerHub').maybeSingle();
+      if(data?.payload){
+        piHubConfig=JSON.parse(data.payload);
+        return piHubConfig;
+      }
+    }catch(e){console.warn('[Pi Hub] Config load failed:',e);}
+  }
+  // Fall back to localStorage
   try{
-    const{data}=await _supabase.from('ha3d_user_data').select('payload').eq('collection','printerHub').maybeSingle();
-    if(data?.payload){
-      piHubConfig=JSON.parse(data.payload);
-      return piHubConfig;
-    }
-  }catch(e){console.warn('[Pi Hub] Config load failed:',e);}
-  return null;
+    const saved=localStorage.getItem('ha3d_pihub_local');
+    if(saved){piHubConfig=JSON.parse(saved);return piHubConfig;}
+  }catch(e){}
+  // Auto-seed with defaults — user can edit via Setup
+  piHubConfig={...PI_DEFAULTS};
+  localStorage.setItem('ha3d_pihub_local',JSON.stringify(piHubConfig));
+  return piHubConfig;
 }
 
 async function savePiHubConfig(cfg){
   piHubConfig=cfg;
-  if(!_supabase)return;
-  await _supabase.from('ha3d_user_data').upsert({collection:'printerHub',payload:JSON.stringify(cfg)},{onConflict:'collection'});
+  localStorage.setItem('ha3d_pihub_local',JSON.stringify(cfg));
+  if(supabaseClient&&currentUser){
+    try{
+      await supabaseClient.from('ha3d_user_data').upsert(
+        {user_id:currentUser.id,collection:'printerHub',payload:JSON.stringify(cfg),updated_at:new Date().toISOString()},
+        {onConflict:'user_id,collection'}
+      );
+    }catch(e){console.warn('[Pi Hub] Config save failed:',e);}
+  }
 }
 
 // ── Build URLs from config ──
@@ -13229,35 +13263,152 @@ function renderDiscord(){
   '</div>';
 }
 
-// ── Social placeholder ──
+// ── Social data ──
+Object.assign(KEYS,{socialQueue:'ha3d_socialqueue_v1'});
+let socialQueue=[];
+function loadSocial(){socialQueue=gs(KEYS.socialQueue);}
+function saveSocial(){ss(KEYS.socialQueue,socialQueue);}
+loadSocial();
+
+// ── Post to Instagram via server proxy ──
+async function postToInstagram(postId){
+  const p=socialQueue.find(x=>x.id===postId);
+  if(!p){return;}
+  if(!p.imageUrl||!p.caption){toast('Add image URL and caption first','','error');return;}
+  p.status='posting';
+  saveSocial();renderSocial();
+  try{
+    const res=await fetch('/api/social/instagram',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({imageUrl:p.imageUrl,caption:p.caption})
+    });
+    const json=await res.json();
+    if(res.ok&&json.id){
+      p.status='posted';
+      p.postedAt=Date.now();
+      p.igId=json.id;
+      toast('Posted to Instagram!','','success');
+    }else{
+      p.status='failed';
+      p.error=json.error||'Unknown error';
+      toast('Instagram post failed',p.error||'','error');
+    }
+  }catch(e){
+    p.status='failed';
+    p.error=e.message;
+    toast('Instagram post failed',e.message,'error');
+  }
+  saveSocial();renderSocial();
+}
+
+function addSocialPost(){
+  const cap=(document.getElementById('sc-caption')?.value||'').trim();
+  const img=(document.getElementById('sc-image')?.value||'').trim();
+  const tags=(document.getElementById('sc-tags')?.value||'').trim();
+  const sched=(document.getElementById('sc-schedule')?.value||'');
+  if(!cap){toast('Add a caption first','','error');return;}
+  const fullCaption=tags?cap+'\n\n'+tags:cap;
+  socialQueue.unshift({
+    id:uid(),caption:fullCaption,imageUrl:img,
+    scheduledFor:sched?new Date(sched).getTime():null,
+    status:sched?'scheduled':'draft',
+    createdAt:Date.now()
+  });
+  saveSocial();
+  document.getElementById('sc-caption').value='';
+  document.getElementById('sc-image').value='';
+  document.getElementById('sc-tags').value='';
+  document.getElementById('sc-schedule').value='';
+  renderSocial();
+  toast('Post added to queue','','success');
+}
+function delSocialPost(id){
+  socialQueue=socialQueue.filter(x=>x.id!==id);
+  saveSocial();renderSocial();
+}
+
+// ── Social tab renderer ──
 function renderSocial(){
   const el=document.getElementById('social-content');
   if(!el)return;
-  el.innerHTML='<div class="printer-card">'+
-    '<div style="font-family:\'Orbitron\',monospace;font-size:11px;font-weight:700;color:var(--gold-b);letter-spacing:2px;margin-bottom:8px">📱 SOCIAL SCHEDULER</div>'+
-    '<div style="font-size:8px;color:var(--txt-d);line-height:1.8;margin-bottom:12px">'+
-      'Instagram scheduling via Meta Graph API is configured (META_ACCESS_TOKEN set).<br>'+
-      'Full Social Composer, Queue, and Analytics coming as part of the Section 16 build.'+
-    '</div>'+
-    '<div style="display:grid;gap:6px">'+
-      '<div style="padding:8px;border:1px solid var(--bdr);border-radius:4px;display:flex;align-items:center;gap:8px">'+
-        '<div style="width:8px;height:8px;border-radius:50%;background:var(--grn)"></div>'+
-        '<div style="font-size:8px;color:var(--txt-b)">Instagram — API credentials configured</div>'+
+
+  const statusBadge=(p)=>{
+    const m={draft:{c:'var(--txt-d)',t:'DRAFT'},scheduled:{c:'var(--gold)',t:'SCHEDULED'},posting:{c:'var(--cyn)',t:'POSTING…'},posted:{c:'var(--grn)',t:'POSTED'},failed:{c:'var(--red)',t:'FAILED'}};
+    const s=m[p.status]||m.draft;
+    return '<span style="font-size:7px;font-family:\'Orbitron\',monospace;font-weight:700;color:'+s.c+';letter-spacing:1px">'+s.t+'</span>';
+  };
+
+  const queue=socialQueue.map(p=>{
+    const schedLabel=p.scheduledFor?new Date(p.scheduledFor).toLocaleString([],{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}):'';
+    const postedLabel=p.postedAt?new Date(p.postedAt).toLocaleString([],{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}):'';
+    const canPost=p.status==='draft'||p.status==='scheduled'||p.status==='failed';
+    return '<div style="border:1px solid var(--bdr);border-radius:6px;padding:10px;background:rgba(0,0,0,0.15)">'+
+      '<div style="display:flex;align-items:flex-start;gap:8px">'+
+        (p.imageUrl?'<img src="'+esc(p.imageUrl)+'" style="width:50px;height:50px;object-fit:cover;border-radius:4px;flex-shrink:0;border:1px solid var(--bdr)" onerror="this.style.display=\'none\'"/>':'<div style="width:50px;height:50px;border:1px dashed var(--bdr);border-radius:4px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:18px">📷</div>')+
+        '<div style="flex:1;min-width:0">'+
+          '<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">'+
+            statusBadge(p)+
+            (schedLabel?'<span style="font-size:7px;color:var(--txt-d)">📅 '+schedLabel+'</span>':'')+
+            (postedLabel?'<span style="font-size:7px;color:var(--grn)">✓ '+postedLabel+'</span>':'')+
+          '</div>'+
+          '<div style="font-size:8px;color:var(--txt-b);white-space:pre-wrap;max-height:60px;overflow:hidden;line-height:1.5">'+esc(p.caption.slice(0,180))+(p.caption.length>180?'…':'')+'</div>'+
+          (p.error?'<div style="font-size:7px;color:var(--red);margin-top:3px">Error: '+esc(p.error)+'</div>':'')+
+        '</div>'+
+        '<div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0">'+
+          (canPost?'<button class="btn btn-pur btn-xs" onclick="postToInstagram(\''+p.id+'\')">Post Now</button>':'')+
+          '<button class="btn btn-ghost btn-xs" onclick="delSocialPost(\''+p.id+'\')">✕</button>'+
+        '</div>'+
       '</div>'+
-      '<div style="padding:8px;border:1px solid var(--bdr);border-radius:4px;display:flex;align-items:center;gap:8px">'+
-        '<div style="width:8px;height:8px;border-radius:50%;background:var(--txt-d)"></div>'+
-        '<div style="font-size:8px;color:var(--txt-d)">TikTok — skipped per user request</div>'+
+    '</div>';
+  }).join('')||'<div style="padding:20px;text-align:center;font-size:8px;color:var(--txt-d)">No posts in queue. Compose your first post above.</div>';
+
+  el.innerHTML=
+    // Composer
+    '<div class="printer-card" style="margin-bottom:8px">'+
+      '<div style="font-family:\'Orbitron\',monospace;font-size:9px;font-weight:700;color:var(--gold-b);letter-spacing:2px;margin-bottom:10px">📱 COMPOSE POST</div>'+
+      '<div style="margin-bottom:6px">'+
+        '<div style="font-size:7px;color:var(--txt-d);letter-spacing:1px;margin-bottom:3px">CAPTION</div>'+
+        '<textarea id="sc-caption" rows="3" placeholder="Write your post caption…" style="width:100%;box-sizing:border-box;background:rgba(0,0,0,0.3);border:1px solid var(--bdr);color:var(--txt-b);font-family:\'Share Tech Mono\',monospace;font-size:9px;padding:7px 9px;border-radius:5px;resize:vertical;line-height:1.5"></textarea>'+
+      '</div>'+
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px">'+
+        '<div>'+
+          '<div style="font-size:7px;color:var(--txt-d);letter-spacing:1px;margin-bottom:3px">IMAGE URL</div>'+
+          '<input class="srch" id="sc-image" placeholder="https://… or Supabase URL" style="width:100%;box-sizing:border-box"/>'+
+        '</div>'+
+        '<div>'+
+          '<div style="font-size:7px;color:var(--txt-d);letter-spacing:1px;margin-bottom:3px">SCHEDULE (optional)</div>'+
+          '<input class="srch" id="sc-schedule" type="datetime-local" style="width:100%;box-sizing:border-box"/>'+
+        '</div>'+
+      '</div>'+
+      '<div style="margin-bottom:10px">'+
+        '<div style="font-size:7px;color:var(--txt-d);letter-spacing:1px;margin-bottom:3px">HASHTAGS</div>'+
+        '<input class="srch" id="sc-tags" placeholder="#3dprinting #hypedanubis3d #pokemon3d…" style="width:100%;box-sizing:border-box"/>'+
+      '</div>'+
+      '<div style="display:flex;gap:6px;align-items:center">'+
+        '<button class="btn btn-pur" onclick="addSocialPost()">+ Add to Queue</button>'+
+        '<div style="font-size:7px;color:var(--txt-d)">Posts via Meta Graph API · Instagram Business account required</div>'+
       '</div>'+
     '</div>'+
-  '</div>';
+    // Queue
+    '<div class="printer-card">'+
+      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">'+
+        '<div style="font-family:\'Orbitron\',monospace;font-size:9px;font-weight:700;color:var(--gold-b);letter-spacing:2px">QUEUE ('+socialQueue.length+')</div>'+
+        '<div style="display:flex;gap:5px;align-items:center">'+
+          '<div style="width:7px;height:7px;border-radius:50%;background:var(--grn)"></div>'+
+          '<div style="font-size:7px;color:var(--txt-d)">Meta API configured</div>'+
+        '</div>'+
+      '</div>'+
+      '<div style="display:grid;gap:6px">'+queue+'</div>'+
+    '</div>';
 }
 
-// ── Init Pi Hub on app load ──
+// ── Init Pi Hub on app load (safe — no crash on Supabase miss) ──
 (async function initPiHub(){
-  const cfg=await loadPiHubConfig();
-  if(cfg){
-    startPiPolling();
-  }
+  try{
+    const cfg=await loadPiHubConfig();
+    if(cfg){startPiPolling();}
+  }catch(e){console.warn('[Pi Hub] Init failed:',e);}
 })();
 
 // ── Also wire up printers tab to use new renderPrinters ──
