@@ -16161,11 +16161,11 @@ function _buildPostCard(p,compact){
     +'<div style="display:flex;align-items:flex-start;gap:8px">'
       +thumb
       +'<div style="flex:1;min-width:0">'
-        +'<div style="display:flex;align-items:center;gap:5px;margin-bottom:4px;flex-wrap:wrap">'
-          +'<span style="font-size:9px">'+typeIcon+'</span>'
+        +'<div style="display:flex;align-items:center;gap:4px;margin-bottom:4px;flex-wrap:wrap">'
           +'<span style="font-size:6.5px;font-family:\'Orbitron\',monospace;font-weight:700;color:'+statusColor+';letter-spacing:1px">'+statusLabel+'</span>'
-          +'<span style="font-size:6px;background:'+platBg+';color:#fff;padding:1px 5px;border-radius:3px;font-family:\'Orbitron\',monospace;font-weight:700">'+platLabel+'</span>'
-          +(p.addToStory?'<span style="font-size:6px;color:var(--cyn);font-family:\'Orbitron\',monospace">+STORY</span>':'')
+          +'<span style="font-size:6px;background:'+platBg+';color:#fff;padding:1px 5px;border-radius:3px;font-family:\'Orbitron\',monospace;font-weight:700;letter-spacing:.5px">'+platLabel+'</span>'
+          +'<span style="font-size:6px;background:rgba(255,255,255,0.08);color:var(--txt-b);padding:1px 5px;border-radius:3px;font-family:\'Orbitron\',monospace;font-weight:600;letter-spacing:.5px">'+typeIcon+' '+(p.postType||'post').toUpperCase()+'</span>'
+          +(p.addToStory?'<span style="font-size:6px;background:rgba(6,182,212,0.15);color:var(--cyn);padding:1px 5px;border-radius:3px;font-family:\'Orbitron\',monospace;font-weight:600">+STORY</span>':'')
           +(schedLabel?'<span style="font-size:7px;color:var(--txt-d)">📅 '+esc(schedLabel)+'</span>':'')
           +(postedLabel?'<span style="font-size:7px;color:var(--grn)">✓ '+esc(postedLabel)+'</span>':'')
         +'</div>'
