@@ -14008,6 +14008,17 @@ async function onPiPrintStarted(name,data){
   // Move queue card to In Progress if matching job
   var jobName=(data.subtask_name||'').replace('.gcode.3mf','').replace('.3mf','');
   var displayName=jobName||('Print on '+name);
+
+  // ── Match against 3MF library early (used for queue noTmf flag + warning toast) ──
+  var _cleanJN=jobName.replace(/_/g,' ').trim();
+  var _jLow=_cleanJN.toLowerCase();
+  var _jLowBase=_jLow.replace(/\s+plate\s+\d+$/i,'').trim();
+  var matchedTmf=(jobName&&typeof tmfLib!=='undefined')?tmfLib.find(function(t){
+    var tName=(t.name||'').toLowerCase().trim();
+    var tFile=(t.filename||'').replace(/\.gcode\.3mf$/i,'').replace(/\.3mf$/i,'').replace(/_/g,' ').toLowerCase().trim();
+    return tName===_jLow||tFile===_jLow||tName===_jLowBase||tFile===_jLowBase;
+  }):null;
+
   var changed=false;
   if(jobName){
     queueItems=queueItems.map(function(q){
@@ -14020,102 +14031,41 @@ async function onPiPrintStarted(name,data){
   if(changed){
     saveQueue();render();
   } else {
-    // No matching queue item — auto-create one as In Progress (test print / restock / manual start)
+    // No matching queue item — auto-create one as In Progress
     var alreadyInProgress=queueItems.some(function(q){return q.stage==='inprogress'&&q.printer===name&&q.autoFromPi;});
     if(!alreadyInProgress){
       var autoHrs=data.mc_remaining_time?Math.round((data.mc_remaining_time/60)*10)/10:0;
-      var autoItem={id:uid(),name:displayName,category:'Other',printer:name,hrs:autoHrs,qty:1,priority:'normal',stage:'inprogress',startedAt:Date.now(),timestamp:Date.now(),notes:'Auto-added from Pi Hub',autoFromPi:true};
+      var autoItem={id:uid(),name:displayName,category:'Other',printer:name,hrs:autoHrs,qty:1,priority:'normal',stage:'inprogress',startedAt:Date.now(),timestamp:Date.now(),notes:'Auto-added from Pi Hub',autoFromPi:true,noTmf:!matchedTmf,tmfId:matchedTmf?matchedTmf.id:null};
       queueItems.push(autoItem);
       saveQueue();render();
       toast('Auto-added to In Progress',displayName,'info',3000);
     }
   }
-  // Ensure printerRecords has this printer
   ensurePrinterRecord(name);
 
-  // Auto-add to 3MF library if this job isn't already in it
-  // Matches by display name OR filename (case-insensitive, ignoring underscores/spaces)
-  if(jobName&&typeof tmfLib!=='undefined'){
-    var cleanJobName=jobName.replace(/_/g,' ').trim();
-    var jLow=cleanJobName.toLowerCase();
-    var alreadyInLib=tmfLib.some(function(t){
-      var tName=(t.name||'').toLowerCase().trim();
-      var tFile=(t.filename||'').replace(/\.3mf$/i,'').replace(/_/g,' ').toLowerCase().trim();
-      return tName===jLow||tFile===jLow||tName===jLow.replace(/ /g,'_')||tFile===jLow.replace(/ /g,'_');
-    });
-    if(!alreadyInLib){
-      var estHrs=data.mc_remaining_time?Math.round((data.mc_remaining_time/60)*10)/10:null;
-      var _newAutoId=uid();
-      tmfLib.push({
-        id:_newAutoId,
-        filename:jobName.replace(/ /g,'_')+'.3mf',
-        name:cleanJobName,
-        printer:name,
-        autoAdded:true,
-        uploadedAt:Date.now(),
-        filamentType:'',filamentColor:'',filamentBrand:'',
-        filamentTypes:[],filamentColors:[],filamentBrands:[],
-        filamentGramsPerColor:[],
-        nozzleTemp:null,nozzleDiam:'',bedType:'',layerHeight:null,
-        supportType:'',supports:false,amsUnits:0,
-        objects:[],plates:[],
-        hrs:estHrs,layers:null,profile:'',filamentGrams:[],
-        supportGrams:0,purgeGrams:0,hasGcode:false
-      });
-      saveTmfs();
-      toast('Added to 3MF Library',cleanJobName,'info',3500);
-      // Auto-link to a matching catalog product (fuzzy name match)
-      if(typeof catalogItems!=='undefined'&&catalogItems.length){
-        var _autoJBase=jLow.replace(/\s+plate\s+\d+$/i,'').replace(/\s+v\d+$/i,'').trim();
-        var _autoJFirst=_autoJBase.split(' ')[0];
-        var _autoLinked=catalogItems.find(function(c){
-          if(c.tmfId)return false; // skip already-linked products
-          var cN=(c.name||'').toLowerCase().replace(/_/g,' ').trim();
-          var cFirst=cN.split(' ')[0];
-          return cN===jLow||cN===_autoJBase||_autoJBase.includes(cN)
-            ||(cN.length>4&&_autoJBase.includes(cN))
-            ||(_autoJFirst.length>3&&cN.includes(_autoJFirst))
-            ||(cFirst.length>3&&_autoJBase.includes(cFirst));
-        });
-        if(_autoLinked){
-          _autoLinked.tmfId=_newAutoId;
-          saveCatalog();
-          toast('Auto-linked to product',cleanJobName+' → '+_autoLinked.name,'success',3500);
-        }
+  // ── Warn if no 3MF in library for this print ──
+  if(jobName&&!matchedTmf){
+    toast('No 3MF in library','"'+_cleanJN+'" — upload the 3MF file for accurate color & cost tracking','warning',7000);
+  }
+
+  // ── Populate piTmfObjData from matched 3MF library entry ──
+  if(matchedTmf){
+    var plateMatch=jobName.match(/_plate_(\d+)$/i);
+    var targetPlateIdx=plateMatch?parseInt(plateMatch[1]):1;
+    var tmfObjs=null;
+    if(Array.isArray(matchedTmf.plateObjects)&&matchedTmf.plateObjects.length){
+      var plateDat=matchedTmf.plateObjects.find(function(p){return p.plateIdx===targetPlateIdx;})
+        ||matchedTmf.plateObjects[0];
+      if(plateDat&&plateDat.objects&&plateDat.objects.length){
+        tmfObjs={objectList:plateDat.objects.map(function(n,i){return{name:n,skipped:false,idx:i};}),totalObjects:plateDat.objects.length,plateName:plateDat.plateName};
       }
     }
-
-    // ── Populate piTmfObjData from matched 3MF library entry ──
-    // If MQTT obj_list is empty, use the library's per-plate object names for display
-    // subtask_name may be "ProjectName_plate_2" — strip _plate_N for the base-name match too
-    var jLow2=(jobName||'').replace(/_/g,' ').toLowerCase().trim();
-    var jLow2Base=jLow2.replace(/\s+plate\s+\d+$/i,'').trim();
-    var matchedTmf=tmfLib.find(function(t){
-      var tName=(t.name||'').toLowerCase().trim();
-      var tFile=(t.filename||'').replace(/\.gcode\.3mf$/i,'').replace(/\.3mf$/i,'').replace(/_/g,' ').toLowerCase().trim();
-      return tName===jLow2||tFile===jLow2||tName===jLow2Base||tFile===jLow2Base;
-    });
-    if(matchedTmf){
-      // Determine which plate — subtask_name often ends in _plate_N
-      var plateMatch=jobName.match(/_plate_(\d+)$/i);
-      var targetPlateIdx=plateMatch?parseInt(plateMatch[1]):1;
-      var tmfObjs=null;
-      // Prefer per-plate data
-      if(Array.isArray(matchedTmf.plateObjects)&&matchedTmf.plateObjects.length){
-        var plateDat=matchedTmf.plateObjects.find(function(p){return p.plateIdx===targetPlateIdx;})
-          ||matchedTmf.plateObjects[0];
-        if(plateDat&&plateDat.objects&&plateDat.objects.length){
-          tmfObjs={objectList:plateDat.objects.map(function(n,i){return{name:n,skipped:false,idx:i};}),totalObjects:plateDat.objects.length,plateName:plateDat.plateName};
-        }
-      }
-      // Fall back to flat objects array
-      if(!tmfObjs&&Array.isArray(matchedTmf.objects)&&matchedTmf.objects.length){
-        var flatObjs=matchedTmf.objects.filter(Boolean);
-        if(flatObjs.length){tmfObjs={objectList:flatObjs.map(function(n,i){return{name:n,skipped:false,idx:i};}),totalObjects:flatObjs.length,plateName:''};}
-      }
-      if(tmfObjs){
-        piTmfObjData[name]={...tmfObjs,fromTmf:true,tmfName:matchedTmf.name};
-      }
+    if(!tmfObjs&&Array.isArray(matchedTmf.objects)&&matchedTmf.objects.length){
+      var flatObjs=matchedTmf.objects.filter(Boolean);
+      if(flatObjs.length){tmfObjs={objectList:flatObjs.map(function(n,i){return{name:n,skipped:false,idx:i};}),totalObjects:flatObjs.length,plateName:''};}
+    }
+    if(tmfObjs){
+      piTmfObjData[name]={...tmfObjs,fromTmf:true,tmfName:matchedTmf.name};
     }
   }
 }
