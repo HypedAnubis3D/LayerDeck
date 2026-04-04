@@ -15293,7 +15293,7 @@ function _startTapoAutoOffCountdown(printerName,deviceId,alias){
       const r=await fetch('/api/tapo/power',{
         method:'POST',
         headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({deviceId,on:false})
+        body:JSON.stringify({deviceId,on:false,hubUrl:getPiUrl()||null})
       });
       const j=await r.json();
       if(j.ok){
