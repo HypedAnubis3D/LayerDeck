@@ -16216,7 +16216,7 @@ function _socialMediaBrokenThumb(img){
 function _buildCalDayPanel(){
   if(_calDay===null)return '';
   const dayPosts=socialQueue.filter(function(p){
-    const ts=p.status==='posted'?(p.postedAt||p.scheduledFor):p.scheduledFor;
+    const ts=p.status==='posted'?(p.postedAt||p.scheduledFor||p.createdAt):(p.scheduledFor||p.createdAt);
     if(!ts)return false;
     const d=new Date(ts);
     return d.getFullYear()===_calYear&&d.getMonth()===_calMonth&&d.getDate()===_calDay;
@@ -16294,10 +16294,10 @@ function renderSocial(){
   const today=new Date();
   const isToday=function(d){return today.getFullYear()===_calYear&&today.getMonth()===_calMonth&&today.getDate()===d;};
 
-  // Map posts by day for dots — use postedAt for posted items, scheduledFor for everything else
+  // Map posts by day for dots — postedAt > scheduledFor > createdAt as fallback
   const postsByDay={};
   socialQueue.forEach(function(p){
-    const ts=p.status==='posted'?(p.postedAt||p.scheduledFor):p.scheduledFor;
+    const ts=p.status==='posted'?(p.postedAt||p.scheduledFor||p.createdAt):(p.scheduledFor||p.createdAt);
     if(!ts)return;
     const d=new Date(ts);
     if(d.getFullYear()!==_calYear||d.getMonth()!==_calMonth)return;
