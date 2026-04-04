@@ -32,7 +32,11 @@ async function tapoLogin(force = false): Promise<string> {
     }),
   });
   const j = await res.json() as any;
-  if (j.error_code !== 0) throw new Error(`Tapo login failed (${j.error_code}): ${j.msg ?? JSON.stringify(j)}`);
+  if (j.error_code !== 0) {
+    _token = null; // clear cache so a corrected secret triggers a fresh login
+    const hint = j.error_code === -20601 ? ' — check TAPO_EMAIL and TAPO_PASSWORD in Replit Secrets' : '';
+    throw new Error(`Tapo login failed (${j.error_code}): ${j.msg ?? JSON.stringify(j)}${hint}`);
+  }
   _token   = j.result.token as string;
   _tokenAt = Date.now();
   return _token;

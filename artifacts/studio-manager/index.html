@@ -15117,21 +15117,29 @@ function openCameraFeed(printerName){
 }
 
 // ── Tapo P115 smart plug helpers ────────────────────────────────────────────
+let _tapoLastError=''; // last fetch error — shown in plug section
 async function fetchTapoDevices(force){
   const CACHE_MS=60000;
   if(!force&&_tapoFetching)return;
   if(!force&&_tapoDevices.length&&Date.now()-_tapoLastFetch<CACHE_MS)return;
   _tapoFetching=true;
+  _tapoLastError='';
   try{
     const r=await fetch('/api/tapo/devices',{signal:AbortSignal.timeout(12000)});
     const j=await r.json();
     if(j.ok){
       _tapoDevices=j.devices||[];
       _tapoLastFetch=Date.now();
+      _tapoLastError='';
       _tapoAutoAssignByIp();
+    }else{
+      _tapoLastError=j.error||'Unknown error';
     }
     if(curTab==='pihub') renderPiHub();
-  }catch(e){if(curTab==='pihub') renderPiHub();}
+  }catch(e){
+    _tapoLastError=e.message||'Network error';
+    if(curTab==='pihub') renderPiHub();
+  }
   finally{_tapoFetching=false;}
 }
 
@@ -15320,8 +15328,14 @@ function _renderPrinterTapoSection(printerName){
       '</label>';
   }
 
-  const loadHint=(!_tapoDevices.length&&!_tapoFetching)?
-    '<button class="btn btn-xs" onclick="fetchTapoDevices(true)" style="margin-top:4px;font-size:7px">↺ Load plugs</button>':'';
+  let loadHint='';
+  if(_tapoLastError){
+    loadHint='<div style="font-size:7px;color:var(--red-b);margin-top:4px;line-height:1.4">'+
+      '⚠ '+esc(_tapoLastError)+
+      ' <button class="btn btn-xs" onclick="fetchTapoDevices(true)" style="font-size:7px;margin-left:4px">Retry</button></div>';
+  }else if(!_tapoDevices.length&&!_tapoFetching){
+    loadHint='<button class="btn btn-xs" onclick="fetchTapoDevices(true)" style="margin-top:4px;font-size:7px">↺ Load plugs</button>';
+  }
 
   return '<div style="border-top:1px solid var(--bdr);margin-top:7px;padding-top:7px">'+
     '<div style="display:flex;align-items:center;gap:6px;margin-bottom:5px">'+
