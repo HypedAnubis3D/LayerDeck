@@ -183,8 +183,8 @@ async function checkLowStock() {
   if (!supabase) return;
 
   const [rawSpools, rawCatalog] = await Promise.all([
-    getSupabaseCollection(supabase, "ha3d_fil_v2"),
-    getSupabaseCollection(supabase, "ha3d_catalog_v1"),
+    getSupabaseCollection(supabase, "spools"),
+    getSupabaseCollection(supabase, "catalogItems"),
   ]);
 
   type Spool      = { remaining?: number; brand?: string; colorName?: string; name?: string };
@@ -245,10 +245,10 @@ export async function sendDailyDiscordReport() {
   }
 
   const [rawPrints, rawSpools, rawQueue, rawCatalog] = await Promise.all([
-    getSupabaseCollection(supabase, "ha3d_prints_v1"),
-    getSupabaseCollection(supabase, "ha3d_fil_v2"),
-    getSupabaseCollection(supabase, "ha3d_queue_v1"),
-    getSupabaseCollection(supabase, "ha3d_catalog_v1"),
+    getSupabaseCollection(supabase, "prints"),
+    getSupabaseCollection(supabase, "spools"),
+    getSupabaseCollection(supabase, "queueItems"),
+    getSupabaseCollection(supabase, "catalogItems"),
   ]);
 
   type FilamentEntry = { spoolId?: string; grams?: number };
