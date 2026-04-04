@@ -157,22 +157,29 @@ router.post(
       pendingOrders.push(order);
       req.log.info({ orderNumber: order["orderNumber"], total: order["total"] }, "Square sale processed");
 
-      // Post Discord notification via the discord route
-      const discordWebhookUrl =
-        process.env.REPLIT_DEV_DOMAIN
-          ? `http://localhost:8080/api/discord/notify`
-          : `http://localhost:8080/api/discord/notify`;
-      try {
-        await fetch(discordWebhookUrl, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            alertType: "order",
-            message:   `🟦 Square Sale\nOrder: ${order["orderNumber"]}\nCustomer: ${order["customer"]}\nTotal: $${(order["total"] as number).toFixed(2)}\nItems: ${(order["items"] as unknown[]).length}`,
-          }),
-        });
-      } catch {
-        // Discord is best-effort
+      // Post to Discord orders webhook directly
+      const discordOrdersUrl = process.env.DISCORD_WEBHOOK_ORDERS;
+      if (discordOrdersUrl) {
+        try {
+          const items = order["items"] as Array<{ name: string; qty: number }>;
+          const itemLines = items.length
+            ? items.map(i => `  • ${i.name}${i.qty > 1 ? ` ×${i.qty}` : ""}`).join("\n")
+            : "  • (no item details)";
+          const msg = [
+            `🟦 **New Square Sale**`,
+            `Order: **${order["orderNumber"]}**`,
+            `Customer: ${order["customer"]}`,
+            `Total: **$${(order["total"] as number).toFixed(2)}**`,
+            itemLines,
+          ].join("\n");
+          await fetch(discordOrdersUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ content: msg }),
+          });
+        } catch {
+          // Discord is best-effort
+        }
       }
     } catch (err) {
       req.log.error(err, "Failed to process Square sale");

@@ -8,6 +8,7 @@ const DATA_DIR = path.join(process.cwd(), "data");
 const PRINTS_FILE = path.join(DATA_DIR, "watched-prints.json");
 const CONVENTIONS_FILE = path.join(DATA_DIR, "watched-conventions.json");
 const ORDERS_FILE = path.join(DATA_DIR, "watched-orders.json");
+const LAST_STOCK_ALERT_FILE = path.join(DATA_DIR, "last-stock-alert.json");
 
 interface WatchedPrint {
   id: string;
@@ -130,7 +131,14 @@ async function checkOrders() {
   if (changed) writeJson(ORDERS_FILE, orders);
 }
 
-// ── Daily Discord Report ───────────────────────────────────────────────────
+// ── Supabase helper ────────────────────────────────────────────────────────────
+
+function makeSupabase() {
+  const url = process.env.SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) return null;
+  return createClient(url, key, { auth: { persistSession: false } });
+}
 
 async function getSupabaseCollection(
   supabase: ReturnType<typeof createClient>,
@@ -153,6 +161,72 @@ async function getSupabaseCollection(
   }
 }
 
+// ── Low stock / low spool check (runs once daily) ─────────────────────────────
+
+async function checkLowStock() {
+  const webhookUrl = process.env.DISCORD_WEBHOOK_STOCK_ALERTS;
+  if (!webhookUrl) return;
+
+  // Only alert once per calendar day (Eastern)
+  const today = new Date().toLocaleDateString("en-US", {
+    timeZone: "America/New_York",
+    year: "numeric", month: "2-digit", day: "2-digit",
+  });
+  const last = readJson<{ date: string }>(LAST_STOCK_ALERT_FILE, { date: "" });
+  if (last.date === today) return;
+
+  const supabase = makeSupabase();
+  if (!supabase) return;
+
+  const [rawSpools, rawCatalog] = await Promise.all([
+    getSupabaseCollection(supabase, "ha3d_fil_v2"),
+    getSupabaseCollection(supabase, "ha3d_catalog_v1"),
+  ]);
+
+  type Spool      = { remaining?: number; brand?: string; colorName?: string; name?: string };
+  type CatalogItem = { qty?: number; lowStockAt?: number; name?: string };
+
+  const spools  = rawSpools  as Spool[];
+  const catalog = rawCatalog as CatalogItem[];
+
+  // < 100 g remaining = low spool (matches daily report threshold)
+  const lowSpools = spools.filter(s => (s.remaining ?? 0) > 0 && (s.remaining ?? 0) < 100);
+  // qty <= lowStockAt (default 3) = low product stock
+  const lowStock  = catalog.filter(i => (i.qty ?? 0) <= (i.lowStockAt ?? 3));
+
+  // Mark as checked even when nothing is low so we don't re-run all day
+  writeJson(LAST_STOCK_ALERT_FILE, { date: today });
+
+  if (!lowSpools.length && !lowStock.length) return;
+
+  const lines: string[] = ["⚠️ **LayerDeck Stock Alert**", "──────────────────"];
+  if (lowStock.length) {
+    lines.push("📦 **Low Product Stock:**");
+    lowStock.slice(0, 8).forEach(i =>
+      lines.push(`  • ${i.name ?? "Unknown"} — ${i.qty ?? 0} left`)
+    );
+  }
+  if (lowSpools.length) {
+    lines.push("\n🧵 **Low Filament Spools:**");
+    lowSpools.slice(0, 8).forEach(s =>
+      lines.push(`  • ${s.brand ?? ""} ${s.colorName ?? s.name ?? ""} — ~${Math.round(s.remaining ?? 0)}g left`)
+    );
+  }
+
+  try {
+    await fetch(webhookUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content: lines.join("\n") }),
+    });
+    logger.info({ lowStock: lowStock.length, lowSpools: lowSpools.length }, "Low stock alert sent to Discord");
+  } catch (err) {
+    logger.error({ err }, "Low stock Discord alert failed");
+  }
+}
+
+// ── Daily Discord Report ───────────────────────────────────────────────────────
+
 export async function sendDailyDiscordReport() {
   const webhookUrl = process.env.DISCORD_WEBHOOK_DAILY_REPORT;
   if (!webhookUrl) {
@@ -160,16 +234,11 @@ export async function sendDailyDiscordReport() {
     return;
   }
 
-  const supabaseUrl = process.env.SUPABASE_URL;
-  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!supabaseUrl || !supabaseKey) {
+  const supabase = makeSupabase();
+  if (!supabase) {
     logger.warn("Supabase env vars missing — skipping daily report");
     return;
   }
-
-  const supabase = createClient(supabaseUrl, supabaseKey, {
-    auth: { persistSession: false },
-  });
 
   const [rawPrints, rawSpools, rawQueue, rawCatalog] = await Promise.all([
     getSupabaseCollection(supabase, "ha3d_prints_v1"),
@@ -178,59 +247,44 @@ export async function sendDailyDiscordReport() {
     getSupabaseCollection(supabase, "ha3d_catalog_v1"),
   ]);
 
-  type PrintRecord   = { date?: string; success?: boolean; printerName?: string; filamentUsed?: number; printTime?: string };
-  type SpoolRecord   = { remaining?: number };
+  type PrintRecord   = { date?: string; success?: boolean; printerName?: string; filamentUsed?: number; printTime?: string; productName?: string };
+  type SpoolRecord   = { remaining?: number; brand?: string; colorName?: string; name?: string };
   type QueueRecord   = { stage?: string; hrs?: number };
   type CatalogRecord = { qty?: number; lowStockAt?: number; name?: string; productName?: string };
 
-  const prints   = rawPrints   as PrintRecord[];
-  const spools   = rawSpools   as SpoolRecord[];
-  const queue    = rawQueue    as QueueRecord[];
-  const catalog  = rawCatalog  as CatalogRecord[];
+  const prints  = rawPrints  as PrintRecord[];
+  const spools  = rawSpools  as SpoolRecord[];
+  const queue   = rawQueue   as QueueRecord[];
+  const catalog = rawCatalog as CatalogRecord[];
 
   const today = new Date().toISOString().split("T")[0];
 
-  const todayPrints = prints.filter((p) => p.date === today && p.success);
-  const todayFails  = prints.filter((p) => p.date === today && !p.success);
+  const todayPrints = prints.filter(p => p.date === today && p.success);
+  const todayFails  = prints.filter(p => p.date === today && !p.success);
 
-  const queuedJobs = queue.filter(
-    (q) => q.stage === "queued" || q.stage === "inprogress"
-  );
-  const queueTotalMins = queuedJobs.reduce(
-    (a, q) => a + (parseFloat(String(q.hrs ?? 0)) * 60),
-    0
-  );
+  const queuedJobs = queue.filter(q => q.stage === "queued" || q.stage === "inprogress");
+  const queueTotalMins = queuedJobs.reduce((a, q) => a + (parseFloat(String(q.hrs ?? 0)) * 60), 0);
   const queueHours   = Math.floor(queueTotalMins / 60);
   const queueRemMins = Math.round(queueTotalMins % 60);
   const queueTime    = queueHours > 0 ? `${queueHours}h ${queueRemMins}m` : `${queueRemMins}m`;
 
-  const totalGrams = todayPrints.reduce(
-    (a, p) => a + (parseFloat(String(p.filamentUsed ?? 0))),
-    0
-  );
-  const printersRan = [...new Set(todayPrints.map((p) => p.printerName).filter(Boolean))];
+  const totalGrams = todayPrints.reduce((a, p) => a + parseFloat(String(p.filamentUsed ?? 0)), 0);
+  const printersRan = [...new Set(todayPrints.map(p => p.printerName).filter(Boolean))];
 
   let totalMins = 0;
   for (const p of todayPrints) {
-    const t = p.printTime ?? "";
-    const m = t.match(/(\d+)h\s*(\d+)m/);
+    const m = (p.printTime ?? "").match(/(\d+)h\s*(\d+)m/);
     if (m) totalMins += parseInt(m[1]) * 60 + parseInt(m[2]);
   }
   const hrs    = Math.floor(totalMins / 60);
   const mins   = totalMins % 60;
   const timeStr = hrs > 0 ? `${hrs}h ${mins}m` : `${mins}m`;
 
-  const lowSpools = spools.filter(
-    (s) => (s.remaining ?? 0) > 0 && (s.remaining ?? 0) < 100
-  );
-  const lowStockItems = catalog.filter(
-    (i) => (i.qty ?? 0) <= (i.lowStockAt != null ? i.lowStockAt : 3)
-  );
+  const lowSpools     = spools.filter(s => (s.remaining ?? 0) > 0 && (s.remaining ?? 0) < 100);
+  const lowStockItems = catalog.filter(i => (i.qty ?? 0) <= (i.lowStockAt ?? 3));
 
   const dateLabel = new Date().toLocaleDateString("en-US", {
-    weekday: "long",
-    month: "long",
-    day: "numeric",
+    weekday: "long", month: "long", day: "numeric",
     timeZone: "America/New_York",
   });
 
@@ -243,36 +297,25 @@ export async function sendDailyDiscordReport() {
   if (totalGrams > 0) lines.push(`\n🧵 Filament Used: ${totalGrams.toFixed(0)}g total`);
   if (todayFails.length) {
     lines.push(`\n❌ Print Failures: ${todayFails.length}`);
-    todayFails.forEach((f) =>
-      lines.push(`   ${f.printerName ?? ""}${f.productName ? ` — ${(f as { productName?: string }).productName}` : ""}`)
-    );
+    todayFails.forEach(f => lines.push(`   ${f.printerName ?? ""}${f.productName ? ` — ${f.productName}` : ""}`));
   }
   if (lowStockItems.length) {
     lines.push("\n⚠️ Low Stock:");
-    lowStockItems.slice(0, 5).forEach((i) =>
-      lines.push(`   ${i.name ?? i.productName ?? ""} (${i.qty ?? 0} left)`)
-    );
+    lowStockItems.slice(0, 5).forEach(i => lines.push(`   ${i.name ?? i.productName ?? ""} (${i.qty ?? 0} left)`));
   }
   if (lowSpools.length) {
     lines.push("\n🧵 Spools Running Low:");
-    type SpoolFull = SpoolRecord & { brand?: string; colorName?: string; name?: string };
-    (lowSpools as SpoolFull[]).slice(0, 3).forEach((s) =>
-      lines.push(`   ${s.brand ?? ""} ${s.colorName ?? s.name ?? ""} ~${Math.round(s.remaining ?? 0)}g`)
-    );
+    lowSpools.slice(0, 3).forEach(s => lines.push(`   ${s.brand ?? ""} ${s.colorName ?? s.name ?? ""} ~${Math.round(s.remaining ?? 0)}g`));
   }
   lines.push(`\n📋 Queue: ${queuedJobs.length} jobs pending (~${queueTime} total)`);
   lines.push("──────────────────────────");
-  if (!todayFails.length && !lowStockItems.length && !lowSpools.length) {
-    lines.push("No alerts today ✅");
-  }
-
-  const message = lines.join("\n");
+  if (!todayFails.length && !lowStockItems.length && !lowSpools.length) lines.push("No alerts today ✅");
 
   try {
     const r = await fetch(webhookUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content: message }),
+      body: JSON.stringify({ content: lines.join("\n") }),
     });
     if (r.ok) {
       logger.info("Daily Discord report sent successfully");
@@ -285,32 +328,28 @@ export async function sendDailyDiscordReport() {
   }
 }
 
-// ── Schedule daily report at 6AM Eastern ──────────────────────────────────
+// ── Schedule helpers ───────────────────────────────────────────────────────────
+
+function msUntilNext6amEastern(): number {
+  const now = new Date();
+  const eastern = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
+  const next6am = new Date(eastern);
+  next6am.setHours(6, 0, 0, 0);
+  if (next6am <= eastern) next6am.setDate(next6am.getDate() + 1);
+  return next6am.getTime() - eastern.getTime();
+}
+
 function scheduleDailyReport() {
-  function msUntilNext6amEastern(): number {
-    const now = new Date();
-    // Get current time in Eastern timezone
-    const eastern = new Date(
-      now.toLocaleString("en-US", { timeZone: "America/New_York" })
-    );
-    const next6am = new Date(eastern);
-    next6am.setHours(6, 0, 0, 0);
-    if (next6am <= eastern) next6am.setDate(next6am.getDate() + 1);
-    // Difference in real ms
-    return next6am.getTime() - eastern.getTime();
-  }
-
   const delay = msUntilNext6amEastern();
-  const hoursUntil = Math.round(delay / 3_600_000 * 10) / 10;
-  logger.info({ hoursUntil }, "Daily Discord report scheduled");
-
+  logger.info({ hoursUntil: Math.round(delay / 3_600_000 * 10) / 10 }, "Daily Discord report scheduled");
   setTimeout(function tick() {
-    sendDailyDiscordReport().catch((err) =>
-      logger.error({ err }, "Daily report error")
-    );
+    sendDailyDiscordReport().catch(err => logger.error({ err }, "Daily report error"));
+    // Reset stock alert date so the stock check also runs fresh each new day
     setTimeout(tick, 24 * 60 * 60 * 1000);
   }, delay);
 }
+
+// ── Main export ────────────────────────────────────────────────────────────────
 
 export function startNotificationScheduler() {
   const tick = async () => {
@@ -318,6 +357,7 @@ export function startNotificationScheduler() {
       await checkPrints();
       await checkConventions();
       await checkOrders();
+      await checkLowStock();
     } catch (err) {
       logger.error({ err }, "Notification scheduler error");
     }

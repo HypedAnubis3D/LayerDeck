@@ -53,6 +53,10 @@ const PI_PORT        = 3000;
 const printerStates  = {};
 const printerClients = {};
 
+// Track previous gcode state per printer so we can detect transitions
+// (RUNNING → FINISH, * → FAILED) without re-alerting on every poll tick
+const _printerPrevGcodeState = {};
+
 // ── Discord alert helpers ──────────────────────────────────────────────────────
 // Webhook URL loaded from config.json (discordWebhookPrintAlerts) or env var.
 let DISCORD_ALERTS_URL = process.env.DISCORD_WEBHOOK_PRINT_ALERTS || '';
@@ -222,8 +226,29 @@ PRINTERS.forEach(printer => {
           }
         }
 
-        // Section 30: snapshot full state on FAILED for post-failure dialog
+        // ── Print complete / failed Discord alerts ──────────────────────────
         const gcodeState = mqttPayload.print.gcode_state;
+        if (gcodeState && gcodeState !== _printerPrevGcodeState[printer.name]) {
+          const prevState = _printerPrevGcodeState[printer.name];
+          const jobName = (mqttPayload.print.subtask_name || printerStates[printer.name].subtask_name || '')
+            .replace(/\.gcode\.3mf$/i, '').replace(/\.3mf$/i, '') || 'Unknown job';
+
+          if (gcodeState === 'FINISH' && prevState) {
+            // Only alert on a real transition FROM a known prior state (not first connect)
+            mqttAlert(printer.name,
+              `✅ **${printer.name}** print finished!\n📄 ${jobName}`,
+              false);
+          } else if (gcodeState === 'FAILED' && prevState) {
+            const pct = mqttPayload.print.mc_percent || printerStates[printer.name].mc_percent || 0;
+            mqttAlert(printer.name,
+              `❌ **${printer.name}** print **FAILED** at ${pct}%\n📄 ${jobName}`,
+              false);
+          }
+
+          _printerPrevGcodeState[printer.name] = gcodeState;
+        }
+
+        // Section 30: snapshot full state on FAILED for post-failure dialog
         if (gcodeState === 'FAILED') {
           printerStates[printer.name].failureSnapshot = {
             mcPercent:   mqttPayload.print.mc_percent      || 0,
