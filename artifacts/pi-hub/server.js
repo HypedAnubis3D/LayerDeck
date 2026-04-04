@@ -551,8 +551,8 @@ async function _tapoLocalDevice(alias) {
   if (!email || !password) throw new Error('TAPO_EMAIL / TAPO_PASSWORD env vars not set on Pi');
   const ip = TAPO_PLUG_IPS[alias.toLowerCase().trim()];
   if (!ip) throw new Error(`No local IP found for plug alias: "${alias}"`);
-  const credential = new lib.AuthCredential(email, password);
-  return await lib.loginDeviceByIp(credential, ip);
+  // tp-link-tapo-connect v3+: loginDeviceByIp(email, password, ip)
+  return await lib.loginDeviceByIp(email, password, ip);
 }
 
 // GET /tapo/devices — returns on/off + wattage via local protocol
