@@ -15695,7 +15695,7 @@ function loadSocial(){
   socialQueue.forEach(function(p){
     if(p.status==='posting'){
       p.status='failed';
-      p.error='Post was interrupted (page reloaded mid-upload). Check Instagram/Facebook and retry if it didn\'t go through.';
+      p.error='Post was interrupted (page reloaded mid-upload). Check Instagram and retry if it didn\'t go through.';
       dirty=true;
     }
   });
@@ -15709,7 +15709,7 @@ let _scPostType='post'; // 'post'|'reel'|'story'
 let _scAddStory=false;
 let _scMediaUrl='';
 let _scUploading=false;
-let _scPlatform='both'; // 'both'|'ig'|'fb'
+let _scPlatform='ig';
 let _scMode='now'; // 'now'|'schedule'
 let _scMediaUrls=[]; // array of uploaded public URLs (multi-image support)
 let _scMediaMimes={}; // url → mimeType, for detecting video without relying on extension
@@ -15845,15 +15845,6 @@ function socialToggleStory(){
 }
 function socialSetPlatform(p){
   _scPlatform=p;
-  const configs={both:{bg:'var(--pur)',color:'#fff'},ig:{bg:'#e1306c',color:'#fff'},fb:{bg:'#1877f2',color:'#fff'}};
-  ['both','ig','fb'].forEach(function(k){
-    const b=document.getElementById('sc-plat-'+k);
-    if(!b)return;
-    const active=k===p;
-    b.style.background=active?configs[k].bg:'rgba(255,255,255,0.06)';
-    b.style.color=active?configs[k].color:'#9ca3b0';
-    b.style.borderColor=active?configs[k].bg:'var(--bdr)';
-  });
 }
 function socialSetMode(m){
   _scMode=m;
@@ -15960,34 +15951,6 @@ async function postToInstagram(postId){
   saveSocial();renderSocial();
 }
 
-async function postToFacebook(postId){
-  const p=socialQueue.find(x=>x.id===postId);
-  if(!p)return;
-  if(p.fbStatus==='posted'||p.fbStatus==='posting'){return;}
-  if(!p.caption){toast('Add a caption first','','error');return;}
-  p.fbStatus='posting';
-  saveSocial();renderSocial();
-  const media=p.mediaUrl||p.imageUrl||null;
-  try{
-    const res=await fetch('/api/social/facebook',{
-      method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({message:p.caption,mediaUrl:media})
-    });
-    const rawText=await res.text();
-    let json;try{json=JSON.parse(rawText);}catch(_){json={error:rawText||'Server returned an unexpected response'};}
-    if(res.ok&&json.id){
-      p.fbStatus='posted';p.fbPostedAt=Date.now();p.fbId=json.id;
-      toast('Posted to Facebook! 🎉','','success',3000);
-    }else{
-      p.fbStatus='failed';p.fbError=json.error||'Unknown error';
-      toast('Facebook post failed',p.fbError,'error');
-    }
-  }catch(e){
-    p.fbStatus='failed';p.fbError=e.message;
-    toast('Facebook post failed',e.message,'error');
-  }
-  saveSocial();renderSocial();
-}
 
 function _buildNewPost(status,schedFor){
   const cap=(document.getElementById('sc-caption')?.value||'').trim();
@@ -16011,8 +15974,7 @@ async function socialPostNow(){
     if(!post){_postNowLock=false;return;}
     socialQueue.unshift(post);saveSocial();
     _resetComposer();renderSocial();
-    if(post.platform==='both'||post.platform==='ig'||!post.platform) await postToInstagram(post.id);
-    if(post.platform==='both'||post.platform==='fb') await postToFacebook(post.id);
+    await postToInstagram(post.id);
   }finally{_postNowLock=false;}
 }
 function socialSchedulePost(){
@@ -16027,7 +15989,7 @@ function socialSchedulePost(){
 function socialMarkPosted(postId){
   const p=socialQueue.find(x=>x.id===postId);
   if(!p)return;
-  p.status='posted';p.postedAt=p.postedAt||Date.now();p.error=null;p.fbError=null;
+  p.status='posted';p.postedAt=p.postedAt||Date.now();p.error=null;
   saveSocial();renderSocial();
   toast('Marked as posted','Post logged on calendar','success',2500);
 }
@@ -16037,8 +15999,7 @@ async function socialRetryPost(postId){
   if(p.status==='posted'||p.status==='posting'){
     toast('Already posted','This post has already been published','warning',3000);return;
   }
-  if(p.platform==='both'||p.platform==='ig'||!p.platform) await postToInstagram(postId);
-  if(p.platform==='both'||p.platform==='fb') await postToFacebook(postId);
+  await postToInstagram(postId);
 }
 // Keep addSocialPost as alias for openShopifySocialAnnounce compat
 function addSocialPost(){ socialPostNow(); }
@@ -16048,8 +16009,8 @@ function socialOpenPostModal(postId){
   const p=socialQueue.find(x=>x.id===postId);
   if(!p)return;
   const urls=(p.mediaUrls&&p.mediaUrls.length)?p.mediaUrls:(p.mediaUrl?[p.mediaUrl]:[]);
-  const platLabel={both:'IG+FB',ig:'IG',fb:'FB'}[p.platform||'both']||'IG+FB';
-  const platBg={both:'var(--pur)',ig:'#e1306c',fb:'#1877f2'}[p.platform||'both']||'var(--pur)';
+  const platLabel='IG';
+  const platBg='#e1306c';
   const statusColor={draft:'var(--txt-d)',scheduled:'var(--gold)',posting:'var(--cyn)',posted:'var(--grn)',failed:'var(--red)'}[p.status]||'var(--txt-d)';
   const statusLabel={draft:'DRAFT',scheduled:'SCHED',posting:'POSTING…',posted:'POSTED',failed:'FAILED'}[p.status]||p.status;
   const schedLabel=p.scheduledFor?new Date(p.scheduledFor).toLocaleString([],{weekday:'short',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}):'';
@@ -16077,7 +16038,7 @@ function socialOpenPostModal(postId){
       +'</div>'
       +(mediaHtml?'<div style="margin-bottom:14px">'+mediaHtml+'</div>':'')
       +'<div style="font-size:8.5px;color:var(--txt-b);white-space:pre-wrap;line-height:1.55;margin-bottom:14px;max-height:160px;overflow-y:auto;border:1px solid var(--bdr);border-radius:7px;padding:10px;background:rgba(0,0,0,0.2)">'+esc(p.caption||'(no caption)')+'</div>'
-      +((p.error||p.fbError)?'<div style="font-size:7px;color:var(--red);margin-bottom:10px;word-break:break-word">⚠ '+esc(p.error||p.fbError||'')+'</div>':'')
+      +(p.error?'<div style="font-size:7px;color:var(--red);margin-bottom:10px;word-break:break-word">⚠ '+esc(p.error)+'</div>':'')
       +'<div style="display:flex;gap:8px">'
         +(canEdit?'<button onclick="socialEditPost(\''+postId+'\')" style="flex:1;padding:10px;border-radius:7px;background:var(--gold);color:#000;font-size:9px;font-weight:700;cursor:pointer;border:none;font-family:\'Orbitron\',monospace;letter-spacing:1px">✏ EDIT POST</button>':'')
         +(canEdit||p.status==='draft'||p.status==='failed'?'<button onclick="socialRetryPost(\''+postId+'\');socialClosePostModal()" style="flex:1;padding:10px;border-radius:7px;background:linear-gradient(135deg,#7c3aed,#e1306c);color:#fff;font-size:9px;font-weight:700;cursor:pointer;border:none;font-family:\'Orbitron\',monospace;letter-spacing:1px">🚀 POST NOW</button>':'')
@@ -16104,7 +16065,7 @@ function socialEditPost(postId){
   _scMediaUrls=urls.slice();
   _scMediaUrl=urls[0]||'';
   _scPostType=p.postType||'post';
-  _scPlatform=p.platform||'both';
+  _scPlatform='ig';
   _scAddStory=!!p.addToStory;
   // Extract caption (strip hashtags if possible)
   const fullCap=p.caption||'';
@@ -16193,8 +16154,7 @@ setInterval(async function(){
   for(const p of due){
     const media=p.mediaUrl||p.imageUrl;
     if(!media){p.status='failed';p.error='Missing media';saveSocial();continue;}
-    if(p.platform==='both'||p.platform==='ig'||!p.platform) await postToInstagram(p.id);
-    if(p.platform==='both'||p.platform==='fb') await postToFacebook(p.id);
+    await postToInstagram(p.id);
   }
 },60000);
 
@@ -16268,8 +16228,8 @@ function _buildPostCard(p,compact){
   const typeIcon={post:'📷',reel:'🎬',story:'💫'}[p.postType||'post']||'📷';
   const statusColor={draft:'var(--txt-d)',scheduled:'var(--gold)',posting:'var(--cyn)',posted:'var(--grn)',failed:'var(--red)'}[p.status]||'var(--txt-d)';
   const statusLabel={draft:'DRAFT',scheduled:'SCHED',posting:'POSTING…',posted:'POSTED',failed:'FAILED'}[p.status]||'DRAFT';
-  const platLabel={both:'IG+FB',ig:'IG',fb:'FB'}[p.platform||'both']||'IG+FB';
-  const platBg={both:'var(--pur)',ig:'#e1306c',fb:'#1877f2'}[p.platform||'both']||'var(--pur)';
+  const platLabel='IG';
+  const platBg='#e1306c';
   const allUrls=(p.mediaUrls&&p.mediaUrls.length)?p.mediaUrls:(p.mediaUrl||p.imageUrl?[p.mediaUrl||p.imageUrl]:[]);
   const media=allUrls[0]||'';
   const isVideo=media&&media.match(/\.(mp4|mov|avi|webm)(\?|$)/i);
@@ -16286,7 +16246,7 @@ function _buildPostCard(p,compact){
     :media&&isVideo?'<div style="width:'+sz+'px;height:'+sz+'px;background:#111;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;border:1px solid var(--bdr)">🎬</div>'
     :'<div style="width:'+sz+'px;height:'+sz+'px;border:1px dashed var(--bdr);border-radius:5px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:16px">📷</div>';
   const caption=p.caption||'';
-  const errorStr=p.error||p.fbError||'';
+  const errorStr=p.error||'';
   return '<div style="border:1px solid var(--bdr);border-radius:7px;padding:10px;background:rgba(0,0,0,0.18);margin-bottom:6px">'
     +'<div style="display:flex;align-items:flex-start;gap:8px">'
       +thumb
@@ -16433,15 +16393,7 @@ function renderSocial(){
         +'<div style="font-size:7px;color:var(--txt-d);letter-spacing:1px;margin-bottom:4px">HASHTAGS</div>'
         +'<input class="srch" id="sc-tags" placeholder="#3dprinting #hypedanubis3d #pokemon3d…" style="width:100%;box-sizing:border-box"/>'
       +'</div>'
-      // Platform selector
-      +'<div style="margin-bottom:10px">'
-        +'<div style="font-size:7px;color:var(--txt-d);letter-spacing:1px;margin-bottom:5px">POST TO</div>'
-        +'<div style="display:flex;gap:6px">'
-          +'<button id="sc-plat-both" onclick="socialSetPlatform(\'both\')" style="flex:1;padding:7px 8px;border-radius:6px;border:1.5px solid var(--pur);background:var(--pur);color:#fff;font-size:8px;font-weight:700;cursor:pointer;font-family:\'Orbitron\',monospace;letter-spacing:1px">IG + FB</button>'
-          +'<button id="sc-plat-ig" onclick="socialSetPlatform(\'ig\')" style="flex:1;padding:7px 8px;border-radius:6px;border:1.5px solid var(--bdr);background:rgba(255,255,255,0.06);color:#9ca3b0;font-size:8px;font-weight:700;cursor:pointer;font-family:\'Orbitron\',monospace;letter-spacing:1px">📷 IG</button>'
-          +'<button id="sc-plat-fb" onclick="socialSetPlatform(\'fb\')" style="flex:1;padding:7px 8px;border-radius:6px;border:1.5px solid var(--bdr);background:rgba(255,255,255,0.06);color:#9ca3b0;font-size:8px;font-weight:700;cursor:pointer;font-family:\'Orbitron\',monospace;letter-spacing:1px">📘 FB</button>'
-        +'</div>'
-      +'</div>'
+      
       // Post Now / Schedule toggle
       +'<div style="display:flex;gap:6px;margin-bottom:8px">'
         +'<button id="sc-mode-now" onclick="socialSetMode(\'now\')" style="flex:1;padding:8px;border-radius:6px;border:1.5px solid var(--bdr);background:var(--gold);color:#000;font-size:8px;font-weight:700;cursor:pointer;font-family:\'Orbitron\',monospace;letter-spacing:1px">🚀 POST NOW</button>'
