@@ -14071,11 +14071,12 @@ async function onPiPrintStarted(name,data){
 }
 
 async function onPiPrintFinished(name,data){
-  // Dedup guard — if another Pi Hub finish event already fired for this same job within the
-  // last 10 minutes, skip creating a duplicate record (handles rapid state transitions / reloads)
   const jobNameCheck=(data.subtask_name||'').replace('.gcode.3mf','').replace('.3mf','')||'Unknown';
+  // Dedup for the entire calendar day — prevents duplicate records when the app
+  // reloads and re-receives the FINISH MQTT state (can be minutes or hours later)
+  const _todayStart=new Date();_todayStart.setHours(0,0,0,0);
   const recentDup=prints.find(function(r){
-    return r.autoFromPi&&r.printer===name&&r.name===jobNameCheck&&(Date.now()-(r.finishedAt||r.timestamp||0))<600000;
+    return r.autoFromPi&&r.printer===name&&r.name===jobNameCheck&&(r.finishedAt||r.timestamp||0)>=_todayStart.getTime();
   });
   if(recentDup){return;}
   const jobName=(data.subtask_name||'').replace('.gcode.3mf','').replace('.3mf','')||'Unknown';

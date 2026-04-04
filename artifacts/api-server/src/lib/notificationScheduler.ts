@@ -188,7 +188,7 @@ async function checkLowStock() {
   ]);
 
   type Spool      = { remaining?: number; brand?: string; colorName?: string; name?: string };
-  type CatalogItem = { qty?: number; lowStockAt?: number; name?: string };
+  type CatalogItem = { stockQty?: number; lowStockAt?: number; name?: string };
 
   const spools  = rawSpools  as Spool[];
   const catalog = rawCatalog as CatalogItem[];
@@ -196,7 +196,7 @@ async function checkLowStock() {
   // < 100 g remaining = low spool (matches daily report threshold)
   const lowSpools = spools.filter(s => (s.remaining ?? 0) > 0 && (s.remaining ?? 0) < 100);
   // qty <= lowStockAt (default 3) = low product stock
-  const lowStock  = catalog.filter(i => (i.qty ?? 0) <= (i.lowStockAt ?? 3));
+  const lowStock  = catalog.filter(i => (i.stockQty ?? 0) <= (i.lowStockAt ?? 3));
 
   // Mark as checked even when nothing is low so we don't re-run all day
   writeJson(LAST_STOCK_ALERT_FILE, { date: today });
@@ -207,7 +207,7 @@ async function checkLowStock() {
   if (lowStock.length) {
     lines.push("📦 **Low Product Stock:**");
     lowStock.slice(0, 8).forEach(i =>
-      lines.push(`  • ${i.name ?? "Unknown"} — ${i.qty ?? 0} left`)
+      lines.push(`  • ${i.name ?? "Unknown"} — ${i.stockQty ?? 0} left`)
     );
   }
   if (lowSpools.length) {
@@ -265,7 +265,7 @@ export async function sendDailyDiscordReport() {
   };
   type SpoolRecord   = { remaining?: number; brand?: string; colorName?: string; name?: string };
   type QueueRecord   = { stage?: string; hrs?: number };
-  type CatalogRecord = { qty?: number; lowStockAt?: number; name?: string; productName?: string };
+  type CatalogRecord = { stockQty?: number; lowStockAt?: number; name?: string; productName?: string };
 
   const prints  = rawPrints  as PrintRecord[];
   const spools  = rawSpools  as SpoolRecord[];
@@ -314,7 +314,7 @@ export async function sendDailyDiscordReport() {
   const timeStr = hrs > 0 ? `${hrs}h ${mins}m` : `${mins}m`;
 
   const lowSpools     = spools.filter(s => (s.remaining ?? 0) > 0 && (s.remaining ?? 0) < 100);
-  const lowStockItems = catalog.filter(i => (i.qty ?? 0) <= (i.lowStockAt ?? 3));
+  const lowStockItems = catalog.filter(i => (i.stockQty ?? 0) <= (i.lowStockAt ?? 3));
 
   const dateLabel = new Date().toLocaleDateString("en-US", {
     weekday: "long", month: "long", day: "numeric",
@@ -326,7 +326,14 @@ export async function sendDailyDiscordReport() {
     "──────────────────────────",
     `🖨️ Prints Completed: ${todayPrints.length}${totalMins > 0 ? ` (total ${timeStr})` : ""}`,
   ];
-  if (printersRan.length) lines.push(`   ${printersRan.join(" | ")}`);
+  // List each print's name and printer
+  todayPrints.slice(0, 8).forEach(p => {
+    const pMins = Math.round((p.hrs ?? 0) * 60);
+    const pHrs  = Math.floor(pMins / 60);
+    const pMin  = pMins % 60;
+    const dur   = pMins > 0 ? ` (${pHrs > 0 ? pHrs + "h " : ""}${pMin}m)` : "";
+    lines.push(`   • ${p.name ?? "Unknown"}${p.printer ? ` — ${p.printer}` : ""}${dur}`);
+  });
   if (totalGrams > 0) lines.push(`\n🧵 Filament Used: ${totalGrams.toFixed(0)}g total`);
   if (todayFails.length) {
     lines.push(`\n❌ Print Failures: ${todayFails.length}`);
@@ -334,7 +341,7 @@ export async function sendDailyDiscordReport() {
   }
   if (lowStockItems.length) {
     lines.push("\n⚠️ Low Stock:");
-    lowStockItems.slice(0, 5).forEach(i => lines.push(`   ${i.name ?? i.productName ?? ""} (${i.qty ?? 0} left)`));
+    lowStockItems.slice(0, 5).forEach(i => lines.push(`   ${i.name ?? i.productName ?? ""} (${i.stockQty ?? 0} left)`));
   }
   if (lowSpools.length) {
     lines.push("\n🧵 Spools Running Low:");
