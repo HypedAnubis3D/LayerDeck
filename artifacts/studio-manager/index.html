@@ -15874,29 +15874,66 @@ async function postToInstagram(postId){
   if(!p.caption&&p.postType!=='story'){toast('Add a caption first','','error');return;}
   p.status='posting';p.error=null;
   saveSocial();renderSocial();
+  async function _igSafeJson(r){const t=await r.text();try{return JSON.parse(t);}catch(_){return{error:t||'Unexpected server response'};}}
   try{
+    // Step 1: create container (fast for all types)
     const res=await fetch('/api/social/instagram',{
       method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({mediaUrl:media,caption:p.caption||'',postType:p.postType||'post'})
     });
-    const rawText=await res.text();
-    let json;try{json=JSON.parse(rawText);}catch(_){json={error:rawText||'Server returned an unexpected response'};}
-    if(res.ok&&json.id){
-      p.status='posted';p.postedAt=Date.now();p.igId=json.id;
-      const msg=json.postedAsImage?'Posted as image (API can\'t post image Reels — use the IG app to convert to Reel)':'@hypedanubis3d';
-      const toastType=json.postedAsImage?'warning':'success';
-      toast('Posted to Instagram! 🎉',msg,toastType,json.postedAsImage?6000:3500);
-      if(p.addToStory&&p.postType!=='story'){
-        const r2=await fetch('/api/social/instagram',{
-          method:'POST',headers:{'Content-Type':'application/json'},
-          body:JSON.stringify({mediaUrl:media,caption:'',postType:'story'})
-        });
-        const t2=await r2.text();let j2;try{j2=JSON.parse(t2);}catch(_){j2={};}
-        p.storyId=j2.id||null;
+    const json=await _igSafeJson(res);
+    if(!res.ok||json.error){
+      p.status='failed';p.error=json.error||'Unknown error';
+      toast('Instagram post failed',p.error,'error');
+      saveSocial();renderSocial();return;
+    }
+    // Step 2: if video, poll until Instagram finishes processing then publish
+    if(json.pending&&json.containerId){
+      p.status='posting';p.error=null;saveSocial();renderSocial();
+      let igId=json.igId;let posted=false;
+      for(let i=0;i<20;i++){
+        await new Promise(function(r){setTimeout(r,4000);});
+        const sr=await fetch('/api/social/instagram/container/'+json.containerId).catch(function(){return null;});
+        if(!sr){continue;}
+        const sj=await _igSafeJson(sr);
+        if(sj.statusCode==='FINISHED'){
+          // Publish now that it's ready
+          const pr=await fetch('/api/social/instagram/publish',{
+            method:'POST',headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({containerId:json.containerId,igId,postType:p.postType})
+          }).catch(function(){return null;});
+          if(pr){
+            const pj=await _igSafeJson(pr);
+            if(pj.ok&&pj.id){
+              p.status='posted';p.postedAt=Date.now();p.igId=pj.id;posted=true;
+              toast('Posted to Instagram! 🎉','@hypedanubis3d','success',3500);
+            }else{
+              p.status='failed';p.error=pj.error||'Publish failed';
+              toast('Instagram post failed',p.error,'error');
+            }
+          }else{
+            p.status='failed';p.error='Publish request failed';
+            toast('Instagram post failed',p.error,'error');
+          }
+          break;
+        }else if(sj.statusCode==='ERROR'){
+          p.status='failed';p.error='Video processing failed on Instagram — check format and try again';
+          toast('Instagram post failed',p.error,'error');break;
+        }
       }
-    }else if(json.pending){
-      p.status='failed';p.error=json.error||'Video still processing — try again in a minute';
-      toast('Reel still processing',p.error,'warning',5000);
+      if(!posted&&p.status==='posting'){
+        p.status='failed';p.error='Video is taking too long to process. Try again in a few minutes.';
+        toast('Still processing',p.error,'warning',6000);
+      }
+    }else if(json.id){
+      // Image/story — already published
+      p.status='posted';p.postedAt=Date.now();p.igId=json.id;
+      const msg=json.postedAsImage?'Posted as image (API can\'t post image Reels — use IG app to convert to Reel)':'@hypedanubis3d';
+      toast('Posted to Instagram! 🎉',msg,json.postedAsImage?'warning':'success',json.postedAsImage?6000:3500);
+      if(p.addToStory&&p.postType!=='story'){
+        const r2=await fetch('/api/social/instagram',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mediaUrl:media,caption:'',postType:'story'})}).catch(function(){return null;});
+        if(r2){const j2=await _igSafeJson(r2);p.storyId=j2.id||null;}
+      }
     }else{
       p.status='failed';p.error=json.error||'Unknown error';
       toast('Instagram post failed',p.error,'error');

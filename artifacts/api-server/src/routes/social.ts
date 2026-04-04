@@ -200,7 +200,30 @@ router.post("/upload/multi", upload.array("files", 10), async (req, res) => {
   return res.json({ ok: true, urls, count: urls.length, storage: allSupabase ? "supabase" : "mixed" });
 });
 
-// POST /api/social/instagram — publish to Instagram (post/reel/story)
+// Helper: build IG container body
+function buildIgContainer(postType: string, resolvedMedia: string, caption: string | undefined, token: string): Record<string, string | boolean> {
+  const mediaIsVideo = !!resolvedMedia.match(/\.(mp4|mov|avi|mkv|webm)(\?|$)/i);
+  const body: Record<string, string | boolean> = { access_token: token };
+  if (postType === "reel" && mediaIsVideo) {
+    body.media_type = "REELS"; body.video_url = resolvedMedia; body.share_to_feed = true;
+    if (caption) body.caption = caption;
+  } else if (postType === "reel" && !mediaIsVideo) {
+    body.image_url = resolvedMedia;
+    if (caption) body.caption = caption;
+  } else if (postType === "story") {
+    body.media_type = "STORIES";
+    if (mediaIsVideo) body.video_url = resolvedMedia; else body.image_url = resolvedMedia;
+  } else {
+    if (mediaIsVideo) { body.media_type = "VIDEO"; body.video_url = resolvedMedia; }
+    else body.image_url = resolvedMedia;
+    if (caption) body.caption = caption;
+  }
+  return body;
+}
+
+// POST /api/social/instagram — create media container.
+// For images/stories: also publishes immediately and returns { ok, id }.
+// For videos: returns { ok, pending:true, containerId, igId } — client must poll then publish.
 router.post("/instagram", async (req, res) => {
   const token = process.env.META_ACCESS_TOKEN;
   if (!token) return res.status(500).json({ error: "META_ACCESS_TOKEN not set" });
@@ -216,71 +239,28 @@ router.post("/instagram", async (req, res) => {
     const igInfo = await getIgInfo(token);
     if (!igInfo?.id) return res.status(400).json({ error: "Cannot resolve Instagram Business Account ID." });
 
-    // Build container payload based on post type
-    const mediaIsVideo = !!resolvedMedia.match(/\.(mp4|mov|avi|mkv|webm)$/i);
-    const isVideo = mediaIsVideo;
-    const containerBody: Record<string, string | boolean> = { access_token: token };
+    const mediaIsVideo = !!resolvedMedia.match(/\.(mp4|mov|avi|mkv|webm)(\?|$)/i);
+    const containerBody = buildIgContainer(postType, resolvedMedia, caption, token);
 
-    if (postType === "reel" && mediaIsVideo) {
-      containerBody.media_type = "REELS";
-      containerBody.video_url = resolvedMedia;
-      containerBody.share_to_feed = true;
-      if (caption) containerBody.caption = caption;
-    } else if (postType === "reel" && !mediaIsVideo) {
-      // Instagram Graph API requires a video for Reels — image Reels are only possible
-      // through the native app (which converts internally). Fall back to IMAGE feed post.
-      containerBody.image_url = resolvedMedia;
-      if (caption) containerBody.caption = caption;
-    } else if (postType === "story") {
-      containerBody.media_type = "STORIES";
-      if (isVideo) containerBody.video_url = resolvedMedia;
-      else containerBody.image_url = resolvedMedia;
-    } else {
-      // regular post
-      if (isVideo) {
-        containerBody.media_type = "VIDEO";
-        containerBody.video_url = resolvedMedia;
-      } else {
-        containerBody.image_url = resolvedMedia;
-      }
-      if (caption) containerBody.caption = caption;
-    }
-
-    // Step 1: create media container
+    // Create container (fast — returns in < 3s)
     const createRes = await fetch(`${IG_BASE}/${igInfo.id}/media`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
+      method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify(containerBody),
     });
     const createJson = (await createRes.json()) as { id?: string; error?: { message: string } };
-    if (createJson.error) {
-      return res.status(400).json({
-        error: createJson.error.message,
-        hint: "Ensure the media URL is publicly accessible.",
-      });
-    }
+    if (createJson.error) return res.status(400).json({ error: createJson.error.message, hint: "Ensure the media URL is publicly accessible." });
 
     const containerId = createJson.id;
     if (!containerId) return res.status(400).json({ error: "Failed to create media container" });
 
-    // For video reels/posts only — poll until container is ready (up to 45s).
-    // Image reels process instantly and don't need polling.
-    if (isVideo) {
-      let ready = false;
-      for (let i = 0; i < 9; i++) {
-        await new Promise(r => setTimeout(r, 5000));
-        const statusRes = await fetch(`${IG_BASE}/${containerId}?fields=status_code&access_token=${encodeURIComponent(token)}`);
-        const statusJson = (await statusRes.json()) as { status_code?: string };
-        if (statusJson.status_code === "FINISHED") { ready = true; break; }
-        if (statusJson.status_code === "ERROR") return res.status(400).json({ error: "Video processing failed on Instagram — check the video format and try again." });
-      }
-      if (!ready) return res.status(202).json({ ok: false, pending: true, containerId, error: "Video is still processing on Instagram. Try posting again in a minute." });
+    // Videos need processing time — return containerId for client-side polling
+    if (mediaIsVideo) {
+      return res.json({ ok: true, pending: true, containerId, igId: igInfo.id, postType });
     }
 
-    // Step 2: publish
+    // Images/stories publish immediately
     const publishRes = await fetch(`${IG_BASE}/${igInfo.id}/media_publish`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
+      method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ creation_id: containerId, access_token: token }),
     });
     const publishJson = (await publishRes.json()) as { id?: string; error?: { message: string } };
@@ -288,6 +268,39 @@ router.post("/instagram", async (req, res) => {
 
     const actualPostType = (postType === "reel" && !mediaIsVideo) ? "post" : postType;
     return res.json({ ok: true, id: publishJson.id, igId: igInfo.id, username: igInfo.username, postType: actualPostType, postedAsImage: postType === "reel" && !mediaIsVideo });
+  } catch (e) {
+    return res.status(500).json({ error: e instanceof Error ? e.message : "Unknown error" });
+  }
+});
+
+// GET /api/social/instagram/container/:containerId — check video container status (single check, no polling)
+router.get("/instagram/container/:containerId", async (req, res) => {
+  const token = process.env.META_ACCESS_TOKEN;
+  if (!token) return res.status(500).json({ error: "META_ACCESS_TOKEN not set" });
+  try {
+    const r = await fetch(`${IG_BASE}/${req.params.containerId}?fields=status_code,status&access_token=${encodeURIComponent(token)}`);
+    const j = (await r.json()) as { status_code?: string; status?: string; error?: { message: string } };
+    if (j.error) return res.status(400).json({ error: j.error.message });
+    return res.json({ statusCode: j.status_code ?? "UNKNOWN", status: j.status });
+  } catch (e) {
+    return res.status(500).json({ error: e instanceof Error ? e.message : "Unknown error" });
+  }
+});
+
+// POST /api/social/instagram/publish — publish a ready container
+router.post("/instagram/publish", async (req, res) => {
+  const token = process.env.META_ACCESS_TOKEN;
+  if (!token) return res.status(500).json({ error: "META_ACCESS_TOKEN not set" });
+  const { containerId, igId, postType } = req.body as { containerId: string; igId: string; postType?: string };
+  if (!containerId || !igId) return res.status(400).json({ error: "containerId and igId required" });
+  try {
+    const publishRes = await fetch(`${IG_BASE}/${igId}/media_publish`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ creation_id: containerId, access_token: token }),
+    });
+    const publishJson = (await publishRes.json()) as { id?: string; error?: { message: string } };
+    if (publishJson.error) return res.status(400).json({ error: publishJson.error.message });
+    return res.json({ ok: true, id: publishJson.id, postType });
   } catch (e) {
     return res.status(500).json({ error: e instanceof Error ? e.message : "Unknown error" });
   }
