@@ -14819,6 +14819,8 @@ async function confirmSkipRefund(){
 function renderPrinters(){
   document.getElementById('printers-cnt').textContent=printerRecords.length+' printers';
   const g=document.getElementById('printers-grid');
+  // Kick off Tapo device fetch so plug sections in printer cards are populated
+  if(piHubConfig) fetchTapoDevices();
 
   // Pi Hub connection card at the top
   let piCard='';
@@ -14982,6 +14984,7 @@ function renderPrinters(){
             '<button class="btn btn-ghost btn-xs" style="color:var(--cyn-b)" onclick="piLightToggle(\''+esc(p.name)+'\')">💡 Light</button>'+
             '<button class="btn btn-ghost btn-xs" style="color:var(--gold-b)" onclick="piCalibrateMenu(\''+esc(p.name)+'\')">🔧 Calibrate</button>'+
           '</div>'+
+          _renderPrinterTapoSection(p.name)+
         '</div>':'')+
       // EXPANDED STATIC DATA
       '<div id="pexpand-'+p.id+'" style="display:'+(expanded?'block':'none')+'">'+
@@ -15196,7 +15199,7 @@ async function tapoSetPower(deviceId,on,btnEl){
     const r=await fetch('/api/tapo/power',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({deviceId,on,hubUrl:_piHubUrl||null})
+      body:JSON.stringify({deviceId,on,hubUrl:getPiHubUrl()||null})
     });
     const j=await r.json();
     if(j.ok){
