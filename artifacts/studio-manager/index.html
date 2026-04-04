@@ -15687,7 +15687,20 @@ async function setHealthCronFrequency(freq){
 // ── Social data ──
 Object.assign(KEYS,{socialQueue:'ha3d_socialqueue_v2'});
 let socialQueue=[];
-function loadSocial(){socialQueue=gs(KEYS.socialQueue)||[];}
+function loadSocial(){
+  socialQueue=gs(KEYS.socialQueue)||[];
+  // If a post was in 'posting' when the page closed/refreshed, the polling loop
+  // died mid-flight. Reset it so the user can retry instead of it being frozen.
+  let dirty=false;
+  socialQueue.forEach(function(p){
+    if(p.status==='posting'){
+      p.status='failed';
+      p.error='Post was interrupted (page reloaded mid-upload). Check Instagram/Facebook and retry if it didn\'t go through.';
+      dirty=true;
+    }
+  });
+  if(dirty)ss(KEYS.socialQueue,socialQueue);
+}
 function saveSocial(){ss(KEYS.socialQueue,socialQueue);}
 loadSocial();
 
@@ -15906,6 +15919,7 @@ async function postToInstagram(postId){
             const pj=await _igSafeJson(pr);
             if(pj.ok&&pj.id){
               p.status='posted';p.postedAt=Date.now();p.igId=pj.id;posted=true;
+              saveSocial();
               toast('Posted to Instagram! 🎉','@hypedanubis3d','success',3500);
             }else{
               p.status='failed';p.error=pj.error||'Publish failed';
@@ -16003,6 +16017,13 @@ function socialSchedulePost(){
   _resetComposer();renderSocial();
   toast('Scheduled!','Post will auto-publish at the set time','success');
 }
+function socialMarkPosted(postId){
+  const p=socialQueue.find(x=>x.id===postId);
+  if(!p)return;
+  p.status='posted';p.postedAt=p.postedAt||Date.now();p.error=null;p.fbError=null;
+  saveSocial();renderSocial();
+  toast('Marked as posted','Post logged on calendar','success',2500);
+}
 async function socialRetryPost(postId){
   const p=socialQueue.find(x=>x.id===postId);
   if(!p)return;
@@ -16050,6 +16071,7 @@ function socialOpenPostModal(postId){
       +'<div style="display:flex;gap:8px">'
         +(canEdit?'<button onclick="socialEditPost(\''+postId+'\')" style="flex:1;padding:10px;border-radius:7px;background:var(--gold);color:#000;font-size:9px;font-weight:700;cursor:pointer;border:none;font-family:\'Orbitron\',monospace;letter-spacing:1px">✏ EDIT POST</button>':'')
         +(canEdit||p.status==='draft'||p.status==='failed'?'<button onclick="socialRetryPost(\''+postId+'\');socialClosePostModal()" style="flex:1;padding:10px;border-radius:7px;background:linear-gradient(135deg,#7c3aed,#e1306c);color:#fff;font-size:9px;font-weight:700;cursor:pointer;border:none;font-family:\'Orbitron\',monospace;letter-spacing:1px">🚀 POST NOW</button>':'')
+        +(p.status==='failed'?'<button onclick="socialMarkPosted(\''+postId+'\');socialClosePostModal()" style="padding:10px 14px;border-radius:7px;background:rgba(34,197,94,0.15);color:var(--grn);font-size:9px;font-weight:700;cursor:pointer;border:1px solid var(--grn);font-family:\'Orbitron\',monospace;letter-spacing:1px">✓ MARK POSTED</button>':'')
         +'<button onclick="delSocialPost(\''+postId+'\');socialClosePostModal()" style="padding:10px 14px;border-radius:7px;background:rgba(239,68,68,0.15);color:var(--red);font-size:9px;font-weight:700;cursor:pointer;border:1px solid var(--red);font-family:\'Orbitron\',monospace;letter-spacing:1px">✕ DELETE</button>'
       +'</div>'
     +'</div>'
