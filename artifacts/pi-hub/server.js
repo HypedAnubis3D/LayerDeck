@@ -235,8 +235,11 @@ PRINTERS.forEach(printer => {
 
           if (gcodeState === 'FINISH' && prevState) {
             // Only alert on a real transition FROM a known prior state (not first connect)
+            const _st = printerStates[printer.name].printStartTime;
+            const _dur = _st ? Math.round((Date.now() - _st) / 60000) : 0;
+            const _durStr = _dur > 0 ? `${Math.floor(_dur/60)}h ${_dur%60}m` : '—';
             mqttAlert(printer.name,
-              `✅ **${printer.name}** print finished!\n📄 ${jobName}`,
+              `✅ **Print Complete — ${printer.name}**\nJob: ${jobName}\nDuration: ${_durStr}`,
               false);
           } else if (gcodeState === 'FAILED' && prevState) {
             const pct = mqttPayload.print.mc_percent || printerStates[printer.name].mc_percent || 0;
@@ -262,9 +265,15 @@ PRINTERS.forEach(printer => {
         // Track print start time for duration calculations
         if (gcodeState === 'RUNNING' && !printerStates[printer.name].printStartTime) {
           printerStates[printer.name].printStartTime = Date.now();
+          printerStates[printer.name].lastCompletedDurationMins = null; // clear stale
         }
-        // Clear start time when print ends
+        // When print ends: save duration BEFORE clearing start time so the app
+        // can retrieve it on the next poll (avoids "Duration: —" when app missed RUNNING)
         if (['FINISH', 'FAILED', 'IDLE'].includes(gcodeState)) {
+          const st = printerStates[printer.name].printStartTime;
+          if (st && gcodeState === 'FINISH') {
+            printerStates[printer.name].lastCompletedDurationMins = Math.round((Date.now() - st) / 60000);
+          }
           printerStates[printer.name].printStartTime = null;
           // Clear object data when print ends — next print may not be print-by-object
           if (['FINISH', 'IDLE'].includes(gcodeState)) {
