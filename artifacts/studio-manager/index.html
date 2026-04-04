@@ -15930,11 +15930,11 @@ function socialOpenPostModal(postId){
   const mediaHtml=urls.length===0?''
     :urls.length===1?((urls[0].match(/\.(mp4|mov|avi|webm)(\?|$)/i))
       ?'<video src="'+esc(urls[0])+'" style="width:100%;max-height:240px;object-fit:contain;border-radius:8px;background:#000" controls muted></video>'
-      :'<img src="'+esc(urls[0])+'" style="width:100%;max-height:240px;object-fit:contain;border-radius:8px;background:#000"/>')
+      :'<img src="'+esc(urls[0])+'" style="width:100%;max-height:240px;object-fit:contain;border-radius:8px;background:#000;display:block" onerror="_socialMediaBrokenLarge(this)"/>')
     :'<div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:4px">'+urls.map(function(u){
       return u.match(/\.(mp4|mov|avi|webm)(\?|$)/i)
         ?'<div style="width:140px;height:140px;flex-shrink:0;border-radius:7px;background:#111;display:flex;align-items:center;justify-content:center;font-size:36px">🎬</div>'
-        :'<img src="'+esc(u)+'" style="width:140px;height:140px;flex-shrink:0;object-fit:cover;border-radius:7px;border:1px solid var(--bdr)"/>';
+        :'<img src="'+esc(u)+'" style="width:140px;height:140px;flex-shrink:0;object-fit:cover;border-radius:7px;border:1px solid var(--bdr)" onerror="_socialMediaBrokenThumb(this)"/>';
     }).join('')+'</div>';
   const html='<div id="sc-post-modal" onclick="if(event.target===this)socialClosePostModal()" style="position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.75);display:flex;align-items:flex-end;justify-content:center">'
     +'<div style="width:100%;max-width:480px;background:var(--bg-card,#14142a);border-radius:16px 16px 0 0;padding:18px;max-height:85vh;overflow-y:auto;box-sizing:border-box" onclick="event.stopPropagation()">'
@@ -16089,6 +16089,33 @@ function socialCalSelectDay(day){
   });
   if(panelEl)panelEl.innerHTML=_buildCalDayPanel();
 }
+function _socialMediaBrokenCard(img){
+  var p=img.parentNode;
+  if(!p)return;
+  img.style.display='none';
+  var d=document.createElement('div');
+  d.style.cssText='position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;background:rgba(239,68,68,0.1)';
+  d.innerHTML='<span style="font-size:16px">⚠️</span><span style="font-size:5px;color:#ef4444;font-family:Orbitron,monospace;text-align:center;line-height:1.2">MEDIA<br>LOST</span>';
+  p.appendChild(d);
+}
+function _socialMediaBrokenLarge(img){
+  var p=img.parentNode;
+  if(!p)return;
+  img.style.display='none';
+  var d=document.createElement('div');
+  d.style.cssText='width:100%;height:160px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;background:rgba(239,68,68,0.08);border-radius:8px;border:1px solid rgba(239,68,68,0.3)';
+  d.innerHTML='<span style="font-size:32px">⚠️</span><span style="font-size:8px;color:#ef4444;font-family:Orbitron,monospace">MEDIA UNAVAILABLE</span><span style="font-size:7px;color:#9ca3b0;text-align:center">File no longer exists on server.<br>Use Edit Post to re-upload.</span>';
+  p.appendChild(d);
+}
+function _socialMediaBrokenThumb(img){
+  var p=img.parentNode;
+  if(!p)return;
+  img.style.display='none';
+  var d=document.createElement('div');
+  d.style.cssText='width:140px;height:140px;flex-shrink:0;border-radius:7px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.3);display:inline-flex;align-items:center;justify-content:center;font-size:28px';
+  d.textContent='⚠️';
+  p.appendChild(d);
+}
 function _buildCalDayPanel(){
   if(_calDay===null)return '';
   const dayPosts=socialQueue.filter(function(p){
@@ -16122,7 +16149,10 @@ function _buildPostCard(p,compact){
   const sz=compact?'40':'56';
   const extraCount=allUrls.length>1?allUrls.length-1:0;
   const thumb=media&&!isVideo
-    ?'<div style="position:relative;width:'+sz+'px;height:'+sz+'px;flex-shrink:0"><img src="'+esc(media)+'" style="width:'+sz+'px;height:'+sz+'px;object-fit:cover;border-radius:5px;border:1px solid var(--bdr)" onerror="this.style.display=\'none\'"/>'+(extraCount?'<div style="position:absolute;bottom:2px;right:2px;background:rgba(0,0,0,0.75);color:#fff;font-size:7px;padding:1px 4px;border-radius:3px;font-family:\'Orbitron\',monospace">+'+extraCount+'</div>':'')+'</div>'
+    ?'<div style="position:relative;width:'+sz+'px;height:'+sz+'px;flex-shrink:0;border:1px solid var(--bdr);border-radius:5px;overflow:hidden">'
+      +'<img src="'+esc(media)+'" style="width:'+sz+'px;height:'+sz+'px;object-fit:cover;border-radius:5px;display:block" onerror="_socialMediaBrokenCard(this)"/>'
+      +(extraCount?'<div style="position:absolute;bottom:2px;right:2px;background:rgba(0,0,0,0.75);color:#fff;font-size:7px;padding:1px 4px;border-radius:3px;font-family:\'Orbitron\',monospace">+'+extraCount+'</div>':'')
+    +'</div>'
     :media&&isVideo?'<div style="width:'+sz+'px;height:'+sz+'px;background:#111;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;border:1px solid var(--bdr)">🎬</div>'
     :'<div style="width:'+sz+'px;height:'+sz+'px;border:1px dashed var(--bdr);border-radius:5px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:16px">📷</div>';
   const caption=p.caption||'';
