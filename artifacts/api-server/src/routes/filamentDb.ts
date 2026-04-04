@@ -38,6 +38,8 @@ const TYPE_MAP: Record<string, string> = {
   "ASA":                "ASA",
   "TPU / TPE":          "TPU 95A",
   "TPU":                "TPU 95A",
+  "TPU 90A":            "TPU 90A",
+  "TPU 68D":            "TPU 68D",
   "PAHT-CF":            "PA6-CF",
   "PA6-CF":             "PA6-CF",
   "PC":                 "PC",

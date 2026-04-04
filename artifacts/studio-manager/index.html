@@ -1738,7 +1738,7 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
         <option>PETG Basic</option><option>PETG HF</option><option>PETG Translucent</option><option>PETG-CF</option>
         <option>ABS</option><option>ABS-CF</option><option>ABS-GF</option><option>ASA</option><option>ASA-CF</option><option>ASA Aero</option>
         <option>PA</option><option>PA-CF</option><option>PA-GF</option><option>PC</option><option>PC-CF</option><option>PPS</option><option>PPS-CF</option>
-        <option>TPU 95A</option><option>TPU 85A</option>
+        <option>TPU 95A</option><option>TPU 90A</option><option>TPU 68D</option><option>TPU 85A</option>
         <option>Support W</option><option>Support G</option><option>HIPS</option><option>BVOH</option><option>PVA</option>
       </select>
       <select class="flt" id="sp-p" onchange="render()">
@@ -2355,7 +2355,7 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
       <option>PETG Basic</option><option>PETG HF</option><option>PETG-CF</option>
       <option>ABS</option><option>ABS-GF</option><option>ASA</option><option>ASA-CF</option>
       <option>PA6-CF</option><option>PC</option>
-      <option>TPU 95A</option><option>TPU 85A</option>
+      <option>TPU 95A</option><option>TPU 90A</option><option>TPU 68D</option><option>TPU 85A</option>
       <option>Support W</option><option>Support G</option><option>PVB</option>
     </select>
     <button class="btn btn-sm" id="fildb-sync-btn" onclick="syncFilamentColors()" style="font-size:9px;padding:4px 8px">⟳ Sync Colors</button>
@@ -2573,7 +2573,7 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
         <optgroup label="── PETG Family ──"><option>PETG Basic</option><option>PETG HF</option><option>PETG Translucent</option><option>PETG-CF</option></optgroup>
         <optgroup label="── ABS / ASA ──"><option>ABS</option><option>ABS-CF</option><option>ABS-GF</option><option>ASA</option><option>ASA-CF</option><option>ASA Aero</option></optgroup>
         <optgroup label="── Engineering ──"><option>PA</option><option>PA-CF</option><option>PA-GF</option><option>PC</option><option>PC-CF</option><option>PPS</option><option>PPS-CF</option></optgroup>
-        <optgroup label="── Flexible ──"><option>TPU 95A</option><option>TPU 85A</option></optgroup>
+        <optgroup label="── Flexible ──"><option>TPU 95A</option><option>TPU 90A</option><option>TPU 68D</option><option>TPU 85A</option></optgroup>
         <optgroup label="── Support / Other ──"><option>Support W</option><option>Support G</option><option>HIPS</option><option>BVOH</option><option>PVA</option></optgroup>
       </select>
     </div>
@@ -2931,7 +2931,7 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
         <optgroup label="── PETG Family ──"><option>PETG Basic</option><option>PETG HF</option><option>PETG Translucent</option><option>PETG-CF</option></optgroup>
         <optgroup label="── ABS / ASA ──"><option>ABS</option><option>ABS-CF</option><option>ABS-GF</option><option>ASA</option><option>ASA-CF</option><option>ASA Aero</option></optgroup>
         <optgroup label="── Engineering ──"><option>PA</option><option>PA-CF</option><option>PA-GF</option><option>PC</option><option>PC-CF</option><option>PPS</option><option>PPS-CF</option></optgroup>
-        <optgroup label="── Flexible ──"><option>TPU 95A</option><option>TPU 85A</option></optgroup>
+        <optgroup label="── Flexible ──"><option>TPU 95A</option><option>TPU 90A</option><option>TPU 68D</option><option>TPU 85A</option></optgroup>
         <optgroup label="── Support / Other ──"><option>Support W</option><option>Support G</option><option>HIPS</option><option>BVOH</option><option>PVA</option></optgroup>
       </select>
     </div>
@@ -2966,6 +2966,19 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
   <div class="macts">
     <button class="btn btn-cyn" onclick="saveSpool()">Save</button>
     <button class="btn btn-ghost" onclick="closeSpool()">Cancel</button>
+  </div>
+</div>
+</div>
+
+<!-- FILDB LINK PICKER -->
+<div class="overlay" id="mod-fildb-link" style="display:none;z-index:1100" onclick="if(event.target.id==='mod-fildb-link')closeFildbLinkPicker()">
+<div class="modal" style="max-width:480px;max-height:80vh;display:flex;flex-direction:column">
+  <div class="mhead"><span class="mtitle">🔗 Link Barcode to Filament</span><button class="mbtn" onclick="closeFildbLinkPicker()">✕</button></div>
+  <p style="margin:0 0 10px;font-size:11px;color:var(--text-dim)">Search the filament library and select the matching entry. The barcode will be saved so it auto-fills next time.</p>
+  <input id="fildb-link-search" type="text" class="inp" placeholder="Search brand, name, type…" oninput="renderFildbLinks(this.value)" style="margin-bottom:10px"/>
+  <div id="fildb-link-list" style="flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:6px;min-height:80px"></div>
+  <div class="macts" style="margin-top:12px">
+    <button class="btn btn-ghost" onclick="closeFildbLinkPicker()">Cancel</button>
   </div>
 </div>
 </div>
@@ -3593,7 +3606,7 @@ const KEYS={spools:'ha3d_fil_v2',hist:'ha3d_hist_v2',prints:'ha3d_prints_v1',
   shopify:'ha3d_shopify_v1',inv:'hypedanubis_v2',inperson:'ha3d_inperson_v1',
   dashHidden:'ha3d_dash_hidden_v1',barcodeDb:'ha3d_barcode_db_v1',notifIds:'ha3d_notif_ids_v1'};
 
-const MAT_C={'PLA Basic':'#3a80e0','PLA Matte':'#8858c0','PLA Silk':'#c09828','PLA+':'#28a858','PLA Glow':'#88ee44','PLA Metal':'#b0b0c0','PLA Marble':'#d0ccc8','PLA Translucent':'#80e0f8','PLA High Speed':'#f08040','PLA Aero':'#60b0d8','PLA-CF':'#786860','PLA-GF':'#606870','PETG Basic':'#22aacc','PETG HF':'#20d0c0','PETG Translucent':'#80d8e0','PETG-CF':'#1a5050','ABS':'#c04828','ABS-CF':'#484040','ABS-GF':'#584840','ASA':'#a07828','ASA-CF':'#487048','ASA Aero':'#80c088','PA':'#507080','PA-CF':'#383838','PA-GF':'#485058','PC':'#3a6090','PC-CF':'#304050','PPS':'#504858','PPS-CF':'#282828','TPU 95A':'#9050b0','TPU 85A':'#c080d8','Support W':'#a0c8e0','Support G':'#888888','Support':'#404850','HIPS':'#d8c898','BVOH':'#90d090','PVA':'#e8e090'};
+const MAT_C={'PLA Basic':'#3a80e0','PLA Matte':'#8858c0','PLA Silk':'#c09828','PLA+':'#28a858','PLA Glow':'#88ee44','PLA Metal':'#b0b0c0','PLA Marble':'#d0ccc8','PLA Translucent':'#80e0f8','PLA High Speed':'#f08040','PLA Aero':'#60b0d8','PLA-CF':'#786860','PLA-GF':'#606870','PETG Basic':'#22aacc','PETG HF':'#20d0c0','PETG Translucent':'#80d8e0','PETG-CF':'#1a5050','ABS':'#c04828','ABS-CF':'#484040','ABS-GF':'#584840','ASA':'#a07828','ASA-CF':'#487048','ASA Aero':'#80c088','PA':'#507080','PA-CF':'#383838','PA-GF':'#485058','PC':'#3a6090','PC-CF':'#304050','PPS':'#504858','PPS-CF':'#282828','TPU 95A':'#9050b0','TPU 90A':'#b060c8','TPU 68D':'#7840a0','TPU 85A':'#c080d8','Support W':'#a0c8e0','Support G':'#888888','Support':'#404850','HIPS':'#d8c898','BVOH':'#90d090','PVA':'#e8e090'};
 // Nozzle wear multiplier per material (1.0 = baseline brass nozzle wear)
 const WEAR_FACTOR={'PLA-CF':3.0,'PA-CF':3.0,'PA-GF':3.0,'PC-CF':3.0,'PPS-CF':3.0,'PETG-CF':2.5,'ABS-CF':2.5,'ABS-GF':2.5,'ASA-CF':2.5,'PLA-GF':2.5,'PLA Glow':1.5,'PLA Metal':1.5,'PLA Marble':1.3,'PC':1.2,'PA':1.2,'PPS':1.2,'PC-CF':3.0};
 function matWear(m){return WEAR_FACTOR[m]||1.0;}
@@ -6157,8 +6170,11 @@ function openBarcodeScanner(){
           openAddSpool();
           document.getElementById('es-barcode').value=txt;
           const banner=document.getElementById('es-barcode-banner');
-          if(banner){banner.style.cssText='display:block;background:#2a2a1a;border:1px solid #7a7a2a;color:#cccc44;border-radius:6px;padding:8px 10px;margin-bottom:10px;font-size:9px';banner.textContent='⚡ New barcode scanned — fill in the details below and save to teach the app. Future scans of this barcode will auto-fill.';}
-          toast('New Barcode','Fill in details — we\'ll remember it for next time','info');
+          if(banner){
+            banner.style.cssText='display:block;background:#2a2a1a;border:1px solid #7a7a2a;color:#cccc44;border-radius:6px;padding:8px 10px;margin-bottom:10px;font-size:9px';
+            banner.innerHTML='⚡ New barcode — fill in details below, or <button class="btn btn-gold btn-xs" style="padding:2px 7px;font-size:9px;margin:0 4px" onclick="openFildbLinkPicker()">🔗 Link to existing filament</button>';
+          }
+          toast('New Barcode','Fill in details or link to an existing filament','info');
         }
       },()=>{}
     ).then(()=>{document.getElementById('scan-status').textContent='Point camera at barcode on spool box…';}).catch(e=>{document.getElementById('scan-status').textContent='Camera error: '+e;});
@@ -6176,6 +6192,59 @@ function openRowScanner(rowId){
   }catch(e){document.getElementById('row-scan-status').textContent='Scanner unavailable: '+e;}
 }
 function closeRowScanner(){document.getElementById('mod-row-scan').style.display='none';if(rowScanner){try{rowScanner.stop().then(()=>{rowScanner.clear();rowScanner=null;});}catch{rowScanner=null;}}}
+
+// ════════════════════════════════════════
+// FILAMENT DB LINK PICKER (barcode → existing DB entry)
+// ════════════════════════════════════════
+function openFildbLinkPicker(){
+  document.getElementById('fildb-link-search').value='';
+  renderFildbLinks('');
+  document.getElementById('mod-fildb-link').style.display='flex';
+  setTimeout(()=>document.getElementById('fildb-link-search').focus(),50);
+}
+function closeFildbLinkPicker(){document.getElementById('mod-fildb-link').style.display='none';}
+function renderFildbLinks(q){
+  const list=document.getElementById('fildb-link-list');
+  const terms=q.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const results=FILAMENT_DB.filter(f=>{
+    if(!terms.length)return true;
+    const hay=(f.brand+' '+f.name+' '+f.mat).toLowerCase();
+    return terms.every(t=>hay.includes(t));
+  }).slice(0,40);
+  if(!results.length){list.innerHTML='<div style="color:var(--text-dim);font-size:11px;text-align:center;padding:18px">No matches found</div>';return;}
+  list.innerHTML=results.map((f,i)=>{
+    const first=f.colors&&f.colors[0];
+    const swatch=first?'<span style="display:inline-block;width:12px;height:12px;border-radius:3px;background:'+first.hex+';border:1px solid rgba(255,255,255,.15);margin-right:6px;flex-shrink:0"></span>':'';
+    return '<div onclick="pickFildbEntry('+FILAMENT_DB.indexOf(f)+')" style="cursor:pointer;padding:8px 10px;border-radius:6px;background:var(--s2);border:1px solid var(--s3);display:flex;align-items:center;gap:4px;font-size:11px" onmouseover="this.style.background=\'var(--s3)\'" onmouseout="this.style.background=\'var(--s2)\'">'
+      +swatch+'<strong>'+esc(f.brand)+'</strong> &nbsp;<span style="color:var(--text-dim)">'+esc(f.name)+'</span> &nbsp;<span style="color:var(--text-dim);font-size:10px">('+esc(f.mat)+')</span>'
+      +(f.colors?' &nbsp;<span style="color:var(--text-dim);font-size:10px">'+f.colors.length+' colors</span>':'')+'</div>';
+  }).join('');
+}
+function pickFildbEntry(idx){
+  const f=FILAMENT_DB[idx];if(!f)return;
+  const barcode=document.getElementById('es-barcode').value.trim();
+  // Pick first color as default (user can change in form)
+  const col=f.colors&&f.colors[0]?f.colors[0].hex:'#ffffff';
+  const colName=f.colors&&f.colors[0]?f.colors[0].name:'';
+  document.getElementById('es-name').value=f.brand+' '+f.name+(colName?' - '+colName:'');
+  document.getElementById('es-mat').value=f.mat||'PLA Basic';
+  document.getElementById('es-brand').value=f.brand||'Bambu Lab';
+  document.getElementById('es-col').value=col;
+  document.getElementById('es-cp').value=col;
+  document.getElementById('es-cost').value=f.cost||'13.99';
+  document.getElementById('es-total').value=f.weight||1000;
+  document.getElementById('es-rem').value=f.weight||1000;
+  // Save barcode→DB link immediately
+  if(barcode){
+    barcodeDb[barcode]={name:f.brand+' '+f.name,material:f.mat,brand:f.brand,color:col,cost:f.cost||13.99,total:f.weight||1000,fildbIdx:idx};
+    try{localStorage.setItem(KEYS.barcodeDb,JSON.stringify(barcodeDb));}catch(e){}
+  }
+  const banner=document.getElementById('es-barcode-banner');
+  if(banner){banner.style.cssText='display:block;background:#1a3a1a;border:1px solid #2a7a2a;color:#66cc66;border-radius:6px;padding:8px 10px;margin-bottom:10px;font-size:9px';banner.textContent='✓ Linked to: '+f.brand+' '+f.name+' — barcode saved for next time. Adjust color/details below if needed.';}
+  closeFildbLinkPicker();
+  toast('Linked!',f.brand+' '+f.name+' — barcode mapped','success');
+}
+
 
 // ════════════════════════════════════════
 // QUICK DATE HELPERS
@@ -8906,7 +8975,7 @@ function renderObStep(){
       <div class="field"><div class="fl">Material</div><select id="ob-spool-mat" style="width:100%;background:var(--bg);border:1px solid var(--bdr2);color:var(--txt);padding:7px 9px;font-family:'Share Tech Mono',monospace;font-size:9px;border-radius:3px;">
         <option>PLA Basic</option><option>PLA Matte</option><option>PLA Silk</option><option>PLA+</option><option>PLA Glow</option><option>PLA Metal</option><option>PLA Marble</option><option>PLA Translucent</option><option>PLA High Speed</option><option>PLA Aero</option><option>PLA-CF</option><option>PLA-GF</option>
         <option>PETG Basic</option><option>PETG HF</option><option>PETG Translucent</option><option>PETG-CF</option>
-        <option>ABS</option><option>ABS-CF</option><option>ABS-GF</option><option>ASA</option><option>ASA-CF</option><option>PA</option><option>PA-CF</option><option>PC</option><option>TPU 95A</option><option>TPU 85A</option>
+        <option>ABS</option><option>ABS-CF</option><option>ABS-GF</option><option>ASA</option><option>ASA-CF</option><option>PA</option><option>PA-CF</option><option>PC</option><option>TPU 95A</option><option>TPU 90A</option><option>TPU 68D</option><option>TPU 85A</option>
         <option>Support W</option><option>Support G</option><option>HIPS</option>
       </select></div>
       <div class="field"><div class="fl">Cost/Spool ($)</div><input type="number" id="ob-spool-cost" value="13.99" step="0.01" style="width:100%;background:var(--bg);border:1px solid var(--bdr2);color:var(--txt);padding:7px 9px;font-family:'Share Tech Mono',monospace;font-size:9px;border-radius:3px;"/></div>
@@ -11627,7 +11696,8 @@ const FILAMENT_DB=[
      {name:'Red',hex:'#C13A3D'},{name:'Maroon Red',hex:'#8B3040'},{name:'Pink',hex:'#FF7896'},{name:'Hot Pink',hex:'#E06090'},
      {name:'Magenta',hex:'#C55498'},{name:'Orange',hex:'#F07745'},{name:'Yellow',hex:'#F5D020'},{name:'Sunflower Yellow',hex:'#FFBD25'},
      {name:'Bright Green',hex:'#00A553'},{name:'Mistletoe Green',hex:'#2E7759'},{name:'Cyan',hex:'#009ACE'},
-     {name:'Turquoise',hex:'#00BCD4'},{name:'Blue',hex:'#23529A'},{name:'Cobalt Blue',hex:'#2C4F9E'},{name:'Purple',hex:'#6B6FB2'}],
+     {name:'Turquoise',hex:'#00BCD4'},{name:'Blue',hex:'#23529A'},{name:'Cobalt Blue',hex:'#2C4F9E'},
+     {name:'Purple',hex:'#6B6FB2'},{name:'Indigo Purple',hex:'#4B3080'},{name:'Cocoa Brown',hex:'#6B4226'}],
    cost:13.99,weight:1000,nozzle:220,bed:35,speed:500,notes:'Reliable all-rounder. Great for most prints.'},
   {brand:'Bambu Lab',name:'PLA Matte',mat:'PLA Matte',
    colors:[
@@ -11636,7 +11706,7 @@ const FILAMENT_DB=[
      {name:'Mandarin Orange',hex:'#FC9257'},{name:'Lemon Yellow',hex:'#FFC968'},{name:'Desert Tan',hex:'#D4B483'},
      {name:'Grass Green',hex:'#76B56F'},{name:'Apple Green',hex:'#7DC67E'},{name:'Dark Green',hex:'#656A4D'},
      {name:'Marine Blue',hex:'#287FAC'},{name:'Ice Blue',hex:'#9FD7E1'},{name:'Dark Blue',hex:'#1A3A6B'},
-     {name:'Lilac Purple',hex:'#9389C2'},{name:'Latte Brown',hex:'#BF9E82'},{name:'Caramel',hex:'#A0644A'},
+     {name:'Lilac Purple',hex:'#9389C2'},{name:'Latte Brown',hex:'#BF9E82'},{name:'Dark Brown',hex:'#6B3A1F'},{name:'Caramel',hex:'#A0644A'},
      {name:'Sakura Pink',hex:'#EAB8CA'}],
    cost:13.99,weight:1000,nozzle:220,bed:35,speed:500,notes:'Beautiful matte finish. Hides layer lines well.'},
   {brand:'Bambu Lab',name:'PLA Silk',mat:'PLA Silk',
@@ -11686,7 +11756,7 @@ const FILAMENT_DB=[
    colors:[{name:'Black',hex:'#3D3D3C'},{name:'Titan Gray',hex:'#8B9398'},{name:'Malachite Green',hex:'#2E8B57'},{name:'Indigo Blue',hex:'#3F51B5'},{name:'Violet Purple',hex:'#604F73'}],
    cost:29.99,weight:500,nozzle:260,bed:75,speed:250,notes:'Hardened nozzle required. Excellent strength-to-weight ratio.'},
   {brand:'Bambu Lab',name:'ABS',mat:'ABS',
-   colors:[{name:'Black',hex:'#2A2A2A'},{name:'White',hex:'#F5F5F5'},{name:'Silver',hex:'#C0C0C0'},{name:'Grey',hex:'#808080'},{name:'Orange',hex:'#F07030'},{name:'Tangerine Yellow',hex:'#FFA500'},{name:'Olive',hex:'#6B7A3A'},{name:'Purple',hex:'#6A0DAD'}],
+   colors:[{name:'Black',hex:'#2A2A2A'},{name:'White',hex:'#F5F5F5'},{name:'Silver',hex:'#C0C0C0'},{name:'Grey',hex:'#808080'},{name:'Orange',hex:'#F07030'},{name:'Tangerine Yellow',hex:'#FFA500'},{name:'Mint',hex:'#7DC67E'},{name:'Olive',hex:'#6B7A3A'},{name:'Azure',hex:'#5B9BD5'},{name:'Purple',hex:'#6A0DAD'}],
    cost:13.99,weight:1000,nozzle:255,bed:90,speed:300,notes:'Requires enclosed printer. Very durable. Slight shrinkage.'},
   {brand:'Bambu Lab',name:'ABS-GF',mat:'ABS-GF',
    colors:[{name:'Black',hex:'#2A2A2A'},{name:'Green',hex:'#2A8A4A'},{name:'Red',hex:'#CC2020'}],
@@ -11703,6 +11773,12 @@ const FILAMENT_DB=[
   {brand:'Bambu Lab',name:'TPU 95A',mat:'TPU 95A',
    colors:[{name:'White',hex:'#F0EFE3'},{name:'Gray',hex:'#8C9091'},{name:'Black',hex:'#3E3D3D'},{name:'Yellow',hex:'#FDD803'},{name:'Blue',hex:'#23529A'}],
    cost:24.99,weight:1000,nozzle:220,bed:25,speed:150,notes:'Flexible filament. Print slowly for best results. Shore 95A.'},
+  {brand:'Bambu Lab',name:'TPU 90A',mat:'TPU 90A',
+   colors:[{name:'Black',hex:'#2A2A2A'},{name:'White',hex:'#F0EFE3'},{name:'Quicksilver',hex:'#C0C0D0'},{name:'Frozen',hex:'#B0D8E0'}],
+   cost:24.99,weight:1000,nozzle:215,bed:25,speed:120,notes:'Softer flex than 95A. Shore 90A. Excellent grip and flexibility.'},
+  {brand:'Bambu Lab',name:'TPU 68D',mat:'TPU 68D',
+   colors:[{name:'Black',hex:'#2A2A2A'},{name:'White',hex:'#F5F5F5'},{name:'Gray',hex:'#8C9091'},{name:'Neon Green',hex:'#39FF14'}],
+   cost:26.99,weight:1000,nozzle:225,bed:35,speed:180,notes:'Semi-rigid TPU. Shore 68D. Tougher than 95A, some flex.'},
   {brand:'Bambu Lab',name:'TPU 85A',mat:'TPU 85A',
    colors:[{name:'Black',hex:'#2A2A2A'},{name:'Flesh',hex:'#F0C8A0'}],
    cost:27.99,weight:1000,nozzle:210,bed:25,speed:100,notes:'Super soft flex. Shore 85A. Excellent for gaskets and grips.'},
@@ -11716,7 +11792,9 @@ const FILAMENT_DB=[
   // ── ELEGOO ────────────────────────────────────────────────────────────────
   {brand:'ELEGOO',name:'PLA Basic',mat:'PLA Basic',
    colors:[{name:'Black',hex:'#2A2A2A'},{name:'White',hex:'#F5F5F5'},{name:'Space Gray',hex:'#808080'},{name:'Hot Pink',hex:'#E85FA0'},
-           {name:'Neon Green',hex:'#39FF14'},{name:'Sea Green',hex:'#2E8B57'},{name:'Red',hex:'#CC3322'},{name:'Brown',hex:'#9A6152'}],
+           {name:'Neon Green',hex:'#39FF14'},{name:'Sea Green',hex:'#2E8B57'},{name:'Mint Green',hex:'#98D8C8'},{name:'Red',hex:'#CC3322'},
+           {name:'Orange',hex:'#F07030'},{name:'Yellow',hex:'#F5D020'},{name:'Sky Blue',hex:'#87CEEB'},{name:'Blue',hex:'#2255AA'},
+           {name:'Purple',hex:'#6A0DAD'},{name:'Brown',hex:'#9A6152'}],
    cost:14.99,weight:1000,nozzle:220,bed:55,speed:500,notes:'Solid everyday PLA. Wide range of colors.'},
   {brand:'ELEGOO',name:'PLA+',mat:'PLA+',
    colors:[{name:'Black',hex:'#343132'},{name:'White',hex:'#F5F5F5'},{name:'Grey',hex:'#808080'},{name:'Red',hex:'#D93025'},
@@ -11752,9 +11830,12 @@ const FILAMENT_DB=[
            {name:'Starlight Comet',hex:'#587A68'},{name:'Starlight Mercury',hex:'#6F7B83'},{name:'Starlight Neptune',hex:'#25737D'}],
    cost:13.99,weight:1000,nozzle:200,bed:25,speed:500,notes:'High quality, very consistent diameter. Excellent for detail work.'},
   {brand:'Polymaker',name:'PolyTerra PLA',mat:'PLA Matte',
-   colors:[{name:'Cotton White',hex:'#F0EEE8'},{name:'Charcoal',hex:'#3C3C3C'},{name:'Army Brown',hex:'#7B5E3A'},{name:'Brick Red',hex:'#A0391C'},
-           {name:'Forest Green',hex:'#228B22'},{name:'Muted Navy',hex:'#2A3F6B'},{name:'Savanna Yellow',hex:'#D4A840'},
-           {name:'Mint',hex:'#90C8A0'},{name:'Lavender Purple',hex:'#A898C8'},{name:'Mocha',hex:'#7A5C48'}],
+   colors:[{name:'Cotton White',hex:'#F0EEE8'},{name:'Charcoal',hex:'#3C3C3C'},{name:'Grey',hex:'#808080'},
+           {name:'Army Brown',hex:'#7B5E3A'},{name:'Wood Brown',hex:'#8B6340'},{name:'Mocha',hex:'#7A5C48'},
+           {name:'Brick Red',hex:'#A0391C'},{name:'Lava Red',hex:'#CC2200'},{name:'Army Red',hex:'#8B1A1A'},
+           {name:'Savanna Yellow',hex:'#D4A840'},{name:'Forest Green',hex:'#228B22'},{name:'Army Dark Green',hex:'#3B5323'},
+           {name:'Mint',hex:'#90C8A0'},{name:'Glacier Blue',hex:'#7EC8C8'},{name:'Army Blue',hex:'#2A3F6B'},
+           {name:'Muted Navy',hex:'#1A2B50'},{name:'Lavender Purple',hex:'#A898C8'}],
    cost:13.99,weight:1000,nozzle:200,bed:25,speed:400,notes:'Matte earthy tones. Eco-friendly packaging. Low odor.'},
   {brand:'Polymaker',name:'Panchroma Matte',mat:'PLA Matte',
    colors:[{name:'Lavender Purple',hex:'#A898C8'},{name:'Lime Green',hex:'#8DC63F'},{name:'Matte Wood',hex:'#9B7B5A'}],
@@ -11788,12 +11869,16 @@ const FILAMENT_DB=[
            {name:'Midnight Blue',hex:'#1C2E5C'},{name:'Klein Blue',hex:'#002FA7'},{name:'Ceramic White',hex:'#F5F3EE'},{name:'Light Gold',hex:'#D3943D'}],
    cost:12.99,weight:1000,nozzle:215,bed:55,speed:500,notes:'Budget-friendly with good print quality. Wide color range.'},
   {brand:'SUNLU',name:'PLA Meta',mat:'PLA Silk',
-   colors:[{name:'Cream White',hex:'#EDE0C8'},{name:'Sakura Pink',hex:'#F5B5C2'},{name:'Mint Green',hex:'#03A490'},{name:'Taro Purple',hex:'#A69ED0'},
-           {name:'Blue',hex:'#00B2CC'},{name:'Silver',hex:'#C0C0C0'},{name:'Light Gold',hex:'#D3943D'}],
+   colors:[{name:'Cream White',hex:'#EDE0C8'},{name:'White',hex:'#F5F5F5'},{name:'Black',hex:'#2A2A2A'},
+           {name:'Sakura Pink',hex:'#F5B5C2'},{name:'Cherry Red',hex:'#CC2E2E'},{name:'Sunny Orange',hex:'#FC9257'},
+           {name:'Lemon Yellow',hex:'#FFF44F'},{name:'Mint Green',hex:'#03A490'},{name:'Sky Blue',hex:'#87CEEB'},
+           {name:'Ice Blue',hex:'#B0E0E6'},{name:'Blue',hex:'#00B2CC'},{name:'Taro Purple',hex:'#A69ED0'},
+           {name:'Chocolate Brown',hex:'#7B3F00'},{name:'Silver',hex:'#C0C0C0'},{name:'Light Gold',hex:'#D3943D'}],
    cost:13.99,weight:1000,nozzle:210,bed:55,speed:350,notes:'Glossy silk-like sheen. Popular for props and display pieces.'},
   {brand:'SUNLU',name:'Matte PLA',mat:'PLA Matte',
-   colors:[{name:'Black',hex:'#454546'},{name:'White',hex:'#EBEBEB'},{name:'Bone White',hex:'#EDE0C8'},{name:'Red',hex:'#CC3322'},
-           {name:'Sunny Orange',hex:'#FC9257'},{name:'Olive Green',hex:'#7A8B60'},{name:'Navy',hex:'#1C2E5C'}],
+   colors:[{name:'Black',hex:'#454546'},{name:'White',hex:'#EBEBEB'},{name:'Bone White',hex:'#EDE0C8'},{name:'Gray',hex:'#808080'},
+           {name:'Red',hex:'#CC3322'},{name:'Sunny Orange',hex:'#FC9257'},{name:'Light Yellow',hex:'#FFF8A3'},
+           {name:'Olive Green',hex:'#7A8B60'},{name:'Taro Purple',hex:'#A69ED0'},{name:'Navy',hex:'#1C2E5C'},{name:'Clay',hex:'#C8A882'}],
    cost:13.49,weight:1000,nozzle:215,bed:55,speed:400,notes:'Smooth matte surface. Good value for display and cosplay props.'},
   {brand:'SUNLU',name:'PETG',mat:'PETG Basic',
    colors:[{name:'Olive Green',hex:'#707D63'},{name:'White',hex:'#DBDDD9'},{name:'Transparent',hex:'#BAB9B4'},{name:'Elite Black',hex:'#404141'},
