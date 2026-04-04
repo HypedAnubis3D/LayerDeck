@@ -15699,6 +15699,7 @@ let _scUploading=false;
 let _scPlatform='both'; // 'both'|'ig'|'fb'
 let _scMode='now'; // 'now'|'schedule'
 let _scMediaUrls=[]; // array of uploaded public URLs (multi-image support)
+let _scMediaMimes={}; // url → mimeType, for detecting video without relying on extension
 let _calYear=new Date().getFullYear();
 let _calMonth=new Date().getMonth();
 let _calDay=null;
@@ -15727,14 +15728,19 @@ function socialPickMedia(){
   const inp=document.getElementById('sc-file-inp');
   if(inp)inp.click();
 }
+function _isVideoUrl(url){
+  if(!url)return false;
+  if(_scMediaMimes[url]&&_scMediaMimes[url].startsWith('video/'))return true;
+  return !!/\.(mp4|mov|avi|webm|mkv)(\?|$)/i.test(url);
+}
 function _renderMediaGrid(){
   const el=document.getElementById('sc-media-preview');
   if(!el)return;
   if(!_scMediaUrls.length){el.innerHTML='';el.style.display='none';return;}
   const items=_scMediaUrls.map(function(url,i){
-    const isVid=url.match(/\.(mp4|mov|avi|webm)(\?|$)/i);
+    const isVid=_isVideoUrl(url);
     const thumb=isVid
-      ?'<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:28px;background:#111">🎬</div>'
+      ?'<video src="'+esc(url)+'" style="width:100%;height:100%;object-fit:cover" preload="metadata" muted playsinline></video>'
       :'<img src="'+esc(url)+'" style="width:100%;height:100%;object-fit:cover" onerror="this.style.display=\'none\'"/>';
     return '<div style="position:relative;width:90px;height:90px;border-radius:7px;overflow:hidden;flex-shrink:0;border:1.5px solid var(--bdr)">'
       +thumb
@@ -15760,6 +15766,8 @@ async function socialHandleFiles(fileList){
   if(statusEl)statusEl.textContent='Uploading '+files.length+' file'+(files.length>1?'s':'')+'…';
   // Show local previews immediately while uploading
   const localUrls=files.map(function(f){return URL.createObjectURL(f);});
+  // Track mimeType for each blob: URL so video detection works before extension is known
+  files.forEach(function(f,i){_scMediaMimes[localUrls[i]]=f.type;});
   _scMediaUrls=_scMediaUrls.concat(localUrls);
   _renderMediaGrid();
   // Upload all via multi endpoint
@@ -15769,6 +15777,8 @@ async function socialHandleFiles(fileList){
     const res=await fetch('/api/social/upload/multi',{method:'POST',body:fd});
     const json=await res.json();
     if(res.ok&&json.urls){
+      // Transfer mimeTypes from blob: URLs to new Supabase URLs (same order as files)
+      json.urls.forEach(function(su,i){if(files[i])_scMediaMimes[su]=files[i].type;});
       // Replace local blob URLs with server public URLs
       _scMediaUrls=_scMediaUrls.filter(function(u){return!u.startsWith('blob:');}).concat(json.urls);
       _scMediaUrl=_scMediaUrls[0]||'';
@@ -15849,6 +15859,7 @@ function _resetComposer(){
   });
   _scMediaUrls=[];
   _scMediaUrl='';
+  _scMediaMimes={};
   _renderMediaGrid();
   const upEl=document.getElementById('sc-upload-status');
   if(upEl)upEl.textContent='';
@@ -15977,12 +15988,12 @@ function socialOpenPostModal(postId){
   const canEdit=p.status==='scheduled'&&p.scheduledFor&&p.scheduledFor>Date.now();
   const typeIcon={post:'📷',reel:'🎬',story:'💫'}[p.postType||'post']||'📷';
   const mediaHtml=urls.length===0?''
-    :urls.length===1?((urls[0].match(/\.(mp4|mov|avi|webm)(\?|$)/i))
-      ?'<video src="'+esc(urls[0])+'" style="width:100%;max-height:240px;object-fit:contain;border-radius:8px;background:#000" controls muted></video>'
-      :'<img src="'+esc(urls[0])+'" style="width:100%;max-height:240px;object-fit:contain;border-radius:8px;background:#000;display:block" onerror="_socialMediaBrokenLarge(this)"/>')
+    :urls.length===1?(_isVideoUrl(urls[0])
+      ?'<video src="'+esc(urls[0])+'" style="width:100%;max-height:240px;object-fit:contain;border-radius:8px;background:#000" controls muted playsinline></video>'
+      :'<img src="'+esc(urls[0])+'" style="width:100%;max-height:240px;object-fit:contain;border-radius:8px;background:#000;display:block" onerror="_socialMediaBrokenLarge(this)"/>') 
     :'<div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:4px">'+urls.map(function(u){
-      return u.match(/\.(mp4|mov|avi|webm)(\?|$)/i)
-        ?'<div style="width:140px;height:140px;flex-shrink:0;border-radius:7px;background:#111;display:flex;align-items:center;justify-content:center;font-size:36px">🎬</div>'
+      return _isVideoUrl(u)
+        ?'<video src="'+esc(u)+'" style="width:140px;height:140px;flex-shrink:0;object-fit:cover;border-radius:7px;border:1px solid var(--bdr)" preload="metadata" muted playsinline></video>'
         :'<img src="'+esc(u)+'" style="width:140px;height:140px;flex-shrink:0;object-fit:cover;border-radius:7px;border:1px solid var(--bdr)" onerror="_socialMediaBrokenThumb(this)"/>';
     }).join('')+'</div>';
   const html='<div id="sc-post-modal" onclick="if(event.target===this)socialClosePostModal()" style="position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.75);display:flex;align-items:flex-end;justify-content:center">'
