@@ -217,9 +217,23 @@ input.srch::placeholder{color:var(--txt-d);}
 .kcard.selected{outline:2px solid var(--gold);outline-offset:2px;background:rgba(201,162,39,.08);}
 .kcard-name{font-size:10px;color:var(--txt-b);font-weight:600;margin-bottom:3px;}
 .kcard-meta{font-size:9px;color:var(--txt-d);line-height:1.6;}
-.kcard-colors{display:flex;gap:4px;margin-top:5px;}
-.kcard-dot{width:8px;height:8px;border-radius:50%;}
+.kcard-colors{display:flex;gap:4px;margin-top:5px;flex-wrap:wrap;}
+.kcard-dot{width:8px;height:8px;border-radius:50%;border:1px solid rgba(255,255,255,.12);}
 .kcard-actions{display:flex;gap:4px;margin-top:7px;}
+/* Colour View panel */
+.colour-view{background:var(--surf2);border:1px solid var(--bdr2);border-radius:8px;padding:12px 14px;margin-bottom:10px;}
+.cv-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;cursor:pointer;user-select:none;}
+.cv-title{font-size:8px;color:var(--txt-d);letter-spacing:1.5px;text-transform:uppercase;}
+.cv-printers{display:flex;flex-direction:column;gap:10px;}
+.cv-printer-row{display:flex;align-items:center;gap:10px;}
+.cv-printer-name{font-size:8px;color:var(--txt-d);min-width:60px;flex-shrink:0;}
+.cv-slots{display:flex;gap:5px;flex-wrap:wrap;}
+.cv-slot{display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer;padding:4px 3px;border-radius:5px;transition:background .15s;}
+.cv-slot:hover{background:rgba(255,255,255,.06);}
+.cv-slot-dot{width:18px;height:18px;border-radius:50%;border:1px solid rgba(255,255,255,.1);}
+.cv-slot-label{font-size:5px;color:var(--txt-d);text-align:center;max-width:28px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.cv-slot-pct{font-size:4.5px;color:var(--bdr2);}
+.cv-empty{font-size:8px;color:var(--bdr2);padding:4px 0;font-style:italic;}
 .k-move-btn{flex:1;padding:4px;background:none;border:1px solid var(--bdr2);color:var(--txt-d);font-family:'Inter',sans-serif;font-size:9px;font-weight:500;border-radius:6px;cursor:pointer;transition:all .15s;}
 .k-move-btn:hover{color:var(--txt);border-color:var(--bdr2);background:rgba(255,255,255,.05);}
 .k-priority{position:absolute;top:7px;right:7px;font-size:9px;}
@@ -1783,8 +1797,17 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
 <div id="tab-queue" style="display:none">
   <div class="ctrl">
     <button class="btn btn-pur" onclick="openAddQueue()">+ Add to Queue</button>
+    <button class="btn btn-gold btn-sm" onclick="optimizePrintQueue()" title="Reorder queued items to minimise filament swaps">🎨 Optimize</button>
     <button class="btn btn-ghost btn-sm" onclick="enterSelectMode('queue')">☑ Select</button>
     <span class="cnt" id="q-cnt"></span>
+  </div>
+  <!-- Colour View: collapsible AMS slot grid -->
+  <div class="colour-view" id="colour-view-panel">
+    <div class="cv-header" onclick="toggleColourView()">
+      <span class="cv-title">🎨 Colour View — AMS Slots</span>
+      <span id="cv-toggle-icon" style="font-size:9px;color:var(--txt-d)">▲ hide</span>
+    </div>
+    <div id="colour-view-content" class="cv-printers"></div>
   </div>
   <div class="kanban" id="kanban-board"></div>
 </div>
@@ -4331,6 +4354,13 @@ function renderQueue(){
         doneByHtml+
         (q.notes?'<div style="font-size:6px;color:var(--txt-d);margin-top:3px">'+esc(q.notes)+'</div>':'')+
         (q.stage==='done'&&q.outcome?'<div style="font-size:6px;font-weight:bold;letter-spacing:1px;margin-top:4px;color:'+(q.outcome==='failed'?'var(--red)':'var(--grn)')+'\">'+(q.outcome==='failed'?'✕ FAILED':'✓ SUCCEEDED')+'</div>':'')+
+        (function(){
+          var cols=getQueueItemColors(q);
+          if(!cols.length)return '';
+          return '<div class="kcard-colors">'+cols.map(function(c){
+            return '<div class="kcard-dot" style="background:'+esc(c)+';box-shadow:0 0 5px '+esc(c)+'55" title="'+esc(c)+'"></div>';
+          }).join('')+'</div>';
+        }())+
         '<div class="kcard-actions">'+
           (prevStage?'<button class="k-move-btn" onclick="event.stopPropagation();moveQueue(\''+q.id+'\',\''+prevStage+'\')">← Back</button>':'')+
           (nextStage?'<button class="k-move-btn" style="color:'+(st.key==='queued'?'var(--cyn)':'var(--grn)')+';border-color:'+(st.key==='queued'?'var(--cyn-d)':'var(--grn-d)')+'" onclick="event.stopPropagation();moveQueue(\''+q.id+'\',\''+nextStage+'\')">'+(st.key==='queued'?'Start →':'✓ Done')+'</button>':'')+
@@ -4346,6 +4376,165 @@ function renderQueue(){
       '<div class="kanban-body" id="kanban-body-'+st.key+'">'+( cards||'<div class="empty-col">Empty</div>')+'</div>'+
     '</div>';
   }).join('');
+  renderColourView();
+}
+
+// ── Colour View + Print Queue Optimizer ──
+
+// Get the filament hex colors for a queue item (from linked spools or TMF)
+function getQueueItemColors(qi){
+  if(qi.filaments&&qi.filaments.length){
+    var cols=qi.filaments.map(function(f){
+      var sp=spools.find(function(s){return s.id===f.spoolId;});
+      return sp?sp.color:null;
+    }).filter(Boolean);
+    if(cols.length)return cols;
+  }
+  if(qi.tmfId){
+    var tmf=tmfLib.find(function(t){return t.id===qi.tmfId;});
+    if(tmf&&tmf.filamentColors&&tmf.filamentColors.length){
+      return tmf.filamentColors.filter(Boolean).map(function(c){return c.startsWith('#')?c:'#'+c.slice(0,6);});
+    }
+  }
+  return [];
+}
+
+var _cvCollapsed=false;
+function toggleColourView(){
+  _cvCollapsed=!_cvCollapsed;
+  var content=document.getElementById('colour-view-content');
+  var icon=document.getElementById('cv-toggle-icon');
+  if(content)content.style.display=_cvCollapsed?'none':'';
+  if(icon)icon.textContent=_cvCollapsed?'▼ show':'▲ hide';
+}
+
+function renderColourView(){
+  var el=document.getElementById('colour-view-content');
+  if(!el||_cvCollapsed)return;
+  var prs=(printerRecords||[]).filter(function(p){return p.active!==false;});
+  if(!prs.length){el.innerHTML='<div class="cv-empty">No printers configured</div>';return;}
+  el.innerHTML=prs.map(function(pr){
+    var slots=amsMap[pr.name]||{};
+    var _liveMap=(typeof piLiveData!=='undefined')?piLiveData:{};
+    var livePr=_liveMap[pr.name]||{};
+    var piAms=livePr.ams;
+    var vtTray=livePr.vt_tray;
+    var activeTrayId=piAms?String(piAms.tray_now||''):'';
+    var trays=[];
+    if(piAms&&piAms.ams&&piAms.ams.length){
+      piAms.ams.forEach(function(unit,ui){
+        (unit.tray||[]).forEach(function(t,ti){trays.push({piTray:t,slotNum:ui*4+ti+1});});
+      });
+    }else{
+      var numSlots=Math.min((pr.amsSlots||0),16);
+      for(var i=0;i<numSlots;i++)trays.push({piTray:null,slotNum:i+1});
+    }
+    // Include external spool if printer has one
+    var extSlot='';
+    if(vtTray&&vtTray.tray_type){
+      var rawExtCol=(vtTray.tray_color||'').replace(/^#/,'');
+      var extCol='#'+(rawExtCol&&rawExtCol!=='00000000'?rawExtCol.slice(0,6):'888888');
+      var extLabel=vtTray.tray_sub_brands||vtTray.tray_type||'EXT';
+      var extPct=vtTray.remain||0;
+      extSlot='<div class="cv-slot" onclick="openExtSpoolModal(\''+esc(pr.name)+'\')" title="External: '+esc(extLabel)+(extPct?' ('+extPct+'%)':'')+'">'
+        +'<div class="cv-slot-dot" style="background:'+extCol+';box-shadow:0 0 6px '+extCol+'44;border-color:'+extCol+'55"></div>'
+        +'<div class="cv-slot-label">'+esc(extLabel.split(' ')[0])+'</div>'
+        +(extPct?'<div class="cv-slot-pct">'+extPct+'%</div>':'')
+      +'</div>';
+    }
+    if(!trays.length&&!extSlot)return '';
+    var slotsHtml=trays.map(function(item){
+      var n=item.slotNum;
+      var sp=slots[n]?spools.find(function(s){return s.id===slots[n];}):null;
+      var piTray=item.piTray&&item.piTray.tray_type?item.piTray:null;
+      var col=sp?sp.color:piTray?('#'+(piTray.tray_color||'888888').slice(0,6)):'var(--bdr2)';
+      var p=sp?pct(sp):piTray?(piTray.remain||0):0;
+      var rawLabel=sp?sp.name:(piTray?(piTray.tray_sub_brands||piTray.tray_type||'—'):'—');
+      var filled=sp||piTray;
+      var isActive=piTray&&String(piTray.id)===activeTrayId;
+      return '<div class="cv-slot" onclick="openAmsModal(\''+esc(pr.name)+'\','+n+')" title="Slot '+n+': '+esc(rawLabel)+(p?' ('+p+'%)':'')+'">'
+        +'<div class="cv-slot-dot" style="background:'+col+';'+(filled?'box-shadow:0 0 6px '+col+'44;border-color:'+col+'55':'opacity:.25')+(isActive?';outline:2px solid var(--grn);outline-offset:2px':'')+'">'+'</div>'
+        +'<div class="cv-slot-label">'+esc(rawLabel.split(' ')[0])+'</div>'
+        +(p>0?'<div class="cv-slot-pct">'+p+'%</div>':'')
+      +'</div>';
+    }).join('')+extSlot;
+    return '<div class="cv-printer-row">'
+      +'<div class="cv-printer-name">'+esc(pr.name)+'</div>'
+      +'<div class="cv-slots">'+slotsHtml+'</div>'
+    +'</div>';
+  }).filter(Boolean).join('');
+  if(!el.innerHTML)el.innerHTML='<div class="cv-empty">No AMS data yet — connect Pi Hub to see live slots</div>';
+}
+
+// Greedy optimizer: reorders queued items to minimise filament swaps
+function optimizePrintQueue(){
+  var queued=queueItems.filter(function(q){return (q.stage||'queued')==='queued';});
+  if(queued.length<2){toast('Nothing to optimize','Need at least 2 queued items','info',2500);return;}
+
+  // Build loaded color set from AMS assignments across all printers
+  function getLoadedColors(){
+    var cols=[];
+    (printerRecords||[]).forEach(function(pr){
+      Object.values(amsMap[pr.name]||{}).forEach(function(spoolId){
+        var sp=spools.find(function(s){return s.id===spoolId;});
+        if(sp&&sp.color)cols.push(sp.color);
+      });
+    });
+    return cols;
+  }
+
+  // Euclidean RGB distance between two hex colors
+  function hexDist(a,b){
+    var parse=function(h){h=(h||'').replace('#','').slice(0,6);return[parseInt(h.slice(0,2),16)||0,parseInt(h.slice(2,4),16)||0,parseInt(h.slice(4,6),16)||0];};
+    var ac=parse(a),bc=parse(b);
+    return Math.sqrt(Math.pow(ac[0]-bc[0],2)+Math.pow(ac[1]-bc[1],2)+Math.pow(ac[2]-bc[2],2));
+  }
+
+  // Score: average "closeness" of item colors to reference set (higher = better match)
+  function matchScore(itemCols,refCols){
+    if(!itemCols.length||!refCols.length)return 0;
+    return itemCols.reduce(function(sum,c){
+      var best=Math.min.apply(null,refCols.map(function(r){return hexDist(c,r);}));
+      return sum+Math.max(0,442-best); // 442 = max possible RGB distance
+    },0)/itemCols.length;
+  }
+
+  // Build per-item color arrays
+  var itemColors={};
+  queued.forEach(function(q){itemColors[q.id]=getQueueItemColors(q);});
+
+  // Greedy sort: pick next item that best matches current reference colors
+  function greedySort(items,refColors){
+    var pool=items.slice(),result=[];
+    while(pool.length){
+      var best=null,bestScore=-Infinity;
+      pool.forEach(function(q){
+        var score=matchScore(itemColors[q.id],refColors.length?refColors:itemColors[q.id]);
+        if(score>bestScore){bestScore=score;best=q;}
+      });
+      if(!best)best=pool[0];
+      result.push(best);
+      pool.splice(pool.indexOf(best),1);
+      var pickedCols=itemColors[best.id];
+      if(pickedCols.length)refColors=pickedCols;
+    }
+    return result;
+  }
+
+  var loaded=getLoadedColors();
+  // Keep high-priority at front, optimize each group independently
+  var high=queued.filter(function(q){return q.priority==='high';});
+  var normal=queued.filter(function(q){return q.priority!=='high';});
+  var sorted=greedySort(high,loaded).concat(greedySort(normal,loaded));
+
+  var base=1000;
+  sorted.forEach(function(q,i){
+    queueItems=queueItems.map(function(item){
+      return item.id===q.id?Object.assign({},item,{sortOrder:base+i*10}):item;
+    });
+  });
+  saveQueue();renderQueue();renderColourView();
+  toast('Queue optimized 🎨',sorted.length+' items reordered by colour similarity','success',3000);
 }
 
 // ── Queue drag-to-reorder (Queued section only) ──
