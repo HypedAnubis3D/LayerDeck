@@ -84,12 +84,11 @@ async function getIgInfo(token: string): Promise<IgInfo | null> {
   return _cachedIgInfo;
 }
 
-// Build the public base URL for media files (served under /api/social/media)
+// Build the public base URL for media files (served under /api/social/media).
+// Always derived from the incoming request so it works in both dev and production.
 function getMediaBaseUrl(req: import("express").Request): string {
-  const domain = process.env.REPLIT_DEV_DOMAIN;
-  if (domain) return `https://${domain}/api/social/media`;
-  const proto = req.protocol;
-  const host = req.get("host") ?? "localhost";
+  const proto = req.protocol; // "https" in production (trust proxy is set)
+  const host = req.get("x-forwarded-host") ?? req.get("host") ?? "localhost";
   return `${proto}://${host}/api/social/media`;
 }
 
