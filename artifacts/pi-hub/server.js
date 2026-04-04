@@ -81,12 +81,24 @@ function sendDiscordAlert(content) {
   } catch (e) { /* silent */ }
 }
 
-// Debounce: at most one MQTT alert per printer per 5 minutes to avoid spam
+// Debounce: at most one MQTT error alert per printer per 5 minutes for real errors
 const _mqttAlertTs = {};
-function mqttAlert(printerName, content) {
+// Track which printers we've already sent an "offline/unreachable" alert for.
+// Suppresses repeated EHOSTUNREACH spam when printer is powered off overnight.
+// Cleared when the printer reconnects.
+const _printerOfflineNotified = {};
+
+function mqttAlert(printerName, content, isOfflineAlert) {
   const now = Date.now();
-  if (_mqttAlertTs[printerName] && now - _mqttAlertTs[printerName] < 5 * 60 * 1000) return;
-  _mqttAlertTs[printerName] = now;
+  if (isOfflineAlert) {
+    // Already told Discord this printer is down — don't repeat until it comes back
+    if (_printerOfflineNotified[printerName]) return;
+    _printerOfflineNotified[printerName] = now;
+  } else {
+    // Real errors: debounce to at most once per 5 minutes
+    if (_mqttAlertTs[printerName] && now - _mqttAlertTs[printerName] < 5 * 60 * 1000) return;
+    _mqttAlertTs[printerName] = now;
+  }
   sendDiscordAlert(content);
   console.warn(content);
 }
@@ -138,13 +150,20 @@ PRINTERS.forEach(printer => {
   printerClients[printer.name] = { client, REQUEST_TOPIC };
 
   client.on('connect', () => {
+    const wasOffline = !!_printerOfflineNotified[printer.name];
     printerStates[printer.name].online = true;
+    // Clear offline flag so the next power-off will alert again
+    delete _printerOfflineNotified[printer.name];
     client.subscribe(REPORT_TOPIC);
     // Request full push on connect so we get all current state immediately
     client.publish(REQUEST_TOPIC, JSON.stringify({
       pushing: { sequence_id: '0', command: 'pushall' }
     }));
     console.log(`Connected to ${printer.name}`);
+    // Notify Discord only if we previously told it the printer was offline
+    if (wasOffline) {
+      sendDiscordAlert(`✅ **${printer.name}** is back online`);
+    }
   });
 
   client.on('message', (topic, message) => {
@@ -235,12 +254,25 @@ PRINTERS.forEach(printer => {
 
   client.on('error', (err) => {
     printerStates[printer.name].online = false;
-    mqttAlert(printer.name, `⚠️ **${printer.name}** MQTT error: ${err.message}`);
+    const unreachable = err.code === 'EHOSTUNREACH' || err.code === 'ECONNREFUSED'
+      || err.code === 'ETIMEDOUT' || err.code === 'ENOTFOUND'
+      || (err.message || '').includes('EHOSTUNREACH')
+      || (err.message || '').includes('ECONNREFUSED');
+    if (unreachable) {
+      // Printer is powered off or unreachable — alert ONCE, then silence until back online
+      mqttAlert(printer.name, `🔴 **${printer.name}** is unreachable (powered off or network issue)`, true);
+    } else {
+      // Genuine error (auth, protocol, etc.) — debounced real alert
+      mqttAlert(printer.name, `⚠️ **${printer.name}** MQTT error: ${err.message}`, false);
+    }
   });
 
   client.on('offline', () => {
     printerStates[printer.name].online = false;
-    mqttAlert(printer.name, `📡 **${printer.name}** went offline (MQTT disconnected)`);
+    // Only alert if we haven't already flagged this printer as unreachable
+    if (!_printerOfflineNotified[printer.name]) {
+      mqttAlert(printer.name, `📡 **${printer.name}** went offline (MQTT disconnected)`, false);
+    }
   });
 });
 
