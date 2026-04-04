@@ -10,6 +10,7 @@ import discordRouter from "./discord";
 import squareRouter from "./square";
 import socialRouter from "./social";
 import tapoRouter from "./tapo";
+import filamentDbRouter from "./filamentDb";
 
 const router: IRouter = Router();
 
@@ -24,5 +25,6 @@ router.use("/discord", discordRouter);
 router.use("/square", squareRouter);
 router.use("/social", socialRouter);
 router.use("/tapo", tapoRouter);
+router.use("/filament-db", filamentDbRouter);
 
 export default router;

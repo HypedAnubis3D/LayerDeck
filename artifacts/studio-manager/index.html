@@ -2358,10 +2358,11 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
       <option>TPU 95A</option><option>TPU 85A</option>
       <option>Support W</option><option>Support G</option><option>PVB</option>
     </select>
+    <button class="btn btn-sm" id="fildb-sync-btn" onclick="syncFilamentColors()" style="font-size:9px;padding:4px 8px">⟳ Sync Colors</button>
     <span class="cnt" id="fildb-cnt"></span>
   </div>
   <div style="font-size:8px;color:var(--txt-d);margin-bottom:10px;padding:8px;background:var(--surf);border:1px solid var(--bdr);border-radius:4px">
-    💡 Click <b style="color:var(--gold)">+ Add to Spools</b> on any filament to pre-fill the spool form with its settings. Community database — updated with common Bambu, eSUN, Polymaker and more.
+    💡 Click <b style="color:var(--gold)">+ Add to Spools</b> on any filament to pre-fill the spool form. Hit <b style="color:var(--cyn)">⟳ Sync Colors</b> to pull live color additions from the community database.
   </div>
   <div id="fildb-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:9px"></div>
 </div>
@@ -11864,6 +11865,42 @@ function renderFildb(){
       '</div>'+
     '</div>';
   }).join('');
+}
+async function syncFilamentColors(){
+  const btn=document.getElementById('fildb-sync-btn');
+  if(btn){btn.disabled=true;btn.textContent='⟳ Syncing…';}
+  try{
+    const resp=await fetch('/api/filament-db/sync');
+    if(!resp.ok)throw new Error('HTTP '+resp.status);
+    const json=await resp.json();
+    if(!json.ok)throw new Error(json.error||'Unknown error');
+    let totalNew=0,totalUpdated=0;
+    for(const brandData of json.data){
+      for(const [mat,liveColors] of Object.entries(brandData.types)){
+        const entry=FILAMENT_DB.find(function(f){return f.brand===brandData.brand&&f.mat===mat;});
+        if(!entry)continue;
+        for(const lc of liveColors){
+          const alreadyHex=entry.colors.some(function(c){return c.hex.toLowerCase()===lc.hex.toLowerCase();});
+          const alreadyName=entry.colors.some(function(c){return c.name.toLowerCase()===lc.name.toLowerCase();});
+          if(!alreadyHex&&!alreadyName){
+            entry.colors.push({name:lc.name,hex:lc.hex});
+            totalNew++;
+          }
+        }
+        totalUpdated++;
+      }
+    }
+    renderFildb();
+    if(totalNew>0){
+      toast('Colors Synced',totalNew+' new color'+(totalNew===1?'':'s')+' added across '+totalUpdated+' filament types','success',6000);
+    } else {
+      toast('Already Up to Date','No new colors found — database is current','info',4000);
+    }
+  }catch(e){
+    toast('Sync Failed',String(e),'error',5000);
+  }finally{
+    if(btn){btn.disabled=false;btn.textContent='⟳ Sync Colors';}
+  }
 }
 function addFilamentToSpools(brand,name,mat,cost,weight){
   navTo('spools',document.getElementById('nav-spools'));
