@@ -3,7 +3,7 @@
  * Updated: Section 30 — object boundary data (MQTT obj_list parsing),
  *          skip command support, failureSnapshot on FAILED state.
  *
- * Deploy: scp this file to ~/layerdeck-hub/server.js on the Pi, then:
+ * Deploy: scp this file to ~/bambu-hub/server.js on the Pi, then:
  *   pm2 restart layerdeck-hub
  */
 
