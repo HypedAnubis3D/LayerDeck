@@ -8,6 +8,7 @@ import pihubRouter from "./pihub";
 import cameraRouter from "./camera";
 import discordRouter from "./discord";
 import squareRouter from "./square";
+import socialRouter from "./social";
 
 const router: IRouter = Router();
 
@@ -20,5 +21,6 @@ router.use("/pihub", pihubRouter);
 router.use("/camera", cameraRouter);
 router.use("/discord", discordRouter);
 router.use("/square", squareRouter);
+router.use("/social", socialRouter);
 
 export default router;
