@@ -117,12 +117,21 @@ router.get("/status", async (_req, res) => {
   }
 });
 
-// POST /api/social/upload — save media file to local disk and return a public URL
+// POST /api/social/upload — save single media file to local disk and return a public URL
 router.post("/upload", upload.single("file"), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: "No file provided" });
   const base = getMediaBaseUrl(req);
   const publicUrl = `${base}/${req.file.filename}`;
   return res.json({ ok: true, url: publicUrl, mimeType: req.file.mimetype, size: req.file.size });
+});
+
+// POST /api/social/upload/multi — save multiple media files, return array of URLs
+router.post("/upload/multi", upload.array("files", 10), async (req, res) => {
+  const files = req.files as Express.Multer.File[] | undefined;
+  if (!files || files.length === 0) return res.status(400).json({ error: "No files provided" });
+  const base = getMediaBaseUrl(req);
+  const urls = files.map(f => `${base}/${f.filename}`);
+  return res.json({ ok: true, urls, count: urls.length });
 });
 
 // POST /api/social/instagram — publish to Instagram (post/reel/story)

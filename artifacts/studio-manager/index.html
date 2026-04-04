@@ -15655,6 +15655,7 @@ let _scMediaUrl='';
 let _scUploading=false;
 let _scPlatform='both'; // 'both'|'ig'|'fb'
 let _scMode='now'; // 'now'|'schedule'
+let _scMediaUrls=[]; // array of uploaded public URLs (multi-image support)
 let _calYear=new Date().getFullYear();
 let _calMonth=new Date().getMonth();
 let _calDay=null;
@@ -15678,53 +15679,79 @@ const SOCIAL_TEMPLATES=[
    tags:'#hypedanubis3d #behindthescenes #3dprinting #makerlife #printfarm #timelapse #3dprinter'},
 ];
 
-// ── Media upload helper ──
+// ── Media upload helpers (multi-image) ──
 function socialPickMedia(){
   const inp=document.getElementById('sc-file-inp');
   if(inp)inp.click();
 }
-async function socialHandleFile(file){
-  if(!file)return;
-  const isVideo=file.type.startsWith('video/');
-  // Show local preview immediately
-  const previewUrl=URL.createObjectURL(file);
-  _scMediaUrl=previewUrl; // temp until uploaded
-  _renderMediaPreview(previewUrl,isVideo);
-  // Upload to server
+function _renderMediaGrid(){
+  const el=document.getElementById('sc-media-preview');
+  if(!el)return;
+  if(!_scMediaUrls.length){el.innerHTML='';el.style.display='none';return;}
+  const items=_scMediaUrls.map(function(url,i){
+    const isVid=url.match(/\.(mp4|mov|avi|webm)(\?|$)/i);
+    const thumb=isVid
+      ?'<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:28px;background:#111">🎬</div>'
+      :'<img src="'+esc(url)+'" style="width:100%;height:100%;object-fit:cover" onerror="this.style.display=\'none\'"/>';
+    return '<div style="position:relative;width:90px;height:90px;border-radius:7px;overflow:hidden;flex-shrink:0;border:1.5px solid var(--bdr)">'
+      +thumb
+      +'<button onclick="socialRemoveMedia('+i+')" style="position:absolute;top:3px;right:3px;width:18px;height:18px;border-radius:50%;background:rgba(0,0,0,0.75);border:none;color:#fff;font-size:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1">✕</button>'
+      +(i===0&&_scMediaUrls.length>1?'<div style="position:absolute;bottom:3px;left:3px;background:var(--pur);color:#fff;font-size:5px;padding:2px 4px;border-radius:3px;font-family:\'Orbitron\',monospace">COVER</div>':'')
+    +'</div>';
+  }).join('');
+  el.innerHTML='<div style="display:flex;gap:6px;flex-wrap:wrap;padding:6px">'+items+'</div>';
+  el.style.display='block';
+}
+function socialRemoveMedia(idx){
+  _scMediaUrls.splice(idx,1);
+  _scMediaUrl=_scMediaUrls[0]||'';
+  const urlEl=document.getElementById('sc-media-url');
+  if(urlEl)urlEl.value=_scMediaUrl;
+  _renderMediaGrid();
+}
+async function socialHandleFiles(fileList){
+  if(!fileList||!fileList.length)return;
+  const files=Array.from(fileList);
   _scUploading=true;
   const statusEl=document.getElementById('sc-upload-status');
-  if(statusEl)statusEl.textContent='Uploading…';
+  if(statusEl)statusEl.textContent='Uploading '+files.length+' file'+(files.length>1?'s':'')+'…';
+  // Show local previews immediately while uploading
+  const localUrls=files.map(function(f){return URL.createObjectURL(f);});
+  _scMediaUrls=_scMediaUrls.concat(localUrls);
+  _renderMediaGrid();
+  // Upload all via multi endpoint
   const fd=new FormData();
-  fd.append('file',file);
+  files.forEach(function(f){fd.append('files',f);});
   try{
-    const res=await fetch('/api/social/upload',{method:'POST',body:fd});
+    const res=await fetch('/api/social/upload/multi',{method:'POST',body:fd});
     const json=await res.json();
-    if(res.ok&&json.url){
-      _scMediaUrl=json.url;
+    if(res.ok&&json.urls){
+      // Replace local blob URLs with server public URLs
+      _scMediaUrls=_scMediaUrls.filter(function(u){return!u.startsWith('blob:');}).concat(json.urls);
+      _scMediaUrl=_scMediaUrls[0]||'';
       const urlEl=document.getElementById('sc-media-url');
-      if(urlEl)urlEl.value=json.url;
-      if(statusEl)statusEl.textContent='✓ Uploaded';
-      _renderMediaPreview(json.url,isVideo);
-      toast('Media uploaded','Ready to post','success',2500);
+      if(urlEl)urlEl.value=_scMediaUrl;
+      if(statusEl)statusEl.textContent='✓ '+json.urls.length+' uploaded';
+      _renderMediaGrid();
+      toast('Media uploaded',json.urls.length+' file'+(json.urls.length>1?'s':'')+' ready','success',2500);
     }else{
+      _scMediaUrls=_scMediaUrls.filter(function(u){return!u.startsWith('blob:');});
       if(statusEl)statusEl.textContent='Upload failed: '+(json.error||'unknown');
       toast('Upload failed',json.error||'','error');
+      _renderMediaGrid();
     }
   }catch(e){
+    _scMediaUrls=_scMediaUrls.filter(function(u){return!u.startsWith('blob:');});
     if(statusEl)statusEl.textContent='Upload error';
     toast('Upload error',e.message,'error');
+    _renderMediaGrid();
   }
   _scUploading=false;
 }
+// Legacy single-file compat (URL input)
 function _renderMediaPreview(url,isVideo){
-  const el=document.getElementById('sc-media-preview');
-  if(!el)return;
-  if(isVideo){
-    el.innerHTML='<video src="'+esc(url)+'" style="width:100%;max-height:180px;border-radius:6px;object-fit:cover" controls muted></video>';
-  }else{
-    el.innerHTML='<img src="'+esc(url)+'" style="width:100%;max-height:180px;border-radius:6px;object-fit:cover" onerror="this.style.display=\'none\'"/>';
-  }
-  el.style.display='block';
+  if(url&&!_scMediaUrls.includes(url)){_scMediaUrls=[url];_scMediaUrl=url;}
+  _renderMediaGrid();
 }
 function socialSetType(t){
   _scPostType=t;
@@ -15777,11 +15804,11 @@ function _resetComposer(){
   ['sc-caption','sc-media-url','sc-tags','sc-schedule-dt'].forEach(function(id){
     const e=document.getElementById(id);if(e)e.value='';
   });
-  const prev=document.getElementById('sc-media-preview');
-  if(prev){prev.innerHTML='';prev.style.display='none';}
+  _scMediaUrls=[];
+  _scMediaUrl='';
+  _renderMediaGrid();
   const upEl=document.getElementById('sc-upload-status');
   if(upEl)upEl.textContent='';
-  _scMediaUrl='';
 }
 
 // ── Post to Instagram ──
@@ -15853,11 +15880,14 @@ function _buildNewPost(status,schedFor){
   const cap=(document.getElementById('sc-caption')?.value||'').trim();
   const manualUrl=(document.getElementById('sc-media-url')?.value||'').trim();
   const tags=(document.getElementById('sc-tags')?.value||'').trim();
-  const media=manualUrl||_scMediaUrl;
+  // Merge manual URL with uploaded URLs
+  const allUrls=_scMediaUrls.length?_scMediaUrls:(manualUrl?[manualUrl]:[]);
+  if(manualUrl&&!allUrls.includes(manualUrl))allUrls.unshift(manualUrl);
+  const media=allUrls[0]||'';
   if(!cap&&_scPostType!=='story'){toast('Add a caption first','','error');return null;}
   if(!media){toast('Add media first','Pick from gallery or paste a URL','error');return null;}
   const fullCaption=tags?cap+'\n\n'+tags:cap;
-  return {id:uid(),caption:fullCaption,mediaUrl:media,postType:_scPostType,addToStory:_scAddStory,platform:_scPlatform,scheduledFor:schedFor||null,status:status,createdAt:Date.now()};
+  return {id:uid(),caption:fullCaption,mediaUrl:media,mediaUrls:allUrls,postType:_scPostType,addToStory:_scAddStory,platform:_scPlatform,scheduledFor:schedFor||null,status:status,createdAt:Date.now()};
 }
 async function socialPostNow(){
   const post=_buildNewPost('posting',null);
@@ -15884,6 +15914,91 @@ async function socialRetryPost(postId){
 }
 // Keep addSocialPost as alias for openShopifySocialAnnounce compat
 function addSocialPost(){ socialPostNow(); }
+
+// ── Post detail modal (calendar click) ──
+function socialOpenPostModal(postId){
+  const p=socialQueue.find(x=>x.id===postId);
+  if(!p)return;
+  const urls=(p.mediaUrls&&p.mediaUrls.length)?p.mediaUrls:(p.mediaUrl?[p.mediaUrl]:[]);
+  const platLabel={both:'IG+FB',ig:'IG',fb:'FB'}[p.platform||'both']||'IG+FB';
+  const platBg={both:'var(--pur)',ig:'#e1306c',fb:'#1877f2'}[p.platform||'both']||'var(--pur)';
+  const statusColor={draft:'var(--txt-d)',scheduled:'var(--gold)',posting:'var(--cyn)',posted:'var(--grn)',failed:'var(--red)'}[p.status]||'var(--txt-d)';
+  const statusLabel={draft:'DRAFT',scheduled:'SCHED',posting:'POSTING…',posted:'POSTED',failed:'FAILED'}[p.status]||p.status;
+  const schedLabel=p.scheduledFor?new Date(p.scheduledFor).toLocaleString([],{weekday:'short',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}):'';
+  const canEdit=p.status==='scheduled'&&p.scheduledFor&&p.scheduledFor>Date.now();
+  const typeIcon={post:'📷',reel:'🎬',story:'💫'}[p.postType||'post']||'📷';
+  const mediaHtml=urls.length===0?''
+    :urls.length===1?((urls[0].match(/\.(mp4|mov|avi|webm)(\?|$)/i))
+      ?'<video src="'+esc(urls[0])+'" style="width:100%;max-height:240px;object-fit:contain;border-radius:8px;background:#000" controls muted></video>'
+      :'<img src="'+esc(urls[0])+'" style="width:100%;max-height:240px;object-fit:contain;border-radius:8px;background:#000"/>')
+    :'<div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:4px">'+urls.map(function(u){
+      return u.match(/\.(mp4|mov|avi|webm)(\?|$)/i)
+        ?'<div style="width:140px;height:140px;flex-shrink:0;border-radius:7px;background:#111;display:flex;align-items:center;justify-content:center;font-size:36px">🎬</div>'
+        :'<img src="'+esc(u)+'" style="width:140px;height:140px;flex-shrink:0;object-fit:cover;border-radius:7px;border:1px solid var(--bdr)"/>';
+    }).join('')+'</div>';
+  const html='<div id="sc-post-modal" onclick="if(event.target===this)socialClosePostModal()" style="position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.75);display:flex;align-items:flex-end;justify-content:center">'
+    +'<div style="width:100%;max-width:480px;background:var(--bg-card,#14142a);border-radius:16px 16px 0 0;padding:18px;max-height:85vh;overflow-y:auto;box-sizing:border-box" onclick="event.stopPropagation()">'
+      +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">'
+        +'<div style="display:flex;align-items:center;gap:6px">'
+          +'<span style="font-size:12px">'+typeIcon+'</span>'
+          +'<span style="font-family:\'Orbitron\',monospace;font-size:9px;font-weight:700;color:'+statusColor+'">'+statusLabel+'</span>'
+          +'<span style="font-size:7px;background:'+platBg+';color:#fff;padding:2px 6px;border-radius:3px;font-family:\'Orbitron\',monospace;font-weight:700">'+platLabel+'</span>'
+          +(schedLabel?'<span style="font-size:7px;color:var(--txt-d)">📅 '+esc(schedLabel)+'</span>':'')
+        +'</div>'
+        +'<button onclick="socialClosePostModal()" style="background:rgba(255,255,255,0.1);border:none;color:var(--txt-b);width:28px;height:28px;border-radius:50%;cursor:pointer;font-size:14px">✕</button>'
+      +'</div>'
+      +(mediaHtml?'<div style="margin-bottom:14px">'+mediaHtml+'</div>':'')
+      +'<div style="font-size:8.5px;color:var(--txt-b);white-space:pre-wrap;line-height:1.55;margin-bottom:14px;max-height:160px;overflow-y:auto;border:1px solid var(--bdr);border-radius:7px;padding:10px;background:rgba(0,0,0,0.2)">'+esc(p.caption||'(no caption)')+'</div>'
+      +((p.error||p.fbError)?'<div style="font-size:7px;color:var(--red);margin-bottom:10px;word-break:break-word">⚠ '+esc(p.error||p.fbError||'')+'</div>':'')
+      +'<div style="display:flex;gap:8px">'
+        +(canEdit?'<button onclick="socialEditPost(\''+postId+'\')" style="flex:1;padding:10px;border-radius:7px;background:var(--gold);color:#000;font-size:9px;font-weight:700;cursor:pointer;border:none;font-family:\'Orbitron\',monospace;letter-spacing:1px">✏ EDIT POST</button>':'')
+        +(canEdit||p.status==='draft'||p.status==='failed'?'<button onclick="socialRetryPost(\''+postId+'\');socialClosePostModal()" style="flex:1;padding:10px;border-radius:7px;background:linear-gradient(135deg,#7c3aed,#e1306c);color:#fff;font-size:9px;font-weight:700;cursor:pointer;border:none;font-family:\'Orbitron\',monospace;letter-spacing:1px">🚀 POST NOW</button>':'')
+        +'<button onclick="delSocialPost(\''+postId+'\');socialClosePostModal()" style="padding:10px 14px;border-radius:7px;background:rgba(239,68,68,0.15);color:var(--red);font-size:9px;font-weight:700;cursor:pointer;border:1px solid var(--red);font-family:\'Orbitron\',monospace;letter-spacing:1px">✕ DELETE</button>'
+      +'</div>'
+    +'</div>'
+  +'</div>';
+  document.body.insertAdjacentHTML('beforeend',html);
+}
+function socialClosePostModal(){
+  const m=document.getElementById('sc-post-modal');
+  if(m)m.remove();
+}
+function socialEditPost(postId){
+  const p=socialQueue.find(x=>x.id===postId);
+  if(!p)return;
+  socialClosePostModal();
+  // Remove from queue (we're re-editing it)
+  socialQueue=socialQueue.filter(x=>x.id!==postId);
+  saveSocial();
+  // Pre-fill composer
+  const urls=(p.mediaUrls&&p.mediaUrls.length)?p.mediaUrls:(p.mediaUrl?[p.mediaUrl]:[]);
+  _scMediaUrls=urls.slice();
+  _scMediaUrl=urls[0]||'';
+  _scPostType=p.postType||'post';
+  _scPlatform=p.platform||'both';
+  _scAddStory=!!p.addToStory;
+  // Extract caption (strip hashtags if possible)
+  const fullCap=p.caption||'';
+  const hashIdx=fullCap.lastIndexOf('\n\n#');
+  const capPart=hashIdx>-1?fullCap.slice(0,hashIdx):fullCap;
+  const tagPart=hashIdx>-1?fullCap.slice(hashIdx+2):'';
+  // If scheduled, restore datetime
+  const schedIso=p.scheduledFor?new Date(p.scheduledFor).toISOString().slice(0,16):'';
+  if(schedIso){_scMode='schedule';}
+  renderSocial();
+  // Fill fields after render
+  setTimeout(function(){
+    const capEl=document.getElementById('sc-caption');
+    const tagEl=document.getElementById('sc-tags');
+    const dtEl=document.getElementById('sc-schedule-dt');
+    if(capEl)capEl.value=capPart;
+    if(tagEl)tagEl.value=tagPart;
+    if(dtEl&&schedIso)dtEl.value=schedIso;
+    _renderMediaGrid();
+    document.getElementById('sc-caption')?.scrollIntoView({behavior:'smooth',block:'center'});
+  },100);
+  toast('Post loaded for editing','Update and re-schedule or post now','info',3000);
+}
 function delSocialPost(id){
   socialQueue=socialQueue.filter(x=>x.id!==id);
   saveSocial();renderSocial();
@@ -15986,7 +16101,11 @@ function _buildCalDayPanel(){
     return '<div style="padding:10px;text-align:center;font-size:8px;color:var(--txt-d)">'
       +'No posts scheduled for '+monthName+' '+_calDay+'</div>';
   }
-  return dayPosts.map(function(p){return _buildPostCard(p,true);}).join('');
+  return dayPosts.map(function(p){
+    return '<div onclick="socialOpenPostModal(\''+p.id+'\')" style="cursor:pointer;border-radius:8px;transition:opacity .15s" onmouseenter="this.style.opacity=\'0.85\'" onmouseleave="this.style.opacity=\'1\'">'
+      +_buildPostCard(p,true)
+      +'</div>';
+  }).join('');
 }
 function _buildPostCard(p,compact){
   const typeIcon={post:'📷',reel:'🎬',story:'💫'}[p.postType||'post']||'📷';
@@ -15994,13 +16113,16 @@ function _buildPostCard(p,compact){
   const statusLabel={draft:'DRAFT',scheduled:'SCHED',posting:'POSTING…',posted:'POSTED',failed:'FAILED'}[p.status]||'DRAFT';
   const platLabel={both:'IG+FB',ig:'IG',fb:'FB'}[p.platform||'both']||'IG+FB';
   const platBg={both:'var(--pur)',ig:'#e1306c',fb:'#1877f2'}[p.platform||'both']||'var(--pur)';
-  const media=p.mediaUrl||p.imageUrl||'';
+  const allUrls=(p.mediaUrls&&p.mediaUrls.length)?p.mediaUrls:(p.mediaUrl||p.imageUrl?[p.mediaUrl||p.imageUrl]:[]);
+  const media=allUrls[0]||'';
   const isVideo=media&&media.match(/\.(mp4|mov|avi|webm)(\?|$)/i);
   const schedLabel=p.scheduledFor?new Date(p.scheduledFor).toLocaleString([],{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}):'';
   const postedLabel=p.postedAt?new Date(p.postedAt).toLocaleString([],{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}):'';
   const canRetry=p.status==='draft'||p.status==='failed';
   const sz=compact?'40':'56';
-  const thumb=media&&!isVideo?'<img src="'+esc(media)+'" style="width:'+sz+'px;height:'+sz+'px;object-fit:cover;border-radius:5px;flex-shrink:0;border:1px solid var(--bdr)" onerror="this.style.display=\'none\'"/>'
+  const extraCount=allUrls.length>1?allUrls.length-1:0;
+  const thumb=media&&!isVideo
+    ?'<div style="position:relative;width:'+sz+'px;height:'+sz+'px;flex-shrink:0"><img src="'+esc(media)+'" style="width:'+sz+'px;height:'+sz+'px;object-fit:cover;border-radius:5px;border:1px solid var(--bdr)" onerror="this.style.display=\'none\'"/>'+(extraCount?'<div style="position:absolute;bottom:2px;right:2px;background:rgba(0,0,0,0.75);color:#fff;font-size:7px;padding:1px 4px;border-radius:3px;font-family:\'Orbitron\',monospace">+'+extraCount+'</div>':'')+'</div>'
     :media&&isVideo?'<div style="width:'+sz+'px;height:'+sz+'px;background:#111;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;border:1px solid var(--bdr)">🎬</div>'
     :'<div style="width:'+sz+'px;height:'+sz+'px;border:1px dashed var(--bdr);border-radius:5px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:16px">📷</div>';
   const caption=p.caption||'';
@@ -16133,7 +16255,7 @@ function renderSocial(){
       // Media picker
       +'<div style="margin-bottom:8px">'
         +'<div style="font-size:7px;color:var(--txt-d);letter-spacing:1px;margin-bottom:5px">MEDIA</div>'
-        +'<input type="file" id="sc-file-inp" accept="image/*,video/*" style="display:none" onchange="socialHandleFile(this.files[0])"/>'
+        +'<input type="file" id="sc-file-inp" accept="image/*,video/*" multiple style="display:none" onchange="socialHandleFiles(this.files);this.value=\'\'"/>'
         +'<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:6px">'
           +'<button class="btn btn-ghost" onclick="socialPickMedia()" style="display:flex;align-items:center;gap:5px;font-size:8px;padding:6px 12px">'
             +'<span style="font-size:14px">📁</span> Pick from Gallery'
@@ -16220,10 +16342,12 @@ function renderSocial(){
   socialSetPlatform(_scPlatform);
   socialSetMode(_scMode);
   if(_scAddStory){_scAddStory=false;socialToggleStory();} // toggle from false→true
-  // Restore media preview if we have a URL
-  if(_scMediaUrl){
-    const isVid=_scMediaUrl.match(/\.(mp4|mov|avi|webm)/i);
-    _renderMediaPreview(_scMediaUrl,!!isVid);
+  // Restore media preview grid if we have uploaded files
+  if(_scMediaUrls.length){
+    _renderMediaGrid();
+  }else if(_scMediaUrl){
+    _scMediaUrls=[_scMediaUrl];
+    _renderMediaGrid();
   }
 
   // Async API status badge
