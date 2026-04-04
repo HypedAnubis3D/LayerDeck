@@ -13640,9 +13640,14 @@ function getGo2rtcUrl(){
   // Local fallback (only works when browser is on same network)
   return 'http://'+piHubConfig.tailscaleIP+':'+(piHubConfig.go2rtcPort||1984);
 }
-// Auto-derive go2rtc stream name from printer name: "P1 Room" → "camera_p1_room"
+// Auto-derive go2rtc stream name from printer name
+// "P1S (Closet)" → "camera_p1_closet", "A1" → "camera_a1", "P1 Room" → "camera_p1_room"
 function defaultCameraStream(printerName){
-  return 'camera_'+printerName.toLowerCase().replace(/\s+/g,'_');
+  var s=printerName.toLowerCase();
+  s=s.replace(/\(([^)]+)\)/g,' $1');   // "(Closet)" → " closet"
+  s=s.replace(/([a-z]+\d+)[a-z]+/g,'$1'); // strip model suffix: "p1s" → "p1"
+  s=s.replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,'').replace(/_+/g,'_');
+  return 'camera_'+s;
 }
 function resolveCameraStream(printerName){
   var saved=(piHubConfig&&piHubConfig.cameras&&piHubConfig.cameras[printerName])||'';
