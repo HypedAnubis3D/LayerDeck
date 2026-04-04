@@ -15515,7 +15515,24 @@ function renderDiscord(){
       '<div style="font-size:7px;color:var(--txt-d);margin-bottom:8px">Control which alerts fire and where they go. Uncheck to silence an alert type entirely.</div>'+
       routingRows+
     '</div>'+
+    '<div class="printer-card">'+
+      '<div style="font-family:\'Orbitron\',monospace;font-size:9px;font-weight:700;color:var(--gold-b);letter-spacing:2px;margin-bottom:6px">📊 DAILY REPORT</div>'+
+      '<div style="font-size:7px;color:var(--txt-d);margin-bottom:10px">The daily summary posts to #daily-report automatically at <b>6AM Eastern</b> every day via the server — no browser tab needed. Use the button below to send it right now.</div>'+
+      '<button class="btn btn-org btn-sm" style="width:100%;padding:7px" onclick="sendDailyReportNow()">Send Report Now</button>'+
+    '</div>'+
     '</div>';
+}
+
+async function sendDailyReportNow(){
+  const btn=event.target;
+  btn.disabled=true;btn.textContent='Sending…';
+  try{
+    const r=await fetch('/api/discord/daily-report/send',{method:'POST',headers:{'Content-Type':'application/json'}});
+    const j=await r.json().catch(()=>({}));
+    if(r.ok&&j.ok){toast('Daily Report Sent','Check your #daily-report channel','success',4000);}
+    else{toast('Send Failed',j.error||('HTTP '+r.status),'error',5000);}
+  }catch(e){toast('Send Failed',e.message||'Network error','error',5000);}
+  btn.disabled=false;btn.textContent='Send Report Now';
 }
 
 // ── Discord config ──
@@ -15524,7 +15541,7 @@ const DISCORD_DEFAULT_CHANNELS=[
   {key:'print-alerts',    name:'#print-alerts',      desc:'Print finish/fail notifications',    url:'',enabled:true},
   {key:'orders',          name:'#orders',             desc:'New Shopify and Square order alerts', url:'',enabled:true},
   {key:'stock-alerts',    name:'#stock-alerts',       desc:'Low stock & spool alerts',           url:'',enabled:true},
-  {key:'daily-report',    name:'#daily-report',       desc:'Nightly summary at 6AM',             url:'',enabled:true},
+  {key:'daily-report',    name:'#daily-report',       desc:'Daily summary at 6AM Eastern (server-side — no tab needed)', url:'',enabled:true},
   {key:'convention-sales',name:'#convention-sales',   desc:'Real-time convention sales feed',    url:'',enabled:true},
   {key:'pi-health',       name:'#pi-health',          desc:'Pi service monitoring (5-min)',       url:'',enabled:true},
   {key:'bambu-restock',   name:'#bambu-restock',      desc:'Bambu filament restock alerts',      url:'',enabled:true},

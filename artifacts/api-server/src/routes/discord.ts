@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { sendDailyDiscordReport } from "../lib/notificationScheduler";
 
 const router = Router();
 
@@ -26,6 +27,17 @@ router.post("/notify", async (req, res) => {
         .json({ error: `Discord returned ${r.status}`, detail: text });
     }
 
+    res.json({ ok: true });
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : "Unknown error";
+    res.status(500).json({ error: msg });
+  }
+});
+
+// Manual trigger for the daily report (from Discord settings page)
+router.post("/daily-report/send", async (_req, res) => {
+  try {
+    await sendDailyDiscordReport();
     res.json({ ok: true });
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : "Unknown error";
