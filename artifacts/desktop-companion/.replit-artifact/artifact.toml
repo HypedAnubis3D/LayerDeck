@@ -1,6 +1,6 @@
 kind = "web"
 previewPath = "/companion/"
-title = "LayerStack Desktop Companion"
+title = "LayerDeck Desktop Companion"
 version = "1.0.0"
 id = "artifacts/desktop-companion"
 router = "path"

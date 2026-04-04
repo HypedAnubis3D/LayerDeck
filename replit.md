@@ -6,8 +6,8 @@ This is a pnpm workspace monorepo utilizing TypeScript, designed to manage a 3D 
 
 *   **Monorepo Management:** Uses pnpm workspaces for efficient dependency management and shared libraries.
 *   **API Services:** Provides a RESTful API with strong validation and persistence using Express, PostgreSQL, and Drizzle ORM.
-*   **Studio Management (LayerStack):** A PWA for managing Shopify integrations, order intake, print queue, and inventory, accessible via `artifacts/studio-manager`.
-*   **Desktop Companion (LayerStack Desktop):** A React application offering a comprehensive business dashboard, 3MF file management, and real-time Bambu Lab printer status via `/companion/`.
+*   **Studio Management (LayerDeck):** A PWA for managing Shopify integrations, order intake, print queue, and inventory, accessible via `artifacts/studio-manager`.
+*   **Desktop Companion (LayerDeck Desktop Companion):** A React application offering a comprehensive business dashboard, 3MF file management, and real-time Bambu Lab printer status via `/companion/`.
 *   **Code Generation:** Automates API client and Zod schema generation from an OpenAPI specification using Orval.
 
 # User Preferences
