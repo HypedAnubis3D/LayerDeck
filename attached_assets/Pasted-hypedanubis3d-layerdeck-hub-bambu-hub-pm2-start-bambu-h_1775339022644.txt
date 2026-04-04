@@ -1,0 +1,78 @@
+hypedanubis3d@layerdeck-hub:~/bambu-hub $ pm2 start ~/bambu-hub/ecosystem.config.js
+[PM2][WARN] Applications layerdeck-hub not running, starting...
+[PM2] App [layerdeck-hub] launched (1 instances)
+┌────┬────────────────────┬──────────┬──────┬───────────┬──────────┬──────────┐
+│ id │ name               │ mode     │ ↺    │ status    │ cpu      │ memory   │
+├────┼────────────────────┼──────────┼──────┼───────────┼──────────┼──────────┤
+│ 1  │ cameras            │ fork     │ 0    │ online    │ 0%       │ 57.6mb   │
+│ 3  │ layerdeck-hub      │ fork     │ 0    │ online    │ 0%       │ 16.7mb   │
+└────┴────────────────────┴──────────┴──────┴───────────┴──────────┴──────────┘
+hypedanubis3d@layerdeck-hub:~/bambu-hub $ pm2 save
+[PM2] Saving current process list...
+[PM2] Successfully saved in /home/hypedanubis3d/.pm2/dump.pm2
+hypedanubis3d@layerdeck-hub:~/bambu-hub $ pm2 logs layerdeck-hub --lines 30
+[TAILING] Tailing last 30 lines for [layerdeck-hub] process (change the value with --lines option)
+/home/hypedanubis3d/.pm2/logs/layerdeck-hub-out.log last 30 lines:
+3|layerdec | Connected to A1
+3|layerdec | Connected to A1
+3|layerdec | Loaded 3 printers from printers.json
+3|layerdec | 🚀 LayerDeck Hub on port 3000
+3|layerdec | Connected to A1
+3|layerdec | Connected to P1 Room
+3|layerdec | Connected to P1 Closet
+3|layerdec | Control: P1 Closet → light_on
+3|layerdec | Control: P1 Closet → light_off
+3|layerdec | Control: P1 Closet → light_on
+3|layerdec | Connected to P1 Room
+3|layerdec | Connected to P1 Closet
+3|layerdec | Loaded 3 printers from printers.json
+3|layerdec | LayerDeck Hub on port 3000
+3|layerdec | Connected to P1 Room
+3|layerdec | Connected to P1 Closet
+3|layerdec | Connected to A1
+3|layerdec | Connected to A1
+3|layerdec | Loaded 3 printers from printers.json
+3|layerdec | 🚀 LayerDeck Hub on port 3000
+3|layerdec | Connected to P1 Room
+3|layerdec | Connected to P1 Closet
+3|layerdec | Loaded 3 printers from printers.json
+3|layerdec | 🚀 LayerDeck Hub on port 3000
+3|layerdec | Connected to P1 Room
+3|layerdec | Connected to P1 Closet
+3|layerdec | Loaded 3 printers from printers.json
+3|layerdec | 🚀 LayerDeck Hub on port 3000
+3|layerdec | Connected to P1 Room
+3|layerdec | Connected to P1 Closet
+
+/home/hypedanubis3d/.pm2/logs/layerdeck-hub-error.log last 30 lines:
+3|layerdec | ⚠️ **A1** MQTT error: connect EHOSTUNREACH 192.168.1.171:8883
+3|layerdec | ⚠️ **P1 Closet** MQTT error: Keepalive timeout
+3|layerdec | ⚠️ **P1 Room** MQTT error: connect EHOSTUNREACH 192.168.1.166:8883
+3|layerdec | ⚠️ **A1** MQTT error: connect EHOSTUNREACH 192.168.1.171:8883
+3|layerdec | ⚠️ **P1 Closet** MQTT error: connect EHOSTUNREACH 192.168.1.155:8883
+3|layerdec | ⚠️ **P1 Room** MQTT error: connect EHOSTUNREACH 192.168.1.166:8883
+3|layerdec | ⚠️ **A1** MQTT error: connect EHOSTUNREACH 192.168.1.171:8883
+3|layerdec | ⚠️ **P1 Closet** MQTT error: connect EHOSTUNREACH 192.168.1.155:8883
+3|layerdec | ⚠️ **P1 Room** MQTT error: connect EHOSTUNREACH 192.168.1.166:8883
+3|layerdec | ⚠️ **A1** MQTT error: connect EHOSTUNREACH 192.168.1.171:8883
+3|layerdec | ⚠️ **P1 Closet** MQTT error: connect EHOSTUNREACH 192.168.1.155:8883
+3|layerdec | ⚠️ **P1 Room** MQTT error: connect EHOSTUNREACH 192.168.1.166:8883
+3|layerdec | ⚠️ **A1** MQTT error: connect EHOSTUNREACH 192.168.1.171:8883
+3|layerdec | ⚠️ **P1 Closet** MQTT error: connect EHOSTUNREACH 192.168.1.155:8883
+3|layerdec | ⚠️ **P1 Room** MQTT error: connect EHOSTUNREACH 192.168.1.166:8883
+3|layerdec | ⚠️ **A1** MQTT error: connect EHOSTUNREACH 192.168.1.171:8883
+3|layerdec | ⚠️ **A1** MQTT error: connect EHOSTUNREACH 192.168.1.171:8883
+3|layerdec | 🔴 **A1** is unreachable (powered off or network issue)
+3|layerdec | ⚠️ **A1** MQTT error: read ECONNRESET
+3|layerdec | ⚠️ **P1 Closet** MQTT error: Keepalive timeout
+3|layerdec | 🔴 **P1 Closet** is unreachable (powered off or network issue)
+3|layerdec | ⚠️ **P1 Room** MQTT error: Keepalive timeout
+3|layerdec | 🔴 **P1 Room** is unreachable (powered off or network issue)
+3|layerdec | ⚠️ **A1** MQTT error: Keepalive timeout
+3|layerdec | 🔴 **A1** is unreachable (powered off or network issue)
+3|layerdec | 🔴 **P1 Room** is unreachable (powered off or network issue)
+3|layerdec | 🔴 **A1** is unreachable (powered off or network issue)
+3|layerdec | 🔴 **P1 Closet** is unreachable (powered off or network issue)
+3|layerdec | 🔴 **A1** is unreachable (powered off or network issue)
+3|layerdec | 🔴 **A1** is unreachable (powered off or network issue)
+
