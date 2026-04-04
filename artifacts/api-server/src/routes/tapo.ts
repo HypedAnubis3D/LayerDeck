@@ -98,9 +98,16 @@ router.get('/devices', async (req, res) => {
     const withState = await Promise.all(devices.map(async d => {
       try {
         const info = await tapoPass(token, d.deviceId, d.appServerUrl, 'get_device_info');
-        return { deviceId: d.deviceId, alias: d.alias, model: d.model, on: !!info?.result?.device_on, power_mw: info?.result?.current_power ?? null };
+        return {
+          deviceId:  d.deviceId,
+          alias:     d.alias,
+          model:     d.model,
+          on:        !!info?.result?.device_on,
+          power_mw:  info?.result?.current_power ?? null,
+          ip:        info?.result?.ip ?? null,
+        };
       } catch {
-        return { deviceId: d.deviceId, alias: d.alias, model: d.model, on: null, power_mw: null };
+        return { deviceId: d.deviceId, alias: d.alias, model: d.model, on: null, power_mw: null, ip: null };
       }
     }));
 

@@ -13772,6 +13772,12 @@ try{var _taoe=localStorage.getItem('tapoAutoOffEnabled');if(_taoe)_tapoAutoOffEn
 function _saveTapoAutoOffEnabled(){try{localStorage.setItem('tapoAutoOffEnabled',JSON.stringify(_tapoAutoOffEnabled));}catch(e){}}
 // Active countdown timers — { printerName: { outerTimeout, countInterval, bannerId } }
 let _tapoAutoOffTimers={};
+// Known outlet IP → printer name mapping (auto-assigns plugs on first load)
+const TAPO_IP_PRINTER_DEFAULTS={
+  '192.168.1.165':'A1',
+  '192.168.1.172':'P1 Closet',
+  '192.168.1.162':'P1 Room'
+};
 
 // ── State badge colors ──
 const STATE_COLORS={
@@ -15122,10 +15128,36 @@ async function fetchTapoDevices(force){
     if(j.ok){
       _tapoDevices=j.devices||[];
       _tapoLastFetch=Date.now();
+      _tapoAutoAssignByIp();
     }
     if(curTab==='pihub') renderPiHub();
   }catch(e){if(curTab==='pihub') renderPiHub();}
   finally{_tapoFetching=false;}
+}
+
+// Auto-assign plugs to printers based on known outlet IPs.
+// Only sets assignments that aren't already manually configured.
+function _tapoAutoAssignByIp(){
+  const printers=piHubConfig?.printers||[];
+  let changed=false;
+  _tapoDevices.forEach(function(dev){
+    if(!dev.ip)return;
+    const targetName=TAPO_IP_PRINTER_DEFAULTS[dev.ip];
+    if(!targetName)return;
+    // Find the configured printer whose name best matches the target name
+    const printer=printers.find(function(p){
+      return p.name===targetName||
+        p.name.toLowerCase().includes(targetName.toLowerCase())||
+        targetName.toLowerCase().includes(p.name.toLowerCase());
+    });
+    if(!printer)return;
+    // Only auto-assign if nothing is already set for this printer
+    if(!_tapoPrinterPlugs[printer.name]){
+      _tapoPrinterPlugs[printer.name]=dev.deviceId;
+      changed=true;
+    }
+  });
+  if(changed)_saveTapoPrinterPlugs();
 }
 
 async function tapoSetPower(deviceId,on,btnEl){
