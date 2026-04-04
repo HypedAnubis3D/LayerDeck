@@ -217,15 +217,18 @@ router.post("/instagram", async (req, res) => {
     if (!igInfo?.id) return res.status(400).json({ error: "Cannot resolve Instagram Business Account ID." });
 
     // Build container payload based on post type
-    const isVideo = postType === "reel" || resolvedMedia.match(/\.(mp4|mov|avi|mkv|webm)$/i);
+    // Instagram Graph API only supports video Reels — images posted as "reel" must fall back to IMAGE post
+    const mediaIsVideo = !!resolvedMedia.match(/\.(mp4|mov|avi|mkv|webm)$/i);
+    const isVideo = mediaIsVideo;
+    const effectivePostType = (postType === "reel" && !mediaIsVideo) ? "post" : postType;
     const containerBody: Record<string, string | boolean> = { access_token: token };
 
-    if (postType === "reel") {
+    if (effectivePostType === "reel") {
       containerBody.media_type = "REELS";
       containerBody.video_url = resolvedMedia;
       containerBody.share_to_feed = true;
       if (caption) containerBody.caption = caption;
-    } else if (postType === "story") {
+    } else if (effectivePostType === "story") {
       containerBody.media_type = "STORIES";
       if (isVideo) containerBody.video_url = resolvedMedia;
       else containerBody.image_url = resolvedMedia;
