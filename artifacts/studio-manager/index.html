@@ -15814,6 +15814,11 @@ async function postToFacebook(postId){
   saveSocial();renderSocial();
 }
 
+async function postBothSocial(postId){
+  await postToInstagram(postId);
+  await postToFacebook(postId);
+}
+
 function addSocialPost(){
   const cap=(document.getElementById('sc-caption')?.value||'').trim();
   const manualUrl=(document.getElementById('sc-media-url')?.value||'').trim();
@@ -15979,8 +15984,9 @@ function _buildPostCard(p,compact){
         +((p.error||p.fbError)?'<div style="font-size:7px;color:var(--red);margin-top:2px">'+esc(p.error||p.fbError||'')+'</div>':'')
       +'</div>'
       +'<div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0">'
-        +(canPost?'<button class="btn btn-pur btn-xs" onclick="postToInstagram(\''+p.id+'\')" style="font-size:7px">'+typeIcon+' IG</button>':'')
-        +(canFb&&caption?'<button class="btn btn-ghost btn-xs" onclick="postToFacebook(\''+p.id+'\')" style="font-size:7px">FB</button>':'')
+        +(canPost?'<button class="btn btn-pur btn-xs" onclick="postBothSocial(\''+p.id+'\')" style="font-size:6.5px;white-space:nowrap;padding:4px 6px">'+typeIcon+' IG+FB</button>':'')
+        +(canPost?'<button class="btn btn-ghost btn-xs" onclick="postToInstagram(\''+p.id+'\')" style="font-size:6.5px;padding:3px 5px">IG only</button>':'')
+        +(canFb&&caption?'<button class="btn btn-ghost btn-xs" onclick="postToFacebook(\''+p.id+'\')" style="font-size:6.5px;padding:3px 5px">FB only</button>':'')
         +'<button class="btn btn-ghost btn-xs" onclick="delSocialPost(\''+p.id+'\')" style="font-size:9px">✕</button>'
       +'</div>'
     +'</div>'

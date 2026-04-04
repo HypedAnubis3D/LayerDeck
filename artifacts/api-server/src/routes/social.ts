@@ -1,13 +1,24 @@
 import { Router } from "express";
 import multer from "multer";
+import path from "path";
+import fs from "fs";
 
 const router = Router();
 const IG_BASE = "https://graph.facebook.com/v21.0";
 const KNOWN_PAGE_ID = process.env.META_PAGE_ID ?? "445455645311970";
-const SUPABASE_BUCKET = "social-media";
 
-// multer: store upload in memory, max 200MB (videos)
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 200 * 1024 * 1024 } });
+// Disk storage for uploaded media — served at /media/:filename
+const UPLOADS_DIR = path.join(process.cwd(), "uploads");
+if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+
+const diskStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, UPLOADS_DIR),
+  filename: (_req, file, cb) => {
+    const ext = path.extname(file.originalname) || ".bin";
+    cb(null, `${Date.now()}_${Math.random().toString(36).slice(2)}${ext}`);
+  },
+});
+const upload = multer({ storage: diskStorage, limits: { fileSize: 200 * 1024 * 1024 } });
 
 interface IgInfo {
   id: string;
@@ -73,19 +84,20 @@ async function getIgInfo(token: string): Promise<IgInfo | null> {
   return _cachedIgInfo;
 }
 
-// ── Supabase storage helper ──
-async function ensureSupabaseBucket(): Promise<void> {
-  const url = process.env.SUPABASE_URL;
-  const key = process.env.SUPABASE_ANON_KEY;
-  if (!url || !key) return;
-  try {
-    await fetch(`${url}/storage/v1/bucket`, {
-      method: "POST",
-      headers: { "Authorization": `Bearer ${key}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ id: SUPABASE_BUCKET, name: SUPABASE_BUCKET, public: true }),
-    });
-  } catch { /* bucket likely exists */ }
+// Build the public base URL for media files (served under /api/social/media)
+function getMediaBaseUrl(req: import("express").Request): string {
+  const domain = process.env.REPLIT_DEV_DOMAIN;
+  if (domain) return `https://${domain}/api/social/media`;
+  const proto = req.protocol;
+  const host = req.get("host") ?? "localhost";
+  return `${proto}://${host}/api/social/media`;
 }
+
+// GET /api/social/media/:filename — serve uploaded files
+router.get("/media/:filename", (req, res) => {
+  const filename = path.basename(req.params.filename); // strip path traversal
+  res.sendFile(path.join(UPLOADS_DIR, filename));
+});
 
 // GET /api/social/status
 router.get("/status", async (_req, res) => {
@@ -105,37 +117,12 @@ router.get("/status", async (_req, res) => {
   }
 });
 
-// POST /api/social/upload — upload media file to Supabase public storage
+// POST /api/social/upload — save media file to local disk and return a public URL
 router.post("/upload", upload.single("file"), async (req, res) => {
-  const supabaseUrl = process.env.SUPABASE_URL;
-  const supabaseKey = process.env.SUPABASE_ANON_KEY;
-  if (!supabaseUrl || !supabaseKey) return res.status(500).json({ error: "Supabase not configured" });
   if (!req.file) return res.status(400).json({ error: "No file provided" });
-
-  await ensureSupabaseBucket();
-
-  const ext = req.file.originalname.split(".").pop() ?? "bin";
-  const path = `${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
-
-  try {
-    const uploadRes = await fetch(`${supabaseUrl}/storage/v1/object/${SUPABASE_BUCKET}/${path}`, {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${supabaseKey}`,
-        "Content-Type": req.file.mimetype,
-        "x-upsert": "true",
-      },
-      body: req.file.buffer,
-    });
-    if (!uploadRes.ok) {
-      const err = await uploadRes.text();
-      return res.status(400).json({ error: `Upload failed: ${err}` });
-    }
-    const publicUrl = `${supabaseUrl}/storage/v1/object/public/${SUPABASE_BUCKET}/${path}`;
-    return res.json({ ok: true, url: publicUrl, mimeType: req.file.mimetype, size: req.file.size });
-  } catch (e) {
-    return res.status(500).json({ error: e instanceof Error ? e.message : "Upload error" });
-  }
+  const base = getMediaBaseUrl(req);
+  const publicUrl = `${base}/${req.file.filename}`;
+  return res.json({ ok: true, url: publicUrl, mimeType: req.file.mimetype, size: req.file.size });
 });
 
 // POST /api/social/instagram — publish to Instagram (post/reel/story)
