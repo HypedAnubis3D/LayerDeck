@@ -15148,19 +15148,41 @@ async function fetchTapoDevices(force){
 function _tapoAutoAssignByIp(){
   const printers=piHubConfig?.printers||[];
   let changed=false;
+
+  // Helper: does plug alias keyword appear in printer name or vice-versa?
+  function _aliasMatchesPrinter(alias,printerName){
+    const a=alias.toLowerCase().replace(/[^a-z0-9\s]/g,'').trim();
+    const p=printerName.toLowerCase().replace(/[^a-z0-9\s]/g,'').trim();
+    // Strip common suffix words from alias ("plug", "outlet", "socket")
+    const aCore=a.replace(/\b(plug|outlet|socket|smart)\b/g,'').trim();
+    if(!aCore)return false;
+    // Token-based: every meaningful word in alias core found in printer name
+    const tokens=aCore.split(/\s+/).filter(function(t){return t.length>1;});
+    return tokens.length>0&&tokens.every(function(t){return p.includes(t)||t.includes(p.split(/\s+/)[0]);});
+  }
+
   _tapoDevices.forEach(function(dev){
-    if(!dev.ip)return;
-    const targetName=TAPO_IP_PRINTER_DEFAULTS[dev.ip];
-    if(!targetName)return;
-    // Find the configured printer whose name best matches the target name
+    // --- Primary: IP-based match (if ip was returned) ---
+    if(dev.ip){
+      const targetName=TAPO_IP_PRINTER_DEFAULTS[dev.ip];
+      if(targetName){
+        const printer=printers.find(function(p){
+          return p.name===targetName||
+            p.name.toLowerCase().includes(targetName.toLowerCase())||
+            targetName.toLowerCase().includes(p.name.toLowerCase());
+        });
+        if(printer&&!_tapoPrinterPlugs[printer.name]){
+          _tapoPrinterPlugs[printer.name]=dev.deviceId;
+          changed=true;
+          return;
+        }
+      }
+    }
+    // --- Fallback: alias keyword match ---
     const printer=printers.find(function(p){
-      return p.name===targetName||
-        p.name.toLowerCase().includes(targetName.toLowerCase())||
-        targetName.toLowerCase().includes(p.name.toLowerCase());
+      return !_tapoPrinterPlugs[p.name]&&_aliasMatchesPrinter(dev.alias||'',p.name);
     });
-    if(!printer)return;
-    // Only auto-assign if nothing is already set for this printer
-    if(!_tapoPrinterPlugs[printer.name]){
+    if(printer&&!_tapoPrinterPlugs[printer.name]){
       _tapoPrinterPlugs[printer.name]=dev.deviceId;
       changed=true;
     }
@@ -15174,7 +15196,7 @@ async function tapoSetPower(deviceId,on,btnEl){
     const r=await fetch('/api/tapo/power',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({deviceId,on})
+      body:JSON.stringify({deviceId,on,hubUrl:_piHubUrl||null})
     });
     const j=await r.json();
     if(j.ok){

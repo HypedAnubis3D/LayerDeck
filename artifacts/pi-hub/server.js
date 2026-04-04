@@ -516,4 +516,82 @@ app.post('/health/cron', (req, res) => {
   }
 });
 
+// ── Section 31: Tapo P115 local control (cloud-offline fallback) ───────────────
+// Plugs are on the local LAN; cloud passthrough fails when they lack internet
+// access. Pi Hub reaches them directly via local KLAP protocol.
+//
+// Deploy note: run `npm install tp-link-tapo-connect` in ~/bambu-hub/ once,
+// then this block activates automatically.
+
+const TAPO_PLUG_IPS = {
+  // alias (lowercase)  → local IP
+  'a1 plug':        '192.168.1.165',
+  'p1 closet plug': '192.168.1.172',
+  'p1s room plug':  '192.168.1.162',
+  'p1 room plug':   '192.168.1.162', // alternate naming
+};
+
+let _tapoLib = null;
+function _getTapoLib() {
+  if (_tapoLib) return _tapoLib;
+  try {
+    _tapoLib = require('tp-link-tapo-connect');
+    console.log('[Tapo] tp-link-tapo-connect loaded');
+  } catch (e) {
+    console.warn('[Tapo] tp-link-tapo-connect not installed — run: npm install tp-link-tapo-connect');
+  }
+  return _tapoLib;
+}
+
+async function _tapoLocalDevice(alias) {
+  const lib = _getTapoLib();
+  if (!lib) throw new Error('tp-link-tapo-connect not installed on Pi Hub');
+  const email    = process.env.TAPO_EMAIL;
+  const password = process.env.TAPO_PASSWORD;
+  if (!email || !password) throw new Error('TAPO_EMAIL / TAPO_PASSWORD env vars not set on Pi');
+  const ip = TAPO_PLUG_IPS[alias.toLowerCase().trim()];
+  if (!ip) throw new Error(`No local IP found for plug alias: "${alias}"`);
+  const credential = new lib.AuthCredential(email, password);
+  return await lib.loginDeviceByIp(credential, ip);
+}
+
+// GET /tapo/devices — returns on/off + wattage via local protocol
+app.get('/tapo/devices', async (req, res) => {
+  const results = await Promise.all(
+    Object.entries(TAPO_PLUG_IPS).map(async ([alias, ip]) => {
+      try {
+        const device = await _tapoLocalDevice(alias);
+        const info   = await device.getDeviceInfo();
+        return {
+          alias,
+          ip,
+          on:       !!info?.result?.device_on,
+          power_mw: info?.result?.current_power ?? null,
+          error:    null,
+        };
+      } catch (e) {
+        return { alias, ip, on: null, power_mw: null, error: e.message };
+      }
+    })
+  );
+  res.json({ ok: true, devices: results });
+});
+
+// POST /tapo/power — { alias: "A1 Plug", on: true }
+app.post('/tapo/power', async (req, res) => {
+  const { alias, on } = req.body;
+  if (!alias || typeof on !== 'boolean') {
+    return res.status(400).json({ ok: false, error: 'alias (string) and on (boolean) required' });
+  }
+  try {
+    const device = await _tapoLocalDevice(alias);
+    await device.setPowerState(on);
+    console.log(`[Tapo] ${alias} → ${on ? 'ON' : 'OFF'}`);
+    res.json({ ok: true, alias, on });
+  } catch (e) {
+    console.error(`[Tapo] Power command failed for "${alias}":`, e.message);
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
 app.listen(PI_PORT, () => console.log(`🚀 LayerDeck Hub on port ${PI_PORT}`));
