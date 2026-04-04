@@ -153,7 +153,11 @@ async function getSupabaseCollection(
       .limit(1)
       .maybeSingle();
     if (error || !data) return [];
-    const payload = data.payload;
+    let payload = data.payload;
+    // The app stores payload as JSON.stringify(array) — parse if it's a string
+    if (typeof payload === "string") {
+      try { payload = JSON.parse(payload); } catch { return []; }
+    }
     if (Array.isArray(payload)) return payload;
     return [];
   } catch {
