@@ -15752,13 +15752,14 @@ function socialToggleStory(){
 }
 function socialSetPlatform(p){
   _scPlatform=p;
+  const configs={both:{bg:'var(--pur)',color:'#fff'},ig:{bg:'#e1306c',color:'#fff'},fb:{bg:'#1877f2',color:'#fff'}};
   ['both','ig','fb'].forEach(function(k){
     const b=document.getElementById('sc-plat-'+k);
     if(!b)return;
     const active=k===p;
-    b.style.background=active?'var(--pur)':'';
-    b.style.color=active?'#fff':'var(--txt-d)';
-    b.style.borderColor=active?'var(--pur)':'var(--bdr)';
+    b.style.background=active?configs[k].bg:'rgba(255,255,255,0.06)';
+    b.style.color=active?configs[k].color:'#9ca3b0';
+    b.style.borderColor=active?configs[k].bg:'var(--bdr)';
   });
 }
 function socialSetMode(m){
@@ -15769,8 +15770,8 @@ function socialSetMode(m){
   if(nowRow)nowRow.style.display=m==='now'?'block':'none';
   const nowBtn=document.getElementById('sc-mode-now');
   const schBtn=document.getElementById('sc-mode-sch');
-  if(nowBtn){nowBtn.style.background=m==='now'?'var(--gold)':'';nowBtn.style.color=m==='now'?'#000':'var(--txt-b)';}
-  if(schBtn){schBtn.style.background=m==='schedule'?'var(--cyn)':'';schBtn.style.color=m==='schedule'?'#000':'var(--txt-b)';}
+  if(nowBtn){nowBtn.style.background=m==='now'?'var(--gold)':'rgba(255,255,255,0.06)';nowBtn.style.color=m==='now'?'#000':'#9ca3b0';}
+  if(schBtn){schBtn.style.background=m==='schedule'?'var(--cyn)':'rgba(255,255,255,0.06)';schBtn.style.color=m==='schedule'?'#000':'#9ca3b0';}
 }
 function _resetComposer(){
   ['sc-caption','sc-media-url','sc-tags','sc-schedule-dt'].forEach(function(id){
@@ -16153,14 +16154,14 @@ function renderSocial(){
         +'<div style="font-size:7px;color:var(--txt-d);letter-spacing:1px;margin-bottom:5px">POST TO</div>'
         +'<div style="display:flex;gap:6px">'
           +'<button id="sc-plat-both" onclick="socialSetPlatform(\'both\')" style="flex:1;padding:7px 8px;border-radius:6px;border:1.5px solid var(--pur);background:var(--pur);color:#fff;font-size:8px;font-weight:700;cursor:pointer;font-family:\'Orbitron\',monospace;letter-spacing:1px">IG + FB</button>'
-          +'<button id="sc-plat-ig" onclick="socialSetPlatform(\'ig\')" style="flex:1;padding:7px 8px;border-radius:6px;border:1.5px solid var(--bdr);background:none;color:var(--txt-d);font-size:8px;font-weight:700;cursor:pointer;font-family:\'Orbitron\',monospace;letter-spacing:1px">📷 IG</button>'
-          +'<button id="sc-plat-fb" onclick="socialSetPlatform(\'fb\')" style="flex:1;padding:7px 8px;border-radius:6px;border:1.5px solid var(--bdr);background:none;color:var(--txt-d);font-size:8px;font-weight:700;cursor:pointer;font-family:\'Orbitron\',monospace;letter-spacing:1px">📘 FB</button>'
+          +'<button id="sc-plat-ig" onclick="socialSetPlatform(\'ig\')" style="flex:1;padding:7px 8px;border-radius:6px;border:1.5px solid var(--bdr);background:rgba(255,255,255,0.06);color:#9ca3b0;font-size:8px;font-weight:700;cursor:pointer;font-family:\'Orbitron\',monospace;letter-spacing:1px">📷 IG</button>'
+          +'<button id="sc-plat-fb" onclick="socialSetPlatform(\'fb\')" style="flex:1;padding:7px 8px;border-radius:6px;border:1.5px solid var(--bdr);background:rgba(255,255,255,0.06);color:#9ca3b0;font-size:8px;font-weight:700;cursor:pointer;font-family:\'Orbitron\',monospace;letter-spacing:1px">📘 FB</button>'
         +'</div>'
       +'</div>'
       // Post Now / Schedule toggle
       +'<div style="display:flex;gap:6px;margin-bottom:8px">'
         +'<button id="sc-mode-now" onclick="socialSetMode(\'now\')" style="flex:1;padding:8px;border-radius:6px;border:1.5px solid var(--bdr);background:var(--gold);color:#000;font-size:8px;font-weight:700;cursor:pointer;font-family:\'Orbitron\',monospace;letter-spacing:1px">🚀 POST NOW</button>'
-        +'<button id="sc-mode-sch" onclick="socialSetMode(\'schedule\')" style="flex:1;padding:8px;border-radius:6px;border:1.5px solid var(--bdr);background:none;color:var(--txt-b);font-size:8px;font-weight:700;cursor:pointer;font-family:\'Orbitron\',monospace;letter-spacing:1px">📅 SCHEDULE</button>'
+        +'<button id="sc-mode-sch" onclick="socialSetMode(\'schedule\')" style="flex:1;padding:8px;border-radius:6px;border:1.5px solid var(--bdr);background:rgba(255,255,255,0.06);color:#9ca3b0;font-size:8px;font-weight:700;cursor:pointer;font-family:\'Orbitron\',monospace;letter-spacing:1px">📅 SCHEDULE</button>'
       +'</div>'
       // Schedule datetime (hidden until Schedule mode selected)
       +'<div id="sc-schedule-row" style="display:none;margin-bottom:8px">'
