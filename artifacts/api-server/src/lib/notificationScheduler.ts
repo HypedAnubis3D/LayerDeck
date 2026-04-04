@@ -247,7 +247,18 @@ export async function sendDailyDiscordReport() {
     getSupabaseCollection(supabase, "ha3d_catalog_v1"),
   ]);
 
-  type PrintRecord   = { date?: string; success?: boolean; printerName?: string; filamentUsed?: number; printTime?: string; productName?: string };
+  type FilamentEntry = { spoolId?: string; grams?: number };
+  type PrintRecord   = {
+    name?: string;
+    printer?: string;
+    hrs?: number;
+    status?: string;     // 'done' | 'printing' | 'failed' — used by current app
+    success?: boolean;   // legacy field on older manual-log prints
+    finishedAt?: number; // ms timestamp — set on Pi Hub auto-logged and finished prints
+    timestamp?: number;  // ms timestamp — always set
+    date?: string;       // ISO date string — set on some older/manual prints
+    filaments?: FilamentEntry[];
+  };
   type SpoolRecord   = { remaining?: number; brand?: string; colorName?: string; name?: string };
   type QueueRecord   = { stage?: string; hrs?: number };
   type CatalogRecord = { qty?: number; lowStockAt?: number; name?: string; productName?: string };
@@ -257,10 +268,27 @@ export async function sendDailyDiscordReport() {
   const queue   = rawQueue   as QueueRecord[];
   const catalog = rawCatalog as CatalogRecord[];
 
-  const today = new Date().toISOString().split("T")[0];
+  // Build today's date window in Eastern time
+  const easternNow = new Date(new Date().toLocaleString("en-US", { timeZone: "America/New_York" }));
+  const todayStart = new Date(easternNow); todayStart.setHours(0, 0, 0, 0);
+  const todayEnd   = new Date(todayStart);  todayEnd.setDate(todayEnd.getDate() + 1);
+  const todayStartMs = todayStart.getTime();
+  const todayEndMs   = todayEnd.getTime();
 
-  const todayPrints = prints.filter(p => p.date === today && p.success);
-  const todayFails  = prints.filter(p => p.date === today && !p.success);
+  // A print counts as "today" based on finishedAt → timestamp → parsed date field
+  const printTs = (p: PrintRecord): number => {
+    if (p.finishedAt) return p.finishedAt;
+    if (p.timestamp)  return p.timestamp;
+    if (p.date)       return new Date(p.date).getTime() || 0;
+    return 0;
+  };
+  const isToday = (p: PrintRecord) => { const t = printTs(p); return t >= todayStartMs && t < todayEndMs; };
+  // "done" = new status field OR legacy success boolean
+  const isDone   = (p: PrintRecord) => p.status === "done"   || p.success === true;
+  const isFailed = (p: PrintRecord) => p.status === "failed" || p.success === false;
+
+  const todayPrints = prints.filter(p => isDone(p)   && isToday(p));
+  const todayFails  = prints.filter(p => isFailed(p) && isToday(p));
 
   const queuedJobs = queue.filter(q => q.stage === "queued" || q.stage === "inprogress");
   const queueTotalMins = queuedJobs.reduce((a, q) => a + (parseFloat(String(q.hrs ?? 0)) * 60), 0);
@@ -268,13 +296,14 @@ export async function sendDailyDiscordReport() {
   const queueRemMins = Math.round(queueTotalMins % 60);
   const queueTime    = queueHours > 0 ? `${queueHours}h ${queueRemMins}m` : `${queueRemMins}m`;
 
-  const totalGrams = todayPrints.reduce((a, p) => a + parseFloat(String(p.filamentUsed ?? 0)), 0);
-  const printersRan = [...new Set(todayPrints.map(p => p.printerName).filter(Boolean))];
+  // Grams = sum of filaments array; hrs = decimal hours stored directly
+  const totalGrams = todayPrints.reduce((a, p) =>
+    a + (p.filaments ?? []).reduce((s, f) => s + (f.grams ?? 0), 0), 0);
+  const printersRan = [...new Set(todayPrints.map(p => p.printer).filter(Boolean))];
 
   let totalMins = 0;
   for (const p of todayPrints) {
-    const m = (p.printTime ?? "").match(/(\d+)h\s*(\d+)m/);
-    if (m) totalMins += parseInt(m[1]) * 60 + parseInt(m[2]);
+    totalMins += Math.round((p.hrs ?? 0) * 60);
   }
   const hrs    = Math.floor(totalMins / 60);
   const mins   = totalMins % 60;
@@ -297,7 +326,7 @@ export async function sendDailyDiscordReport() {
   if (totalGrams > 0) lines.push(`\n🧵 Filament Used: ${totalGrams.toFixed(0)}g total`);
   if (todayFails.length) {
     lines.push(`\n❌ Print Failures: ${todayFails.length}`);
-    todayFails.forEach(f => lines.push(`   ${f.printerName ?? ""}${f.productName ? ` — ${f.productName}` : ""}`));
+    todayFails.forEach(f => lines.push(`   ${f.printer ?? ""}${f.name ? ` — ${f.name}` : ""}`));
   }
   if (lowStockItems.length) {
     lines.push("\n⚠️ Low Stock:");
