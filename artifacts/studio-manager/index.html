@@ -15135,6 +15135,28 @@ async function fetchTapoDevices(force){
       _tapoLastFetch=Date.now();
       _tapoLastError='';
       _tapoAutoAssignByIp();
+      // Merge live on/off + wattage from Pi Hub (cloud doesn't return state)
+      const hubUrl=getPiUrl();
+      if(hubUrl){
+        fetch(hubUrl+'/tapo/devices',{signal:AbortSignal.timeout(8000)})
+          .then(function(hr){return hr.json();})
+          .then(function(hj){
+            if(hj.ok&&Array.isArray(hj.devices)){
+              hj.devices.forEach(function(hd){
+                const match=_tapoDevices.find(function(d){
+                  return (d.alias||'').toLowerCase().replace(/\s+/g,'')===
+                         (hd.alias||'').toLowerCase().replace(/\s+/g,'');
+                });
+                if(match){
+                  if(hd.on!==null&&hd.on!==undefined)match.on=hd.on;
+                  if(hd.power_mw!==null&&hd.power_mw!==undefined)match.power_mw=hd.power_mw;
+                }
+              });
+              if(curTab==='pihub') renderPiHub();
+              if(curTab==='printers') renderPrinters();
+            }
+          }).catch(function(){});
+      }
     }else{
       _tapoLastError=j.error||'Unknown error';
     }
