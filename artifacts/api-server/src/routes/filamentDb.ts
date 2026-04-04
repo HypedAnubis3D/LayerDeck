@@ -23,6 +23,8 @@ const TYPE_MAP: Record<string, string> = {
   "PLA Marble":         "PLA Marble",
   "PLA+":               "PLA+",
   "PLA Pro":            "PLA+",
+  "PLA Tough":          "PLA Tough",
+  "PLA Tough+":         "PLA Tough",
   "PLA High Speed":     "PLA High Speed",
   "High Speed PLA":     "PLA High Speed",
   "PLA Meta":           "PLA Silk",

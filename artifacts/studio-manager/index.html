@@ -2351,7 +2351,7 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
     </select>
     <select class="flt" id="fildb-mat" onchange="renderFildb()">
       <option value="">All Materials</option>
-      <option>PLA Basic</option><option>PLA Matte</option><option>PLA Silk</option><option>PLA Galaxy</option><option>PLA+</option><option>PLA Glow</option><option>PLA Metal</option><option>PLA Marble</option><option>PLA High Speed</option><option>PLA Aero</option><option>PLA-CF</option><option>PLA-GF</option>
+      <option>PLA Basic</option><option>PLA Matte</option><option>PLA Silk</option><option>PLA Galaxy</option><option>PLA+</option><option>PLA Tough</option><option>PLA Glow</option><option>PLA Metal</option><option>PLA Marble</option><option>PLA High Speed</option><option>PLA Aero</option><option>PLA-CF</option><option>PLA-GF</option>
       <option>PETG Basic</option><option>PETG HF</option><option>PETG-CF</option>
       <option>ABS</option><option>ABS-GF</option><option>ASA</option><option>ASA-CF</option>
       <option>PA6-CF</option><option>PC</option>
@@ -2569,7 +2569,7 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
     <div class="field"><div class="fl">Name / Color</div><input type="text" id="ep3-name" placeholder="Bambu Matte Black PLA"/></div>
     <div class="field"><div class="fl">Material</div>
       <select id="ep3-mat">
-        <optgroup label="── PLA Family ──"><option>PLA Basic</option><option>PLA Matte</option><option>PLA Silk</option><option>PLA Galaxy</option><option>PLA+</option><option>PLA Glow</option><option>PLA Metal</option><option>PLA Marble</option><option>PLA Translucent</option><option>PLA High Speed</option><option>PLA Aero</option><option>PLA-CF</option><option>PLA-GF</option></optgroup>
+        <optgroup label="── PLA Family ──"><option>PLA Basic</option><option>PLA Matte</option><option>PLA Silk</option><option>PLA Galaxy</option><option>PLA+</option><option>PLA Tough</option><option>PLA Glow</option><option>PLA Metal</option><option>PLA Marble</option><option>PLA Translucent</option><option>PLA High Speed</option><option>PLA Aero</option><option>PLA-CF</option><option>PLA-GF</option></optgroup>
         <optgroup label="── PETG Family ──"><option>PETG Basic</option><option>PETG HF</option><option>PETG Translucent</option><option>PETG-CF</option></optgroup>
         <optgroup label="── ABS / ASA ──"><option>ABS</option><option>ABS-CF</option><option>ABS-GF</option><option>ASA</option><option>ASA-CF</option><option>ASA Aero</option></optgroup>
         <optgroup label="── Engineering ──"><option>PA</option><option>PA-CF</option><option>PA-GF</option><option>PC</option><option>PC-CF</option><option>PPS</option><option>PPS-CF</option></optgroup>
@@ -2927,7 +2927,7 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
   <div class="fr2">
     <div class="field"><div class="fl">Material</div>
       <select id="es-mat" onchange="updateSpoolColorSuggestions()">
-        <optgroup label="── PLA Family ──"><option>PLA Basic</option><option>PLA Matte</option><option>PLA Silk</option><option>PLA Galaxy</option><option>PLA+</option><option>PLA Glow</option><option>PLA Metal</option><option>PLA Marble</option><option>PLA Translucent</option><option>PLA High Speed</option><option>PLA Aero</option><option>PLA-CF</option><option>PLA-GF</option></optgroup>
+        <optgroup label="── PLA Family ──"><option>PLA Basic</option><option>PLA Matte</option><option>PLA Silk</option><option>PLA Galaxy</option><option>PLA+</option><option>PLA Tough</option><option>PLA Glow</option><option>PLA Metal</option><option>PLA Marble</option><option>PLA Translucent</option><option>PLA High Speed</option><option>PLA Aero</option><option>PLA-CF</option><option>PLA-GF</option></optgroup>
         <optgroup label="── PETG Family ──"><option>PETG Basic</option><option>PETG HF</option><option>PETG Translucent</option><option>PETG-CF</option></optgroup>
         <optgroup label="── ABS / ASA ──"><option>ABS</option><option>ABS-CF</option><option>ABS-GF</option><option>ASA</option><option>ASA-CF</option><option>ASA Aero</option></optgroup>
         <optgroup label="── Engineering ──"><option>PA</option><option>PA-CF</option><option>PA-GF</option><option>PC</option><option>PC-CF</option><option>PPS</option><option>PPS-CF</option></optgroup>
@@ -11622,37 +11622,45 @@ const FILAMENT_DB=[
   // ── BAMBU LAB ────────────────────────────────────────────────────────────
   {brand:'Bambu Lab',name:'PLA Basic',mat:'PLA Basic',
    colors:[
-     {name:'Black',hex:'#3D3D3C'},{name:'White',hex:'#F5F5F5'},{name:'Grey',hex:'#8B9398'},{name:'Dark Gray',hex:'#616364'},
-     {name:'Blue Grey',hex:'#647988'},{name:'Blue',hex:'#23529A'},{name:'Bambu Green',hex:'#00A553'},{name:'Mistletoe Green',hex:'#2E7759'},
-     {name:'Red',hex:'#C13A3D'},{name:'Pink',hex:'#FF7896'},{name:'Magenta',hex:'#C55498'},{name:'Cyan',hex:'#009ACE'},
-     {name:'Yellow',hex:'#FDD803'},{name:'Sunflower Yellow',hex:'#FFBD25'},{name:'Orange',hex:'#F07745'},
-     {name:'Purple',hex:'#6B6FB2'},{name:'Brown',hex:'#9A6152'},{name:'White Jade',hex:'#ECEADE'}],
+     {name:'Jade White',hex:'#ECEADE'},{name:'White',hex:'#F5F5F5'},{name:'Light Gray',hex:'#C8C8C8'},{name:'Dark Gray',hex:'#616364'},
+     {name:'Blue Grey',hex:'#647988'},{name:'Black',hex:'#3D3D3C'},{name:'Beige',hex:'#F0E6C8'},{name:'Brown',hex:'#9A6152'},
+     {name:'Red',hex:'#C13A3D'},{name:'Maroon Red',hex:'#8B3040'},{name:'Pink',hex:'#FF7896'},{name:'Hot Pink',hex:'#E06090'},
+     {name:'Magenta',hex:'#C55498'},{name:'Orange',hex:'#F07745'},{name:'Yellow',hex:'#F5D020'},{name:'Sunflower Yellow',hex:'#FFBD25'},
+     {name:'Bright Green',hex:'#00A553'},{name:'Mistletoe Green',hex:'#2E7759'},{name:'Cyan',hex:'#009ACE'},
+     {name:'Turquoise',hex:'#00BCD4'},{name:'Blue',hex:'#23529A'},{name:'Cobalt Blue',hex:'#2C4F9E'},{name:'Purple',hex:'#6B6FB2'}],
    cost:13.99,weight:1000,nozzle:220,bed:35,speed:500,notes:'Reliable all-rounder. Great for most prints.'},
   {brand:'Bambu Lab',name:'PLA Matte',mat:'PLA Matte',
    colors:[
-     {name:'Matte Black',hex:'#2A2A2A'},{name:'Ivory White',hex:'#EBEBE3'},{name:'Ash Gray',hex:'#8D9499'},{name:'Charcoal',hex:'#424344'},
-     {name:'Dark Red',hex:'#AF4749'},{name:'Scarlet Red',hex:'#D34651'},{name:'Mandarin Orange',hex:'#FC9257'},{name:'Lemon Yellow',hex:'#FFC968'},
-     {name:'Grass Green',hex:'#76B56F'},{name:'Dark Green',hex:'#656A4D'},{name:'Marine Blue',hex:'#287FAC'},{name:'Ice Blue',hex:'#9FD7E1'},
-     {name:'Lilac Purple',hex:'#9389C2'},{name:'Matte Plum',hex:'#9A3F63'},{name:'Matte Latte Brown',hex:'#BF9E82'},
-     {name:'Matte Grass Green',hex:'#6BB173'},{name:'Matte Sakura Pink',hex:'#EAB8CA'}],
+     {name:'Matte Black',hex:'#2A2A2A'},{name:'Bone White',hex:'#EBEBE3'},{name:'Ash Gray',hex:'#8D9499'},{name:'Charcoal',hex:'#424344'},
+     {name:'Scarlet Red',hex:'#D34651'},{name:'Dark Red',hex:'#AF4749'},{name:'Terracotta',hex:'#C8613A'},{name:'Plum',hex:'#9A3F63'},
+     {name:'Mandarin Orange',hex:'#FC9257'},{name:'Lemon Yellow',hex:'#FFC968'},{name:'Desert Tan',hex:'#D4B483'},
+     {name:'Grass Green',hex:'#76B56F'},{name:'Apple Green',hex:'#7DC67E'},{name:'Dark Green',hex:'#656A4D'},
+     {name:'Marine Blue',hex:'#287FAC'},{name:'Ice Blue',hex:'#9FD7E1'},{name:'Dark Blue',hex:'#1A3A6B'},
+     {name:'Lilac Purple',hex:'#9389C2'},{name:'Latte Brown',hex:'#BF9E82'},{name:'Caramel',hex:'#A0644A'},
+     {name:'Sakura Pink',hex:'#EAB8CA'}],
    cost:13.99,weight:1000,nozzle:220,bed:35,speed:500,notes:'Beautiful matte finish. Hides layer lines well.'},
   {brand:'Bambu Lab',name:'PLA Silk',mat:'PLA Silk',
-   colors:[{name:'Blue',hex:'#4F9CCC'},{name:'Alpine Green Sparkle',hex:'#4F6359'},{name:'Crimson Red Sparkle',hex:'#83473F'},
-           {name:'Gold',hex:'#D4AF37'},{name:'Silver',hex:'#C0C0C0'},{name:'Copper',hex:'#B87333'},{name:'Rose Gold',hex:'#B76E79'}],
+   colors:[
+     {name:'Gold',hex:'#D4AF37'},{name:'Silver',hex:'#C0C0C0'},{name:'Copper',hex:'#B87333'},{name:'Rose Gold',hex:'#B76E79'},
+     {name:'Titan Gray',hex:'#808080'},{name:'Candy Red',hex:'#C0392B'},{name:'Purple',hex:'#9B59B6'},
+     {name:'Blue',hex:'#4F9CCC'},{name:'Baby Blue',hex:'#87CEEB'},{name:'Alpine Green Sparkle',hex:'#4F6359'},
+     {name:'Crimson Red Sparkle',hex:'#83473F'}],
    cost:14.99,weight:1000,nozzle:220,bed:35,speed:400,notes:'Shiny silk-like finish. Best at slower speeds.'},
   {brand:'Bambu Lab',name:'PLA Galaxy',mat:'PLA Galaxy',
-   colors:[{name:'Nebulae',hex:'#495758'},{name:'Purple',hex:'#4C5763'}],
+   colors:[{name:'Nebula',hex:'#495758'},{name:'Purple',hex:'#4C5763'},{name:'Green',hex:'#3A5248'}],
    cost:15.99,weight:1000,nozzle:220,bed:35,speed:400,notes:'Sparkling galaxy effect. Unique glitter-like particles.'},
   {brand:'Bambu Lab',name:'PLA Glow',mat:'PLA Glow',
    colors:[{name:'Pink',hex:'#FF9CA1'}],
    cost:15.99,weight:1000,nozzle:220,bed:35,speed:400,notes:'Charges in light, glows in the dark. Great for display pieces.'},
   {brand:'Bambu Lab',name:'PLA Metal',mat:'PLA Metal',
-   colors:[{name:'Iron Gray Metallic',hex:'#565451'},{name:'Iridium Gold Metallic',hex:'#AC9E8E'},{name:'Cobalt Blue Metallic',hex:'#5F8192'},
-           {name:'Metallic Cobalt Blue',hex:'#5A7B8C'},{name:'Bronze',hex:'#867254'}],
+   colors:[{name:'Iron Gray Metallic',hex:'#565451'},{name:'Iridium Gold Metallic',hex:'#AC9E8E'},{name:'Oxide Green Metallic',hex:'#4E6645'}],
    cost:16.99,weight:1000,nozzle:220,bed:35,speed:400,notes:'Metallic particle fill. Heavy, premium look.'},
   {brand:'Bambu Lab',name:'PLA Marble',mat:'PLA Marble',
-   colors:[{name:'Marble White',hex:'#DBDDDC'},{name:'Marble Red',hex:'#954D3F'}],
+   colors:[{name:'White Marble',hex:'#DBDDDC'},{name:'Red Granite',hex:'#954D3F'}],
    cost:15.99,weight:1000,nozzle:220,bed:35,speed:400,notes:'Stone-look finish. Unique veining pattern on every print.'},
+  {brand:'Bambu Lab',name:'PLA Tough',mat:'PLA Tough',
+   colors:[{name:'Black',hex:'#2A2A2A'},{name:'White',hex:'#F5F5F5'},{name:'Gray',hex:'#8B9398'},{name:'Cream White',hex:'#EDE0C8'},{name:'Vermilion Red',hex:'#CC3322'},{name:'Light Blue',hex:'#87CEEB'}],
+   cost:14.99,weight:1000,nozzle:220,bed:35,speed:500,notes:'Tougher than standard PLA. Better impact resistance for functional parts.'},
   {brand:'Bambu Lab',name:'PLA High Speed',mat:'PLA High Speed',
    colors:[{name:'Black',hex:'#1A1A1A'},{name:'White',hex:'#F5F5F5'},{name:'Grey',hex:'#808080'},{name:'Red',hex:'#D93025'}],
    cost:14.99,weight:1000,nozzle:230,bed:35,speed:700,notes:'Optimized for high-speed printing. Excellent adhesion.'},
@@ -11666,34 +11674,37 @@ const FILAMENT_DB=[
    colors:[{name:'Light Grey',hex:'#CCCCCC'}],
    cost:22.99,weight:500,nozzle:240,bed:35,speed:300,notes:'Glass-fiber reinforced. Stiff and rigid with low warping.'},
   {brand:'Bambu Lab',name:'PETG Basic',mat:'PETG Basic',
-   colors:[{name:'Translucent Orange',hex:'#EF8E5B'},{name:'Black',hex:'#1A1A1A'},{name:'White',hex:'#F5F5F5'},{name:'Grey',hex:'#808080'}],
+   colors:[{name:'White',hex:'#F0F1F0'},{name:'Gray',hex:'#A3A6A6'},{name:'Natural',hex:'#E8E8DC'},{name:'Blue Gray',hex:'#647988'},{name:'Reflex Blue',hex:'#1A4B8C'},{name:'Black',hex:'#1A1A1A'}],
    cost:13.99,weight:1000,nozzle:240,bed:70,speed:300,notes:'Stronger and more flexible than PLA. Good chemical resistance.'},
   {brand:'Bambu Lab',name:'PETG HF',mat:'PETG HF',
-   colors:[{name:'Orange',hex:'#FF7146'},{name:'White',hex:'#F0F1F0'},{name:'Red',hex:'#C33F45'},{name:'Gray',hex:'#A3A6A6'}],
+   colors:[
+     {name:'White',hex:'#F0F1F0'},{name:'Gray',hex:'#A3A6A6'},{name:'Dark Gray',hex:'#4A4A4A'},{name:'Black',hex:'#3D3D3C'},
+     {name:'Red',hex:'#C33F45'},{name:'Cream',hex:'#E8D5B5'},{name:'Lime Green',hex:'#8DC63F'},
+     {name:'Forest Green',hex:'#2E7D32'},{name:'Lake Blue',hex:'#4A90D9'},{name:'Peanut Brown',hex:'#9B7B5A'}],
    cost:15.99,weight:1000,nozzle:240,bed:70,speed:500,notes:'High-flow PETG. Faster printing without quality loss.'},
   {brand:'Bambu Lab',name:'PETG-CF',mat:'PETG-CF',
-   colors:[{name:'Black',hex:'#3D3D3C'},{name:'Violet Purple',hex:'#604F73'}],
+   colors:[{name:'Black',hex:'#3D3D3C'},{name:'Titan Gray',hex:'#8B9398'},{name:'Malachite Green',hex:'#2E8B57'},{name:'Indigo Blue',hex:'#3F51B5'},{name:'Violet Purple',hex:'#604F73'}],
    cost:29.99,weight:500,nozzle:260,bed:75,speed:250,notes:'Hardened nozzle required. Excellent strength-to-weight ratio.'},
   {brand:'Bambu Lab',name:'ABS',mat:'ABS',
-   colors:[{name:'Black',hex:'#1A1A1A'},{name:'White',hex:'#F5F5F5'},{name:'Grey',hex:'#808080'},{name:'Red',hex:'#CC2020'}],
+   colors:[{name:'Black',hex:'#2A2A2A'},{name:'White',hex:'#F5F5F5'},{name:'Silver',hex:'#C0C0C0'},{name:'Grey',hex:'#808080'},{name:'Orange',hex:'#F07030'},{name:'Tangerine Yellow',hex:'#FFA500'},{name:'Olive',hex:'#6B7A3A'},{name:'Purple',hex:'#6A0DAD'}],
    cost:13.99,weight:1000,nozzle:255,bed:90,speed:300,notes:'Requires enclosed printer. Very durable. Slight shrinkage.'},
   {brand:'Bambu Lab',name:'ABS-GF',mat:'ABS-GF',
-   colors:[{name:'Grey',hex:'#999999'}],
+   colors:[{name:'Black',hex:'#2A2A2A'},{name:'Green',hex:'#2A8A4A'},{name:'Red',hex:'#CC2020'}],
    cost:22.99,weight:500,nozzle:260,bed:90,speed:250,notes:'Glass-fiber reinforced ABS. Reduced warping, higher stiffness.'},
   {brand:'Bambu Lab',name:'ASA',mat:'ASA',
-   colors:[{name:'Black',hex:'#1A1A1A'},{name:'White',hex:'#F5F5F5'},{name:'Grey',hex:'#808080'},{name:'Red',hex:'#CC2020'},{name:'Blue',hex:'#2255AA'}],
+   colors:[{name:'White',hex:'#F5F5F5'},{name:'Gray',hex:'#808080'},{name:'Green',hex:'#2A8A4A'},{name:'Blue',hex:'#2255AA'},{name:'Black',hex:'#1A1A1A'}],
    cost:16.99,weight:1000,nozzle:260,bed:90,speed:300,notes:'UV and weather resistant. Ideal for outdoor parts.'},
   {brand:'Bambu Lab',name:'ASA-CF',mat:'ASA-CF',
-   colors:[{name:'Carbon Black',hex:'#1C1C1C'}],
+   colors:[{name:'Black',hex:'#1C1C1C'}],
    cost:29.99,weight:500,nozzle:270,bed:90,speed:250,notes:'Carbon-fiber ASA. Outdoor-stable and extremely stiff.'},
   {brand:'Bambu Lab',name:'PA6-CF',mat:'PA6-CF',
    colors:[{name:'Black',hex:'#4C4B4A'}],
    cost:49.99,weight:500,nozzle:280,bed:80,speed:200,notes:'Engineering nylon CF. Hardened nozzle required. High strength.'},
   {brand:'Bambu Lab',name:'TPU 95A',mat:'TPU 95A',
-   colors:[{name:'White',hex:'#F0EFE3'},{name:'Gray',hex:'#8C9091'},{name:'Black',hex:'#3E3D3D'}],
+   colors:[{name:'White',hex:'#F0EFE3'},{name:'Gray',hex:'#8C9091'},{name:'Black',hex:'#3E3D3D'},{name:'Yellow',hex:'#FDD803'},{name:'Blue',hex:'#23529A'}],
    cost:24.99,weight:1000,nozzle:220,bed:25,speed:150,notes:'Flexible filament. Print slowly for best results. Shore 95A.'},
   {brand:'Bambu Lab',name:'TPU 85A',mat:'TPU 85A',
-   colors:[{name:'Black',hex:'#1A1A1A'},{name:'White',hex:'#F5F5F5'}],
+   colors:[{name:'Black',hex:'#2A2A2A'},{name:'Flesh',hex:'#F0C8A0'}],
    cost:27.99,weight:1000,nozzle:210,bed:25,speed:100,notes:'Super soft flex. Shore 85A. Excellent for gaskets and grips.'},
   {brand:'Bambu Lab',name:'Support W',mat:'Support W',
    colors:[{name:'White',hex:'#F5F5F5'}],
