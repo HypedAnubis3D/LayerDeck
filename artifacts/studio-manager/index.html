@@ -390,7 +390,8 @@ input.srch::placeholder{color:var(--txt-d);}
 
 /* FIL ROWS */
 .fil-rows{margin-bottom:7px;}
-.fil-row{display:grid;grid-template-columns:1fr 76px 24px 22px;gap:4px;align-items:center;margin-bottom:4px;background:var(--bg);border:1px solid var(--bdr);border-radius:4px;padding:5px 7px;}
+.fil-row{display:grid;grid-template-columns:14px 1fr 76px 24px 22px;gap:4px;align-items:center;margin-bottom:4px;background:var(--bg);border:1px solid var(--bdr);border-radius:4px;padding:5px 7px;}
+.fil-row-dot{width:12px;height:12px;border-radius:50%;flex-shrink:0;border:1.5px solid rgba(255,255,255,.18);cursor:default;}
 .fil-row select,.fil-row input{background:transparent;border:none;color:var(--txt);font-family:'Share Tech Mono',monospace;font-size:8px;padding:0;outline:none;}
 .fil-row input{border-left:1px solid var(--bdr2);padding-left:6px;}
 .fil-row-del{background:none;border:none;color:var(--txt-d);cursor:pointer;font-size:12px;padding:0 2px;}
@@ -4297,12 +4298,21 @@ function applyTmf(t){
     document.getElementById('ep-profile').value=t.profile||'';
   }
   document.getElementById('tmf-prefill-badge').style.display='inline-flex';
-  // fill filament rows
+  // fill filament rows — include color swatches and auto-match spools
   document.getElementById('fil-rows').innerHTML='';
   filRows=[];filRowCount=0;
+  const fcolors=t.filamentColors&&t.filamentColors.length?t.filamentColors:(t.filamentColor?[t.filamentColor]:[]);
   const fgrams=t.filamentGramsPerColor||t.filamentGrams||[];
-  if(fgrams.length){fgrams.forEach(g=>addFilRow('',g));}
-  else{addFilRow();}
+  const maxSlots=Math.max(fcolors.length,fgrams.length);
+  if(maxSlots>0){
+    for(let i=0;i<maxSlots;i++){
+      const g=fgrams[i];
+      if(g===0)continue; // skip slots Bambu marks as unused (0g)
+      const c=fcolors[i]||'';
+      addFilRow('',g!=null?g:'',c);
+    }
+    if(!filRows.length)addFilRow(); // all were 0g — add one blank row
+  }else{addFilRow();}
   updateCostPreview();
 }
 
@@ -5369,12 +5379,23 @@ function filterEcTmfSearch(q){
       .join('');
   updateTmfInfo();
 }
-function addFilRow(spoolId='',grams=''){
+function addFilRow(spoolId='',grams='',colorHex=''){
   const id='fr-'+Date.now()+'-'+(filRowCount++);
   filRows.push(id);
+  // Normalise the color hex to #RRGGBB (strip alpha channel from Bambu format)
+  const cleanHex=colorHex?('#'+(colorHex.replace(/^#/,'').slice(0,6))):'';
+  // Auto-match the closest spool by color if no spool was explicitly set
+  if(!spoolId&&cleanHex){
+    const match=closestSpoolByHex(cleanHex,60);
+    if(match)spoolId=match.id;
+  }
+  const dotStyle=cleanHex
+    ?`background:${cleanHex};box-shadow:0 0 4px ${cleanHex}66`
+    :'background:var(--bdr2)';
+  const dotTitle=cleanHex?`3MF color: ${cleanHex}`:'No color from 3MF';
   const div=document.createElement('div');
   div.className='fil-row';div.id=id;
-  div.innerHTML=`<select onchange="updateCostPreview()">${buildSpoolOpts(spoolId)}</select><input type="number" min="1" placeholder="grams" value="${grams}" oninput="updateCostPreview()"/><button class="fil-qr-btn" onclick="openRowScanner('${id}')" title="Scan spool QR">⬡</button><button class="fil-row-del" onclick="removeFilRow('${id}')">✕</button>`;
+  div.innerHTML=`<div class="fil-row-dot" style="${dotStyle}" title="${dotTitle}"></div><select onchange="updateCostPreview()">${buildSpoolOpts(spoolId)}</select><input type="number" min="1" placeholder="grams" value="${grams}" oninput="updateCostPreview()"/><button class="fil-qr-btn" onclick="openRowScanner('${id}')" title="Scan spool QR">⬡</button><button class="fil-row-del" onclick="removeFilRow('${id}')">✕</button>`;
   document.getElementById('fil-rows').appendChild(div);
   updateCostPreview();
 }
