@@ -16216,14 +16216,15 @@ function _socialMediaBrokenThumb(img){
 function _buildCalDayPanel(){
   if(_calDay===null)return '';
   const dayPosts=socialQueue.filter(function(p){
-    if(!p.scheduledFor)return false;
-    const d=new Date(p.scheduledFor);
+    const ts=p.status==='posted'?(p.postedAt||p.scheduledFor):p.scheduledFor;
+    if(!ts)return false;
+    const d=new Date(ts);
     return d.getFullYear()===_calYear&&d.getMonth()===_calMonth&&d.getDate()===_calDay;
   });
   const monthName=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][_calMonth];
   if(!dayPosts.length){
     return '<div style="padding:10px;text-align:center;font-size:8px;color:var(--txt-d)">'
-      +'No posts scheduled for '+monthName+' '+_calDay+'</div>';
+      +'No posts for '+monthName+' '+_calDay+'</div>';
   }
   return dayPosts.map(function(p){
     return '<div onclick="socialOpenPostModal(\''+p.id+'\')" style="cursor:pointer;border-radius:8px;transition:opacity .15s" onmouseenter="this.style.opacity=\'0.85\'" onmouseleave="this.style.opacity=\'1\'">'
@@ -16293,11 +16294,12 @@ function renderSocial(){
   const today=new Date();
   const isToday=function(d){return today.getFullYear()===_calYear&&today.getMonth()===_calMonth&&today.getDate()===d;};
 
-  // Map posts by day for dots
+  // Map posts by day for dots — use postedAt for posted items, scheduledFor for everything else
   const postsByDay={};
   socialQueue.forEach(function(p){
-    if(!p.scheduledFor)return;
-    const d=new Date(p.scheduledFor);
+    const ts=p.status==='posted'?(p.postedAt||p.scheduledFor):p.scheduledFor;
+    if(!ts)return;
+    const d=new Date(ts);
     if(d.getFullYear()!==_calYear||d.getMonth()!==_calMonth)return;
     const day=d.getDate();
     if(!postsByDay[day])postsByDay[day]=[];
