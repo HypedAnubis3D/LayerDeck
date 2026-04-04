@@ -50,16 +50,47 @@ async function resolveIgInfo(userToken: string): Promise<IgInfo | null> {
     const igId = igScope?.target_ids?.[0] ?? null;
     if (!igId) return null;
 
-    // Try to get the IG username using the user token directly
+    // Try to resolve IG username — attempt multiple paths
     let username: string | null = null;
     try {
+      // Path 1: direct IG account query with user token
       const igRes = await fetch(
         `${IG_BASE}/${igId}?fields=id,username&access_token=${encodeURIComponent(userToken)}`
       );
       const igJ = (await igRes.json()) as { id?: string; username?: string; error?: unknown };
       if (igJ.username) username = igJ.username;
+
+      // Path 2: via Facebook Page → instagram_business_account (when IG is linked to page)
+      if (!username) {
+        const pageScope = granular.find((s) => s.scope === "pages_show_list");
+        const pageId = pageScope?.target_ids?.[0];
+        if (pageId) {
+          // Get page access token first
+          const pgRes = await fetch(
+            `${IG_BASE}/${pageId}?fields=access_token,instagram_business_account{id,username}&access_token=${encodeURIComponent(userToken)}`
+          );
+          const pgJ = (await pgRes.json()) as {
+            access_token?: string;
+            instagram_business_account?: { id: string; username?: string };
+          };
+          if (pgJ?.instagram_business_account?.username) {
+            username = pgJ.instagram_business_account.username;
+          } else if (pgJ?.access_token) {
+            // Try again with page token
+            const pgRes2 = await fetch(
+              `${IG_BASE}/${pageId}?fields=instagram_business_account{id,username}&access_token=${encodeURIComponent(pgJ.access_token)}`
+            );
+            const pgJ2 = (await pgRes2.json()) as {
+              instagram_business_account?: { id: string; username?: string };
+            };
+            if (pgJ2?.instagram_business_account?.username) {
+              username = pgJ2.instagram_business_account.username;
+            }
+          }
+        }
+      }
     } catch {
-      // username stays null — not critical
+      // username stays null — not critical for publishing
     }
 
     return { id: igId, username, missingScopes };
