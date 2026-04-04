@@ -217,18 +217,18 @@ router.post("/instagram", async (req, res) => {
     if (!igInfo?.id) return res.status(400).json({ error: "Cannot resolve Instagram Business Account ID." });
 
     // Build container payload based on post type
-    // Instagram Graph API only supports video Reels — images posted as "reel" must fall back to IMAGE post
     const mediaIsVideo = !!resolvedMedia.match(/\.(mp4|mov|avi|mkv|webm)$/i);
     const isVideo = mediaIsVideo;
-    const effectivePostType = (postType === "reel" && !mediaIsVideo) ? "post" : postType;
     const containerBody: Record<string, string | boolean> = { access_token: token };
 
-    if (effectivePostType === "reel") {
+    if (postType === "reel") {
       containerBody.media_type = "REELS";
-      containerBody.video_url = resolvedMedia;
       containerBody.share_to_feed = true;
       if (caption) containerBody.caption = caption;
-    } else if (effectivePostType === "story") {
+      // Images can be posted as Reels (static reel) using image_url; videos use video_url
+      if (mediaIsVideo) containerBody.video_url = resolvedMedia;
+      else containerBody.image_url = resolvedMedia;
+    } else if (postType === "story") {
       containerBody.media_type = "STORIES";
       if (isVideo) containerBody.video_url = resolvedMedia;
       else containerBody.image_url = resolvedMedia;
@@ -260,7 +260,8 @@ router.post("/instagram", async (req, res) => {
     const containerId = createJson.id;
     if (!containerId) return res.status(400).json({ error: "Failed to create media container" });
 
-    // For videos/reels, poll until container is ready (up to 45s — stay under proxy timeout)
+    // For video reels/posts only — poll until container is ready (up to 45s).
+    // Image reels process instantly and don't need polling.
     if (isVideo) {
       let ready = false;
       for (let i = 0; i < 9; i++) {
