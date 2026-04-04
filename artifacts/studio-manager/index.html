@@ -15910,7 +15910,13 @@ function renderSocial(){
     const statusEl=document.getElementById('sc-api-status');
     if(!statusEl)return;
     if(s&&s.ok&&s.igUsername){
+      // Fully connected — IG username resolved
       statusEl.innerHTML='<div style="width:6px;height:6px;border-radius:50%;background:var(--grn);box-shadow:0 0 5px var(--grn);flex-shrink:0"></div>@'+esc(s.igUsername);
+    }else if(s&&s.igId&&s.warning){
+      // IG account found via token scopes but missing pages_read_engagement
+      const missing=(s.missingScopes||[]).join(', ');
+      statusEl.innerHTML='<div style="width:6px;height:6px;border-radius:50%;background:var(--gold);box-shadow:0 0 5px var(--gold)55;flex-shrink:0"></div>'
+        +'<span style="color:var(--gold)">IG linked · add <code style="font-size:9px;background:rgba(255,200,0,.12);padding:1px 4px;border-radius:3px">'+esc(missing)+'</code> to token</span>';
     }else if(s&&s.ok&&s.name){
       statusEl.innerHTML='<div style="width:6px;height:6px;border-radius:50%;background:var(--gold);flex-shrink:0"></div>'+esc(s.name)+' · no IG Business page';
     }else{
