@@ -13646,7 +13646,10 @@ function defaultCameraStream(printerName){
 }
 function resolveCameraStream(printerName){
   var saved=(piHubConfig&&piHubConfig.cameras&&piHubConfig.cameras[printerName])||'';
-  return saved||defaultCameraStream(printerName);
+  // Only use a manually saved name if it already has the correct camera_ prefix
+  // (old saved names like "p1_closet" are treated as stale and auto-derived instead)
+  if(saved&&saved.toLowerCase().startsWith('camera_'))return saved;
+  return defaultCameraStream(printerName);
 }
 function getCameraUrl(printerName,format){
   const g=getGo2rtcUrl();
