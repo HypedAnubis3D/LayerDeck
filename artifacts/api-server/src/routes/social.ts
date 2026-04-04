@@ -221,13 +221,16 @@ router.post("/instagram", async (req, res) => {
     const isVideo = mediaIsVideo;
     const containerBody: Record<string, string | boolean> = { access_token: token };
 
-    if (postType === "reel") {
+    if (postType === "reel" && mediaIsVideo) {
       containerBody.media_type = "REELS";
+      containerBody.video_url = resolvedMedia;
       containerBody.share_to_feed = true;
       if (caption) containerBody.caption = caption;
-      // Images can be posted as Reels (static reel) using image_url; videos use video_url
-      if (mediaIsVideo) containerBody.video_url = resolvedMedia;
-      else containerBody.image_url = resolvedMedia;
+    } else if (postType === "reel" && !mediaIsVideo) {
+      // Instagram Graph API requires a video for Reels — image Reels are only possible
+      // through the native app (which converts internally). Fall back to IMAGE feed post.
+      containerBody.image_url = resolvedMedia;
+      if (caption) containerBody.caption = caption;
     } else if (postType === "story") {
       containerBody.media_type = "STORIES";
       if (isVideo) containerBody.video_url = resolvedMedia;
@@ -283,7 +286,8 @@ router.post("/instagram", async (req, res) => {
     const publishJson = (await publishRes.json()) as { id?: string; error?: { message: string } };
     if (publishJson.error) return res.status(400).json({ error: publishJson.error.message });
 
-    return res.json({ ok: true, id: publishJson.id, igId: igInfo.id, username: igInfo.username, postType });
+    const actualPostType = (postType === "reel" && !mediaIsVideo) ? "post" : postType;
+    return res.json({ ok: true, id: publishJson.id, igId: igInfo.id, username: igInfo.username, postType: actualPostType, postedAsImage: postType === "reel" && !mediaIsVideo });
   } catch (e) {
     return res.status(500).json({ error: e instanceof Error ? e.message : "Unknown error" });
   }
@@ -301,12 +305,15 @@ router.post("/facebook", async (req, res) => {
     const igInfo = await getIgInfo(token);
     const pageId = igInfo?.pageId ?? KNOWN_PAGE_ID;
 
-    // Always try to get a Page-scoped token — both USER and SYSTEM_USER tokens
-    // may need this for pages_manage_posts to work on the /photos and /feed endpoints
+    // Get a Page-scoped token — required for pages_manage_posts on /photos and /feed.
+    // If exchange fails (e.g. token is already a page token, or missing pages_show_list),
+    // fall back to the original token and let Meta return the real error.
     let postToken = token;
-    const pgRes = await fetch(`${IG_BASE}/${pageId}?fields=access_token&access_token=${encodeURIComponent(token)}`);
-    const pgJ = (await pgRes.json()) as { access_token?: string };
-    if (pgJ.access_token) postToken = pgJ.access_token;
+    try {
+      const pgRes = await fetch(`${IG_BASE}/${pageId}?fields=access_token&access_token=${encodeURIComponent(token)}`);
+      const pgJ = (await pgRes.json()) as { access_token?: string };
+      if (pgJ.access_token) postToken = pgJ.access_token;
+    } catch { /* fall back to original token */ }
 
     let postJson: { id?: string; post_id?: string; error?: { message: string; code?: number } };
 

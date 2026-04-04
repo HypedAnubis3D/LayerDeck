@@ -15872,7 +15872,9 @@ async function postToInstagram(postId){
     let json;try{json=JSON.parse(rawText);}catch(_){json={error:rawText||'Server returned an unexpected response'};}
     if(res.ok&&json.id){
       p.status='posted';p.postedAt=Date.now();p.igId=json.id;
-      toast('Posted to Instagram! 🎉','@hypedanubis3d','success',3500);
+      const msg=json.postedAsImage?'Posted as image (API can\'t post image Reels — use the IG app to convert to Reel)':'@hypedanubis3d';
+      const toastType=json.postedAsImage?'warning':'success';
+      toast('Posted to Instagram! 🎉',msg,toastType,json.postedAsImage?6000:3500);
       if(p.addToStory&&p.postType!=='story'){
         const r2=await fetch('/api/social/instagram',{
           method:'POST',headers:{'Content-Type':'application/json'},
