@@ -15882,6 +15882,7 @@ function _resetComposer(){
 async function postToInstagram(postId){
   const p=socialQueue.find(x=>x.id===postId);
   if(!p)return;
+  if(p.status==='posted'||p.status==='posting'){return;}
   const media=p.mediaUrl||p.imageUrl;
   if(!media){toast('Add media first','Pick an image or video','error');return;}
   if(!p.caption&&p.postType!=='story'){toast('Add a caption first','','error');return;}
@@ -15962,6 +15963,7 @@ async function postToInstagram(postId){
 async function postToFacebook(postId){
   const p=socialQueue.find(x=>x.id===postId);
   if(!p)return;
+  if(p.fbStatus==='posted'||p.fbStatus==='posting'){return;}
   if(!p.caption){toast('Add a caption first','','error');return;}
   p.fbStatus='posting';
   saveSocial();renderSocial();
@@ -16000,13 +16002,18 @@ function _buildNewPost(status,schedFor){
   const fullCaption=tags?cap+'\n\n'+tags:cap;
   return {id:uid(),caption:fullCaption,mediaUrl:media,mediaUrls:allUrls,postType:_scPostType,addToStory:_scAddStory,platform:_scPlatform,scheduledFor:schedFor||null,status:status,createdAt:Date.now()};
 }
+let _postNowLock=false;
 async function socialPostNow(){
-  const post=_buildNewPost('posting',null);
-  if(!post)return;
-  socialQueue.unshift(post);saveSocial();
-  _resetComposer();renderSocial();
-  if(post.platform==='both'||post.platform==='ig'||!post.platform) await postToInstagram(post.id);
-  if(post.platform==='both'||post.platform==='fb') await postToFacebook(post.id);
+  if(_postNowLock)return;
+  _postNowLock=true;
+  try{
+    const post=_buildNewPost('posting',null);
+    if(!post){_postNowLock=false;return;}
+    socialQueue.unshift(post);saveSocial();
+    _resetComposer();renderSocial();
+    if(post.platform==='both'||post.platform==='ig'||!post.platform) await postToInstagram(post.id);
+    if(post.platform==='both'||post.platform==='fb') await postToFacebook(post.id);
+  }finally{_postNowLock=false;}
 }
 function socialSchedulePost(){
   const sched=(document.getElementById('sc-schedule-dt')?.value||'');
@@ -16027,6 +16034,9 @@ function socialMarkPosted(postId){
 async function socialRetryPost(postId){
   const p=socialQueue.find(x=>x.id===postId);
   if(!p)return;
+  if(p.status==='posted'||p.status==='posting'){
+    toast('Already posted','This post has already been published','warning',3000);return;
+  }
   if(p.platform==='both'||p.platform==='ig'||!p.platform) await postToInstagram(postId);
   if(p.platform==='both'||p.platform==='fb') await postToFacebook(postId);
 }
