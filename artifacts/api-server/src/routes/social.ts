@@ -2,12 +2,14 @@ import { Router } from "express";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
+import { createClient } from "@supabase/supabase-js";
 
 const router = Router();
 const IG_BASE = "https://graph.facebook.com/v21.0";
 const KNOWN_PAGE_ID = process.env.META_PAGE_ID ?? "445455645311970";
+const STORAGE_BUCKET = "social-media";
 
-// Disk storage for uploaded media — served at /media/:filename
+// Disk storage — multer writes here for parsing; Supabase takes over persistence
 const UPLOADS_DIR = path.join(process.cwd(), "uploads");
 if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 
@@ -19,6 +21,36 @@ const diskStorage = multer.diskStorage({
   },
 });
 const upload = multer({ storage: diskStorage, limits: { fileSize: 200 * 1024 * 1024 } });
+
+// ── Supabase Storage helpers ──────────────────────────────────────────────────
+function getSupabase() {
+  const url = process.env.SUPABASE_URL;
+  const key = process.env.SUPABASE_ANON_KEY;
+  if (!url || !key) return null;
+  return createClient(url, key);
+}
+
+async function uploadToSupabase(filePath: string, filename: string, mimetype: string): Promise<string | null> {
+  const sb = getSupabase();
+  if (!sb) return null;
+  try {
+    const buffer = fs.readFileSync(filePath);
+    // Try creating the bucket first (idempotent — ignore all errors, bucket may already exist)
+    await sb.storage.createBucket(STORAGE_BUCKET, { public: true, allowedMimeTypes: ["image/*", "video/*"], fileSizeLimit: 209715200 }).catch(() => {});
+    const { error } = await sb.storage.from(STORAGE_BUCKET).upload(filename, buffer, { contentType: mimetype, upsert: true });
+    if (error) {
+      console.warn("[social] Supabase upload failed:", error.message, "— falling back to local disk");
+      return null;
+    }
+    const { data } = sb.storage.from(STORAGE_BUCKET).getPublicUrl(filename);
+    try { fs.unlinkSync(filePath); } catch { /* ignore cleanup error */ }
+    console.info("[social] Uploaded to Supabase Storage:", data.publicUrl);
+    return data.publicUrl;
+  } catch (e) {
+    console.warn("[social] Supabase upload error:", e, "— falling back to local disk");
+    return null;
+  }
+}
 
 interface IgInfo {
   id: string;
@@ -116,21 +148,29 @@ router.get("/status", async (_req, res) => {
   }
 });
 
-// POST /api/social/upload — save single media file to local disk and return a public URL
+// POST /api/social/upload — save single media file; Supabase Storage preferred, local fallback
 router.post("/upload", upload.single("file"), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: "No file provided" });
-  const base = getMediaBaseUrl(req);
-  const publicUrl = `${base}/${req.file.filename}`;
-  return res.json({ ok: true, url: publicUrl, mimeType: req.file.mimetype, size: req.file.size });
+  const sbUrl = await uploadToSupabase(req.file.path, req.file.filename, req.file.mimetype);
+  const publicUrl = sbUrl ?? `${getMediaBaseUrl(req)}/${req.file.filename}`;
+  const storage = sbUrl ? "supabase" : "local";
+  return res.json({ ok: true, url: publicUrl, mimeType: req.file.mimetype, size: req.file.size, storage });
 });
 
-// POST /api/social/upload/multi — save multiple media files, return array of URLs
+// POST /api/social/upload/multi — save multiple media files; Supabase preferred, local fallback
 router.post("/upload/multi", upload.array("files", 10), async (req, res) => {
   const files = req.files as Express.Multer.File[] | undefined;
   if (!files || files.length === 0) return res.status(400).json({ error: "No files provided" });
   const base = getMediaBaseUrl(req);
-  const urls = files.map(f => `${base}/${f.filename}`);
-  return res.json({ ok: true, urls, count: urls.length });
+  const results = await Promise.all(
+    files.map(async f => {
+      const sbUrl = await uploadToSupabase(f.path, f.filename, f.mimetype);
+      return { url: sbUrl ?? `${base}/${f.filename}`, storage: sbUrl ? "supabase" : "local" };
+    })
+  );
+  const urls = results.map(r => r.url);
+  const allSupabase = results.every(r => r.storage === "supabase");
+  return res.json({ ok: true, urls, count: urls.length, storage: allSupabase ? "supabase" : "mixed" });
 });
 
 // POST /api/social/instagram — publish to Instagram (post/reel/story)
