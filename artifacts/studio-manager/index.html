@@ -13640,11 +13640,18 @@ function getGo2rtcUrl(){
   // Local fallback (only works when browser is on same network)
   return 'http://'+piHubConfig.tailscaleIP+':'+(piHubConfig.go2rtcPort||1984);
 }
+// Auto-derive go2rtc stream name from printer name: "P1 Room" → "camera_p1_room"
+function defaultCameraStream(printerName){
+  return 'camera_'+printerName.toLowerCase().replace(/\s+/g,'_');
+}
+function resolveCameraStream(printerName){
+  var saved=(piHubConfig&&piHubConfig.cameras&&piHubConfig.cameras[printerName])||'';
+  return saved||defaultCameraStream(printerName);
+}
 function getCameraUrl(printerName,format){
   const g=getGo2rtcUrl();
   if(!g||!piHubConfig)return null;
-  const stream=piHubConfig.cameras?.[printerName];
-  if(!stream)return null;
+  const stream=resolveCameraStream(printerName);
   const fmt=format||'hls';
   if(fmt==='hls') return g+'/api/stream.m3u8?src='+encodeURIComponent(stream);
   if(fmt==='mp4') return g+'/api/stream.mp4?src='+encodeURIComponent(stream);
@@ -14755,8 +14762,8 @@ function cameraProxyUrl(go2rtcBase,stream,format){
 }
 
 function openCameraFeed(printerName){
-  const stream=piHubConfig?.cameras?.[printerName];
-  if(!stream){toast('No camera configured for '+printerName,'Set a camera stream name in Pi Hub Setup','error');return;}
+  if(!piHubConfig){toast('Pi Hub not configured','Open Pi Hub Setup first','error');return;}
+  const stream=resolveCameraStream(printerName);
 
   const go2rtcUrl=(piHubConfig.go2rtcPublicUrl||'').replace(/\/$/,'');
   const piHubPublicUrl=(piHubConfig.publicUrl||'').replace(/\/$/,'');
