@@ -204,18 +204,17 @@ router.post("/upload/multi", upload.array("files", 10), async (req, res) => {
 function buildIgContainer(postType: string, resolvedMedia: string, caption: string | undefined, token: string): Record<string, string | boolean> {
   const mediaIsVideo = !!resolvedMedia.match(/\.(mp4|mov|avi|mkv|webm)(\?|$)/i);
   const body: Record<string, string | boolean> = { access_token: token };
-  if (postType === "reel" && mediaIsVideo) {
-    body.media_type = "REELS"; body.video_url = resolvedMedia; body.share_to_feed = true;
-    if (caption) body.caption = caption;
-  } else if (postType === "reel" && !mediaIsVideo) {
-    body.image_url = resolvedMedia;
-    if (caption) body.caption = caption;
-  } else if (postType === "story") {
+  if (postType === "story") {
     body.media_type = "STORIES";
     if (mediaIsVideo) body.video_url = resolvedMedia; else body.image_url = resolvedMedia;
+  } else if (mediaIsVideo) {
+    // Instagram deprecated media_type:VIDEO for feed posts in 2023.
+    // All videos (whether the user chose "post" or "reel") must go through REELS.
+    body.media_type = "REELS"; body.video_url = resolvedMedia; body.share_to_feed = true;
+    if (caption) body.caption = caption;
   } else {
-    if (mediaIsVideo) { body.media_type = "VIDEO"; body.video_url = resolvedMedia; }
-    else body.image_url = resolvedMedia;
+    // Image post or image reel fallback
+    body.image_url = resolvedMedia;
     if (caption) body.caption = caption;
   }
   return body;
@@ -361,7 +360,14 @@ router.post("/facebook", async (req, res) => {
       postJson = (await feedRes.json()) as typeof postJson;
     }
 
-    if (postJson.error) return res.status(400).json({ error: postJson.error.message });
+    if (postJson.error) {
+      let hint = postJson.error.message;
+      const code = postJson.error.code;
+      if (code === 200 || hint.toLowerCase().includes("manage_posts") || hint.toLowerCase().includes("publish")) {
+        hint = "Facebook token missing pages_manage_posts or pages_read_engagement permission. Regenerate your META_ACCESS_TOKEN at developers.facebook.com with those scopes.";
+      }
+      return res.status(400).json({ error: hint });
+    }
     return res.json({ ok: true, id: postJson.post_id ?? postJson.id });
   } catch (e) {
     return res.status(500).json({ error: e instanceof Error ? e.message : "Unknown error" });
