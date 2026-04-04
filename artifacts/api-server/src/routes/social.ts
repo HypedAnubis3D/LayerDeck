@@ -25,18 +25,45 @@ const upload = multer({ storage: diskStorage, limits: { fileSize: 200 * 1024 * 1
 // ── Supabase Storage helpers ──────────────────────────────────────────────────
 function getSupabase() {
   const url = process.env.SUPABASE_URL;
-  const key = process.env.SUPABASE_ANON_KEY;
+  // Prefer service role key for server-side uploads (bypasses RLS, can create buckets)
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_ANON_KEY;
   if (!url || !key) return null;
-  return createClient(url, key);
+  return createClient(url, key, { auth: { persistSession: false } });
+}
+
+let _bucketEnsured = false;
+
+async function ensureStorageBucket(): Promise<boolean> {
+  if (_bucketEnsured) return true;
+  const sb = getSupabase();
+  if (!sb) return false;
+  try {
+    // Check if bucket already exists
+    const { data: buckets } = await sb.storage.listBuckets();
+    const exists = (buckets ?? []).some((b: { name: string }) => b.name === STORAGE_BUCKET);
+    if (exists) { _bucketEnsured = true; return true; }
+    // Create bucket (public; no fileSizeLimit arg — Supabase API rejects large values)
+    const { error } = await sb.storage.createBucket(STORAGE_BUCKET, { public: true });
+    if (error) {
+      console.warn("[social] Could not create Supabase bucket:", error.message);
+      return false;
+    }
+    console.info("[social] Created Supabase Storage bucket:", STORAGE_BUCKET);
+    _bucketEnsured = true;
+    return true;
+  } catch (e) {
+    console.warn("[social] ensureStorageBucket error:", e);
+    return false;
+  }
 }
 
 async function uploadToSupabase(filePath: string, filename: string, mimetype: string): Promise<string | null> {
   const sb = getSupabase();
   if (!sb) return null;
   try {
+    const ready = await ensureStorageBucket();
+    if (!ready) return null;
     const buffer = fs.readFileSync(filePath);
-    // Try creating the bucket first (idempotent — ignore all errors, bucket may already exist)
-    await sb.storage.createBucket(STORAGE_BUCKET, { public: true, allowedMimeTypes: ["image/*", "video/*"], fileSizeLimit: 209715200 }).catch(() => {});
     const { error } = await sb.storage.from(STORAGE_BUCKET).upload(filename, buffer, { contentType: mimetype, upsert: true });
     if (error) {
       console.warn("[social] Supabase upload failed:", error.message, "— falling back to local disk");
