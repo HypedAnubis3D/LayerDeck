@@ -219,17 +219,47 @@ router.post("/facebook", async (req, res) => {
   try {
     const igInfo = await getIgInfo(token);
     const pageId = igInfo?.pageId ?? KNOWN_PAGE_ID;
+
+    // Always try to get a Page-scoped token — both USER and SYSTEM_USER tokens
+    // may need this for pages_manage_posts to work on the /photos and /feed endpoints
     let postToken = token;
-    if (igInfo?.tokenType === "USER") {
-      const pgRes = await fetch(`${IG_BASE}/${pageId}?fields=access_token&access_token=${encodeURIComponent(token)}`);
-      const pgJ = (await pgRes.json()) as { access_token?: string };
-      if (pgJ.access_token) postToken = pgJ.access_token;
+    const pgRes = await fetch(`${IG_BASE}/${pageId}?fields=access_token&access_token=${encodeURIComponent(token)}`);
+    const pgJ = (await pgRes.json()) as { access_token?: string };
+    if (pgJ.access_token) postToken = pgJ.access_token;
+
+    let postJson: { id?: string; post_id?: string; error?: { message: string; code?: number } };
+
+    if (photo) {
+      // Post photo to Facebook Page: use /photos with published=true
+      const body = { url: photo, caption: message, published: "true", access_token: postToken };
+      const photoRes = await fetch(`${IG_BASE}/${pageId}/photos`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      postJson = (await photoRes.json()) as typeof postJson;
+
+      // Fallback: if /photos fails, try /feed with link attachment
+      if (postJson.error) {
+        const feedBody = { message: message, link: photo, access_token: postToken };
+        const feedRes = await fetch(`${IG_BASE}/${pageId}/feed`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(feedBody),
+        });
+        postJson = (await feedRes.json()) as typeof postJson;
+      }
+    } else {
+      // Text-only post
+      const body = { message: message, access_token: postToken };
+      const feedRes = await fetch(`${IG_BASE}/${pageId}/feed`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      postJson = (await feedRes.json()) as typeof postJson;
     }
-    const endpoint = photo ? `${IG_BASE}/${pageId}/photos` : `${IG_BASE}/${pageId}/feed`;
-    const body: Record<string, string> = { access_token: postToken };
-    if (photo) { body.url = photo; body.caption = message; } else { body.message = message; }
-    const postRes = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-    const postJson = (await postRes.json()) as { id?: string; post_id?: string; error?: { message: string } };
+
     if (postJson.error) return res.status(400).json({ error: postJson.error.message });
     return res.json({ ok: true, id: postJson.post_id ?? postJson.id });
   } catch (e) {

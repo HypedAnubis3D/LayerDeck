@@ -15653,6 +15653,8 @@ let _scPostType='post'; // 'post'|'reel'|'story'
 let _scAddStory=false;
 let _scMediaUrl='';
 let _scUploading=false;
+let _scPlatform='both'; // 'both'|'ig'|'fb'
+let _scMode='now'; // 'now'|'schedule'
 let _calYear=new Date().getFullYear();
 let _calMonth=new Date().getMonth();
 let _calDay=null;
@@ -15748,6 +15750,38 @@ function socialToggleStory(){
     btn.style.borderColor=_scAddStory?'var(--cyn)':'var(--bdr)';
   }
 }
+function socialSetPlatform(p){
+  _scPlatform=p;
+  ['both','ig','fb'].forEach(function(k){
+    const b=document.getElementById('sc-plat-'+k);
+    if(!b)return;
+    const active=k===p;
+    b.style.background=active?'var(--pur)':'';
+    b.style.color=active?'#fff':'var(--txt-d)';
+    b.style.borderColor=active?'var(--pur)':'var(--bdr)';
+  });
+}
+function socialSetMode(m){
+  _scMode=m;
+  const schedRow=document.getElementById('sc-schedule-row');
+  if(schedRow)schedRow.style.display=m==='schedule'?'block':'none';
+  const nowRow=document.getElementById('sc-postnow-row');
+  if(nowRow)nowRow.style.display=m==='now'?'block':'none';
+  const nowBtn=document.getElementById('sc-mode-now');
+  const schBtn=document.getElementById('sc-mode-sch');
+  if(nowBtn){nowBtn.style.background=m==='now'?'var(--gold)':'';nowBtn.style.color=m==='now'?'#000':'var(--txt-b)';}
+  if(schBtn){schBtn.style.background=m==='schedule'?'var(--cyn)':'';schBtn.style.color=m==='schedule'?'#000':'var(--txt-b)';}
+}
+function _resetComposer(){
+  ['sc-caption','sc-media-url','sc-tags','sc-schedule-dt'].forEach(function(id){
+    const e=document.getElementById(id);if(e)e.value='';
+  });
+  const prev=document.getElementById('sc-media-preview');
+  if(prev){prev.innerHTML='';prev.style.display='none';}
+  const upEl=document.getElementById('sc-upload-status');
+  if(upEl)upEl.textContent='';
+  _scMediaUrl='';
+}
 
 // ── Post to Instagram ──
 async function postToInstagram(postId){
@@ -15814,43 +15848,41 @@ async function postToFacebook(postId){
   saveSocial();renderSocial();
 }
 
-async function postBothSocial(postId){
-  await postToInstagram(postId);
-  await postToFacebook(postId);
-}
-
-function addSocialPost(){
+function _buildNewPost(status,schedFor){
   const cap=(document.getElementById('sc-caption')?.value||'').trim();
   const manualUrl=(document.getElementById('sc-media-url')?.value||'').trim();
   const tags=(document.getElementById('sc-tags')?.value||'').trim();
-  const sched=(document.getElementById('sc-schedule')?.value||'');
   const media=manualUrl||_scMediaUrl;
-  if(!cap&&_scPostType!=='story'){toast('Add a caption first','','error');return;}
-  if(!media){toast('Add media first','Pick from gallery or paste a URL','error');return;}
+  if(!cap&&_scPostType!=='story'){toast('Add a caption first','','error');return null;}
+  if(!media){toast('Add media first','Pick from gallery or paste a URL','error');return null;}
   const fullCaption=tags?cap+'\n\n'+tags:cap;
-  socialQueue.unshift({
-    id:uid(),caption:fullCaption,mediaUrl:media,
-    postType:_scPostType,addToStory:_scAddStory,
-    scheduledFor:sched?new Date(sched).getTime():null,
-    status:sched?'scheduled':'draft',
-    createdAt:Date.now()
-  });
-  saveSocial();
-  // reset composer
-  const capEl=document.getElementById('sc-caption');
-  const urlEl=document.getElementById('sc-media-url');
-  const prevEl=document.getElementById('sc-media-preview');
-  const schedEl=document.getElementById('sc-schedule');
-  const tagsEl=document.getElementById('sc-tags');
-  if(capEl)capEl.value='';
-  if(urlEl)urlEl.value='';
-  if(prevEl){prevEl.innerHTML='';prevEl.style.display='none';}
-  if(schedEl)schedEl.value='';
-  if(tagsEl)tagsEl.value='';
-  _scMediaUrl='';
-  renderSocial();
-  toast('Added to queue','','success');
+  return {id:uid(),caption:fullCaption,mediaUrl:media,postType:_scPostType,addToStory:_scAddStory,platform:_scPlatform,scheduledFor:schedFor||null,status:status,createdAt:Date.now()};
 }
+async function socialPostNow(){
+  const post=_buildNewPost('posting',null);
+  if(!post)return;
+  socialQueue.unshift(post);saveSocial();
+  _resetComposer();renderSocial();
+  if(post.platform==='both'||post.platform==='ig'||!post.platform) await postToInstagram(post.id);
+  if(post.platform==='both'||post.platform==='fb') await postToFacebook(post.id);
+}
+function socialSchedulePost(){
+  const sched=(document.getElementById('sc-schedule-dt')?.value||'');
+  if(!sched){toast('Pick a date and time first','','error');return;}
+  const post=_buildNewPost('scheduled',new Date(sched).getTime());
+  if(!post)return;
+  socialQueue.unshift(post);saveSocial();
+  _resetComposer();renderSocial();
+  toast('Scheduled!','Post will auto-publish at the set time','success');
+}
+async function socialRetryPost(postId){
+  const p=socialQueue.find(x=>x.id===postId);
+  if(!p)return;
+  if(p.platform==='both'||p.platform==='ig'||!p.platform) await postToInstagram(postId);
+  if(p.platform==='both'||p.platform==='fb') await postToFacebook(postId);
+}
+// Keep addSocialPost as alias for openShopifySocialAnnounce compat
+function addSocialPost(){ socialPostNow(); }
 function delSocialPost(id){
   socialQueue=socialQueue.filter(x=>x.id!==id);
   saveSocial();renderSocial();
@@ -15916,7 +15948,8 @@ setInterval(async function(){
   for(const p of due){
     const media=p.mediaUrl||p.imageUrl;
     if(!media){p.status='failed';p.error='Missing media';saveSocial();continue;}
-    await postToInstagram(p.id);
+    if(p.platform==='both'||p.platform==='ig'||!p.platform) await postToInstagram(p.id);
+    if(p.platform==='both'||p.platform==='fb') await postToFacebook(p.id);
   }
 },60000);
 
@@ -15958,35 +15991,36 @@ function _buildPostCard(p,compact){
   const typeIcon={post:'📷',reel:'🎬',story:'💫'}[p.postType||'post']||'📷';
   const statusColor={draft:'var(--txt-d)',scheduled:'var(--gold)',posting:'var(--cyn)',posted:'var(--grn)',failed:'var(--red)'}[p.status]||'var(--txt-d)';
   const statusLabel={draft:'DRAFT',scheduled:'SCHED',posting:'POSTING…',posted:'POSTED',failed:'FAILED'}[p.status]||'DRAFT';
+  const platLabel={both:'IG+FB',ig:'IG',fb:'FB'}[p.platform||'both']||'IG+FB';
+  const platBg={both:'var(--pur)',ig:'#e1306c',fb:'#1877f2'}[p.platform||'both']||'var(--pur)';
   const media=p.mediaUrl||p.imageUrl||'';
   const isVideo=media&&media.match(/\.(mp4|mov|avi|webm)(\?|$)/i);
   const schedLabel=p.scheduledFor?new Date(p.scheduledFor).toLocaleString([],{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}):'';
   const postedLabel=p.postedAt?new Date(p.postedAt).toLocaleString([],{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}):'';
-  const canPost=p.status==='draft'||p.status==='scheduled'||p.status==='failed';
-  const canFb=p.fbStatus!=='posting'&&p.fbStatus!=='posted';
-  const thumb=media&&!isVideo?'<img src="'+esc(media)+'" style="width:'+(compact?'40':'56')+'px;height:'+(compact?'40':'56')+'px;object-fit:cover;border-radius:5px;flex-shrink:0;border:1px solid var(--bdr)" onerror="this.style.display=\'none\'"/>'
-    :media&&isVideo?'<div style="width:'+(compact?'40':'56')+'px;height:'+(compact?'40':'56')+'px;background:#111;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;border:1px solid var(--bdr)">🎬</div>'
-    :'<div style="width:'+(compact?'40':'56')+'px;height:'+(compact?'40':'56')+'px;border:1px dashed var(--bdr);border-radius:5px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:16px">📷</div>';
+  const canRetry=p.status==='draft'||p.status==='failed';
+  const sz=compact?'40':'56';
+  const thumb=media&&!isVideo?'<img src="'+esc(media)+'" style="width:'+sz+'px;height:'+sz+'px;object-fit:cover;border-radius:5px;flex-shrink:0;border:1px solid var(--bdr)" onerror="this.style.display=\'none\'"/>'
+    :media&&isVideo?'<div style="width:'+sz+'px;height:'+sz+'px;background:#111;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;border:1px solid var(--bdr)">🎬</div>'
+    :'<div style="width:'+sz+'px;height:'+sz+'px;border:1px dashed var(--bdr);border-radius:5px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:16px">📷</div>';
   const caption=p.caption||'';
+  const errorStr=p.error||p.fbError||'';
   return '<div style="border:1px solid var(--bdr);border-radius:7px;padding:10px;background:rgba(0,0,0,0.18);margin-bottom:6px">'
     +'<div style="display:flex;align-items:flex-start;gap:8px">'
       +thumb
       +'<div style="flex:1;min-width:0">'
-        +'<div style="display:flex;align-items:center;gap:5px;margin-bottom:3px;flex-wrap:wrap">'
+        +'<div style="display:flex;align-items:center;gap:5px;margin-bottom:4px;flex-wrap:wrap">'
           +'<span style="font-size:9px">'+typeIcon+'</span>'
           +'<span style="font-size:6.5px;font-family:\'Orbitron\',monospace;font-weight:700;color:'+statusColor+';letter-spacing:1px">'+statusLabel+'</span>'
+          +'<span style="font-size:6px;background:'+platBg+';color:#fff;padding:1px 5px;border-radius:3px;font-family:\'Orbitron\',monospace;font-weight:700">'+platLabel+'</span>'
           +(p.addToStory?'<span style="font-size:6px;color:var(--cyn);font-family:\'Orbitron\',monospace">+STORY</span>':'')
-          +(p.fbStatus==='posted'?'<span style="font-size:6px;color:var(--grn);font-family:\'Orbitron\',monospace">FB✓</span>':p.fbStatus==='posting'?'<span style="font-size:6px;color:var(--cyn)">FB…</span>':'')
           +(schedLabel?'<span style="font-size:7px;color:var(--txt-d)">📅 '+esc(schedLabel)+'</span>':'')
-          +(postedLabel?'<span style="font-size:7px;color:var(--grn)">✓ IG '+esc(postedLabel)+'</span>':'')
+          +(postedLabel?'<span style="font-size:7px;color:var(--grn)">✓ '+esc(postedLabel)+'</span>':'')
         +'</div>'
-        +'<div style="font-size:8px;color:var(--txt-b);white-space:pre-wrap;max-height:52px;overflow:hidden;line-height:1.4">'+esc(caption.slice(0,180))+(caption.length>180?'…':'')+'</div>'
-        +((p.error||p.fbError)?'<div style="font-size:7px;color:var(--red);margin-top:2px">'+esc(p.error||p.fbError||'')+'</div>':'')
+        +'<div style="font-size:8px;color:var(--txt-b);white-space:pre-wrap;max-height:52px;overflow:hidden;line-height:1.4">'+esc(caption.slice(0,200))+(caption.length>200?'…':'')+'</div>'
+        +(errorStr?'<div style="font-size:7px;color:var(--red);margin-top:3px;word-break:break-word">⚠ '+esc(errorStr)+'</div>':'')
       +'</div>'
       +'<div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0">'
-        +(canPost?'<button class="btn btn-pur btn-xs" onclick="postBothSocial(\''+p.id+'\')" style="font-size:6.5px;white-space:nowrap;padding:4px 6px">'+typeIcon+' IG+FB</button>':'')
-        +(canPost?'<button class="btn btn-ghost btn-xs" onclick="postToInstagram(\''+p.id+'\')" style="font-size:6.5px;padding:3px 5px">IG only</button>':'')
-        +(canFb&&caption?'<button class="btn btn-ghost btn-xs" onclick="postToFacebook(\''+p.id+'\')" style="font-size:6.5px;padding:3px 5px">FB only</button>':'')
+        +(canRetry?'<button class="btn btn-pur btn-xs" onclick="socialRetryPost(\''+p.id+'\')" style="font-size:7px;padding:4px 6px">↻ Post</button>':'')
         +'<button class="btn btn-ghost btn-xs" onclick="delSocialPost(\''+p.id+'\')" style="font-size:9px">✕</button>'
       +'</div>'
     +'</div>'
@@ -16109,18 +16143,35 @@ function renderSocial(){
         +'<input class="srch" id="sc-media-url" placeholder="https://… publicly accessible image or video URL" style="width:100%;box-sizing:border-box;margin-bottom:6px"/>'
         +'<div id="sc-media-preview" style="display:none;border-radius:8px;overflow:hidden;border:1px solid var(--bdr);max-height:200px"></div>'
       +'</div>'
-      // Hashtags + schedule
-      +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:10px">'
-        +'<div>'
-          +'<div style="font-size:7px;color:var(--txt-d);letter-spacing:1px;margin-bottom:4px">HASHTAGS</div>'
-          +'<input class="srch" id="sc-tags" placeholder="#3dprinting #hypedanubis3d…" style="width:100%;box-sizing:border-box"/>'
-        +'</div>'
-        +'<div>'
-          +'<div style="font-size:7px;color:var(--txt-d);letter-spacing:1px;margin-bottom:4px">SCHEDULE (optional)</div>'
-          +'<input class="srch" id="sc-schedule" type="datetime-local" style="width:100%;box-sizing:border-box"/>'
+      // Hashtags
+      +'<div style="margin-bottom:10px">'
+        +'<div style="font-size:7px;color:var(--txt-d);letter-spacing:1px;margin-bottom:4px">HASHTAGS</div>'
+        +'<input class="srch" id="sc-tags" placeholder="#3dprinting #hypedanubis3d #pokemon3d…" style="width:100%;box-sizing:border-box"/>'
+      +'</div>'
+      // Platform selector
+      +'<div style="margin-bottom:10px">'
+        +'<div style="font-size:7px;color:var(--txt-d);letter-spacing:1px;margin-bottom:5px">POST TO</div>'
+        +'<div style="display:flex;gap:6px">'
+          +'<button id="sc-plat-both" onclick="socialSetPlatform(\'both\')" style="flex:1;padding:7px 8px;border-radius:6px;border:1.5px solid var(--pur);background:var(--pur);color:#fff;font-size:8px;font-weight:700;cursor:pointer;font-family:\'Orbitron\',monospace;letter-spacing:1px">IG + FB</button>'
+          +'<button id="sc-plat-ig" onclick="socialSetPlatform(\'ig\')" style="flex:1;padding:7px 8px;border-radius:6px;border:1.5px solid var(--bdr);background:none;color:var(--txt-d);font-size:8px;font-weight:700;cursor:pointer;font-family:\'Orbitron\',monospace;letter-spacing:1px">📷 IG</button>'
+          +'<button id="sc-plat-fb" onclick="socialSetPlatform(\'fb\')" style="flex:1;padding:7px 8px;border-radius:6px;border:1.5px solid var(--bdr);background:none;color:var(--txt-d);font-size:8px;font-weight:700;cursor:pointer;font-family:\'Orbitron\',monospace;letter-spacing:1px">📘 FB</button>'
         +'</div>'
       +'</div>'
-      +'<button class="btn btn-pur" onclick="addSocialPost()" style="width:100%;padding:9px;font-size:9px;font-family:\'Orbitron\',monospace;letter-spacing:1px">+ ADD TO QUEUE</button>'
+      // Post Now / Schedule toggle
+      +'<div style="display:flex;gap:6px;margin-bottom:8px">'
+        +'<button id="sc-mode-now" onclick="socialSetMode(\'now\')" style="flex:1;padding:8px;border-radius:6px;border:1.5px solid var(--bdr);background:var(--gold);color:#000;font-size:8px;font-weight:700;cursor:pointer;font-family:\'Orbitron\',monospace;letter-spacing:1px">🚀 POST NOW</button>'
+        +'<button id="sc-mode-sch" onclick="socialSetMode(\'schedule\')" style="flex:1;padding:8px;border-radius:6px;border:1.5px solid var(--bdr);background:none;color:var(--txt-b);font-size:8px;font-weight:700;cursor:pointer;font-family:\'Orbitron\',monospace;letter-spacing:1px">📅 SCHEDULE</button>'
+      +'</div>'
+      // Schedule datetime (hidden until Schedule mode selected)
+      +'<div id="sc-schedule-row" style="display:none;margin-bottom:8px">'
+        +'<div style="font-size:7px;color:var(--txt-d);letter-spacing:1px;margin-bottom:4px">SCHEDULE DATE & TIME</div>'
+        +'<input class="srch" id="sc-schedule-dt" type="datetime-local" style="width:100%;box-sizing:border-box;margin-bottom:8px"/>'
+        +'<button onclick="socialSchedulePost()" style="width:100%;padding:9px;border-radius:6px;background:var(--cyn);color:#000;font-size:9px;font-weight:700;cursor:pointer;border:none;font-family:\'Orbitron\',monospace;letter-spacing:1px">📅 CONFIRM SCHEDULE</button>'
+      +'</div>'
+      // Post Now action (shown when in now mode)
+      +'<div id="sc-postnow-row" style="margin-bottom:0">'
+        +'<button onclick="socialPostNow()" style="width:100%;padding:11px;border-radius:7px;background:linear-gradient(135deg,#7c3aed,#e1306c);color:#fff;font-size:10px;font-weight:700;cursor:pointer;border:none;font-family:\'Orbitron\',monospace;letter-spacing:2px">🚀 POST NOW</button>'
+      +'</div>'
     +'</div>'
 
     // ── CALENDAR ──
@@ -16163,9 +16214,11 @@ function renderSocial(){
       +postedCards
     +'</div>':'');
 
-  // Restore post type button states
+  // Restore composer button states
   socialSetType(_scPostType);
-  if(_scAddStory)socialToggleStory();
+  socialSetPlatform(_scPlatform);
+  socialSetMode(_scMode);
+  if(_scAddStory){_scAddStory=false;socialToggleStory();} // toggle from false→true
   // Restore media preview if we have a URL
   if(_scMediaUrl){
     const isVid=_scMediaUrl.match(/\.(mp4|mov|avi|webm)/i);
