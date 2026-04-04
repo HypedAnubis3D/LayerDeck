@@ -13758,6 +13758,17 @@ let piPollInFlight=false;  // in-flight lock — never send 2 requests at once
 let piConsecutiveFails=0;  // for exponential backoff
 const PI_POLL_INTERVALS=[5000,10000,20000,30000,30000]; // backoff ladder — max 30s, keeps retrying
 
+// ── Tapo P115 smart plug state ──────────────────────────────────────────────
+let _tapoDevices=[];       // [{deviceId, alias, model, on, power_mw}] — last fetched
+let _tapoFetching=false;
+let _tapoLastFetch=0;
+// Auto power-off map — { printerName: deviceId } — persisted in localStorage
+let _tapoAutoOff={};
+try{var _tao=localStorage.getItem('tapoAutoOff');if(_tao)_tapoAutoOff=JSON.parse(_tao);}catch(e){}
+function _saveTapoAutoOff(){try{localStorage.setItem('tapoAutoOff',JSON.stringify(_tapoAutoOff));}catch(e){}}
+// Debounce flag — prevent double auto-off fires for the same print finish
+let _tapoAutoOffFired={};  // { printerName+jobName : timestamp }
+
 // ── State badge colors ──
 const STATE_COLORS={
   IDLE:    'var(--txt-d)',
@@ -14223,6 +14234,34 @@ async function onPiPrintFinished(name,data){
   piTmfObjData[name]=null;
   postToDiscord('print_complete',
     '✅ Print Complete — '+name+'\nJob: '+jobName+'\nDuration: '+fmtMins(durationMins)+'\nFilament: ~'+(filamentSlots.reduce(function(a,s){return a+s.grams;},0)||gramsUsed)+'g '+material);
+
+  // ── Tapo auto power-off ────────────────────────────────────────────────────
+  const _tapoDeviceId=_tapoAutoOff[name];
+  if(_tapoDeviceId){
+    // Debounce: skip if we already fired auto-off for this printer+job within 5 minutes
+    const _debKey=name+'|'+jobName;
+    const _lastFired=_tapoAutoOffFired[_debKey]||0;
+    if(Date.now()-_lastFired>5*60*1000){
+      _tapoAutoOffFired[_debKey]=Date.now();
+      try{
+        const _r=await fetch('/api/tapo/power',{
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({deviceId:_tapoDeviceId,on:false})
+        });
+        const _j=await _r.json();
+        if(_j.ok){
+          const _dev=_tapoDevices.find(function(d){return d.deviceId===_tapoDeviceId;});
+          if(_dev)_dev.on=false;
+          toast('🔌 Smart Plug OFF',(_j.alias||'Plug')+' powered off after print','ok',5000);
+        }else{
+          toast('⚠ Tapo auto-off failed',_j.error||'','error');
+        }
+      }catch(_e){
+        toast('⚠ Tapo auto-off failed',_e.message||'','error');
+      }
+    }
+  }
 }
 
 async function onPiPrintFailed(name,data){
@@ -15084,7 +15123,121 @@ function openCameraFeed(printerName){
   document.body.appendChild(mod);
 }
 
-// ── Pi Hub tab renderer ──
+// ── Tapo P115 smart plug helpers ────────────────────────────────────────────
+async function fetchTapoDevices(force){
+  const CACHE_MS=60000;
+  if(!force&&_tapoFetching)return;
+  if(!force&&_tapoDevices.length&&Date.now()-_tapoLastFetch<CACHE_MS)return;
+  _tapoFetching=true;
+  try{
+    const r=await fetch('/api/tapo/devices',{signal:AbortSignal.timeout(12000)});
+    const j=await r.json();
+    if(j.ok){
+      _tapoDevices=j.devices||[];
+      _tapoLastFetch=Date.now();
+      // Re-render the Tapo section if Pi Hub tab is open
+      if(curTab==='pihub') renderPiHub();
+    }
+  }catch(e){/* silently ignore — Tapo creds may not be set */}
+  finally{_tapoFetching=false;}
+}
+
+async function tapoSetPower(deviceId,on,btnEl){
+  if(btnEl){btnEl.disabled=true;btnEl.textContent=on?'Turning ON…':'Turning OFF…';}
+  try{
+    const r=await fetch('/api/tapo/power',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({deviceId,on})
+    });
+    const j=await r.json();
+    if(j.ok){
+      const dev=_tapoDevices.find(function(d){return d.deviceId===deviceId;});
+      if(dev)dev.on=on;
+      toast('Smart Plug '+(on?'ON':'OFF'),j.alias||'','ok');
+      if(curTab==='pihub') renderPiHub();
+      // Refresh true state from cloud after 2s
+      setTimeout(function(){fetchTapoDevices(true);},2000);
+    }else{
+      toast('Tapo Error',j.error||'Unknown error','error');
+      if(btnEl){btnEl.disabled=false;btnEl.textContent=on?'Turn ON':'Turn OFF';}
+    }
+  }catch(e){
+    toast('Tapo unreachable',e.message||'','error');
+    if(btnEl){btnEl.disabled=false;btnEl.textContent=on?'Turn ON':'Turn OFF';}
+  }
+}
+
+function tapoToggleAutoOff(printerName,deviceId,checked){
+  if(checked){
+    _tapoAutoOff[printerName]=deviceId;
+  }else{
+    delete _tapoAutoOff[printerName];
+  }
+  _saveTapoAutoOff();
+}
+
+function _renderTapoCard(){
+  const hasEnv=true; // We don't know from frontend if secrets are set — show UI always, errors surface on fetch
+  const printers=piHubConfig?.printers||[];
+
+  // Button to load/refresh devices
+  const loadBtn='<button class="btn btn-ghost btn-sm" onclick="fetchTapoDevices(true)" style="margin-left:auto">'+
+    (_tapoFetching?'⏳ Loading…':'🔄 Refresh Plugs')+'</button>';
+
+  let devicesHtml='';
+  if(!_tapoDevices.length){
+    devicesHtml='<div style="font-size:8px;color:var(--txt-d);padding:8px 0;text-align:center">'+
+      'No Tapo devices loaded yet — click Refresh Plugs. Requires <code>TAPO_EMAIL</code> + <code>TAPO_PASSWORD</code> secrets.</div>';
+  }else{
+    devicesHtml=_tapoDevices.map(function(d){
+      const isOn=d.on===true;
+      const isUnknown=d.on===null||d.on===undefined;
+      const stateCol=isUnknown?'var(--txt-d)':isOn?'var(--grn)':'var(--red-b)';
+      const stateLabel=isUnknown?'UNKNOWN':isOn?'ON':'OFF';
+      const pwrStr=(d.power_mw!=null&&d.power_mw>0)?Math.round(d.power_mw/1000*10)/10+' W':'';
+
+      // Auto-off toggles: one row per configured printer
+      const autoOffRows=printers.map(function(p){
+        const linked=_tapoAutoOff[p.name]===d.deviceId;
+        return '<label style="display:flex;align-items:center;gap:5px;cursor:pointer;margin-top:4px">'+
+          '<input type="checkbox" '+(linked?'checked':'')+
+          ' onchange="tapoToggleAutoOff(\''+esc(p.name)+'\',\''+esc(d.deviceId)+'\',this.checked)"/>'+
+          '<span style="font-size:7px;color:var(--txt-d)">Auto OFF when <strong style="color:var(--txt-b)">'+esc(p.name)+'</strong> finishes</span>'+
+        '</label>';
+      }).join('');
+
+      return '<div style="border:1px solid var(--bdr);border-radius:5px;padding:8px;margin-bottom:6px">'+
+        '<div style="display:flex;align-items:center;gap:8px;margin-bottom:5px">'+
+          '<div style="font-size:8px;font-weight:700;color:var(--txt-b);flex:1">'+esc(d.alias)+'</div>'+
+          '<span style="font-size:7px;color:var(--txt-d)">'+esc(d.model)+'</span>'+
+          '<div style="width:8px;height:8px;border-radius:50%;background:'+stateCol+'"></div>'+
+          '<span style="font-size:7px;font-family:\'Orbitron\',monospace;color:'+stateCol+'">'+stateLabel+'</span>'+
+          (pwrStr?'<span style="font-size:7px;color:var(--txt-d)">'+pwrStr+'</span>':'')+
+        '</div>'+
+        '<div style="display:flex;gap:5px;margin-bottom:6px">'+
+          '<button class="btn btn-xs" style="background:rgba(0,200,100,0.15);border:1px solid var(--grn);color:var(--grn);'+(isOn?'opacity:0.4;pointer-events:none':'')+'"'+
+            ' onclick="tapoSetPower(\''+esc(d.deviceId)+'\',true,this)" '+(isOn?'disabled':'')+'>⚡ Turn ON</button>'+
+          '<button class="btn btn-xs" style="background:rgba(220,60,60,0.15);border:1px solid var(--red-b);color:var(--red-b);'+(!isOn&&!isUnknown?'opacity:0.4;pointer-events:none':'')+'"'+
+            ' onclick="tapoSetPower(\''+esc(d.deviceId)+'\',false,this)" '+(!isOn&&!isUnknown?'disabled':'')+'>🔌 Turn OFF</button>'+
+        '</div>'+
+        (printers.length?autoOffRows:'')+
+      '</div>';
+    }).join('');
+  }
+
+  return '<div class="printer-card">'+
+    '<div style="display:flex;align-items:center;margin-bottom:10px">'+
+      '<div style="font-family:\'Orbitron\',monospace;font-size:9px;font-weight:700;color:var(--gold-b);letter-spacing:2px">⚡ TAPO SMART PLUGS</div>'+
+      loadBtn+
+    '</div>'+
+    devicesHtml+
+    '<div style="font-size:7px;color:var(--txt-d);margin-top:4px;line-height:1.5">'+
+      'Auto OFF triggers when a print completes (FINISH). Set <code>TAPO_EMAIL</code> and <code>TAPO_PASSWORD</code> in Secrets.'+
+    '</div>'+
+  '</div>';
+}
+
 function renderPiHub(){
   const el=document.getElementById('pihub-content');
   if(!el)return;
@@ -15174,7 +15327,11 @@ function renderPiHub(){
       }).join('')+
       '</div>'+
     '</div>':'') +
+    // ── Tapo smart plug card ──
+    _renderTapoCard()+
   '</div>';
+  // Kick off background device fetch if not loaded yet
+  if(!_tapoDevices.length&&!_tapoFetching) fetchTapoDevices();
 }
 
 // ── Pi Hub Setup Modal ──

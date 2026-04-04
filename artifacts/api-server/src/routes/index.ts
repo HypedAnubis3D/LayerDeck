@@ -9,6 +9,7 @@ import cameraRouter from "./camera";
 import discordRouter from "./discord";
 import squareRouter from "./square";
 import socialRouter from "./social";
+import tapoRouter from "./tapo";
 
 const router: IRouter = Router();
 
@@ -22,5 +23,6 @@ router.use("/camera", cameraRouter);
 router.use("/discord", discordRouter);
 router.use("/square", squareRouter);
 router.use("/social", socialRouter);
+router.use("/tapo", tapoRouter);
 
 export default router;
