@@ -15868,19 +15868,22 @@ async function postToInstagram(postId){
       method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({mediaUrl:media,caption:p.caption||'',postType:p.postType||'post'})
     });
-    const json=await res.json();
+    const rawText=await res.text();
+    let json;try{json=JSON.parse(rawText);}catch(_){json={error:rawText||'Server returned an unexpected response'};}
     if(res.ok&&json.id){
       p.status='posted';p.postedAt=Date.now();p.igId=json.id;
       toast('Posted to Instagram! 🎉','@hypedanubis3d','success',3500);
-      // Also post to story if requested
       if(p.addToStory&&p.postType!=='story'){
         const r2=await fetch('/api/social/instagram',{
           method:'POST',headers:{'Content-Type':'application/json'},
           body:JSON.stringify({mediaUrl:media,caption:'',postType:'story'})
         });
-        const j2=await r2.json();
+        const t2=await r2.text();let j2;try{j2=JSON.parse(t2);}catch(_){j2={};}
         p.storyId=j2.id||null;
       }
+    }else if(json.pending){
+      p.status='failed';p.error=json.error||'Video still processing — try again in a minute';
+      toast('Reel still processing',p.error,'warning',5000);
     }else{
       p.status='failed';p.error=json.error||'Unknown error';
       toast('Instagram post failed',p.error,'error');
@@ -15904,7 +15907,8 @@ async function postToFacebook(postId){
       method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({message:p.caption,mediaUrl:media})
     });
-    const json=await res.json();
+    const rawText=await res.text();
+    let json;try{json=JSON.parse(rawText);}catch(_){json={error:rawText||'Server returned an unexpected response'};}
     if(res.ok&&json.id){
       p.fbStatus='posted';p.fbPostedAt=Date.now();p.fbId=json.id;
       toast('Posted to Facebook! 🎉','','success',3000);

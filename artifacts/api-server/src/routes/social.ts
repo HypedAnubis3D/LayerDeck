@@ -257,15 +257,17 @@ router.post("/instagram", async (req, res) => {
     const containerId = createJson.id;
     if (!containerId) return res.status(400).json({ error: "Failed to create media container" });
 
-    // For videos/reels, poll until container is ready (up to 60s)
+    // For videos/reels, poll until container is ready (up to 45s — stay under proxy timeout)
     if (isVideo) {
-      for (let i = 0; i < 12; i++) {
+      let ready = false;
+      for (let i = 0; i < 9; i++) {
         await new Promise(r => setTimeout(r, 5000));
         const statusRes = await fetch(`${IG_BASE}/${containerId}?fields=status_code&access_token=${encodeURIComponent(token)}`);
         const statusJson = (await statusRes.json()) as { status_code?: string };
-        if (statusJson.status_code === "FINISHED") break;
-        if (statusJson.status_code === "ERROR") return res.status(400).json({ error: "Video processing failed on Instagram" });
+        if (statusJson.status_code === "FINISHED") { ready = true; break; }
+        if (statusJson.status_code === "ERROR") return res.status(400).json({ error: "Video processing failed on Instagram — check the video format and try again." });
       }
+      if (!ready) return res.status(202).json({ ok: false, pending: true, containerId, error: "Video is still processing on Instagram. Try posting again in a minute." });
     }
 
     // Step 2: publish
