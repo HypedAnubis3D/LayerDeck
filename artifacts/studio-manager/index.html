@@ -4162,6 +4162,18 @@ function renderTmf(){
     const _tmfFileClean=(t.filename||'').replace(/\.gcode\.3mf$/i,'').replace(/\.3mf$/i,'').replace(/_/g,' ').trim();
     const _tmfDisplayName=_tmfFileClean||t.name||'Unknown';
     const _tmfMeta=(t.name&&t.name!==_tmfDisplayName&&!t.autoAdded)?t.name:null;
+    // Auto-suggest: if unlinked, fuzzy-match a catalog product by name
+    const _tmfLinkedId=(catalogItems.find(p=>p.tmfId===t.id)||{}).id||'';
+    const _tmfSuggestProd=!_tmfLinkedId?(function(){
+      const jN=_tmfDisplayName.toLowerCase().replace(/_/g,' ').trim();
+      const jB=jN.replace(/\s+plate\s+\d+$/i,'').replace(/\s+v\d+$/i,'').trim();
+      const jFirst=jB.split(' ')[0];
+      return catalogItems.find(function(c){
+        const cN=(c.name||'').toLowerCase().replace(/_/g,' ').trim();
+        const cFirst=cN.split(' ')[0];
+        return cN===jN||cN===jB||jB.includes(cN)||(cN.length>4&&jB.includes(cN))||(jFirst.length>3&&cN.includes(jFirst))||(cFirst.length>3&&jB.includes(cFirst));
+      })||null;
+    })():null;
     return '<div class="tmf-card'+(isSel?' selected':'')+'" data-selid="'+t.id+'" onclick="if(selectMode===\'tmf\'){event.stopPropagation();toggleSelect(\''+t.id+'\');}">'+
       '<div class="tmf-name">'+esc(_tmfDisplayName)+(t.autoAdded?'<span style="font-size:6px;background:rgba(0,200,255,.12);color:var(--cyn-b);padding:1px 5px;border-radius:6px;margin-left:5px;vertical-align:middle" title="Auto-added when print started — no 3MF file parsed">auto</span>':'')+'</div>'+
       '<div class="tmf-sub">'+(_tmfMeta?'<span style="color:var(--txt-d);font-style:italic">'+esc(_tmfMeta)+'</span> · ':'')+new Date(t.uploadedAt).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})+'</div>'+
@@ -4191,6 +4203,11 @@ function renderTmf(){
       // Link to product
       '<div style="margin-bottom:8px">'+
         '<div style="font-size:6px;color:var(--txt-d);letter-spacing:1px;text-transform:uppercase;margin-bottom:4px">Linked Product</div>'+
+        (_tmfSuggestProd?
+          '<div style="display:flex;align-items:center;gap:6px;background:rgba(80,200,80,.07);border:1px solid rgba(80,200,80,.2);border-radius:4px;padding:5px 8px;margin-bottom:5px">'+
+            '<span style="font-size:6px;color:var(--grn-b);flex:1">✓ Auto-matched: <b>'+esc(_tmfSuggestProd.name)+'</b></span>'+
+            '<button class="btn btn-xs" style="font-size:5px;padding:2px 7px;background:var(--grn-d);border-color:var(--grn-dim);color:var(--grn-b);white-space:nowrap" onclick="event.stopPropagation();linkTmfToProduct(\''+t.id+'\',\''+_tmfSuggestProd.id+'\')">Confirm</button>'+
+          '</div>':'')+
         '<input type="text" id="tmf-ps-'+t.id+'" placeholder="🔍 Search products…" '+
           'style="width:100%;background:var(--bg);border:1px solid var(--bdr2);color:var(--txt);padding:4px 8px;font-family:\'Share Tech Mono\',monospace;font-size:8px;border-radius:3px;margin-bottom:4px;box-sizing:border-box" '+
           'oninput="filterTmfProdSearch(\''+t.id+'\',this.value)" onclick="event.stopPropagation()" />'+
@@ -14007,8 +14024,9 @@ async function onPiPrintStarted(name,data){
     });
     if(!alreadyInLib){
       var estHrs=data.mc_remaining_time?Math.round((data.mc_remaining_time/60)*10)/10:null;
+      var _newAutoId=uid();
       tmfLib.push({
-        id:uid(),
+        id:_newAutoId,
         filename:jobName.replace(/ /g,'_')+'.3mf',
         name:cleanJobName,
         printer:name,
@@ -14025,6 +14043,25 @@ async function onPiPrintStarted(name,data){
       });
       saveTmfs();
       toast('Added to 3MF Library',cleanJobName,'info',3500);
+      // Auto-link to a matching catalog product (fuzzy name match)
+      if(typeof catalogItems!=='undefined'&&catalogItems.length){
+        var _autoJBase=jLow.replace(/\s+plate\s+\d+$/i,'').replace(/\s+v\d+$/i,'').trim();
+        var _autoJFirst=_autoJBase.split(' ')[0];
+        var _autoLinked=catalogItems.find(function(c){
+          if(c.tmfId)return false; // skip already-linked products
+          var cN=(c.name||'').toLowerCase().replace(/_/g,' ').trim();
+          var cFirst=cN.split(' ')[0];
+          return cN===jLow||cN===_autoJBase||_autoJBase.includes(cN)
+            ||(cN.length>4&&_autoJBase.includes(cN))
+            ||(_autoJFirst.length>3&&cN.includes(_autoJFirst))
+            ||(cFirst.length>3&&_autoJBase.includes(cFirst));
+        });
+        if(_autoLinked){
+          _autoLinked.tmfId=_newAutoId;
+          saveCatalog();
+          toast('Auto-linked to product',cleanJobName+' → '+_autoLinked.name,'success',3500);
+        }
+      }
     }
 
     // ── Populate piTmfObjData from matched 3MF library entry ──
@@ -14567,11 +14604,26 @@ function updatePrinterCardLive(name,data,state){
       el.style.display='';
       el.style.color='';
     }else if(isActive){
-      // obj_list only populates when multiple INDEPENDENT objects exist on the plate
-      // (e.g. 5 separate models). Single multi-color models have no per-object list to skip.
-      el.innerHTML='Skip Object available when multiple independent models are on the plate';
+      // Check if the matched 3MF entry is auto-added (placeholder, no file parsed → no object names)
+      var _soJobRaw=(data.subtask_name||'').replace(/\.gcode\.3mf$/i,'').replace(/\.3mf$/i,'');
+      var _soJobN=_soJobRaw.replace(/_/g,' ').toLowerCase().trim();
+      var _soJobB=_soJobN.replace(/\s+plate\s+\d+$/i,'').trim();
+      var _soTmf=typeof tmfLib!=='undefined'&&_soJobN?tmfLib.find(function(t){
+        var tN=(t.name||'').toLowerCase().trim();
+        var tF=(t.filename||'').replace(/\.gcode\.3mf$/i,'').replace(/\.3mf$/i,'').replace(/_/g,' ').toLowerCase().trim();
+        return tN===_soJobN||tF===_soJobN||tN===_soJobB||tF===_soJobB;
+      }):null;
+      if(_soTmf&&_soTmf.autoAdded&&(!_soTmf.objects||!_soTmf.objects.length)){
+        // Auto-placeholder exists but no objects — prompt to upload the sliced plate 3MF
+        el.innerHTML='📦 Upload the <b>sliced .3mf for this plate</b> to see object names here — '
+          +'Bambu Studio: right-click the plate → <em>Export Plate Sliced File</em>, then upload it in the 3MF Library tab';
+        el.style.color='var(--amb)';
+      }else{
+        // obj_list only populates when multiple INDEPENDENT objects exist on the plate
+        el.innerHTML='Skip Object available when multiple independent models are on the plate';
+        el.style.color='var(--txt-d)';
+      }
       el.style.display='';
-      el.style.color='var(--txt-d)';
     }else{
       el.style.display='none';
       el.textContent='';
