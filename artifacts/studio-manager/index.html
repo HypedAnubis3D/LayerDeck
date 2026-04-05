@@ -3828,10 +3828,33 @@ function renderPrints(){
     if(q&&!(p.name+p.category+p.printer+(p.notes||'')).toLowerCase().includes(q))return false;
     return true;
   });
-  document.getElementById('pr-cnt').textContent=f.length+' prints';
+  // In-progress queue items (auto-added by Pi or manually queued & started)
+  const inProgressQ=(queueItems||[]).filter(function(qi){
+    if(qi.stage!=='inprogress')return false;
+    if(fc&&qi.category!==fc)return false;
+    if(fst&&fst!=='printing')return false;
+    if(q&&!(qi.name+qi.category+qi.printer+(qi.notes||'')).toLowerCase().includes(q))return false;
+    return true;
+  });
+  document.getElementById('pr-cnt').textContent=(f.length+inProgressQ.length)+' prints';
   const g=document.getElementById('prints-grid');
-  if(!f.length){g.innerHTML='<div class="empty" style="grid-column:1/-1">No prints yet</div>';return;}
-  g.innerHTML=[...f].reverse().map(p=>{
+  const inProgressHtml=inProgressQ.map(function(qi){
+    const noTmfBadge=qi.noTmf?'<span style="background:#3a2200;color:#f90;font-size:8px;padding:2px 6px;border-radius:4px;margin-left:6px">⚠ No 3MF</span>':'';
+    const startedLabel=qi.startedAt?(' · Started '+new Date(qi.startedAt).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})):'';
+    return '<div class="print-card" style="border-color:#1a2a1a">'+
+      '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:5px;margin-bottom:2px">'+
+      '<div class="pname">'+esc(qi.name||'Unknown')+(qi.qty>1?' ×'+qi.qty:'')+noTmfBadge+'</div>'+
+      '<span class="status-pill sp-printing">⟳ Printing</span>'+
+      '</div>'+
+      '<div class="pcat">'+(qi.category||'Other')+' · '+(qi.printer||'—')+(qi.hrs?' · '+formatHms(qi.hrs):'')+(startedLabel?'<span style="color:var(--txt-d)">'+startedLabel+'</span>':'')+'</div>'+
+      (qi.notes?'<div class="notes-box" style="font-size:9px;margin-top:4px">'+esc(qi.notes)+'</div>':'')+
+      '<div class="card-acts" style="margin-top:6px">'+
+      '<button class="btn btn-ghost btn-xs" style="flex:1" onclick="openEditQueueItem(\''+qi.id+'\')">Edit / Add 3MF</button>'+
+      '</div>'+
+      '</div>';
+  }).join('');
+  if(!f.length&&!inProgressQ.length){g.innerHTML='<div class="empty" style="grid-column:1/-1">No prints yet</div>';return;}
+  g.innerHTML=inProgressHtml+[...f].reverse().map(p=>{
     // If hrs is missing/0, find a matching completed queue item as display fallback
     const _pNorm=_normName(p.name);
     const _dispHrs=p.hrs||(queueItems.find(q=>q.stage==='done'&&q.printer===p.printer&&_normName(q.name)===_pNorm&&q.hrs>0)||{}).hrs||0;
@@ -5804,10 +5827,33 @@ function openAddQueue(){
   if(allPrinters.length){sel.value=allPrinters[0];}
   document.getElementById('mod-queue').style.display='flex';
 }
+function openEditQueueItem(id){
+  var q=queueItems.find(function(x){return x.id===id;});
+  if(!q)return;
+  document.getElementById('queue-modal-title').textContent='Edit In Progress Print';
+  document.getElementById('eq-id').value=q.id;
+  document.getElementById('eq-name').value=q.name||'';
+  document.getElementById('eq-cat').value=q.category||'Other';
+  document.getElementById('eq-hrs').value=q.hrs||'';
+  document.getElementById('eq-qty').value=q.qty||1;
+  document.getElementById('eq-priority').value=q.priority||'normal';
+  document.getElementById('eq-order').value=q.orderId||'';
+  document.getElementById('eq-notes').value=q.notes||'';
+  var piPrinterNames=[];
+  if(window.piStatus&&piStatus.printers){piPrinterNames=Object.keys(piStatus.printers);}
+  var allPrinters=[...new Set([...(printerRecords||[]).map(function(p){return p.name;}), ...piPrinterNames])].filter(Boolean);
+  if(!allPrinters.length){allPrinters=['X1C','X1E','P1S','P1P','A1','A1 Mini','H2D'];}
+  var sel=document.getElementById('eq-printer');
+  sel.innerHTML=allPrinters.map(function(p){return '<option>'+esc(p)+'</option>';}).join('');
+  if(q.printer){sel.value=q.printer;}
+  document.getElementById('mod-queue').style.display='flex';
+}
 function saveQueueItem(){
   const name=document.getElementById('eq-name').value.trim();if(!name){document.getElementById('eq-name').focus();return;}
   const id=document.getElementById('eq-id').value;
-  const item={id:id||uid(),name,category:document.getElementById('eq-cat').value,printer:document.getElementById('eq-printer').value,hrs:parseFloat(document.getElementById('eq-hrs').value)||0,qty:parseInt(document.getElementById('eq-qty').value)||1,priority:document.getElementById('eq-priority').value,orderId:document.getElementById('eq-order').value.trim(),notes:document.getElementById('eq-notes').value.trim(),stage:id?(queueItems.find(q=>q.id===id)||{}).stage||'queued':'queued',timestamp:id?(queueItems.find(q=>q.id===id)||{}).timestamp||Date.now():Date.now()};
+  const existing=id?(queueItems.find(q=>q.id===id)||{}):null;
+  // Spread existing first so autoFromPi, noTmf, tmfId, startedAt etc. are preserved
+  const item=Object.assign({},existing||{},{id:id||uid(),name,category:document.getElementById('eq-cat').value,printer:document.getElementById('eq-printer').value,hrs:parseFloat(document.getElementById('eq-hrs').value)||0,qty:parseInt(document.getElementById('eq-qty').value)||1,priority:document.getElementById('eq-priority').value,orderId:document.getElementById('eq-order').value.trim(),notes:document.getElementById('eq-notes').value.trim(),stage:existing?existing.stage||'queued':'queued',timestamp:existing?existing.timestamp||Date.now():Date.now()});
   if(id){queueItems=queueItems.map(q=>q.id===id?item:q);}else{queueItems.push(item);}
   saveQueue();closeQueue();render();
 }
@@ -14496,7 +14542,9 @@ async function onPiPrintStarted(name,data){
   var changed=false;
   if(jobName){
     queueItems=queueItems.map(function(q){
-      if(q.stage==='queued'&&!changed&&(q.name.toLowerCase()===jobName.toLowerCase()||(q.printer&&q.printer===name))){
+      // Only match by job name — do NOT fall back to printer-only match which
+      // would accidentally promote calibration or unrelated queued items
+      if(q.stage==='queued'&&!changed&&q.name.toLowerCase()===jobName.toLowerCase()){
         changed=true;return Object.assign({},q,{stage:'inprogress',startedAt:Date.now()});
       }
       return q;
@@ -14505,14 +14553,27 @@ async function onPiPrintStarted(name,data){
   if(changed){
     saveQueue();render();
   } else {
-    // No matching queue item — auto-create one as In Progress
-    var alreadyInProgress=queueItems.some(function(q){return q.stage==='inprogress'&&q.printer===name&&q.autoFromPi;});
+    // No matching queue item — auto-create one as In Progress.
+    // First, remove any stale autoFromPi inprogress item for this printer that
+    // has a DIFFERENT job name (e.g. leftover from calibration or a previous print).
+    var hadStale=false;
+    queueItems=queueItems.filter(function(q){
+      if(q.stage==='inprogress'&&q.printer===name&&q.autoFromPi&&_normName(q.name)!==_normName(displayName)){
+        hadStale=true; return false;
+      }
+      return true;
+    });
+    var alreadyInProgress=queueItems.some(function(q){
+      return q.stage==='inprogress'&&q.printer===name&&q.autoFromPi&&_normName(q.name)===_normName(displayName);
+    });
     if(!alreadyInProgress){
       var autoHrs=data.mc_remaining_time?Math.round((data.mc_remaining_time/60)*10)/10:0;
       var autoItem={id:uid(),name:displayName,category:'Other',printer:name,hrs:autoHrs,qty:1,priority:'normal',stage:'inprogress',startedAt:Date.now(),timestamp:Date.now(),notes:'Auto-added from Pi Hub',autoFromPi:true,noTmf:!matchedTmf,tmfId:matchedTmf?matchedTmf.id:null};
       queueItems.push(autoItem);
       saveQueue();render();
       toast('Auto-added to In Progress',displayName,'info',3000);
+    } else if(hadStale){
+      saveQueue();render();
     }
   }
   ensurePrinterRecord(name);
