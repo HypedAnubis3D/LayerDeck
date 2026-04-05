@@ -3828,9 +3828,12 @@ function renderPrints(){
     if(q&&!(p.name+p.category+p.printer+(p.notes||'')).toLowerCase().includes(q))return false;
     return true;
   });
-  // In-progress queue items (auto-added by Pi or manually queued & started)
+  // In-progress queue items that don't yet have a linked 'printing' print record
+  // (once the user clicks Edit, a print record is created and they show up in f instead)
+  const linkedPrintIds=new Set((prints||[]).filter(function(p){return p.fromQueueItemId;}).map(function(p){return p.fromQueueItemId;}));
   const inProgressQ=(queueItems||[]).filter(function(qi){
     if(qi.stage!=='inprogress')return false;
+    if(linkedPrintIds.has(qi.id))return false; // already promoted to a print record
     if(fc&&qi.category!==fc)return false;
     if(fst&&fst!=='printing')return false;
     if(q&&!(qi.name+qi.category+qi.printer+(qi.notes||'')).toLowerCase().includes(q))return false;
@@ -3841,15 +3844,25 @@ function renderPrints(){
   const inProgressHtml=inProgressQ.map(function(qi){
     const noTmfBadge=qi.noTmf?'<span style="background:#3a2200;color:#f90;font-size:8px;padding:2px 6px;border-radius:4px;margin-left:6px">⚠ No 3MF</span>':'';
     const startedLabel=qi.startedAt?(' · Started '+new Date(qi.startedAt).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})):'';
-    return '<div class="print-card" style="border-color:#1a2a1a">'+
+    const qiCost=calcCost(qi.filaments||[],qi.hrs||0,qi.qty||1);
+    return '<div class="print-card" style="border-left:2px solid #1e3a1e">'+
       '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:5px;margin-bottom:2px">'+
       '<div class="pname">'+esc(qi.name||'Unknown')+(qi.qty>1?' ×'+qi.qty:'')+noTmfBadge+'</div>'+
       '<span class="status-pill sp-printing">⟳ Printing</span>'+
       '</div>'+
-      '<div class="pcat">'+(qi.category||'Other')+' · '+(qi.printer||'—')+(qi.hrs?' · '+formatHms(qi.hrs):'')+(startedLabel?'<span style="color:var(--txt-d)">'+startedLabel+'</span>':'')+'</div>'+
-      (qi.notes?'<div class="notes-box" style="font-size:9px;margin-top:4px">'+esc(qi.notes)+'</div>':'')+
-      '<div class="card-acts" style="margin-top:6px">'+
-      '<button class="btn btn-ghost btn-xs" style="flex:1" onclick="openEditQueueItem(\''+qi.id+'\')">Edit / Add 3MF</button>'+
+      '<div class="pcat">'+(qi.category||'Other')+' · '+(qi.printer||'—')+
+      (qi.hrs?' · <span class="print-time-display" style="display:inline-flex;font-size:8px;padding:2px 6px">'+formatHms(qi.hrs)+'</span>':'')+
+      (startedLabel?'<span style="color:var(--txt-d)">'+startedLabel+'</span>':'')+'</div>'+
+      '<div class="cost-box">'+
+        '<div class="cb-title">Cost Breakdown</div>'+
+        '<div class="cb-row"><span style="color:var(--txt-d)">Filament</span><span>$'+qiCost.filCost.toFixed(2)+'</span></div>'+
+        '<div class="cb-row"><span style="color:var(--txt-d)">Electricity</span><span>$'+qiCost.elecCost.toFixed(2)+'</span></div>'+
+        '<div class="cb-row"><span>Total Cost</span><span class="cb-total">$'+qiCost.total.toFixed(2)+'</span></div>'+
+        '<div class="cb-row"><span style="color:var(--org)">Sell ('+cfg.markup+'% markup)</span><span class="cb-sell">$'+qiCost.sell.toFixed(2)+'</span></div>'+
+      '</div>'+
+      (qi.notes?'<div class="notes-box">'+esc(qi.notes)+'</div>':'')+
+      '<div class="card-acts" style="margin-top:4px">'+
+      '<button class="btn btn-ghost btn-xs" style="flex:1" onclick="openEditInProgressPrint(\''+qi.id+'\')">✎ Edit / Add 3MF</button>'+
       '</div>'+
       '</div>';
   }).join('');
@@ -5530,7 +5543,18 @@ function savePrint(){
     tmfName:selectedTmf?selectedTmf.name:(existing?existing.tmfName:null),
     timestamp:id?(existing||{}).timestamp||Date.now():Date.now(),
   };
-  if(id){prints=prints.map(p=>p.id===id?print:p);}
+  if(id){
+    prints=prints.map(p=>p.id===id?print:p);
+    // If this is a 'printing' placeholder linked to a queue item, sync key fields back
+    if(print.fromQueueItemId&&print.status==='printing'){
+      queueItems=queueItems.map(function(q){
+        return q.id===print.fromQueueItemId
+          ?Object.assign({},q,{name:print.name,category:print.category,printer:print.printer,hrs:print.hrs,qty:print.qty,notes:print.notes,filaments:print.filaments,tmfId:selectedTmfId||q.tmfId,noTmf:!selectedTmfId&&!print.tmfName})
+          :q;
+      });
+      saveQueue();
+    }
+  }
   else{
     prints.push(print);
     filaments.forEach(f=>{
@@ -5847,6 +5871,33 @@ function openEditQueueItem(id){
   sel.innerHTML=allPrinters.map(function(p){return '<option>'+esc(p)+'</option>';}).join('');
   if(q.printer){sel.value=q.printer;}
   document.getElementById('mod-queue').style.display='flex';
+}
+function openEditInProgressPrint(queueItemId){
+  // Opens the full Print editor (with 3MF search, filament colors, cost preview)
+  // for an in-progress queue item. Creates a placeholder 'printing' print record
+  // the first time so the full editor has a prints[] item to work with.
+  var qi=queueItems.find(function(x){return x.id===queueItemId;});
+  if(!qi)return;
+  // Find or create a linked 'printing' print record
+  var linked=qi.linkedPrintId?prints.find(function(p){return p.id===qi.linkedPrintId;}):null;
+  if(!linked){
+    linked={
+      id:uid(),name:qi.name,category:qi.category||'Other',
+      printer:qi.printer,hrs:qi.hrs||0,qty:qi.qty||1,
+      filaments:qi.filaments||[],notes:qi.notes||'',
+      status:'printing',timestamp:qi.startedAt||qi.timestamp||Date.now(),
+      startedAt:qi.startedAt||Date.now(),autoFromPi:qi.autoFromPi||false,
+      fromQueueItemId:qi.id
+    };
+    prints.push(linked);
+    savePrints();
+    // Link back from queue item
+    queueItems=queueItems.map(function(q){
+      return q.id===queueItemId?Object.assign({},q,{linkedPrintId:linked.id}):q;
+    });
+    saveQueue();
+  }
+  openEditPrint(linked.id);
 }
 function saveQueueItem(){
   const name=document.getElementById('eq-name').value.trim();if(!name){document.getElementById('eq-name').focus();return;}
@@ -14657,9 +14708,12 @@ async function onPiPrintFinished(name,data){
   // reloads and re-receives the FINISH MQTT state (can be minutes or hours later)
   const _todayStart=new Date();_todayStart.setHours(0,0,0,0);
   const recentDup=prints.find(function(r){
-    return r.autoFromPi&&r.printer===name&&r.name===jobNameCheck&&(r.finishedAt||r.timestamp||0)>=_todayStart.getTime();
+    return r.autoFromPi&&r.printer===name&&(_normName(r.name)===_normName(jobNameCheck))&&(r.finishedAt||r.timestamp||0)>=_todayStart.getTime();
   });
-  if(recentDup){return;}
+  // If the dup is a 'printing' placeholder (created when user clicked Edit), promote it
+  // to 'done' instead of skipping. True duplicates (status already 'done'/'failed') skip.
+  if(recentDup&&recentDup.status!=='printing'){return;}
+  const _promotePlaceholder=recentDup&&recentDup.status==='printing'?recentDup:null;
   const jobName=(data.subtask_name||'').replace('.gcode.3mf','').replace('.3mf','')||'Unknown';
   const material=getPiAMSMaterial(data);
   // Early 3MF lookup — used as fallback for duration & filament when app loads post-print
@@ -14772,22 +14826,39 @@ async function onPiPrintFinished(name,data){
   const actualHrs=Math.round((durationMins/60)*100)/100;
   const filamentEntries=filamentSlots.map(s=>({spoolId:s.spoolId,grams:s.grams}));
   const _finTmf=_earlyTmf; // already matched above
-  const printRecord={
-    id:uid(),
-    name:jobName,
-    category:'Other',
-    printer:name,
-    hrs:actualHrs,
-    qty:1,
-    filaments:filamentEntries,
-    status:'done',
-    finishedAt:Date.now(),
-    timestamp:Date.now(),
-    notes:'Auto-logged by LayerDeck Pi Hub',
-    autoFromPi:true,
-    tmfName:_finTmf?_finTmf.name:undefined
-  };
-  prints.push(printRecord);
+  let printRecord;
+  if(_promotePlaceholder){
+    // Promote the 'printing' placeholder that was created when user clicked Edit
+    // Preserve any filament/tmf info the user already filled in, only overwrite
+    // duration and add finishedAt. If user manually set filaments, keep them.
+    const _keepFilaments=(_promotePlaceholder.filaments&&_promotePlaceholder.filaments.length&&_promotePlaceholder.filaments.some(function(f){return f.spoolId;}));
+    Object.assign(_promotePlaceholder,{
+      hrs:actualHrs,
+      filaments:_keepFilaments?_promotePlaceholder.filaments:filamentEntries,
+      status:'done',
+      finishedAt:Date.now(),
+      tmfName:(_promotePlaceholder.tmfName)||(_finTmf?_finTmf.name:undefined)
+    });
+    printRecord=_promotePlaceholder;
+    prints=prints.map(function(p){return p.id===printRecord.id?printRecord:p;});
+  } else {
+    printRecord={
+      id:uid(),
+      name:jobName,
+      category:'Other',
+      printer:name,
+      hrs:actualHrs,
+      qty:1,
+      filaments:filamentEntries,
+      status:'done',
+      finishedAt:Date.now(),
+      timestamp:Date.now(),
+      notes:'Auto-logged by LayerDeck Pi Hub',
+      autoFromPi:true,
+      tmfName:_finTmf?_finTmf.name:undefined
+    };
+    prints.push(printRecord);
+  }
   savePrints();
 
   // Move queue card to done — use actualHrs already computed above
