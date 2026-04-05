@@ -45,6 +45,7 @@ const TYPE_MAP: Record<string, string> = {
   "PETG-CF":            "PETG-CF",
   "ABS":                "ABS",
   "ASA":                "ASA",
+  "ASA Glow":           "ASA Glow",
   "TPU / TPE":          "TPU 95A",
   "TPU":                "TPU 95A",
   "TPU 90A":            "TPU 90A",
