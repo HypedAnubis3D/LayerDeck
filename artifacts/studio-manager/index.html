@@ -9180,7 +9180,7 @@ function initSupabase(){
           render();
           checkShopifyConfig();
           syncDiscordFromCloud();
-          pullFromCloud(true);
+          pullFromCloud(true).then(()=>{reconcileMissingPiPrints();}).catch(()=>{});
         }else if(event==='TOKEN_REFRESHED'){
           addSyncLog('Session refreshed','ok');
         }
@@ -14541,6 +14541,37 @@ async function onPiPrintStarted(name,data){
   }
 }
 
+function reconcileMissingPiPrints(){
+  const _todayStart=new Date();_todayStart.setHours(0,0,0,0);
+  const _todayMs=_todayStart.getTime();
+  let _added=0;
+  (typeof queueItems!=='undefined'?queueItems:[]).forEach(function(q){
+    if(q.stage!=='done'||!q.autoFromPi||!q.printer||!q.name)return;
+    const _qDone=q.completedAt||q.timestamp||0;
+    if(_qDone<_todayMs)return; // only today's queue items
+    // Check for matching print record
+    const _exists=prints.find(function(r){
+      return r.autoFromPi&&r.printer===q.printer&&r.name===q.name&&(r.finishedAt||r.timestamp||0)>=_todayMs;
+    });
+    if(_exists)return;
+    // No matching record — create one from the queue item data
+    const _rec={
+      id:uid(),name:q.name,category:q.category||'Other',
+      printer:q.printer,hrs:q.hrs||0,qty:1,
+      filaments:q.filaments||[],
+      status:'done',finishedAt:_qDone,timestamp:_qDone,
+      notes:'Auto-logged by LayerDeck Pi Hub',
+      autoFromPi:true,
+      tmfName:q.tmfId?(tmfLib.find(t=>t.id===q.tmfId)||{}).name:undefined,
+      _reconciled:true
+    };
+    prints.push(_rec);
+    _added++;
+  });
+  if(_added>0){savePrints();render();
+    toast('🔄 Reconciled','Recovered '+_added+' missing Pi Hub print'+(1<_added?'s':''),'info',5000);}
+}
+
 async function onPiPrintFinished(name,data){
   const jobNameCheck=(data.subtask_name||'').replace('.gcode.3mf','').replace('.3mf','')||'Unknown';
   // Dedup for the entire calendar day — prevents duplicate records when the app
@@ -14908,6 +14939,11 @@ async function fetchPiStatus(){
       }catch(e){}
       updatePrinterCardLive(name,p,curState);
     });
+
+    // ── Reconcile: catch Pi Hub print records lost to sync races ─────────────
+    // If a queue item is auto-done by Pi Hub but has no matching print record
+    // today, create a minimal record so the print tab stays accurate.
+    reconcileMissingPiPrints();
 
     updatePiHubStatusDot(true,0);
   }catch(e){
