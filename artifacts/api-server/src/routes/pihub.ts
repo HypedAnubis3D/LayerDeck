@@ -187,4 +187,38 @@ router.post('/health-cron', async (req, res) => {
   }
 });
 
+// ── Section 28: Generic proxy for vision (and any future) endpoints ──────────
+// GET  /api/pihub/proxy?hub=<hubUrl>&path=/vision/status
+// POST /api/pihub/proxy?hub=<hubUrl>&path=/vision/scan  (body forwarded)
+router.all('/proxy', async (req, res) => {
+  const hubUrl  = req.query.hub  as string;
+  const piPath  = req.query.path as string;
+  if (!hubUrl || !piPath) {
+    return res.status(400).json({ error: 'hub and path query params required' });
+  }
+  // Allow only known safe paths (no traversal)
+  if (!/^\/[a-zA-Z0-9/_:%-]+$/.test(piPath)) {
+    return res.status(400).json({ error: 'Invalid path' });
+  }
+  const method  = req.method;
+  const isWrite = method === 'POST' || method === 'PUT' || method === 'PATCH';
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 10000);
+    const upstream = await fetch(`${hubUrl}${piPath}`, {
+      method,
+      headers: isWrite ? { 'Content-Type': 'application/json' } : {},
+      body:    isWrite ? JSON.stringify(req.body) : undefined,
+      signal:  controller.signal,
+    });
+    clearTimeout(timer);
+    const data = await upstream.json().catch(() => ({}));
+    return res.status(upstream.ok ? 200 : upstream.status).json(data);
+  } catch (e: any) {
+    const { hint, code } = classifyError(e);
+    logger.warn({ err: e?.message, path: piPath, code }, '[PiHub] Proxy failed');
+    return res.status(502).json({ error: 'Pi Hub unreachable', code, hint });
+  }
+});
+
 export default router;

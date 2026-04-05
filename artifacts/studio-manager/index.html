@@ -14196,6 +14196,8 @@ Object.assign(TAB_NAMES,{square:'Square',discord:'Discord',pihub:'Pi Hub',social
 
 let piHubConfig=null;   // loaded from Supabase printerHub collection
 let piLiveData={};      // {printerName: {...mqttFields}}
+let piVisionData=null;  // latest from /vision/status — { enabled, results, log, ... }
+let _piVisionFetching=false;
 let piPrevStates={};    // for state transition detection — persisted to survive page refresh
 // Restore compact state snapshot (gcode_state + hms only) from localStorage to prevent re-firing alerts on reload
 try{var _s=localStorage.getItem('piPrevStateKeys');if(_s){var _r=JSON.parse(_s)||{};Object.keys(_r).forEach(function(k){piPrevStates[k]=_r[k];});}}catch(e){}
@@ -14961,6 +14963,9 @@ async function fetchPiStatus(){
     // today, create a minimal record so the print tab stays accurate.
     reconcileMissingPiPrints();
 
+    // ── Section 28: fetch vision status in background (non-blocking) ──────────
+    fetchPiVisionStatus();
+
     updatePiHubStatusDot(true,0);
   }catch(e){
     piConsecutiveFails++;
@@ -14985,6 +14990,251 @@ function _reschedulePiPoll(intervalMs){
   if(piPollTimer)clearInterval(piPollTimer);
   const ms=intervalMs||PI_POLL_INTERVALS[0];
   piPollTimer=setInterval(fetchPiStatus,ms);
+}
+
+// ── Section 28: Vision helpers ────────────────────────────────────────────────
+async function fetchPiVisionStatus(){
+  if(_piVisionFetching)return;
+  const piUrl=getPiUrl();
+  if(!piUrl)return;
+  _piVisionFetching=true;
+  try{
+    const r=await fetch('/api/pihub/proxy?hub='+encodeURIComponent(piUrl)+'&path='+encodeURIComponent('/vision/status'),{signal:AbortSignal.timeout(6000)});
+    if(!r.ok)return;
+    const d=await r.json();
+    piVisionData=d;
+    if(curTab==='pihub') _updateVisionBadges();
+  }catch(_){}
+  finally{_piVisionFetching=false;}
+}
+
+function _updateVisionBadges(){
+  if(!piVisionData||!piVisionData.results)return;
+  Object.entries(piVisionData.results).forEach(([name,r])=>{
+    const id=piId(name);
+    const badge=document.getElementById('vision-badge-'+id);
+    if(!badge)return;
+    badge.innerHTML=_visionBadgeHtml(r);
+  });
+}
+
+function _visionBadgeHtml(r){
+  if(!r)return '';
+  const STATUS_STYLE={
+    ok:     'background:rgba(0,200,100,0.15);color:#00c864;border:1px solid rgba(0,200,100,0.3)',
+    warning:'background:rgba(255,180,0,0.15);color:#ffb400;border:1px solid rgba(255,180,0,0.3)',
+    failure:'background:rgba(220,50,50,0.2);color:#ff4444;border:1px solid rgba(220,50,50,0.4)',
+    error:  'background:rgba(100,100,100,0.15);color:var(--txt-d);border:1px solid var(--bdr)'
+  };
+  const ICON={ok:'✅',warning:'⚠️',failure:'🚨',error:'❓'};
+  const s=r.status||'error';
+  const pct=r.confidence?Math.round(r.confidence*100)+'%':'';
+  const age=r.timestamp?_fmtAgo(r.timestamp):'';
+  return '<span style="display:inline-flex;align-items:center;gap:3px;border-radius:4px;padding:2px 5px;font-size:6.5px;'+
+    (STATUS_STYLE[s]||STATUS_STYLE.error)+'">'+
+    (ICON[s]||'?')+' '+(s==='ok'?'OK':s.toUpperCase())+(pct?' · '+pct:'')+
+    (age?' · '+age:'')+'</span>';
+}
+
+function _fmtAgo(ts){
+  const s=Math.floor((Date.now()-ts)/1000);
+  if(s<60)return s+'s ago';
+  const m=Math.floor(s/60);
+  if(m<60)return m+'m ago';
+  return Math.floor(m/60)+'h ago';
+}
+
+async function piVisionScan(printerName){
+  const piUrl=getPiUrl();
+  if(!piUrl){toast('Pi Hub not connected','','error');return;}
+  const id=piId(printerName);
+  const btn=document.getElementById('vision-scan-btn-'+id);
+  if(btn){btn.disabled=true;btn.textContent='🔍 Scanning…';}
+  try{
+    const r=await fetch('/api/pihub/proxy?hub='+encodeURIComponent(piUrl)+'&path='+encodeURIComponent('/vision/scan'),{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({printer:printerName}),
+      signal:AbortSignal.timeout(8000)
+    });
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    toast('AI Scan Started','Analyzing '+printerName+' — results in ~30s','info',4000);
+    // Poll vision status after 35s to pick up result
+    setTimeout(()=>fetchPiVisionStatus().then(()=>{
+      if(curTab==='pihub') renderPiHub();
+    }),35000);
+  }catch(e){toast('Scan failed',e.message,'error');}
+  finally{if(btn){btn.disabled=false;btn.textContent='🔍 AI Scan';}}
+}
+
+function openVisionSnapshot(printerName){
+  const piUrl=getPiUrl();
+  if(!piUrl){toast('Pi Hub not connected','','error');return;}
+  const modal=document.createElement('div');
+  modal.style='position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.85);display:flex;align-items:center;justify-content:center;padding:16px';
+  modal.onclick=e=>{if(e.target===modal)modal.remove();};
+  const id=piId(printerName);
+  const r=piVisionData&&piVisionData.results&&piVisionData.results[printerName];
+  const statusHtml=r?_visionBadgeHtml(r)+'<div style="font-size:7px;color:var(--txt-d);margin-top:4px">'+esc(r.description||'')+'</div>':'';
+  modal.innerHTML='<div style="background:var(--surf);border:1px solid var(--bdr2);border-radius:10px;padding:16px;max-width:640px;width:100%">'+
+    '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">'+
+      '<div style="font-family:\'Orbitron\',monospace;font-size:10px;font-weight:700;color:var(--gold-b)">📷 '+esc(printerName)+' SNAPSHOT</div>'+
+      '<button class="btn btn-ghost btn-sm" onclick="this.closest(\'div[style*=fixed]\').remove()">✕</button>'+
+    '</div>'+
+    '<div style="margin-bottom:8px">'+statusHtml+'</div>'+
+    '<div id="vision-snap-img-'+id+'" style="text-align:center;min-height:120px;display:flex;align-items:center;justify-content:center">'+
+      '<div style="font-size:8px;color:var(--txt-d)">Loading snapshot…</div>'+
+    '</div>'+
+    '<div style="display:flex;gap:6px;margin-top:10px">'+
+      '<button class="btn btn-ghost btn-sm" onclick="piVisionScan(\''+esc(printerName)+'\')">🔍 New Scan</button>'+
+      '<button class="btn btn-ghost btn-sm" onclick="this.closest(\'div[style*=fixed]\').remove()">Close</button>'+
+    '</div>'+
+  '</div>';
+  document.body.appendChild(modal);
+  // Load snapshot
+  (async()=>{
+    try{
+      const resp=await fetch('/api/pihub/proxy?hub='+encodeURIComponent(piUrl)+'&path='+encodeURIComponent('/vision/snapshot/'+printerName),{signal:AbortSignal.timeout(10000)});
+      if(!resp.ok)throw new Error('No snapshot yet');
+      const d=await resp.json();
+      const imgEl=document.getElementById('vision-snap-img-'+id);
+      if(imgEl&&d.base64){
+        const age=d.timestamp?_fmtAgo(d.timestamp):'';
+        imgEl.innerHTML='<div style="text-align:center"><img src="data:image/jpeg;base64,'+d.base64+'" style="max-width:100%;border-radius:6px;border:1px solid var(--bdr)"/><div style="font-size:7px;color:var(--txt-d);margin-top:4px">Captured '+age+'</div></div>';
+      }
+    }catch(e){
+      const imgEl=document.getElementById('vision-snap-img-'+id);
+      if(imgEl)imgEl.innerHTML='<div style="font-size:8px;color:var(--txt-d)">No snapshot — run a scan first</div>';
+    }
+  })();
+}
+
+function openVisionSettings(){
+  const piUrl=getPiUrl();
+  if(!piUrl){toast('Pi Hub not connected','','error');return;}
+  const cfg=piVisionData||{enabled:true,intervalMins:5,confidenceThreshold:0.55,ollamaModel:'llava:latest',ollamaUrl:'http://localhost:11434',perPrinter:{}};
+  const printers=(piHubConfig&&piHubConfig.printers)||[];
+
+  const modal=document.createElement('div');
+  modal.style='position:fixed;inset:0;z-index:9998;background:rgba(0,0,0,0.75);display:flex;align-items:center;justify-content:center;padding:16px;overflow-y:auto';
+  modal.onclick=e=>{if(e.target===modal)modal.remove();};
+  modal.innerHTML='<div style="background:var(--surf);border:1px solid var(--bdr2);border-radius:10px;padding:20px;max-width:420px;width:100%;max-height:90vh;overflow-y:auto">'+
+    '<div style="font-family:\'Orbitron\',monospace;font-size:11px;font-weight:700;color:var(--gold-b);letter-spacing:2px;margin-bottom:14px">🤖 AI VISION SETTINGS</div>'+
+    // Dependency check section
+    '<div style="background:rgba(0,0,0,0.2);border:1px solid var(--bdr);border-radius:6px;padding:10px;margin-bottom:12px">'+
+      '<div style="font-size:7px;color:var(--txt-d);letter-spacing:1px;margin-bottom:8px">PI SETUP REQUIREMENTS</div>'+
+      '<div style="font-size:7.5px;color:var(--txt-d);line-height:2">'+
+        '<code style="color:var(--cyn)">sudo apt install ffmpeg</code> — frame capture<br>'+
+        '<code style="color:var(--cyn)">curl https://ollama.ai/install.sh | sh</code> — Ollama<br>'+
+        '<code style="color:var(--cyn)">ollama pull llava:latest</code> — vision model (~4 GB)<br>'+
+        '<code style="color:var(--cyn)">ollama serve</code> — start Ollama (or set systemd)<br>'+
+        'Add <code style="color:var(--cyn)">rtspUrl</code> to each printer in <code style="color:var(--cyn)">printers.json</code>'+
+      '</div>'+
+      '<button class="btn btn-ghost btn-sm" style="margin-top:8px" id="vision-check-btn" onclick="checkVisionDeps()">🔍 Check Dependencies</button>'+
+      '<div id="vision-check-result" style="margin-top:6px;font-size:7px"></div>'+
+    '</div>'+
+    // Global toggle + interval
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">'+
+      '<div>'+
+        '<div style="font-size:7px;color:var(--txt-d);letter-spacing:1px;margin-bottom:4px">AI VISION ENABLED</div>'+
+        '<label style="display:flex;align-items:center;gap:6px;cursor:pointer">'+
+          '<input type="checkbox" id="vision-cfg-enabled" '+(cfg.enabled!==false?'checked':'')+' style="width:14px;height:14px"/>'+
+          '<span style="font-size:8px;color:var(--txt-b)">Active</span>'+
+        '</label>'+
+      '</div>'+
+      '<div>'+
+        '<div style="font-size:7px;color:var(--txt-d);letter-spacing:1px;margin-bottom:4px">SCAN INTERVAL</div>'+
+        '<select id="vision-cfg-interval" class="srch" style="font-size:8px;padding:4px">'+
+          [1,2,5,10,15,30].map(v=>'<option value="'+v+'"'+(cfg.intervalMins==v?' selected':'')+'>Every '+v+' min</option>').join('')+
+        '</select>'+
+      '</div>'+
+    '</div>'+
+    // Confidence threshold
+    '<div style="margin-bottom:10px">'+
+      '<div style="font-size:7px;color:var(--txt-d);letter-spacing:1px;margin-bottom:4px">ALERT CONFIDENCE THRESHOLD — <span id="vision-threshold-lbl">'+Math.round((cfg.confidenceThreshold||0.55)*100)+'%</span></div>'+
+      '<input type="range" id="vision-cfg-threshold" min="30" max="95" step="5" value="'+Math.round((cfg.confidenceThreshold||0.55)*100)+'" style="width:100%" oninput="document.getElementById(\'vision-threshold-lbl\').textContent=this.value+\'%\'"/>'+
+      '<div style="font-size:7px;color:var(--txt-d);margin-top:2px">Only send Discord alerts when model confidence is above this level</div>'+
+    '</div>'+
+    // Model + Ollama URL
+    '<div style="display:grid;gap:6px;margin-bottom:10px">'+
+      '<div>'+
+        '<div style="font-size:7px;color:var(--txt-d);letter-spacing:1px;margin-bottom:3px">OLLAMA MODEL</div>'+
+        '<input id="vision-cfg-model" class="srch" value="'+esc(cfg.ollamaModel||'llava:latest')+'" placeholder="llava:latest" style="font-size:8px"/>'+
+        '<div style="font-size:7px;color:var(--txt-d);margin-top:2px">llava-phi3 is faster/smaller (~2.9 GB)</div>'+
+      '</div>'+
+      '<div>'+
+        '<div style="font-size:7px;color:var(--txt-d);letter-spacing:1px;margin-bottom:3px">OLLAMA URL</div>'+
+        '<input id="vision-cfg-url" class="srch" value="'+esc(cfg.ollamaUrl||'http://localhost:11434')+'" placeholder="http://localhost:11434" style="font-size:8px"/>'+
+      '</div>'+
+    '</div>'+
+    // Per-printer toggles
+    (printers.length?
+    '<div style="margin-bottom:12px">'+
+      '<div style="font-size:7px;color:var(--txt-d);letter-spacing:1px;margin-bottom:6px">PER-PRINTER OVERRIDE</div>'+
+      '<div style="display:grid;gap:4px">'+
+      printers.map(p=>{
+        const pp=cfg.perPrinter&&cfg.perPrinter[p.name];
+        const dis=pp&&pp.enabled===false;
+        return '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;border:1px solid var(--bdr);border-radius:4px;padding:5px 8px">'+
+          '<input type="checkbox" class="vision-pp-check" data-printer="'+esc(p.name)+'" '+(!dis?'checked':'')+' style="width:12px;height:12px"/>'+
+          '<span style="font-size:8px;color:var(--txt-b)">'+esc(p.name)+'</span>'+
+        '</label>';
+      }).join('')+
+      '</div>'+
+    '</div>':'') +
+    '<div style="display:flex;gap:6px">'+
+      '<button class="btn btn-gold btn-sm" onclick="saveVisionSettings(this)">💾 Save</button>'+
+      '<button class="btn btn-ghost btn-sm" onclick="this.closest(\'div[style*=fixed]\').remove()">Cancel</button>'+
+    '</div>'+
+  '</div>';
+  document.body.appendChild(modal);
+}
+
+async function checkVisionDeps(){
+  const piUrl=getPiUrl();
+  if(!piUrl)return;
+  const btn=document.getElementById('vision-check-btn');
+  const res=document.getElementById('vision-check-result');
+  if(btn)btn.disabled=true;
+  if(res)res.textContent='Checking…';
+  try{
+    const r=await fetch('/api/pihub/proxy?hub='+encodeURIComponent(piUrl)+'&path='+encodeURIComponent('/vision/check'),{signal:AbortSignal.timeout(8000)});
+    const d=await r.json();
+    if(res)res.innerHTML=
+      '<span style="color:'+(d.ffmpeg?'var(--grn)':'var(--red-b)')+'">'+( d.ffmpeg?'✅':'❌')+' ffmpeg</span> &nbsp;'+
+      '<span style="color:'+(d.ollama?'var(--grn)':'var(--red-b)')+'">'+( d.ollama?'✅':'❌')+' Ollama ('+esc(d.model)+')</span>';
+  }catch(e){
+    if(res)res.innerHTML='<span style="color:var(--red-b)">❌ Pi Hub unreachable</span>';
+  }finally{if(btn)btn.disabled=false;}
+}
+
+async function saveVisionSettings(btnEl){
+  const piUrl=getPiUrl();
+  if(!piUrl){toast('Pi Hub not connected','','error');return;}
+  const enabled=document.getElementById('vision-cfg-enabled')?.checked!==false;
+  const intervalMins=parseFloat(document.getElementById('vision-cfg-interval')?.value)||5;
+  const confidenceThreshold=(parseFloat(document.getElementById('vision-cfg-threshold')?.value)||55)/100;
+  const ollamaModel=document.getElementById('vision-cfg-model')?.value.trim()||'llava:latest';
+  const ollamaUrl=document.getElementById('vision-cfg-url')?.value.trim()||'http://localhost:11434';
+  const perPrinter={};
+  document.querySelectorAll('.vision-pp-check').forEach(cb=>{
+    const name=cb.dataset.printer;
+    if(name)perPrinter[name]={enabled:cb.checked};
+  });
+  try{
+    if(btnEl)btnEl.disabled=true;
+    const r=await fetch('/api/pihub/proxy?hub='+encodeURIComponent(piUrl)+'&path='+encodeURIComponent('/vision/config'),{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({enabled,intervalMins,confidenceThreshold,ollamaModel,ollamaUrl,perPrinter}),
+      signal:AbortSignal.timeout(8000)
+    });
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    toast('Vision Settings Saved','AI scanning updated','success');
+    document.querySelector('div[style*="position:fixed"][style*="z-index:9998"]')?.remove();
+    fetchPiVisionStatus();
+  }catch(e){toast('Save failed',e.message,'error');}
+  finally{if(btnEl)btnEl.disabled=false;}
 }
 
 function updatePiHubStatusDot(online,retryInMs,hint,isChecking){
@@ -15962,10 +16212,15 @@ function renderPiHub(){
         const id=piId(p.name);
         const state=piPrevStates[p.name]?.gcode_state||'OFFLINE';
         const col=STATE_COLORS[state]||STATE_COLORS.OFFLINE;
+        const vRes=piVisionData&&piVisionData.results&&piVisionData.results[p.name];
+        const vEnabled=piVisionData&&piVisionData.enabled!==false&&
+          !(piVisionData.perPrinter&&piVisionData.perPrinter[p.name]&&piVisionData.perPrinter[p.name].enabled===false);
         return '<div style="border:1px solid var(--bdr);border-radius:5px;padding:8px">'+
           '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">'+
             '<div style="font-size:8px;font-weight:700;color:var(--txt-b)">'+esc(p.name)+'</div>'+
             '<span style="font-size:7px;font-family:\'Orbitron\',monospace;color:'+col+';letter-spacing:1px" id="pi-'+id+'-state">'+(STATE_LABELS[state]||state)+'</span>'+
+            '<div style="flex:1"></div>'+
+            '<div id="vision-badge-'+id+'">'+(vRes?_visionBadgeHtml(vRes):'')+'</div>'+
           '</div>'+
           '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:4px;margin-bottom:5px">'+
             '<div><div style="font-size:6px;color:var(--txt-d)">FILE</div><div style="font-size:7px;color:var(--txt-b);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" id="pi-'+id+'-file">—</div></div>'+
@@ -15988,12 +16243,86 @@ function renderPiHub(){
             (getCameraUrl(p.name)?'<button class="btn btn-ghost btn-xs" onclick="openCameraFeed(\''+esc(p.name)+'\')">📷 Camera</button>':'')+
             '<button class="btn btn-ghost btn-xs" style="color:var(--cyn-b)" onclick="piLightToggle(\''+esc(p.name)+'\')">💡 Light</button>'+
             '<button class="btn btn-ghost btn-xs" style="color:var(--gold-b)" onclick="piCalibrateMenu(\''+esc(p.name)+'\')">🔧 Calibrate</button>'+
+            (vEnabled?
+              '<button id="vision-scan-btn-'+id+'" class="btn btn-ghost btn-xs" style="color:var(--cyn)" onclick="piVisionScan(\''+esc(p.name)+'\')">🔍 AI Scan</button>'+
+              (vRes?'<button class="btn btn-ghost btn-xs" style="color:var(--txt-d)" onclick="openVisionSnapshot(\''+esc(p.name)+'\')">📷 Snapshot</button>':'')
+            :'')+
           '</div>'+
           _renderPrinterTapoSection(p.name)+
         '</div>';
       }).join('')+
       '</div>'+
     '</div>':'') +
+    // ── Section 28: AI Vision card ────────────────────────────────────────────
+    (function(){
+      const vd=piVisionData;
+      const vStatus=vd&&vd.enabled!==false?'Active':'Disabled';
+      const vInterval=vd?vd.intervalMins+'m':'5m';
+      const vModel=vd?esc(vd.ollamaModel||'llava:latest'):'llava:latest';
+      const logItems=(vd&&vd.log)||[];
+      const STATUS_COL={ok:'var(--grn)',warning:'var(--gold)',failure:'var(--red-b)',error:'var(--txt-d)'};
+      const STATUS_ICON={ok:'✅',warning:'⚠️',failure:'🚨',error:'❓'};
+      return '<div class="printer-card">'+
+        '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">'+
+          '<div style="font-family:\'Orbitron\',monospace;font-size:9px;font-weight:700;color:var(--gold-b);letter-spacing:2px">🤖 AI VISION</div>'+
+          '<div style="flex:1"></div>'+
+          (vd?'<span style="font-size:7px;color:'+(vd.enabled!==false?'var(--grn)':'var(--txt-d)')+';font-family:\'Orbitron\',monospace">'+vStatus+'</span>':'<span style="font-size:7px;color:var(--txt-d)">Not yet loaded</span>')+
+          '<button class="btn btn-ghost btn-sm" onclick="openVisionSettings()" style="margin-left:6px">⚙ Settings</button>'+
+        '</div>'+
+        (vd?
+          '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px">'+
+            '<div><div style="font-size:6px;color:var(--txt-d);letter-spacing:1px">INTERVAL</div><div style="font-size:8px;color:var(--txt-b);margin-top:2px">'+vInterval+'</div></div>'+
+            '<div><div style="font-size:6px;color:var(--txt-d);letter-spacing:1px">MODEL</div><div style="font-size:8px;color:var(--cyn);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+vModel+'</div></div>'+
+            '<div><div style="font-size:6px;color:var(--txt-d);letter-spacing:1px">THRESHOLD</div><div style="font-size:8px;color:var(--txt-b);margin-top:2px">'+Math.round((vd.confidenceThreshold||0.55)*100)+'%</div></div>'+
+          '</div>'
+        :
+          '<div style="font-size:8px;color:var(--txt-d);margin-bottom:10px;line-height:1.7">'+
+            'AI vision requires Ollama + a vision model on the Pi. Click Settings to configure.<br>'+
+            '<span style="color:var(--cyn)">ollama pull llava:latest</span>'+
+          '</div>'
+        )+
+        // Current results summary
+        ((piHubConfig&&(piHubConfig.printers||[]).length>0&&vd&&vd.results&&Object.keys(vd.results).length>0)?
+          '<div style="margin-bottom:10px">'+
+            '<div style="font-size:6px;color:var(--txt-d);letter-spacing:1px;margin-bottom:6px">LATEST RESULTS</div>'+
+            '<div style="display:grid;gap:4px">'+
+            (piHubConfig.printers||[]).map(p=>{
+              const r=vd.results[p.name];
+              if(!r)return '';
+              const s=r.status||'error';
+              return '<div style="display:flex;align-items:center;gap:6px;border:1px solid var(--bdr);border-radius:4px;padding:5px 8px">'+
+                '<span style="font-size:8px">'+STATUS_ICON[s]+'</span>'+
+                '<span style="font-size:8px;font-weight:700;color:var(--txt-b);flex:1">'+esc(p.name)+'</span>'+
+                '<span style="font-size:7px;color:'+(STATUS_COL[s]||'var(--txt-d)')+'">'+s.toUpperCase()+'</span>'+
+                (r.confidence?'<span style="font-size:7px;color:var(--txt-d)">'+Math.round(r.confidence*100)+'%</span>':'')+
+                (r.timestamp?'<span style="font-size:6.5px;color:var(--txt-d)">'+_fmtAgo(r.timestamp)+'</span>':'')+
+                '<button class="btn btn-ghost btn-xs" onclick="openVisionSnapshot(\''+esc(p.name)+'\')">📷</button>'+
+              '</div>';
+            }).filter(Boolean).join('')+
+            '</div>'+
+          '</div>'
+        :'')+
+        // Scan log
+        (logItems.length>0?
+          '<div>'+
+            '<div style="font-size:6px;color:var(--txt-d);letter-spacing:1px;margin-bottom:6px">SCAN HISTORY (LAST '+logItems.length+')</div>'+
+            '<div style="display:grid;gap:2px;max-height:140px;overflow-y:auto">'+
+            logItems.map(l=>{
+              const s=l.status||'error';
+              return '<div style="display:flex;align-items:center;gap:5px;padding:3px 6px;border-radius:3px;background:rgba(255,255,255,0.03)">'+
+                '<span style="font-size:7px">'+STATUS_ICON[s]+'</span>'+
+                '<span style="font-size:7px;color:var(--txt-d);flex-shrink:0">'+esc(l.printerName)+'</span>'+
+                '<span style="font-size:7px;color:'+(STATUS_COL[s]||'var(--txt-d)')+'">'+s+'</span>'+
+                (l.confidence?'<span style="font-size:6.5px;color:var(--txt-d)">'+Math.round(l.confidence*100)+'%</span>':'')+
+                '<span style="flex:1;font-size:6.5px;color:var(--txt-d);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(l.description||'')+'</span>'+
+                (l.timestamp?'<span style="font-size:6px;color:var(--txt-d);flex-shrink:0">'+_fmtAgo(l.timestamp)+'</span>':'')+
+              '</div>';
+            }).join('')+
+            '</div>'+
+          '</div>'
+        :'<div style="font-size:7.5px;color:var(--txt-d)">No scans yet — click "AI Scan" on a printer card above, or wait for the next auto-scan during a print.</div>')+
+      '</div>';
+    })()+
   '</div>';
   // Load plug list in background so the dropdowns are populated
   if(!_tapoDevices.length&&!_tapoFetching) fetchTapoDevices();

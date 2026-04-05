@@ -606,4 +606,226 @@ app.post('/tapo/power', async (req, res) => {
   }
 });
 
+// ── Section 28: AI Print Failure Detection ────────────────────────────────────
+// Requirements:
+//   1. ffmpeg  — sudo apt install ffmpeg
+//   2. Ollama  — curl https://ollama.ai/install.sh | sh
+//   3. Vision model — ollama pull llava:latest  (or llava-phi3 for faster/smaller)
+// Camera RTSP URLs: add  rtspUrl  field to each printer in printers.json, or set
+// env vars on Pi: CAMERA_A1_RTSP, CAMERA_P1_ROOM_RTSP, CAMERA_P1_CLOSET_RTSP
+
+const { spawnSync: _spawnSync } = require('child_process');
+const http_node = require('http');
+
+// ── Vision config (persisted to vision-config.json) ──────────────────────────
+let _vEnabled   = true;
+let _vIntervalM = 5;       // minutes between auto-scans
+let _vThreshold = 0.55;    // min confidence to send Discord alert
+let _vModel     = 'llava:latest';
+let _vOllamaUrl = 'http://localhost:11434';
+let _vPerPrint  = {};      // { printerName: { enabled: bool } }
+
+const _vCfgPath = path.join(__dirname, 'vision-config.json');
+(function _loadVisionCfg() {
+  try {
+    if (!fs.existsSync(_vCfgPath)) return;
+    const c = JSON.parse(fs.readFileSync(_vCfgPath, 'utf8'));
+    if (c.enabled           !== undefined) _vEnabled   = !!c.enabled;
+    if (c.intervalMins)                    _vIntervalM = parseFloat(c.intervalMins) || 5;
+    if (c.confidenceThreshold !== undefined) _vThreshold = parseFloat(c.confidenceThreshold) || 0.55;
+    if (c.ollamaModel)                     _vModel     = c.ollamaModel;
+    if (c.ollamaUrl)                       _vOllamaUrl = c.ollamaUrl;
+    if (c.perPrinter)                      _vPerPrint  = c.perPrinter;
+  } catch (_) {}
+})();
+
+function _saveVisionCfg() {
+  try {
+    fs.writeFileSync(_vCfgPath, JSON.stringify({
+      enabled: _vEnabled, intervalMins: _vIntervalM,
+      confidenceThreshold: _vThreshold, ollamaModel: _vModel,
+      ollamaUrl: _vOllamaUrl, perPrinter: _vPerPrint
+    }, null, 2));
+  } catch (_) {}
+}
+
+// ── Vision state ──────────────────────────────────────────────────────────────
+const _vResults  = {}; // { printerName: { status, confidence, issues, description, timestamp } }
+const _vImages   = {}; // { printerName: { base64, timestamp } }
+const _vLog      = []; // [{ printerName, status, confidence, description, timestamp }] — last 50
+const _vScanning = new Set();
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function _getRtspUrl(name) {
+  const pr = PRINTERS.find(p => p.name === name);
+  if (pr && pr.rtspUrl) return pr.rtspUrl;
+  // Env var: e.g. CAMERA_P1_ROOM_RTSP for "P1 Room"
+  const envKey = 'CAMERA_' + name.replace(/[\s()]/g, '_').replace(/_+/g, '_').toUpperCase() + '_RTSP';
+  if (process.env[envKey]) return process.env[envKey];
+  // Named fallbacks
+  const MAP = {
+    'A1':        process.env.CAMERA_A1_RTSP,
+    'P1 Room':   process.env.CAMERA_P1_ROOM_RTSP,
+    'P1 Closet': process.env.CAMERA_P1_CLOSET_RTSP
+  };
+  return MAP[name] || null;
+}
+
+function _captureFrame(name) {
+  const url = _getRtspUrl(name);
+  if (!url) return null;
+  const out = `/tmp/ld_vs_${name.replace(/[^a-z0-9]/gi, '_')}.jpg`;
+  try {
+    _spawnSync('ffmpeg', [
+      '-rtsp_transport', 'tcp', '-i', url,
+      '-frames:v', '1', '-q:v', '4', '-vf', 'scale=640:-1',
+      '-y', out
+    ], { timeout: 12000 });
+    if (!fs.existsSync(out)) return null;
+    const b64 = fs.readFileSync(out).toString('base64');
+    try { fs.unlinkSync(out); } catch (_) {}
+    return b64;
+  } catch (e) {
+    console.warn(`[Vision] capture failed for ${name}: ${e.message}`);
+    return null;
+  }
+}
+
+function _askOllama(b64, name) {
+  return new Promise(resolve => {
+    const prompt =
+      `You monitor a 3D printer named "${name}" for failures. Analyze this camera image.\n` +
+      `Detect: spaghetti (filament extruded into air), layer shift, warping, adhesion failure, nozzle clog, stringing, blobs.\n` +
+      `Reply ONLY with JSON (no markdown):\n` +
+      `{"status":"ok","confidence":0.9,"issues":[],"description":"one sentence"}\n` +
+      `status: ok|warning|failure   confidence: 0.0–1.0`;
+    const body = JSON.stringify({ model: _vModel, prompt, images: [b64], stream: false });
+    try {
+      const u   = new URL(`${_vOllamaUrl}/api/generate`);
+      const req = http_node.request({
+        hostname: u.hostname, port: parseInt(u.port) || 11434, path: u.pathname,
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) }
+      }, res => {
+        let d = '';
+        res.on('data', c => d += c);
+        res.on('end', () => {
+          try {
+            const outer = JSON.parse(d);
+            const raw   = (outer.response || '').replace(/```json|```/g, '').trim();
+            resolve(JSON.parse(raw));
+          } catch (_) { resolve({ status: 'ok', confidence: 0, issues: [], description: 'Parse error' }); }
+        });
+      });
+      req.setTimeout(45000, () => { req.destroy(); resolve(null); });
+      req.on('error', () => resolve(null));
+      req.write(body); req.end();
+    } catch (e) { resolve(null); }
+  });
+}
+
+async function _visionScan(name, manual = false) {
+  if (_vScanning.has(name)) return;
+  _vScanning.add(name);
+  try {
+    const st = printerStates[name];
+    if (!manual && !['RUNNING','PAUSE','PAUSED'].includes(st?.gcode_state || '')) return;
+    if (!manual && !_vEnabled) return;
+    if (!manual && _vPerPrint[name]?.enabled === false) return;
+
+    console.log(`[Vision] Scanning ${name}${manual ? ' (manual)' : ''}...`);
+
+    const b64 = _captureFrame(name);
+    if (!b64) {
+      _vResults[name] = { status:'error', confidence:0, issues:[],
+        description:'No frame captured — check RTSP URL or camera connection', timestamp: Date.now() };
+      return;
+    }
+    _vImages[name] = { base64: b64, timestamp: Date.now() };
+
+    const r = await _askOllama(b64, name);
+    if (!r) {
+      _vResults[name] = { status:'error', confidence:0, issues:[],
+        description:'Ollama not responding — run: ollama serve', timestamp: Date.now() };
+      return;
+    }
+
+    const ts = Date.now();
+    _vResults[name] = { ...r, timestamp: ts };
+    _vLog.unshift({ printerName: name, ...r, timestamp: ts });
+    if (_vLog.length > 50) _vLog.length = 50;
+
+    console.log(`[Vision] ${name}: ${r.status} (${Math.round((r.confidence||0)*100)}%) — ${r.description}`);
+
+    // Discord alert when failure/warning exceeds threshold
+    if ((r.status === 'failure' || r.status === 'warning') && (r.confidence || 0) >= _vThreshold) {
+      const emoji  = r.status === 'failure' ? '🚨' : '⚠️';
+      const issues = (r.issues || []).join(', ') || r.description || '';
+      sendDiscordAlert(
+        `${emoji} **AI Vision — ${r.status === 'failure' ? 'Failure' : 'Warning'} on ${name}**\n` +
+        `${issues}\nConfidence: ${Math.round((r.confidence || 0) * 100)}%`
+      );
+    }
+  } finally {
+    _vScanning.delete(name);
+  }
+}
+
+let _vTimer = null;
+function _scheduleVision() {
+  if (_vTimer) clearInterval(_vTimer);
+  const ms = Math.max(1, _vIntervalM) * 60000;
+  _vTimer = setInterval(() => {
+    if (!_vEnabled) return;
+    PRINTERS.forEach(p => _visionScan(p.name).catch(() => {}));
+  }, ms);
+  console.log(`[Vision] auto-scan every ${_vIntervalM} min`);
+}
+_scheduleVision();
+
+// ── Vision endpoints ──────────────────────────────────────────────────────────
+app.get('/vision/status', (req, res) => res.json({
+  enabled: _vEnabled, intervalMins: _vIntervalM,
+  confidenceThreshold: _vThreshold, ollamaModel: _vModel, ollamaUrl: _vOllamaUrl,
+  perPrinter: _vPerPrint, results: _vResults, log: _vLog.slice(0, 20)
+}));
+
+app.get('/vision/snapshot/:printer', (req, res) => {
+  const img = _vImages[req.params.printer];
+  if (!img) return res.status(404).json({ error: 'No snapshot yet' });
+  res.json({ base64: img.base64, timestamp: img.timestamp });
+});
+
+app.post('/vision/scan', (req, res) => {
+  const { printer } = req.body;
+  if (!printer || !PRINTERS.find(p => p.name === printer))
+    return res.status(400).json({ error: 'Valid printer name required' });
+  _visionScan(printer, true).catch(() => {});
+  res.json({ ok: true, scanning: printer });
+});
+
+app.get('/vision/check', (req, res) => {
+  const ff = (() => { try { return _spawnSync('which',['ffmpeg'],{timeout:2000}).status===0; } catch(_){return false;} })();
+  const ol = (() => {
+    try {
+      const r = _spawnSync('curl',['-s','-o','/dev/null','-w','%{http_code}',`${_vOllamaUrl}/api/tags`],{timeout:3000});
+      return (r.stdout||'').toString().trim() === '200';
+    } catch (_) { return false; }
+  })();
+  res.json({ ffmpeg: ff, ollama: ol, model: _vModel, ollamaUrl: _vOllamaUrl });
+});
+
+app.post('/vision/config', (req, res) => {
+  const { enabled, intervalMins, confidenceThreshold, ollamaModel, ollamaUrl, perPrinter } = req.body;
+  if (enabled             !== undefined) _vEnabled   = !!enabled;
+  if (intervalMins        !== undefined) _vIntervalM = parseFloat(intervalMins) || 5;
+  if (confidenceThreshold !== undefined) _vThreshold = parseFloat(confidenceThreshold) || 0.55;
+  if (ollamaModel         !== undefined) _vModel     = ollamaModel;
+  if (ollamaUrl           !== undefined) _vOllamaUrl = ollamaUrl;
+  if (perPrinter          !== undefined) _vPerPrint  = perPrinter;
+  _saveVisionCfg();
+  _scheduleVision();
+  res.json({ ok: true });
+});
+
 app.listen(PI_PORT, () => console.log(`🚀 LayerDeck Hub on port ${PI_PORT}`));

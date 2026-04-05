@@ -86,6 +86,21 @@ A React + Vite application providing a comprehensive business dashboard and 3MF 
     *   **Printers:** Shows nozzle wear and live Bambu Cloud printer status via `/api/bambu/status`.
 *   **Bambu API Integration:** `/api/bambu/status` in the `api-server` authenticates with Bambu Cloud using environment variables to provide device status.
 
+## Pi Hub (`artifacts/pi-hub/server.js`)
+
+Raspberry Pi Node.js server (pm2: `layerdeck-hub`) with direct Bambu Lab MQTT connections, deployed separately to the Pi.
+
+**Section 28 — AI Print Failure Detection:**
+- `GET /vision/status` — scan results, log (last 20), and config
+- `GET /vision/snapshot/:printer` — latest captured JPEG as base64
+- `POST /vision/scan` — trigger immediate scan (manual)
+- `POST /vision/config` — update enabled, intervalMins, confidenceThreshold, model, perPrinter
+- `GET /vision/check` — verify ffmpeg + Ollama are installed
+- Config persisted to `~/bambu-hub/vision-config.json`
+- RTSP URLs from `rtspUrl` in `printers.json` or env vars `CAMERA_A1_RTSP` / `CAMERA_P1_ROOM_RTSP` / `CAMERA_P1_CLOSET_RTSP`
+- Pi dependencies: `ffmpeg` + Ollama with `llava:latest` (or `llava-phi3`)
+- API server generic proxy: `GET/POST /api/pihub/proxy?hub=<url>&path=<path>`
+
 ## Utility Scripts (`scripts`)
 
 A workspace package containing various TypeScript utility scripts, runnable via `pnpm --filter @workspace/scripts run <script>`. These scripts can import any other workspace package.
