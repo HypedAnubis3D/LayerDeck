@@ -9171,6 +9171,7 @@ function initSupabase(){
           addSyncLog('Signed in as '+currentUser.email,'ok');
           render();
           checkShopifyConfig();
+          syncDiscordFromCloud();
           pullFromCloud(true);
         }else if(event==='TOKEN_REFRESHED'){
           addSyncLog('Session refreshed','ok');
@@ -16307,7 +16308,38 @@ function loadDiscord(){
     });
   }
 }
-function saveDiscord(){ss(KEYS.discord,discordCfg);}
+function saveDiscord(){
+  ss(KEYS.discord,discordCfg);
+  if(supabaseClient&&currentUser){
+    supabaseClient.from('ha3d_user_data').upsert(
+      {user_id:currentUser.id,collection:'discordCfg',payload:JSON.stringify(discordCfg),updated_at:new Date().toISOString()},
+      {onConflict:'user_id,collection'}
+    ).catch(e=>console.warn('[Discord] Cloud save failed:',e));
+  }
+}
+async function syncDiscordFromCloud(){
+  if(!supabaseClient||!currentUser)return;
+  try{
+    const{data}=await supabaseClient.from('ha3d_user_data').select('payload').eq('user_id',currentUser.id).eq('collection','discordCfg').maybeSingle();
+    if(data?.payload){
+      const saved=JSON.parse(data.payload);
+      if(saved&&typeof saved==='object'){
+        discordCfg.channels=saved.channels||discordCfg.channels;
+        discordCfg.routing=saved.routing||discordCfg.routing;
+        discordCfg.piHealthFreq=saved.piHealthFreq||discordCfg.piHealthFreq;
+        // Merge in any new default channels/routing keys not yet in saved config
+        DISCORD_DEFAULT_CHANNELS.forEach(def=>{
+          if(!discordCfg.channels.find(c=>c.key===def.key))discordCfg.channels.push({...def});
+        });
+        Object.keys(DISCORD_DEFAULT_ROUTING).forEach(k=>{
+          if(!discordCfg.routing[k])discordCfg.routing[k]={...DISCORD_DEFAULT_ROUTING[k]};
+        });
+        ss(KEYS.discord,discordCfg);
+        if(typeof renderDiscord==='function')renderDiscord();
+      }
+    }
+  }catch(e){console.warn('[Discord] Cloud load failed:',e);}
+}
 loadDiscord();
 
 async function postToDiscord(alertType,message,imageUrl){
