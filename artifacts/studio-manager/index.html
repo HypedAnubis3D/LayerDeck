@@ -15134,8 +15134,12 @@ async function fetchPiVisionStatus(){
     const r=await fetch('/api/pihub/proxy?hub='+encodeURIComponent(piUrl)+'&path='+encodeURIComponent('/vision/status'),{signal:AbortSignal.timeout(6000)});
     if(!r.ok)return;
     const d=await r.json();
+    const firstLoad=!piVisionData;
     piVisionData=d;
-    if(curTab==='pihub'){ renderPiHub(); _updateVisionBadges(); }
+    if(curTab==='pihub'){
+      if(firstLoad) renderPiHub(); // only full re-render on first load to avoid flicker
+      _updateVisionBadges();
+    }
   }catch(_){}
   finally{_piVisionFetching=false;}
 }
@@ -15176,25 +15180,46 @@ function _fmtAgo(ts){
   return Math.floor(m/60)+'h ago';
 }
 
+// Map app config printer name → Pi Hub actual name (they can differ, e.g. "P1S (Closet)" vs "P1 Closet")
+function _resolvePiPrinterName(appName){
+  const keys=Object.keys(piPrevStates||{});
+  if(!keys.length||keys.includes(appName)) return appName;
+  const norm=s=>s.toLowerCase().replace(/[^a-z0-9]/g,'');
+  const aN=norm(appName);
+  // Exact normalized match
+  const exact=keys.find(k=>norm(k)===aN);
+  if(exact) return exact;
+  // Strip trailing 'S' variant: "P1S Closet" → "P1 Closet"
+  const stripped=norm(appName.replace(/(\d)s\s/gi,'$1 ').replace(/\(|\)/g,''));
+  const soft=keys.find(k=>norm(k)===stripped);
+  if(soft) return soft;
+  // Substring match — Pi name contained in app name (or vice versa)
+  const sub=keys.find(k=>{ const kN=norm(k); return aN.includes(kN)||kN.includes(aN); });
+  if(sub) return sub;
+  return appName;
+}
+
 async function piVisionScan(printerName){
   const piUrl=getPiUrl();
   if(!piUrl){toast('Pi Hub not connected','','error');return;}
   const id=piId(printerName);
   const btn=document.getElementById('vision-scan-btn-'+id);
   if(btn){btn.disabled=true;btn.textContent='🔍 Scanning…';}
+  const piName=_resolvePiPrinterName(printerName);
   try{
     const r=await fetch('/api/pihub/proxy?hub='+encodeURIComponent(piUrl)+'&path='+encodeURIComponent('/vision/scan'),{
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({printer:printerName}),
+      body:JSON.stringify({printer:piName}),
       signal:AbortSignal.timeout(8000)
     });
-    if(!r.ok)throw new Error('HTTP '+r.status);
+    if(!r.ok){
+      const errBody=await r.json().catch(()=>({}));
+      throw new Error(errBody.error||'HTTP '+r.status);
+    }
     toast('AI Scan Started','Analyzing '+printerName+' — results in ~30s','info',4000);
     // Poll vision status after 35s to pick up result
-    setTimeout(()=>fetchPiVisionStatus().then(()=>{
-      if(curTab==='pihub') renderPiHub();
-    }),35000);
+    setTimeout(()=>fetchPiVisionStatus(),35000);
   }catch(e){toast('Scan failed',e.message,'error');}
   finally{if(btn){btn.disabled=false;btn.textContent='🔍 AI Scan';}}
 }
