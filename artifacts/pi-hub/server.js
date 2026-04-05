@@ -574,11 +574,13 @@ app.get('/tapo/devices', async (req, res) => {
       try {
         const device = await _tapoLocalDevice(alias);
         const info   = await device.getDeviceInfo();
+        // tp-link-tapo-connect returns device_on directly (no .result wrapper)
+        const raw = info?.result ?? info ?? {};
         return {
           alias,
           ip,
-          on:       !!info?.result?.device_on,
-          power_mw: info?.result?.current_power ?? null,
+          on:       !!raw.device_on,
+          power_mw: raw.current_power ?? null,
           error:    null,
         };
       } catch (e) {
@@ -597,7 +599,7 @@ app.post('/tapo/power', async (req, res) => {
   }
   try {
     const device = await _tapoLocalDevice(alias);
-    await device.setPowerState(on);
+    if (on) { await device.turnOn(); } else { await device.turnOff(); }
     console.log(`[Tapo] ${alias} → ${on ? 'ON' : 'OFF'}`);
     res.json({ ok: true, alias, on });
   } catch (e) {
