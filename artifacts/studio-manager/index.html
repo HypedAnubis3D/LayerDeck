@@ -14555,10 +14555,13 @@ async function onPiPrintFinished(name,data){
   }):null;
   const startTime=piPrintStartTimes[name]||0;
   const wallDurationMins=startTime?Math.round((Date.now()-startTime)/60000):0;
-  // Fallback chain: wall-clock start → Pi Hub saved duration → 3MF estimate
+  // Fallback chain: wall-clock start → Pi Hub saved duration → 3MF estimate → active queue item hrs
+  const _activeQueueItem=typeof queueItems!=='undefined'?queueItems.find(function(q){return q.stage==='inprogress'&&(!q.printer||q.printer===name);}):null;
+  const _queueFallbackMins=_activeQueueItem&&_activeQueueItem.hrs?Math.round(_activeQueueItem.hrs*60):0;
   const durationMins=wallDurationMins
     ||(data.lastCompletedDurationMins||0)
-    ||((_earlyTmf&&_earlyTmf.hrs)?Math.round(_earlyTmf.hrs*60):0);
+    ||((_earlyTmf&&_earlyTmf.hrs)?Math.round(_earlyTmf.hrs*60):0)
+    ||_queueFallbackMins;
   const gramsUsed=estimatePiFilament(material,durationMins);
 
   // ── Per-slot filament tracking via AMS remain% delta ──────────────────
