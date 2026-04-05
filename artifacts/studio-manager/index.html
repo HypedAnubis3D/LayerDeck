@@ -3832,7 +3832,9 @@ function renderPrints(){
   const g=document.getElementById('prints-grid');
   if(!f.length){g.innerHTML='<div class="empty" style="grid-column:1/-1">No prints yet</div>';return;}
   g.innerHTML=[...f].reverse().map(p=>{
-    const cost=calcCost(p.filaments,p.hrs||0,p.qty||1);
+    // If hrs is missing/0, find a matching completed queue item as display fallback
+    const _dispHrs=p.hrs||(queueItems.find(q=>q.stage==='done'&&q.printer===p.printer&&q.name===p.name&&q.hrs>0)||{}).hrs||0;
+    const cost=calcCost(p.filaments,_dispHrs||0,p.qty||1);
     const chips=(p.filaments||[]).map(f=>{
       const sp=spools.find(s=>s.id===f.spoolId);
       const col=sp?sp.color:'#888';
@@ -3862,7 +3864,7 @@ function renderPrints(){
       <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:5px;margin-bottom:2px">
         <div class="pname">${esc(displayName)}${p.qty>1?' ×'+p.qty:''}</div>${pill}
       </div>
-      <div class="pcat">${esc(displayCategory)} · ${esc(displayPrinter)} · <span class="print-time-display" style="display:inline-flex;font-size:8px;padding:2px 6px">${formatHms(p.hrs||p.printTime)||'—'}</span> · ${d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}${jobNameNote}${(st==='done'||st==='failed')?`<span style="color:var(--txt-d)">${finLabel}</span>`:''}</div>
+      <div class="pcat">${esc(displayCategory)} · ${esc(displayPrinter)} · <span class="print-time-display" style="display:inline-flex;font-size:8px;padding:2px 6px">${formatHms(_dispHrs||p.printTime)||'—'}</span> · ${d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}${jobNameNote}${(st==='done'||st==='failed')?`<span style="color:var(--txt-d)">${finLabel}</span>`:''}</div>
       ${chips?`<div class="pc-colors">${chips}</div>`:''}
       <div class="cost-box">
         <div class="cb-title">Cost Breakdown</div>
@@ -5493,12 +5495,14 @@ function savePrint(){
   const qty=parseInt(document.getElementById('ep-qty').value)||1;
   const selectedTmfId=document.getElementById('ep-tmf-select').value;
   const selectedTmf=tmfLib.find(t=>t.id===selectedTmfId);
+  const existing=id?prints.find(p=>p.id===id):null;
   const print={
+    ...(existing||{}),
     id:id||uid(),name,category:document.getElementById('ep-cat').value,
     printer:document.getElementById('ep-printer').value,hrs,qty,filaments,
     notes:document.getElementById('ep-notes').value.trim(),
-    tmfName:selectedTmf?selectedTmf.name:null,
-    timestamp:id?(prints.find(p=>p.id===id)||{}).timestamp||Date.now():Date.now(),
+    tmfName:selectedTmf?selectedTmf.name:(existing?existing.tmfName:null),
+    timestamp:id?(existing||{}).timestamp||Date.now():Date.now(),
   };
   if(id){prints=prints.map(p=>p.id===id?print:p);}
   else{
@@ -8045,12 +8049,14 @@ function savePrint(){
   const qty=parseInt(document.getElementById('ep-qty').value)||1;
   const selectedTmfId=document.getElementById('ep-tmf-select').value;
   const selectedTmf=tmfLib.find(t=>t.id===selectedTmfId);
+  const existing=id?prints.find(p=>p.id===id):null;
   const print={
+    ...(existing||{}),
     id:id||uid(),name,category:document.getElementById('ep-cat').value,
     printer:document.getElementById('ep-printer').value,hrs,qty,filaments,
     notes:document.getElementById('ep-notes').value.trim(),
-    tmfName:selectedTmf?selectedTmf.name:null,
-    timestamp:id?(prints.find(p=>p.id===id)||{}).timestamp||Date.now():Date.now(),
+    tmfName:selectedTmf?selectedTmf.name:(existing?existing.tmfName:null),
+    timestamp:id?(existing||{}).timestamp||Date.now():Date.now(),
   };
   if(id){prints=prints.map(p=>p.id===id?print:p);}
   else{
