@@ -14296,6 +14296,7 @@ let piLiveData={};      // {printerName: {...mqttFields}}
 let piVisionData=null;  // latest from /vision/status — { enabled, results, log, ... }
 let _piVisionFetching=false;
 let piPrevStates={};    // for state transition detection — persisted to survive page refresh
+let piActualPrinterNames=[];  // actual printer names from Pi Hub status keys (may differ from app config names)
 // Restore compact state snapshot (gcode_state + hms only) from localStorage to prevent re-firing alerts on reload
 try{var _s=localStorage.getItem('piPrevStateKeys');if(_s){var _r=JSON.parse(_s)||{};Object.keys(_r).forEach(function(k){piPrevStates[k]=_r[k];});}}catch(e){}
 // Restore HMS dedup timestamps so the 5-min dedupe window survives page reloads
@@ -15031,6 +15032,9 @@ async function fetchPiStatus(){
     const data=await res.json();
     const now=Date.now();
 
+    // Capture Pi's actual printer name keys for scan name resolution
+    piActualPrinterNames=Object.keys(data).filter(k=>typeof data[k]==='object'&&data[k]!==null);
+
     // Success — reset backoff and reschedule at fast interval
     if(piConsecutiveFails>0){
       piConsecutiveFails=0;
@@ -15182,18 +15186,19 @@ function _fmtAgo(ts){
 
 // Map app config printer name → Pi Hub actual name (they can differ, e.g. "P1S (Closet)" vs "P1 Closet")
 function _resolvePiPrinterName(appName){
-  const keys=Object.keys(piPrevStates||{});
+  // piActualPrinterNames holds the real keys from the Pi's /status response
+  const keys=piActualPrinterNames.length?piActualPrinterNames:Object.keys(piPrevStates||{});
   if(!keys.length||keys.includes(appName)) return appName;
   const norm=s=>s.toLowerCase().replace(/[^a-z0-9]/g,'');
   const aN=norm(appName);
-  // Exact normalized match
+  // Exact normalized match (e.g. "P1 Closet" vs "p1closet")
   const exact=keys.find(k=>norm(k)===aN);
   if(exact) return exact;
-  // Strip trailing 'S' variant: "P1S Closet" → "P1 Closet"
-  const stripped=norm(appName.replace(/(\d)s\s/gi,'$1 ').replace(/\(|\)/g,''));
+  // Strip 'S' model suffix + parens: "P1S (Closet)" → "p1closet"
+  const stripped=norm(appName.replace(/(\d)s[\s(]/gi,'$1 ').replace(/\(|\)/g,''));
   const soft=keys.find(k=>norm(k)===stripped);
   if(soft) return soft;
-  // Substring match — Pi name contained in app name (or vice versa)
+  // Substring match
   const sub=keys.find(k=>{ const kN=norm(k); return aN.includes(kN)||kN.includes(aN); });
   if(sub) return sub;
   return appName;
