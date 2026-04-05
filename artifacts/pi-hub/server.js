@@ -58,21 +58,25 @@ const printerClients = {};
 const _printerPrevGcodeState = {};
 
 // ── Discord alert helpers ──────────────────────────────────────────────────────
-// Webhook URL loaded from config.json (discordWebhookPrintAlerts) or env var.
+// Print alerts (completed/failed) — loaded from config.json or env var.
 let DISCORD_ALERTS_URL = process.env.DISCORD_WEBHOOK_PRINT_ALERTS || '';
+// Printer connectivity/status alerts (unreachable, back online, MQTT errors).
+// Falls back to DISCORD_ALERTS_URL if the dedicated status webhook is not set.
+let DISCORD_STATUS_URL = process.env.DISCORD_WEBHOOK_PRINTER_STATUS || '';
 const configPath = path.join(__dirname, 'config.json');
 if (fs.existsSync(configPath)) {
   try {
     const cfg = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-    if (cfg.discordWebhookPrintAlerts) DISCORD_ALERTS_URL = cfg.discordWebhookPrintAlerts;
+    if (cfg.discordWebhookPrintAlerts)   DISCORD_ALERTS_URL = cfg.discordWebhookPrintAlerts;
+    if (cfg.discordWebhookPrinterStatus) DISCORD_STATUS_URL = cfg.discordWebhookPrinterStatus;
   } catch (e) { /* ignore */ }
 }
 
-function sendDiscordAlert(content) {
-  if (!DISCORD_ALERTS_URL) return;
+function _postDiscord(webhookUrl, content) {
+  if (!webhookUrl) return;
   try {
     const body = JSON.stringify({ content });
-    const url  = new URL(DISCORD_ALERTS_URL);
+    const url  = new URL(webhookUrl);
     const req  = https.request({
       hostname: url.hostname,
       path:     url.pathname + url.search,
@@ -83,6 +87,14 @@ function sendDiscordAlert(content) {
     req.write(body);
     req.end();
   } catch (e) { /* silent */ }
+}
+
+function sendDiscordAlert(content) {
+  _postDiscord(DISCORD_ALERTS_URL, content);
+}
+
+function sendDiscordStatus(content) {
+  _postDiscord(DISCORD_STATUS_URL || DISCORD_ALERTS_URL, content);
 }
 
 // Debounce: at most one MQTT error alert per printer per 5 minutes for real errors
@@ -103,7 +115,7 @@ function mqttAlert(printerName, content, isOfflineAlert) {
     if (_mqttAlertTs[printerName] && now - _mqttAlertTs[printerName] < 5 * 60 * 1000) return;
     _mqttAlertTs[printerName] = now;
   }
-  sendDiscordAlert(content);
+  sendDiscordStatus(content);
   console.warn(content);
 }
 

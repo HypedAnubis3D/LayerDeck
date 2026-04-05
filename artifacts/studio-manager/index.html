@@ -16191,13 +16191,14 @@ function renderDiscord(){
   }).join('');
 
   const routingDefs=[
-    {type:'print_complete',  label:'Print completed',    group:'Print Alerts'},
-    {type:'print_failed',    label:'Print failed',        group:'Print Alerts'},
-    {type:'new_order',       label:'New Shopify order',   group:'Orders'},
-    {type:'convention_sale', label:'Convention sale',     group:'Orders'},
-    {type:'low_stock',       label:'Product low stock',   group:'Stock & Filament'},
-    {type:'low_spool',       label:'Spool running low',   group:'Stock & Filament'},
-    {type:'daily_report',    label:'Nightly report',      group:'Daily Summary'},
+    {type:'print_complete',    label:'Print completed',          group:'Print Alerts'},
+    {type:'print_failed',      label:'Print failed',              group:'Print Alerts'},
+    {type:'printer_status',    label:'Printer connection status', group:'Print Alerts'},
+    {type:'new_order',         label:'New Shopify order',         group:'Orders'},
+    {type:'convention_sale',   label:'Convention sale',           group:'Orders'},
+    {type:'low_stock',         label:'Product low stock',         group:'Stock & Filament'},
+    {type:'low_spool',         label:'Spool running low',         group:'Stock & Filament'},
+    {type:'daily_report',      label:'Nightly report',            group:'Daily Summary'},
   ];
 
   const routingRows=routingDefs.map(function(def){
@@ -16271,6 +16272,7 @@ async function sendDailyReportNow(){
 Object.assign(KEYS,{discord:'ha3d_discord_v1'});
 const DISCORD_DEFAULT_CHANNELS=[
   {key:'print-alerts',    name:'#print-alerts',      desc:'Print finish/fail notifications',    url:'',enabled:true},
+  {key:'printer-status',  name:'#printer-status',    desc:'Printer connectivity alerts (unreachable, back online, MQTT errors)', url:'',enabled:true},
   {key:'orders',          name:'#orders',             desc:'New Shopify and Square order alerts', url:'',enabled:true},
   {key:'stock-alerts',    name:'#stock-alerts',       desc:'Low stock & spool alerts',           url:'',enabled:true},
   {key:'daily-report',    name:'#daily-report',       desc:'Daily summary at 6AM Eastern (server-side — no tab needed)', url:'',enabled:true},
@@ -16283,6 +16285,7 @@ const DISCORD_DEFAULT_CHANNELS=[
 const DISCORD_DEFAULT_ROUTING={
   print_complete:  {enabled:true,channel:'print-alerts'},
   print_failed:    {enabled:true,channel:'print-alerts'},
+  printer_status:  {enabled:true,channel:'printer-status'},
   new_order:       {enabled:true,channel:'orders'},
   convention_sale: {enabled:true,channel:'convention-sales'},
   low_stock:       {enabled:true,channel:'stock-alerts'},
@@ -16298,6 +16301,9 @@ function loadDiscord(){
     discordCfg.piHealthFreq=stored.piHealthFreq||'5';
     DISCORD_DEFAULT_CHANNELS.forEach(def=>{
       if(!discordCfg.channels.find(c=>c.key===def.key))discordCfg.channels.push({...def});
+    });
+    Object.keys(DISCORD_DEFAULT_ROUTING).forEach(k=>{
+      if(!discordCfg.routing[k])discordCfg.routing[k]={...DISCORD_DEFAULT_ROUTING[k]};
     });
   }
 }
