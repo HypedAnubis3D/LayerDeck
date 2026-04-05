@@ -63,12 +63,16 @@ let DISCORD_ALERTS_URL = process.env.DISCORD_WEBHOOK_PRINT_ALERTS || '';
 // Printer connectivity/status alerts (unreachable, back online, MQTT errors).
 // Falls back to DISCORD_ALERTS_URL if the dedicated status webhook is not set.
 let DISCORD_STATUS_URL = process.env.DISCORD_WEBHOOK_PRINTER_STATUS || '';
+// Dedicated AI vision watch channel — receives failure/warning alerts from AI scans.
+// Falls back to DISCORD_ALERTS_URL if not set. Set DISCORD_WEBHOOK_PRINT_WATCH in env or config.json.
+let DISCORD_WATCH_URL = process.env.DISCORD_WEBHOOK_PRINT_WATCH || '';
 const configPath = path.join(__dirname, 'config.json');
 if (fs.existsSync(configPath)) {
   try {
     const cfg = JSON.parse(fs.readFileSync(configPath, 'utf8'));
     if (cfg.discordWebhookPrintAlerts)   DISCORD_ALERTS_URL = cfg.discordWebhookPrintAlerts;
     if (cfg.discordWebhookPrinterStatus) DISCORD_STATUS_URL = cfg.discordWebhookPrinterStatus;
+    if (cfg.discordWebhookPrintWatch)    DISCORD_WATCH_URL  = cfg.discordWebhookPrintWatch;
   } catch (e) { /* ignore */ }
 }
 
@@ -91,6 +95,11 @@ function _postDiscord(webhookUrl, content) {
 
 function sendDiscordAlert(content) {
   _postDiscord(DISCORD_ALERTS_URL, content);
+}
+
+function sendDiscordWatch(content) {
+  // AI vision alerts go to the dedicated PRINT_WATCH channel (falls back to PRINT_ALERTS)
+  _postDiscord(DISCORD_WATCH_URL || DISCORD_ALERTS_URL, content);
 }
 
 function sendDiscordStatus(content) {
@@ -278,6 +287,8 @@ PRINTERS.forEach(printer => {
         if (gcodeState === 'RUNNING' && !printerStates[printer.name].printStartTime) {
           printerStates[printer.name].printStartTime = Date.now();
           printerStates[printer.name].lastCompletedDurationMins = null; // clear stale
+          // Clear visual-offline flag — MQTT confirms print is active again
+          _vVisuallyOffline.delete(printer.name);
         }
         // When print ends: save duration BEFORE clearing start time so the app
         // can retrieve it on the next poll (avoids "Duration: —" when app missed RUNNING)
@@ -652,10 +663,22 @@ function _saveVisionCfg() {
 }
 
 // ── Vision state ──────────────────────────────────────────────────────────────
-const _vResults  = {}; // { printerName: { status, confidence, issues, description, timestamp } }
-const _vImages   = {}; // { printerName: { base64, timestamp } }
-const _vLog      = []; // [{ printerName, status, confidence, description, timestamp }] — last 50
-const _vScanning = new Set();
+const _vResults        = {}; // { printerName: { status, confidence, issues, description, timestamp } }
+const _vImages         = {}; // { printerName: { base64, timestamp } }
+const _vLog            = []; // [{ printerName, status, confidence, description, timestamp, autoPaused }] — last 50
+const _vScanning       = new Set();
+// Printers where AI confirmed no active print (dark/empty view) — skip auto-scans until MQTT says RUNNING again
+const _vVisuallyOffline = new Set();
+
+// Keywords suggesting no print in progress (printer off, empty plate, dark image)
+const _V_OFFLINE_KEYWORDS = ['empty','no print','no filament','blank','dark','idle','powered off',
+  'no active','not printing','off','nothing','no object','printer is off','black image',
+  'no 3d print','cannot see','no visible'];
+
+function _isVisuallyOff(description = '', issues = []) {
+  const text = (description + ' ' + issues.join(' ')).toLowerCase();
+  return _V_OFFLINE_KEYWORDS.some(kw => text.includes(kw));
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function _getRtspUrl(name) {
@@ -731,43 +754,88 @@ async function _visionScan(name, manual = false) {
   _vScanning.add(name);
   try {
     const st = printerStates[name];
-    if (!manual && !['RUNNING','PAUSE','PAUSED'].includes(st?.gcode_state || '')) return;
-    if (!manual && !_vEnabled) return;
-    if (!manual && _vPerPrint[name]?.enabled === false) return;
+
+    // Auto-scan guards (manual scans always proceed)
+    if (!manual) {
+      if (!_vEnabled) return;
+      if (_vPerPrint[name]?.enabled === false) return;
+      if (!['RUNNING','PAUSE','PAUSED'].includes(st?.gcode_state || '')) return;
+      // Skip if AI previously confirmed no active print — wait for MQTT to confirm RUNNING
+      if (_vVisuallyOffline.has(name)) {
+        console.log(`[Vision] Skipping ${name} — visually confirmed no active print`);
+        return;
+      }
+    }
 
     console.log(`[Vision] Scanning ${name}${manual ? ' (manual)' : ''}...`);
 
     const b64 = _captureFrame(name);
     if (!b64) {
-      _vResults[name] = { status:'error', confidence:0, issues:[],
+      const entry = { status:'error', confidence:0, issues:[],
         description:'No frame captured — check RTSP URL or camera connection', timestamp: Date.now() };
+      _vResults[name] = entry;
+      _vLog.unshift({ printerName: name, ...entry });
+      if (_vLog.length > 50) _vLog.length = 50;
       return;
     }
     _vImages[name] = { base64: b64, timestamp: Date.now() };
 
     const r = await _askOllama(b64, name);
     if (!r) {
-      _vResults[name] = { status:'error', confidence:0, issues:[],
-        description:'Ollama not responding — run: ollama serve', timestamp: Date.now() };
+      const entry = { status:'error', confidence:0, issues:[],
+        description:'Ollama not responding — is ollama running?', timestamp: Date.now() };
+      _vResults[name] = entry;
+      _vLog.unshift({ printerName: name, ...entry });
+      if (_vLog.length > 50) _vLog.length = 50;
       return;
     }
 
     const ts = Date.now();
-    _vResults[name] = { ...r, timestamp: ts };
-    _vLog.unshift({ printerName: name, ...r, timestamp: ts });
-    if (_vLog.length > 50) _vLog.length = 50;
+    const st2 = printerStates[name];
+    const jobName = (st2?.subtask_name || '').replace(/\.gcode\.3mf$/i,'').replace(/\.3mf$/i,'') || 'Unknown job';
+    const pct = st2?.mc_percent || 0;
 
-    console.log(`[Vision] ${name}: ${r.status} (${Math.round((r.confidence||0)*100)}%) — ${r.description}`);
+    // Detect if AI sees no active print (dark/empty camera view)
+    if (_isVisuallyOff(r.description, r.issues)) {
+      _vVisuallyOffline.add(name);
+      console.log(`[Vision] ${name}: visually offline/empty — auto-scans paused until MQTT confirms RUNNING`);
+    } else {
+      _vVisuallyOffline.delete(name);
+    }
 
-    // Discord alert when failure/warning exceeds threshold
-    if ((r.status === 'failure' || r.status === 'warning') && (r.confidence || 0) >= _vThreshold) {
-      const emoji  = r.status === 'failure' ? '🚨' : '⚠️';
+    let autoPaused = false;
+
+    // Auto-pause + Discord alert for confirmed failures
+    if (r.status === 'failure' && (r.confidence || 0) >= _vThreshold) {
+      const pc = printerClients[name];
+      if (pc && st2?.gcode_state === 'RUNNING') {
+        pc.client.publish(pc.REQUEST_TOPIC, JSON.stringify({ print: { sequence_id: '0', command: 'pause' } }));
+        autoPaused = true;
+        console.log(`[Vision] Auto-paused ${name} due to confirmed failure`);
+      }
       const issues = (r.issues || []).join(', ') || r.description || '';
-      sendDiscordAlert(
-        `${emoji} **AI Vision — ${r.status === 'failure' ? 'Failure' : 'Warning'} on ${name}**\n` +
-        `${issues}\nConfidence: ${Math.round((r.confidence || 0) * 100)}%`
+      sendDiscordWatch(
+        `🚨 **AI Vision — FAILURE detected on ${name}**\n` +
+        `📄 Job: ${jobName} · ${pct}% complete\n` +
+        `🔍 ${issues}\n` +
+        `Confidence: ${Math.round((r.confidence || 0) * 100)}%` +
+        (autoPaused ? '\n⏸ **Print has been automatically paused.**' : '')
+      );
+    } else if (r.status === 'warning' && (r.confidence || 0) >= _vThreshold) {
+      const issues = (r.issues || []).join(', ') || r.description || '';
+      sendDiscordWatch(
+        `⚠️ **AI Vision — WARNING on ${name}**\n` +
+        `📄 Job: ${jobName} · ${pct}% complete\n` +
+        `🔍 ${issues}\n` +
+        `Confidence: ${Math.round((r.confidence || 0) * 100)}%`
       );
     }
+
+    _vResults[name] = { ...r, timestamp: ts, autoPaused };
+    _vLog.unshift({ printerName: name, ...r, timestamp: ts, autoPaused });
+    if (_vLog.length > 50) _vLog.length = 50;
+
+    console.log(`[Vision] ${name}: ${r.status} (${Math.round((r.confidence||0)*100)}%) — ${r.description}${autoPaused ? ' [AUTO-PAUSED]' : ''}`);
   } finally {
     _vScanning.delete(name);
   }
@@ -789,7 +857,8 @@ _scheduleVision();
 app.get('/vision/status', (req, res) => res.json({
   enabled: _vEnabled, intervalMins: _vIntervalM,
   confidenceThreshold: _vThreshold, ollamaModel: _vModel, ollamaUrl: _vOllamaUrl,
-  perPrinter: _vPerPrint, results: _vResults, log: _vLog.slice(0, 20)
+  perPrinter: _vPerPrint, results: _vResults, log: _vLog.slice(0, 20),
+  visuallyOffline: [..._vVisuallyOffline]
 }));
 
 app.get('/vision/snapshot/:printer', (req, res) => {

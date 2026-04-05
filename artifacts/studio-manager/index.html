@@ -15150,8 +15150,10 @@ async function fetchPiVisionStatus(){
 
 function _updateVisionBadges(){
   if(!piVisionData||!piVisionData.results)return;
-  Object.entries(piVisionData.results).forEach(([name,r])=>{
-    const id=piId(name);
+  Object.entries(piVisionData.results).forEach(([piName,r])=>{
+    // Results are keyed by Pi printer name; DOM badges use app config printer name
+    const appPrinter=(piHubConfig?.printers||[]).find(p=>_resolvePiPrinterName(p.name)===piName)||{name:piName};
+    const id=piId(appPrinter.name);
     const badge=document.getElementById('vision-badge-'+id);
     if(!badge)return;
     badge.innerHTML=_visionBadgeHtml(r);
@@ -16447,16 +16449,20 @@ function renderPiHub(){
             '<div style="font-size:6px;color:var(--txt-d);letter-spacing:1px;margin-bottom:6px">LATEST RESULTS</div>'+
             '<div style="display:grid;gap:4px">'+
             (piHubConfig.printers||[]).map(p=>{
-              const r=vd.results[p.name];
+              const piKey=_resolvePiPrinterName(p.name);
+              const r=vd.results[piKey]||vd.results[p.name];
               if(!r)return '';
               const s=r.status||'error';
-              return '<div style="display:flex;align-items:center;gap:6px;border:1px solid var(--bdr);border-radius:4px;padding:5px 8px">'+
-                '<span style="font-size:8px">'+STATUS_ICON[s]+'</span>'+
-                '<span style="font-size:8px;font-weight:700;color:var(--txt-b);flex:1">'+esc(p.name)+'</span>'+
-                '<span style="font-size:7px;color:'+(STATUS_COL[s]||'var(--txt-d)')+'">'+s.toUpperCase()+'</span>'+
-                (r.confidence?'<span style="font-size:7px;color:var(--txt-d)">'+Math.round(r.confidence*100)+'%</span>':'')+
-                (r.timestamp?'<span style="font-size:6.5px;color:var(--txt-d)">'+_fmtAgo(r.timestamp)+'</span>':'')+
-                '<button class="btn btn-ghost btn-xs" onclick="openVisionSnapshot(\''+esc(p.name)+'\')">📷</button>'+
+              return '<div style="border:1px solid var(--bdr);border-radius:4px;padding:5px 8px;margin-bottom:2px">'+
+                '<div style="display:flex;align-items:center;gap:6px">'+
+                  '<span style="font-size:8px">'+STATUS_ICON[s]+'</span>'+
+                  '<span style="font-size:8px;font-weight:700;color:var(--txt-b);flex:1">'+esc(p.name)+'</span>'+
+                  '<span style="font-size:7px;color:'+(STATUS_COL[s]||'var(--txt-d)')+'">'+s.toUpperCase()+'</span>'+
+                  (r.confidence?'<span style="font-size:7px;color:var(--txt-d)">'+Math.round(r.confidence*100)+'%</span>':'')+
+                  (r.timestamp?'<span style="font-size:6.5px;color:var(--txt-d)">'+_fmtAgo(r.timestamp)+'</span>':'')+
+                  '<button class="btn btn-ghost btn-xs" onclick="openVisionSnapshot(\''+esc(p.name)+'\')">📷</button>'+
+                '</div>'+
+                (r.description?'<div style="font-size:6.5px;color:var(--txt-d);margin-top:3px;line-height:1.4;padding-left:16px">'+esc(r.description)+'</div>':'')+
               '</div>';
             }).filter(Boolean).join('')+
             '</div>'+
@@ -16469,13 +16475,17 @@ function renderPiHub(){
             '<div style="display:grid;gap:2px;max-height:140px;overflow-y:auto">'+
             logItems.map(l=>{
               const s=l.status||'error';
-              return '<div style="display:flex;align-items:center;gap:5px;padding:3px 6px;border-radius:3px;background:rgba(255,255,255,0.03)">'+
-                '<span style="font-size:7px">'+STATUS_ICON[s]+'</span>'+
-                '<span style="font-size:7px;color:var(--txt-d);flex-shrink:0">'+esc(l.printerName)+'</span>'+
-                '<span style="font-size:7px;color:'+(STATUS_COL[s]||'var(--txt-d)')+'">'+s+'</span>'+
-                (l.confidence?'<span style="font-size:6.5px;color:var(--txt-d)">'+Math.round(l.confidence*100)+'%</span>':'')+
-                '<span style="flex:1;font-size:6.5px;color:var(--txt-d);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(l.description||'')+'</span>'+
-                (l.timestamp?'<span style="font-size:6px;color:var(--txt-d);flex-shrink:0">'+_fmtAgo(l.timestamp)+'</span>':'')+
+              return '<div style="padding:3px 6px;border-radius:3px;background:rgba(255,255,255,0.03);margin-bottom:2px">'+
+                '<div style="display:flex;align-items:center;gap:5px">'+
+                  '<span style="font-size:7px">'+STATUS_ICON[s]+'</span>'+
+                  '<span style="font-size:7px;color:var(--txt-d);flex-shrink:0">'+esc(l.printerName)+'</span>'+
+                  '<span style="font-size:7px;color:'+(STATUS_COL[s]||'var(--txt-d)')+'">'+s+'</span>'+
+                  (l.confidence?'<span style="font-size:6.5px;color:var(--txt-d)">'+Math.round(l.confidence*100)+'%</span>':'')+
+                  (l.autoPaused?'<span style="font-size:6px;color:var(--gold);font-weight:700">⏸ PAUSED</span>':'')+
+                  '<span style="flex:1"></span>'+
+                  (l.timestamp?'<span style="font-size:6px;color:var(--txt-d);flex-shrink:0">'+_fmtAgo(l.timestamp)+'</span>':'')+
+                '</div>'+
+                (l.description?'<div style="font-size:6px;color:var(--txt-d);margin-top:1px;padding-left:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(l.description)+'</div>':'')+
               '</div>';
             }).join('')+
             '</div>'+
