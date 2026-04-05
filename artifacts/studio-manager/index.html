@@ -15135,7 +15135,7 @@ async function fetchPiVisionStatus(){
     if(!r.ok)return;
     const d=await r.json();
     piVisionData=d;
-    if(curTab==='pihub') _updateVisionBadges();
+    if(curTab==='pihub'){ renderPiHub(); _updateVisionBadges(); }
   }catch(_){}
   finally{_piVisionFetching=false;}
 }
@@ -16375,10 +16375,8 @@ function renderPiHub(){
             (getCameraUrl(p.name)?'<button class="btn btn-ghost btn-xs" onclick="openCameraFeed(\''+esc(p.name)+'\')">📷 Camera</button>':'')+
             '<button class="btn btn-ghost btn-xs" style="color:var(--cyn-b)" onclick="piLightToggle(\''+esc(p.name)+'\')">💡 Light</button>'+
             '<button class="btn btn-ghost btn-xs" style="color:var(--gold-b)" onclick="piCalibrateMenu(\''+esc(p.name)+'\')">🔧 Calibrate</button>'+
-            (vEnabled?
-              '<button id="vision-scan-btn-'+id+'" class="btn btn-ghost btn-xs" style="color:var(--cyn)" onclick="piVisionScan(\''+esc(p.name)+'\')">🔍 AI Scan</button>'+
-              (vRes?'<button class="btn btn-ghost btn-xs" style="color:var(--txt-d)" onclick="openVisionSnapshot(\''+esc(p.name)+'\')">📷 Snapshot</button>':'')
-            :'')+
+            '<button id="vision-scan-btn-'+id+'" class="btn btn-ghost btn-xs" style="color:var(--cyn)" onclick="piVisionScan(\''+esc(p.name)+'\')">🔍 AI Scan</button>'+
+            (vRes?'<button class="btn btn-ghost btn-xs" style="color:var(--txt-d)" onclick="openVisionSnapshot(\''+esc(p.name)+'\')">📷 Snapshot</button>':'')+
           '</div>'+
           _renderPrinterTapoSection(p.name)+
         '</div>';
