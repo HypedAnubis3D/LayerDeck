@@ -702,10 +702,13 @@ function _captureFrame(name) {
   const out = `/tmp/ld_vs_${name.replace(/[^a-z0-9]/gi, '_')}.jpg`;
   try {
     _spawnSync('ffmpeg', [
-      '-rtsp_transport', 'tcp', '-i', url,
+      '-rtsp_transport', 'tcp',
+      '-allowed_media_types', 'video',
+      '-stimeout', '8000000',
+      '-i', url,
       '-frames:v', '1', '-q:v', '4', '-vf', 'scale=640:-1',
       '-y', out
-    ], { timeout: 12000 });
+    ], { timeout: 15000 });
     if (!fs.existsSync(out)) return null;
     const b64 = fs.readFileSync(out).toString('base64');
     try { fs.unlinkSync(out); } catch (_) {}
