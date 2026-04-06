@@ -15374,7 +15374,7 @@ function openVisionSnapshot(printerName){
 function openVisionSettings(){
   const piUrl=getPiUrl();
   if(!piUrl){toast('Pi Hub not connected','','error');return;}
-  const cfg=piVisionData||{enabled:true,intervalMins:5,confidenceThreshold:0.55,ollamaModel:'llava:latest',ollamaUrl:'http://localhost:11434',perPrinter:{}};
+  const cfg=piVisionData||{enabled:true,intervalMins:5,confidenceThreshold:0.55,perPrinter:{}};
   const printers=(piHubConfig&&piHubConfig.printers)||[];
 
   const modal=document.createElement('div');
@@ -15416,17 +15416,9 @@ function openVisionSettings(){
       '<input type="range" id="vision-cfg-threshold" min="30" max="95" step="5" value="'+Math.round((cfg.confidenceThreshold||0.55)*100)+'" style="width:100%" oninput="document.getElementById(\'vision-threshold-lbl\').textContent=this.value+\'%\'"/>'+
       '<div style="font-size:7px;color:var(--txt-d);margin-top:2px">Only send Discord alerts when model confidence is above this level</div>'+
     '</div>'+
-    // Model + Ollama URL
-    '<div style="display:grid;gap:6px;margin-bottom:10px">'+
-      '<div>'+
-        '<div style="font-size:7px;color:var(--txt-d);letter-spacing:1px;margin-bottom:3px">OLLAMA MODEL</div>'+
-        '<input id="vision-cfg-model" class="srch" value="'+esc(cfg.ollamaModel||'llava:latest')+'" placeholder="llava:latest" style="font-size:8px"/>'+
-        '<div style="font-size:7px;color:var(--txt-d);margin-top:2px">llava-phi3 is faster/smaller (~2.9 GB)</div>'+
-      '</div>'+
-      '<div>'+
-        '<div style="font-size:7px;color:var(--txt-d);letter-spacing:1px;margin-bottom:3px">OLLAMA URL</div>'+
-        '<input id="vision-cfg-url" class="srch" value="'+esc(cfg.ollamaUrl||'http://localhost:11434')+'" placeholder="http://localhost:11434" style="font-size:8px"/>'+
-      '</div>'+
+    '<div style="background:rgba(201,162,39,0.08);border:1px solid rgba(201,162,39,0.2);border-radius:5px;padding:8px;margin-bottom:10px;display:flex;align-items:center;gap:8px">'+
+      '<span style="font-size:14px">🤖</span>'+
+      '<div><div style="font-size:7px;color:var(--txt-d);letter-spacing:1px">VISION MODEL</div><div style="font-size:8px;color:var(--gold-b);margin-top:1px">Claude Haiku (Anthropic)</div></div>'+
     '</div>'+
     // Per-printer toggles
     (printers.length?
@@ -15462,8 +15454,8 @@ async function checkVisionDeps(){
     const r=await fetch('/api/pihub/proxy?hub='+encodeURIComponent(piUrl)+'&path='+encodeURIComponent('/vision/check'),{signal:AbortSignal.timeout(8000)});
     const d=await r.json();
     if(res)res.innerHTML=
-      '<span style="color:'+(d.ffmpeg?'var(--grn)':'var(--red-b)')+'">'+( d.ffmpeg?'✅':'❌')+' ffmpeg</span> &nbsp;'+
-      '<span style="color:'+(d.ollama?'var(--grn)':'var(--red-b)')+'">'+( d.ollama?'✅':'❌')+' Ollama ('+esc(d.model)+')</span>';
+      '<span style="color:'+(d.ffmpeg?'var(--grn)':'var(--gold)')+'">'+( d.ffmpeg?'✅':'⚠️')+' ffmpeg</span> &nbsp;'+
+      '<span style="color:var(--grn)">✅ Claude Haiku</span>';
   }catch(e){
     if(res)res.innerHTML='<span style="color:var(--red-b)">❌ Pi Hub unreachable</span>';
   }finally{if(btn)btn.disabled=false;}
@@ -15475,8 +15467,6 @@ async function saveVisionSettings(btnEl){
   const enabled=document.getElementById('vision-cfg-enabled')?.checked!==false;
   const intervalMins=parseFloat(document.getElementById('vision-cfg-interval')?.value)||5;
   const confidenceThreshold=(parseFloat(document.getElementById('vision-cfg-threshold')?.value)||55)/100;
-  const ollamaModel=document.getElementById('vision-cfg-model')?.value.trim()||'llava:latest';
-  const ollamaUrl=document.getElementById('vision-cfg-url')?.value.trim()||'http://localhost:11434';
   const perPrinter={};
   document.querySelectorAll('.vision-pp-check').forEach(cb=>{
     const name=cb.dataset.printer;
@@ -15487,7 +15477,7 @@ async function saveVisionSettings(btnEl){
     const r=await fetch('/api/pihub/proxy?hub='+encodeURIComponent(piUrl)+'&path='+encodeURIComponent('/vision/config'),{
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({enabled,intervalMins,confidenceThreshold,ollamaModel,ollamaUrl,perPrinter}),
+      body:JSON.stringify({enabled,intervalMins,confidenceThreshold,perPrinter}),
       signal:AbortSignal.timeout(8000)
     });
     if(!r.ok)throw new Error('HTTP '+r.status);
@@ -16517,7 +16507,7 @@ function renderPiHub(){
       const vd=piVisionData;
       const vStatus=vd&&vd.enabled!==false?'Active':'Disabled';
       const vInterval=vd?vd.intervalMins+'m':'5m';
-      const vModel=vd?esc(vd.ollamaModel||'claude-haiku'):'claude-haiku';
+      const vModel=vd?esc(vd.model||'claude-haiku'):'claude-haiku';
       const logItems=(vd&&vd.log)||[];
       const STATUS_COL={ok:'var(--grn)',warning:'var(--gold)',failure:'var(--red-b)',error:'var(--txt-d)'};
       const STATUS_ICON={ok:'✅',warning:'⚠️',failure:'🚨',error:'❓'};

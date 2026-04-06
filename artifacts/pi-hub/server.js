@@ -653,7 +653,7 @@ const http_node = require('http');
 let _vEnabled   = true;
 let _vIntervalM = 5;       // minutes between auto-scans
 let _vThreshold = 0.55;    // min confidence to send Discord alert
-let _vModel     = 'claude-haiku';
+const _vModel   = 'claude-haiku'; // always Claude Haiku — not user-configurable
 let _vPerPrint  = {};      // { printerName: { enabled: bool } }
 
 // Anthropic API key — read from config.json or ANTHROPIC_API_KEY env var
@@ -667,7 +667,7 @@ const _vCfgPath = path.join(__dirname, 'vision-config.json');
     if (c.enabled             !== undefined) _vEnabled   = !!c.enabled;
     if (c.intervalMins)                      _vIntervalM = parseFloat(c.intervalMins) || 5;
     if (c.confidenceThreshold !== undefined) _vThreshold = parseFloat(c.confidenceThreshold) || 0.55;
-    if (c.ollamaModel)                       _vModel     = c.ollamaModel;
+    // ollamaModel intentionally ignored — model is always claude-haiku
     if (c.perPrinter)                        _vPerPrint  = c.perPrinter;
   } catch (_) {}
 })();
@@ -684,7 +684,7 @@ function _saveVisionCfg() {
   try {
     fs.writeFileSync(_vCfgPath, JSON.stringify({
       enabled: _vEnabled, intervalMins: _vIntervalM,
-      confidenceThreshold: _vThreshold, ollamaModel: _vModel,
+      confidenceThreshold: _vThreshold,
       perPrinter: _vPerPrint
     }, null, 2));
   } catch (_) {}
@@ -968,7 +968,7 @@ _scheduleVision();
 // ── Vision endpoints ──────────────────────────────────────────────────────────
 app.get('/vision/status', (req, res) => res.json({
   enabled: _vEnabled, intervalMins: _vIntervalM,
-  confidenceThreshold: _vThreshold, ollamaModel: _vModel, ollamaUrl: _vOllamaUrl,
+  confidenceThreshold: _vThreshold, model: _vModel,
   perPrinter: _vPerPrint, results: _vResults, log: _vLog.slice(0, 20),
   visuallyOffline: [..._vVisuallyOffline]
 }));
@@ -999,12 +999,10 @@ app.get('/vision/check', (req, res) => {
 });
 
 app.post('/vision/config', (req, res) => {
-  const { enabled, intervalMins, confidenceThreshold, ollamaModel, ollamaUrl, perPrinter } = req.body;
+  const { enabled, intervalMins, confidenceThreshold, perPrinter } = req.body;
   if (enabled             !== undefined) _vEnabled   = !!enabled;
   if (intervalMins        !== undefined) _vIntervalM = parseFloat(intervalMins) || 5;
   if (confidenceThreshold !== undefined) _vThreshold = parseFloat(confidenceThreshold) || 0.55;
-  if (ollamaModel         !== undefined) _vModel     = ollamaModel;
-  if (ollamaUrl           !== undefined) _vOllamaUrl = ollamaUrl;
   if (perPrinter          !== undefined) _vPerPrint  = perPrinter;
   _saveVisionCfg();
   _scheduleVision();
