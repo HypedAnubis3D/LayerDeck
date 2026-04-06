@@ -102,6 +102,35 @@ function sendDiscordWatch(content) {
   _postDiscord(DISCORD_WATCH_URL || DISCORD_ALERTS_URL, content);
 }
 
+// Send Discord alert with a JPEG image attached (multipart/form-data)
+function sendDiscordWatchWithImage(content, base64Jpeg) {
+  const webhookUrl = DISCORD_WATCH_URL || DISCORD_ALERTS_URL;
+  if (!webhookUrl) return;
+  try {
+    const imgBuf   = Buffer.from(base64Jpeg, 'base64');
+    const boundary = 'LayerDeckVision' + Date.now();
+    const jsonPart = Buffer.from(
+      `--${boundary}\r\nContent-Disposition: form-data; name="payload_json"\r\n\r\n` +
+      JSON.stringify({ content }) + `\r\n`
+    );
+    const filePart = Buffer.from(
+      `--${boundary}\r\nContent-Disposition: form-data; name="files[0]"; filename="snapshot.jpg"\r\nContent-Type: image/jpeg\r\n\r\n`
+    );
+    const tail     = Buffer.from(`\r\n--${boundary}--\r\n`);
+    const body     = Buffer.concat([jsonPart, filePart, imgBuf, tail]);
+    const url      = new URL(webhookUrl);
+    const req      = https.request({
+      hostname: url.hostname,
+      path:     url.pathname + url.search,
+      method:   'POST',
+      headers:  { 'Content-Type': `multipart/form-data; boundary=${boundary}`, 'Content-Length': body.length }
+    }, () => {});
+    req.on('error', () => {});
+    req.write(body);
+    req.end();
+  } catch (e) { /* silent */ }
+}
+
 function sendDiscordStatus(content) {
   _postDiscord(DISCORD_STATUS_URL || DISCORD_ALERTS_URL, content);
 }
@@ -691,8 +720,9 @@ function _saveVisionCfg() {
 }
 
 // ── Vision state ──────────────────────────────────────────────────────────────
-const _vResults        = {}; // { printerName: { status, confidence, issues, description, timestamp } }
-const _vImages         = {}; // { printerName: { base64, timestamp } }
+const _vResults           = {}; // { printerName: { status, confidence, issues, description, timestamp } }
+const _vImages            = {}; // { printerName: { base64, timestamp } }
+const _vConsecFailures    = {}; // consecutive failure count per printer (reset on ok/warning)
 const _vLogPath        = path.join(__dirname, 'vision-log.json');
 const _vLog            = (()=>{ try { if(fs.existsSync(_vLogPath)) return JSON.parse(fs.readFileSync(_vLogPath,'utf8')); } catch(_){} return []; })();
 const _vScanning       = new Set();
@@ -915,31 +945,50 @@ async function _visionScan(name, manual = false) {
     }
 
     let autoPaused = false;
+    const img = _vImages[name];
 
     // Auto-pause + Discord alert for confirmed failures
     if (r.status === 'failure' && (r.confidence || 0) >= _vThreshold) {
+      _vConsecFailures[name] = (_vConsecFailures[name] || 0) + 1;
+      const consecCount = _vConsecFailures[name];
+      // Require 2 consecutive failure detections before auto-pausing (reduces false positives)
       const pc = printerClients[name];
-      if (pc && st2?.gcode_state === 'RUNNING') {
+      if (consecCount >= 2 && pc && st2?.gcode_state === 'RUNNING') {
         pc.client.publish(pc.REQUEST_TOPIC, JSON.stringify({ print: { sequence_id: '0', command: 'pause' } }));
         autoPaused = true;
-        console.log(`[Vision] Auto-paused ${name} due to confirmed failure`);
+        console.log(`[Vision] Auto-paused ${name} — ${consecCount} consecutive failures`);
       }
-      const issues = (r.issues || []).join(', ') || r.description || '';
-      sendDiscordWatch(
+      const issues = (r.issues || []).join('\n• ') || r.description || '';
+      const alertText =
         `🚨 **AI Vision — FAILURE detected on ${name}**\n` +
-        `📄 Job: ${jobName} · ${pct}% complete\n` +
-        `🔍 ${issues}\n` +
-        `Confidence: ${Math.round((r.confidence || 0) * 100)}%` +
-        (autoPaused ? '\n⏸ **Print has been automatically paused.**' : '')
-      );
-    } else if (r.status === 'warning' && (r.confidence || 0) >= _vThreshold) {
-      const issues = (r.issues || []).join(', ') || r.description || '';
-      sendDiscordWatch(
-        `⚠️ **AI Vision — WARNING on ${name}**\n` +
-        `📄 Job: ${jobName} · ${pct}% complete\n` +
-        `🔍 ${issues}\n` +
-        `Confidence: ${Math.round((r.confidence || 0) * 100)}%`
-      );
+        `📄 **Job:** ${jobName} · ${pct}% complete\n` +
+        `📊 **Confidence:** ${Math.round((r.confidence || 0) * 100)}%\n` +
+        `🔍 **Issues:**\n• ${issues}\n` +
+        `📝 **Analysis:** ${r.description || ''}` +
+        (autoPaused ? '\n⏸ **Print has been automatically paused.**' : '') +
+        (consecCount === 1 ? '\n⚠️ *First detection — watching for confirmation before pausing.*' : '');
+      if (img && img.base64) {
+        sendDiscordWatchWithImage(alertText, img.base64);
+      } else {
+        sendDiscordWatch(alertText);
+      }
+    } else {
+      // Reset consecutive failure counter on any non-failure result
+      _vConsecFailures[name] = 0;
+      if (r.status === 'warning' && (r.confidence || 0) >= _vThreshold) {
+        const issues = (r.issues || []).join('\n• ') || r.description || '';
+        const alertText =
+          `⚠️ **AI Vision — WARNING on ${name}**\n` +
+          `📄 **Job:** ${jobName} · ${pct}% complete\n` +
+          `📊 **Confidence:** ${Math.round((r.confidence || 0) * 100)}%\n` +
+          `🔍 **Issues:**\n• ${issues}\n` +
+          `📝 **Analysis:** ${r.description || ''}`;
+        if (img && img.base64) {
+          sendDiscordWatchWithImage(alertText, img.base64);
+        } else {
+          sendDiscordWatch(alertText);
+        }
+      }
     }
 
     _vResults[name] = { ...r, timestamp: ts, autoPaused };

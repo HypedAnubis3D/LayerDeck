@@ -15329,6 +15329,78 @@ async function _openVisionScanResult(printerName){
   }
 }
 
+async function openScanLogEntry(idx){
+  const log=piVisionData&&piVisionData.log;
+  const l=log&&log[idx];
+  if(!l){toast('Log entry not found','','error');return;}
+  const piUrl=getPiUrl();
+  const STATUS_COL={ok:'var(--grn)',warning:'var(--gold)',failure:'var(--red-b)',error:'var(--txt-d)'};
+  const STATUS_ICON={ok:'✅',warning:'⚠️',failure:'🚨',error:'❓'};
+  const s=l.status||'error';
+  const col=STATUS_COL[s]||'var(--txt-d)';
+  const id=piId(l.printerName||'');
+  const existing=document.getElementById('scan-log-modal');
+  if(existing)existing.remove();
+  const modal=document.createElement('div');
+  modal.id='scan-log-modal';
+  modal.style='position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.88);display:flex;align-items:center;justify-content:center;padding:16px';
+  modal.onclick=e=>{if(e.target===modal)modal.remove();};
+  modal.innerHTML=
+    '<div style="background:var(--surf);border:1px solid var(--bdr2);border-radius:12px;padding:18px;max-width:480px;width:100%;max-height:90vh;overflow-y:auto">'+
+      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">'+
+        '<div style="font-family:\'Orbitron\',monospace;font-size:9px;font-weight:700;color:var(--gold-b);letter-spacing:1px">'+
+          STATUS_ICON[s]+' '+esc(l.printerName||'').toUpperCase()+' · '+s.toUpperCase()+
+        '</div>'+
+        '<button class="btn btn-ghost btn-sm" onclick="document.getElementById(\'scan-log-modal\').remove()">✕</button>'+
+      '</div>'+
+      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;padding:8px;background:rgba(255,255,255,0.04);border-radius:6px;border-left:3px solid '+col+'">'+
+        '<div style="flex:1">'+
+          '<div style="font-size:8px;font-weight:700;color:'+col+'">'+s.toUpperCase()+(l.confidence?' · '+Math.round(l.confidence*100)+'% confidence':'')+
+            (l.autoPaused?' · ⏸ Auto-paused':'')+
+          '</div>'+
+          '<div style="font-size:7px;color:var(--txt-d);margin-top:2px">'+(l.timestamp?_fmtAgo(l.timestamp)+' ago':'')+'</div>'+
+        '</div>'+
+      '</div>'+
+      (l.description?
+        '<div style="margin-bottom:10px">'+
+          '<div style="font-size:6px;color:var(--txt-d);letter-spacing:1px;margin-bottom:4px">FULL ANALYSIS</div>'+
+          '<div style="font-size:8px;color:var(--txt-b);line-height:1.6;background:rgba(0,0,0,0.2);border-radius:5px;padding:8px">'+esc(l.description)+'</div>'+
+        '</div>':'')+
+      (l.issues&&l.issues.length?
+        '<div style="margin-bottom:10px">'+
+          '<div style="font-size:6px;color:var(--txt-d);letter-spacing:1px;margin-bottom:4px">DETECTED ISSUES</div>'+
+          l.issues.map(i=>'<div style="font-size:8px;color:var(--red-b);margin-bottom:3px;padding:4px 8px;background:rgba(255,50,50,0.08);border-radius:3px">• '+esc(i)+'</div>').join('')+
+        '</div>':'')+
+      '<div id="scan-log-snap-'+id+'" style="text-align:center;min-height:60px;display:flex;align-items:center;justify-content:center;margin-bottom:12px">'+
+        (piUrl?'<div style="font-size:8px;color:var(--txt-d)">Loading snapshot…</div>':'<div style="font-size:8px;color:var(--txt-d)">Connect Pi Hub to view snapshot</div>')+
+      '</div>'+
+      '<div style="display:flex;gap:6px">'+
+        (l.printerName?'<button class="btn btn-ghost btn-sm" onclick="document.getElementById(\'scan-log-modal\').remove();piVisionScan(\''+esc(l.printerName)+'\')">🔍 Scan Now</button>':'')+
+        '<button class="btn btn-ghost btn-sm" onclick="document.getElementById(\'scan-log-modal\').remove()">Close</button>'+
+      '</div>'+
+    '</div>';
+  document.body.appendChild(modal);
+  if(piUrl&&l.printerName){
+    try{
+      const resp=await fetch('/api/pihub/proxy?hub='+encodeURIComponent(piUrl)+'&path='+encodeURIComponent('/vision/snapshot/'+l.printerName),{signal:AbortSignal.timeout(10000)});
+      if(resp.ok){
+        const d=await resp.json();
+        const imgEl=document.getElementById('scan-log-snap-'+id);
+        if(imgEl&&d.base64){
+          const age=d.timestamp?_fmtAgo(d.timestamp):'';
+          imgEl.innerHTML='<div style="width:100%"><img src="data:image/jpeg;base64,'+d.base64+'" style="max-width:100%;border-radius:6px;border:1px solid var(--bdr)"/><div style="font-size:7px;color:var(--txt-d);margin-top:4px;text-align:center">Latest snapshot — captured '+age+' ago</div></div>';
+        }
+      } else {
+        const imgEl=document.getElementById('scan-log-snap-'+id);
+        if(imgEl)imgEl.innerHTML='<div style="font-size:8px;color:var(--txt-d)">No snapshot stored yet</div>';
+      }
+    }catch(e){
+      const imgEl=document.getElementById('scan-log-snap-'+id);
+      if(imgEl)imgEl.innerHTML='<div style="font-size:8px;color:var(--txt-d)">Snapshot unavailable</div>';
+    }
+  }
+}
+
 function openVisionSnapshot(printerName){
   const piUrl=getPiUrl();
   if(!piUrl){toast('Pi Hub not connected','','error');return;}
@@ -16474,9 +16546,9 @@ function renderPiHub(){
             '<div id="vision-badge-'+id+'">'+(vRes?_visionBadgeHtml(vRes):'')+'</div>'+
           '</div>'+
           '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:4px;margin-bottom:5px">'+
-            '<div><div style="font-size:6px;color:var(--txt-d)">FILE</div><div style="font-size:7px;color:var(--txt-b);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" id="pi-'+id+'-file">—</div></div>'+
-            '<div><div style="font-size:6px;color:var(--txt-d)">PROGRESS</div><div style="font-size:8px;color:var(--grn);font-family:\'Orbitron\',monospace" id="pi-'+id+'-progress">—</div></div>'+
-            '<div><div style="font-size:6px;color:var(--txt-d)">ETA</div><div style="font-size:7px;color:var(--txt-b);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" id="pi-'+id+'-remaining">—</div></div>'+
+            '<div style="min-width:0"><div style="font-size:6px;color:var(--txt-d)">FILE</div><div style="font-size:7px;color:var(--txt-b);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" id="pi-'+id+'-file">—</div></div>'+
+            '<div style="min-width:0"><div style="font-size:6px;color:var(--txt-d)">PROGRESS</div><div style="font-size:8px;color:var(--grn);font-family:\'Orbitron\',monospace" id="pi-'+id+'-progress">—</div></div>'+
+            '<div style="min-width:0"><div style="font-size:6px;color:var(--txt-d)">ETA</div><div style="font-size:7px;color:var(--txt-b);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" id="pi-'+id+'-remaining">—</div></div>'+
           '</div>'+
           '<div style="height:3px;background:rgba(255,255,255,0.06);border-radius:2px;overflow:hidden;margin-bottom:5px">'+
             '<div id="pi-'+id+'-bar" style="height:100%;background:var(--grn);border-radius:2px;width:0%;transition:width 0.5s"></div>'+
@@ -16507,7 +16579,7 @@ function renderPiHub(){
       const vd=piVisionData;
       const vStatus=vd&&vd.enabled!==false?'Active':'Disabled';
       const vInterval=vd?vd.intervalMins+'m':'5m';
-      const vModel=vd?esc(vd.model||'claude-haiku'):'claude-haiku';
+      const vModel='Claude Haiku';
       const logItems=(vd&&vd.log)||[];
       const STATUS_COL={ok:'var(--grn)',warning:'var(--gold)',failure:'var(--red-b)',error:'var(--txt-d)'};
       const STATUS_ICON={ok:'✅',warning:'⚠️',failure:'🚨',error:'❓'};
@@ -16520,9 +16592,9 @@ function renderPiHub(){
         '</div>'+
         (vd?
           '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px">'+
-            '<div><div style="font-size:6px;color:var(--txt-d);letter-spacing:1px">INTERVAL</div><div style="font-size:8px;color:var(--txt-b);margin-top:2px">'+vInterval+'</div></div>'+
-            '<div><div style="font-size:6px;color:var(--txt-d);letter-spacing:1px">MODEL</div><div style="font-size:8px;color:var(--cyn);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+vModel+'</div></div>'+
-            '<div><div style="font-size:6px;color:var(--txt-d);letter-spacing:1px">THRESHOLD</div><div style="font-size:8px;color:var(--txt-b);margin-top:2px">'+Math.round((vd.confidenceThreshold||0.55)*100)+'%</div></div>'+
+            '<div style="min-width:0"><div style="font-size:6px;color:var(--txt-d);letter-spacing:1px">INTERVAL</div><div style="font-size:8px;color:var(--txt-b);margin-top:2px">'+vInterval+'</div></div>'+
+            '<div style="min-width:0"><div style="font-size:6px;color:var(--txt-d);letter-spacing:1px">MODEL</div><div style="font-size:8px;color:var(--cyn);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+vModel+'</div></div>'+
+            '<div style="min-width:0"><div style="font-size:6px;color:var(--txt-d);letter-spacing:1px">THRESHOLD</div><div style="font-size:8px;color:var(--txt-b);margin-top:2px">'+Math.round((vd.confidenceThreshold||0.55)*100)+'%</div></div>'+
           '</div>'
         :
           '<div style="font-size:8px;color:var(--txt-d);margin-bottom:10px;line-height:1.7">'+
@@ -16559,19 +16631,20 @@ function renderPiHub(){
           '<div>'+
             '<div style="font-size:6px;color:var(--txt-d);letter-spacing:1px;margin-bottom:6px">SCAN HISTORY (LAST '+logItems.length+')</div>'+
             '<div style="display:grid;gap:2px;max-height:140px;overflow-y:auto">'+
-            logItems.map(l=>{
+            logItems.map((l,i)=>{
               const s=l.status||'error';
-              return '<div style="padding:3px 6px;border-radius:3px;background:rgba(255,255,255,0.03);margin-bottom:2px;cursor:pointer" onclick="openVisionSnapshot(\''+esc(l.printerName||'')+'\')">'+
+              return '<div style="padding:6px 8px;border-radius:5px;background:rgba(255,255,255,0.03);margin-bottom:3px;cursor:pointer;border:1px solid transparent;active:border-color:var(--bdr2)" onclick="openScanLogEntry('+i+')">'+
                 '<div style="display:flex;align-items:center;gap:5px">'+
-                  '<span style="font-size:7px">'+STATUS_ICON[s]+'</span>'+
-                  '<span style="font-size:7px;color:var(--txt-d);flex-shrink:0">'+esc(l.printerName)+'</span>'+
-                  '<span style="font-size:7px;color:'+(STATUS_COL[s]||'var(--txt-d)')+'">'+s+'</span>'+
+                  '<span style="font-size:9px;flex-shrink:0">'+STATUS_ICON[s]+'</span>'+
+                  '<span style="font-size:7px;color:var(--txt-b);font-weight:600;flex-shrink:0">'+esc(l.printerName)+'</span>'+
+                  '<span style="font-size:7px;color:'+(STATUS_COL[s]||'var(--txt-d)')+';font-weight:700">'+s+'</span>'+
                   (l.confidence?'<span style="font-size:6.5px;color:var(--txt-d)">'+Math.round(l.confidence*100)+'%</span>':'')+
-                  (l.autoPaused?'<span style="font-size:6px;color:var(--gold);font-weight:700">⏸ PAUSED</span>':'')+
+                  (l.autoPaused?'<span style="font-size:6px;color:var(--gold);font-weight:700">⏸</span>':'')+
                   '<span style="flex:1"></span>'+
                   (l.timestamp?'<span style="font-size:6px;color:var(--txt-d);flex-shrink:0">'+_fmtAgo(l.timestamp)+'</span>':'')+
+                  '<span style="font-size:6px;color:var(--txt-d);flex-shrink:0;margin-left:4px">›</span>'+
                 '</div>'+
-                (l.description?'<div style="font-size:6px;color:var(--txt-d);margin-top:1px;padding-left:14px;line-height:1.4">'+esc(l.description)+'</div>':'')+
+                (l.description?'<div style="font-size:6.5px;color:var(--txt-d);margin-top:2px;padding-left:18px;line-height:1.4;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(l.description)+'</div>':'')+
               '</div>';
             }).join('')+
             '</div>'+
