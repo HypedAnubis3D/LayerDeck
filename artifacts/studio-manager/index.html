@@ -16526,54 +16526,50 @@ function renderPiHub(){
       '</div>'+
       '<button class="btn btn-gold btn-sm" onclick="openPiHubSetup()">⚙ Add Public URL Now</button>'+
     '</div>':'') +
-    // Printer live cards (if we have Pi data)
+    // Printer live cards — each printer gets its own full-width printer-card (no extra nesting)
     ((piHubConfig.printers||[]).length>0?
-    '<div class="printer-card">'+
-      '<div style="font-family:\'Orbitron\',monospace;font-size:9px;font-weight:700;color:var(--gold-b);letter-spacing:2px;margin-bottom:8px">PRINTER LIVE STATUS</div>'+
-      '<div style="display:grid;gap:6px">'+
-      (piHubConfig.printers||[]).map(p=>{
-        const id=piId(p.name);
-        const state=piPrevStates[p.name]?.gcode_state||'OFFLINE';
-        const col=STATE_COLORS[state]||STATE_COLORS.OFFLINE;
-        const vRes=piVisionData&&piVisionData.results&&piVisionData.results[p.name];
-        const vEnabled=piVisionData&&piVisionData.enabled!==false&&
-          !(piVisionData.perPrinter&&piVisionData.perPrinter[p.name]&&piVisionData.perPrinter[p.name].enabled===false);
-        return '<div style="border:1px solid var(--bdr);border-radius:5px;padding:8px">'+
-          '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">'+
-            '<div style="font-size:8px;font-weight:700;color:var(--txt-b)">'+esc(p.name)+'</div>'+
-            '<span style="font-size:7px;font-family:\'Orbitron\',monospace;color:'+col+';letter-spacing:1px" id="pi-'+id+'-state">'+(STATE_LABELS[state]||state)+'</span>'+
-            '<div style="flex:1"></div>'+
-            '<div id="vision-badge-'+id+'">'+(vRes?_visionBadgeHtml(vRes):'')+'</div>'+
-          '</div>'+
-          '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:4px;margin-bottom:5px">'+
-            '<div style="min-width:0"><div style="font-size:6px;color:var(--txt-d)">FILE</div><div style="font-size:7px;color:var(--txt-b);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" id="pi-'+id+'-file">—</div></div>'+
-            '<div style="min-width:0"><div style="font-size:6px;color:var(--txt-d)">PROGRESS</div><div style="font-size:8px;color:var(--grn);font-family:\'Orbitron\',monospace" id="pi-'+id+'-progress">—</div></div>'+
-            '<div style="min-width:0"><div style="font-size:6px;color:var(--txt-d)">ETA</div><div style="font-size:7px;color:var(--txt-b);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" id="pi-'+id+'-remaining">—</div></div>'+
-          '</div>'+
-          '<div style="height:3px;background:rgba(255,255,255,0.06);border-radius:2px;overflow:hidden;margin-bottom:5px">'+
-            '<div id="pi-'+id+'-bar" style="height:100%;background:var(--grn);border-radius:2px;width:0%;transition:width 0.5s"></div>'+
-          '</div>'+
-          '<div style="display:flex;gap:6px;margin-bottom:4px">'+
-            '<div style="font-size:6px;color:var(--txt-d)">🌡 <span id="pi-'+id+'-nozzle">—</span></div>'+
-            '<div style="font-size:6px;color:var(--txt-d)">🛏 <span id="pi-'+id+'-bed">—</span></div>'+
-            '<div style="font-size:6px;color:var(--txt-d)">📚 <span id="pi-'+id+'-layer">—</span></div>'+
-          '</div>'+
-          '<div id="pi-'+id+'-ams" style="min-height:4px"></div>'+
-          '<div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:5px">'+
-            '<button id="pi-'+id+'-btn-pause" class="btn btn-ghost btn-xs" onclick="piControl(\''+esc(p.name)+'\',\'pause\')" style="opacity:0.4;pointer-events:none">⏸ Pause</button>'+
-            '<button id="pi-'+id+'-btn-resume" class="btn btn-ghost btn-xs" onclick="piControl(\''+esc(p.name)+'\',\'resume\')" style="opacity:0.4;pointer-events:none">▶ Resume</button>'+
-            '<button id="pi-'+id+'-btn-stop" class="btn btn-xs" style="background:var(--red-d);border:1px solid var(--red-d);color:var(--red-b);opacity:0.4;pointer-events:none" onclick="showConfirm(\'Stop print on '+esc(p.name)+'?\',\'This cannot be undone.\',function(){piControl(\''+esc(p.name)+'\',\'stop\')})">⏹ Stop</button>'+
-            (getCameraUrl(p.name)?'<button class="btn btn-ghost btn-xs" onclick="openCameraFeed(\''+esc(p.name)+'\')">📷 Camera</button>':'')+
-            '<button class="btn btn-ghost btn-xs" style="color:var(--cyn-b)" onclick="piLightToggle(\''+esc(p.name)+'\')">💡 Light</button>'+
-            '<button class="btn btn-ghost btn-xs" style="color:var(--gold-b)" onclick="piCalibrateMenu(\''+esc(p.name)+'\')">🔧 Calibrate</button>'+
-            '<button id="vision-scan-btn-'+id+'" class="btn btn-ghost btn-xs" style="color:var(--cyn)" onclick="piVisionScan(\''+esc(p.name)+'\')">🔍 AI Scan</button>'+
-            (vRes?'<button class="btn btn-ghost btn-xs" style="color:var(--txt-d)" onclick="openVisionSnapshot(\''+esc(p.name)+'\')">📷 Snapshot</button>':'')+
-          '</div>'+
-          _renderPrinterTapoSection(p.name)+
-        '</div>';
-      }).join('')+
-      '</div>'+
-    '</div>':'') +
+    '<div style="font-family:\'Orbitron\',monospace;font-size:9px;font-weight:700;color:var(--gold-b);letter-spacing:2px">PRINTER LIVE STATUS</div>'+
+    (piHubConfig.printers||[]).map(p=>{
+      const id=piId(p.name);
+      const state=piPrevStates[p.name]?.gcode_state||'OFFLINE';
+      const col=STATE_COLORS[state]||STATE_COLORS.OFFLINE;
+      const vRes=piVisionData&&piVisionData.results&&piVisionData.results[p.name];
+      const vEnabled=piVisionData&&piVisionData.enabled!==false&&
+        !(piVisionData.perPrinter&&piVisionData.perPrinter[p.name]&&piVisionData.perPrinter[p.name].enabled===false);
+      return '<div class="printer-card">'+
+        '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">'+
+          '<div style="font-size:10px;font-weight:700;color:var(--txt-b)">'+esc(p.name)+'</div>'+
+          '<span style="font-size:7px;font-family:\'Orbitron\',monospace;color:'+col+';letter-spacing:1px" id="pi-'+id+'-state">'+(STATE_LABELS[state]||state)+'</span>'+
+          '<div style="flex:1"></div>'+
+          '<div id="vision-badge-'+id+'">'+(vRes?_visionBadgeHtml(vRes):'')+'</div>'+
+        '</div>'+
+        '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:6px">'+
+          '<div style="min-width:0"><div style="font-size:6px;color:var(--txt-d);letter-spacing:1px">FILE</div><div style="font-size:7px;color:var(--txt-b);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" id="pi-'+id+'-file">—</div></div>'+
+          '<div style="min-width:0"><div style="font-size:6px;color:var(--txt-d);letter-spacing:1px">PROGRESS</div><div style="font-size:9px;color:var(--grn);font-family:\'Orbitron\',monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" id="pi-'+id+'-progress">—</div></div>'+
+          '<div style="min-width:0"><div style="font-size:6px;color:var(--txt-d);letter-spacing:1px">ETA</div><div style="font-size:7px;color:var(--txt-b);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" id="pi-'+id+'-remaining">—</div></div>'+
+        '</div>'+
+        '<div style="height:3px;background:rgba(255,255,255,0.06);border-radius:2px;overflow:hidden;margin-bottom:6px">'+
+          '<div id="pi-'+id+'-bar" style="height:100%;background:var(--grn);border-radius:2px;width:0%;transition:width 0.5s"></div>'+
+        '</div>'+
+        '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:6px">'+
+          '<div style="min-width:0"><div style="font-size:6px;color:var(--txt-d);letter-spacing:1px">NOZZLE</div><div style="font-size:9px;color:var(--org);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" id="pi-'+id+'-nozzle">—</div></div>'+
+          '<div style="min-width:0"><div style="font-size:6px;color:var(--txt-d);letter-spacing:1px">BED</div><div style="font-size:9px;color:var(--cyn);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" id="pi-'+id+'-bed">—</div></div>'+
+          '<div style="min-width:0"><div style="font-size:6px;color:var(--txt-d);letter-spacing:1px">LAYERS</div><div style="font-size:8px;color:var(--txt-b);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" id="pi-'+id+'-layer">—</div></div>'+
+        '</div>'+
+        '<div style="margin-bottom:6px" id="pi-'+id+'-ams"></div>'+
+        '<div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:6px">'+
+          '<button id="pi-'+id+'-btn-pause" class="btn btn-ghost btn-xs" onclick="piControl(\''+esc(p.name)+'\',\'pause\')" style="opacity:0.4;pointer-events:none">⏸ Pause</button>'+
+          '<button id="pi-'+id+'-btn-resume" class="btn btn-ghost btn-xs" onclick="piControl(\''+esc(p.name)+'\',\'resume\')" style="opacity:0.4;pointer-events:none">▶ Resume</button>'+
+          '<button id="pi-'+id+'-btn-stop" class="btn btn-xs" style="background:var(--red-d);border:1px solid var(--red-d);color:var(--red-b);opacity:0.4;pointer-events:none" onclick="showConfirm(\'Stop print on '+esc(p.name)+'?\',\'This cannot be undone.\',function(){piControl(\''+esc(p.name)+'\',\'stop\')})">⏹ Stop</button>'+
+          (getCameraUrl(p.name)?'<button class="btn btn-ghost btn-xs" onclick="openCameraFeed(\''+esc(p.name)+'\')">📷 Camera</button>':'')+
+          '<button class="btn btn-ghost btn-xs" style="color:var(--cyn-b)" onclick="piLightToggle(\''+esc(p.name)+'\')">💡 Light</button>'+
+          '<button class="btn btn-ghost btn-xs" style="color:var(--gold-b)" onclick="piCalibrateMenu(\''+esc(p.name)+'\')">🔧 Calibrate</button>'+
+          '<button id="vision-scan-btn-'+id+'" class="btn btn-ghost btn-xs" style="color:var(--cyn)" onclick="piVisionScan(\''+esc(p.name)+'\')">🔍 AI Scan</button>'+
+          (vRes?'<button class="btn btn-ghost btn-xs" style="color:var(--txt-d)" onclick="openVisionSnapshot(\''+esc(p.name)+'\')">📷 Snapshot</button>':'')+
+        '</div>'+
+        _renderPrinterTapoSection(p.name)+
+      '</div>';
+    }).join(''):'') +
     // ── Section 28: AI Vision card ────────────────────────────────────────────
     (function(){
       const vd=piVisionData;
