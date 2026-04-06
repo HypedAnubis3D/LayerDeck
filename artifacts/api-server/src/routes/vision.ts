@@ -1,12 +1,14 @@
 import { Router } from "express";
-import Anthropic from "@anthropic-ai/sdk";
+import OpenAI from "openai";
 
 const router = Router();
 
-const anthropic = new Anthropic({
-  baseURL: process.env.AI_INTEGRATIONS_ANTHROPIC_BASE_URL,
-  apiKey: process.env.AI_INTEGRATIONS_ANTHROPIC_API_KEY || "placeholder",
-});
+function getClient() {
+  return new OpenAI({
+    baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
+    apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY || "placeholder",
+  });
+}
 
 router.post("/analyze", async (req, res) => {
   const { base64, printerName, mediaType } = req.body;
@@ -22,16 +24,20 @@ router.post("/analyze", async (req, res) => {
     | "image/webp";
 
   try {
-    const message = await anthropic.messages.create({
-      model: "claude-haiku-4-5",
+    const openai = getClient();
+    const response = await openai.chat.completions.create({
+      model: "gpt-5-nano",
       max_tokens: 256,
       messages: [
         {
           role: "user",
           content: [
             {
-              type: "image",
-              source: { type: "base64", media_type: imgType, data: base64 },
+              type: "image_url",
+              image_url: {
+                url: `data:${imgType};base64,${base64}`,
+                detail: "low",
+              },
             },
             {
               type: "text",
@@ -47,12 +53,10 @@ status must be: ok, warning, or failure. confidence is 0.0 to 1.0.`,
       ],
     });
 
-    const raw = (
-      message.content[0].type === "text" ? message.content[0].text : ""
-    ).trim();
-
+    const raw = (response.choices[0]?.message?.content || "").trim();
     const start = raw.indexOf("{");
     const end = raw.lastIndexOf("}");
+
     if (start === -1 || end === -1) {
       return res.json({
         status: "ok",
@@ -65,7 +69,7 @@ status must be: ok, warning, or failure. confidence is 0.0 to 1.0.`,
     const parsed = JSON.parse(raw.slice(start, end + 1));
     return res.json(parsed);
   } catch (e: any) {
-    console.error("[Vision] Anthropic error:", e?.message);
+    console.error("[Vision] OpenAI error:", e?.message);
     return res.status(500).json({
       status: "error",
       confidence: 0,
