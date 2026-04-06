@@ -653,30 +653,39 @@ const http_node = require('http');
 let _vEnabled   = true;
 let _vIntervalM = 5;       // minutes between auto-scans
 let _vThreshold = 0.55;    // min confidence to send Discord alert
-let _vModel     = 'llava:latest';
-let _vOllamaUrl = 'http://localhost:11434';
+let _vModel     = 'claude-haiku';
 let _vPerPrint  = {};      // { printerName: { enabled: bool } }
+
+// Anthropic API key — read from config.json or ANTHROPIC_API_KEY env var
+let _anthropicKey = process.env.ANTHROPIC_API_KEY || '';
 
 const _vCfgPath = path.join(__dirname, 'vision-config.json');
 (function _loadVisionCfg() {
   try {
     if (!fs.existsSync(_vCfgPath)) return;
     const c = JSON.parse(fs.readFileSync(_vCfgPath, 'utf8'));
-    if (c.enabled           !== undefined) _vEnabled   = !!c.enabled;
-    if (c.intervalMins)                    _vIntervalM = parseFloat(c.intervalMins) || 5;
+    if (c.enabled             !== undefined) _vEnabled   = !!c.enabled;
+    if (c.intervalMins)                      _vIntervalM = parseFloat(c.intervalMins) || 5;
     if (c.confidenceThreshold !== undefined) _vThreshold = parseFloat(c.confidenceThreshold) || 0.55;
-    if (c.ollamaModel)                     _vModel     = c.ollamaModel;
-    if (c.ollamaUrl)                       _vOllamaUrl = c.ollamaUrl;
-    if (c.perPrinter)                      _vPerPrint  = c.perPrinter;
+    if (c.ollamaModel)                       _vModel     = c.ollamaModel;
+    if (c.perPrinter)                        _vPerPrint  = c.perPrinter;
   } catch (_) {}
 })();
+
+// Also pull anthropicKey from config.json if present
+try {
+  if (fs.existsSync(configPath)) {
+    const _cfg = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+    if (_cfg.anthropicApiKey) _anthropicKey = _cfg.anthropicApiKey;
+  }
+} catch (_) {}
 
 function _saveVisionCfg() {
   try {
     fs.writeFileSync(_vCfgPath, JSON.stringify({
       enabled: _vEnabled, intervalMins: _vIntervalM,
       confidenceThreshold: _vThreshold, ollamaModel: _vModel,
-      ollamaUrl: _vOllamaUrl, perPrinter: _vPerPrint
+      perPrinter: _vPerPrint
     }, null, 2));
   } catch (_) {}
 }
@@ -789,32 +798,61 @@ function _captureFrame(name) {
 
 function _askOllama(b64, name) {
   return new Promise(resolve => {
-    const prompt =
-      `You monitor a 3D printer named "${name}" for failures. Analyze this camera image.\n` +
-      `Detect: spaghetti (filament extruded into air), layer shift, warping, adhesion failure, nozzle clog, stringing, blobs.\n` +
-      `Reply ONLY with JSON (no markdown):\n` +
-      `{"status":"ok","confidence":0.9,"issues":[],"description":"one sentence"}\n` +
-      `status: ok|warning|failure   confidence: 0.0–1.0`;
-    const body = JSON.stringify({ model: _vModel, prompt, images: [b64], stream: false });
+    if (!_anthropicKey) {
+      console.warn('[Vision] No ANTHROPIC_API_KEY set — set it in config.json as anthropicApiKey or as an env var');
+      return resolve({ status: 'error', confidence: 0, issues: [], description: 'No Anthropic API key configured' });
+    }
+    const body = JSON.stringify({
+      model: 'claude-haiku-4-5',
+      max_tokens: 256,
+      messages: [{
+        role: 'user',
+        content: [
+          { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: b64 } },
+          { type: 'text', text:
+            `You monitor a 3D printer named "${name}" for failures. Analyze this camera image.\n` +
+            `Detect: spaghetti (filament extruded into air), layer shift, warping, adhesion failure, nozzle clog, stringing, blobs.\n` +
+            `If the printer appears off, empty, or dark, note that.\n` +
+            `Reply ONLY with valid JSON (no markdown, no extra text):\n` +
+            `{"status":"ok","confidence":0.9,"issues":[],"description":"one sentence"}\n` +
+            `status: ok|warning|failure   confidence: 0.0-1.0`
+          }
+        ]
+      }]
+    });
     try {
-      const u   = new URL(`${_vOllamaUrl}/api/generate`);
-      const req = http_node.request({
-        hostname: u.hostname, port: parseInt(u.port) || 11434, path: u.pathname,
+      const req = https.request({
+        hostname: 'api.anthropic.com',
+        path: '/v1/messages',
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) }
+        headers: {
+          'Content-Type': 'application/json',
+          'Content-Length': Buffer.byteLength(body),
+          'x-api-key': _anthropicKey,
+          'anthropic-version': '2023-06-01'
+        }
       }, res => {
         let d = '';
         res.on('data', c => d += c);
         res.on('end', () => {
           try {
             const outer = JSON.parse(d);
-            const raw   = (outer.response || '').replace(/```json|```/g, '').trim();
-            resolve(JSON.parse(raw));
-          } catch (_) { resolve({ status: 'ok', confidence: 0, issues: [], description: 'Parse error' }); }
+            if (outer.error) {
+              console.error('[Vision] Anthropic error:', outer.error.message);
+              return resolve({ status: 'error', confidence: 0, issues: [], description: `Anthropic: ${outer.error.message}` });
+            }
+            const raw = (outer.content?.[0]?.text || '').replace(/```json|```/g, '').trim();
+            const start = raw.indexOf('{'), end = raw.lastIndexOf('}');
+            if (start === -1 || end === -1) return resolve({ status: 'ok', confidence: 0, issues: [], description: 'AI response parse error' });
+            resolve(JSON.parse(raw.slice(start, end + 1)));
+          } catch (e) {
+            console.error('[Vision] Parse error:', e.message);
+            resolve({ status: 'ok', confidence: 0, issues: [], description: 'AI response parse error' });
+          }
         });
       });
-      req.setTimeout(45000, () => { req.destroy(); resolve(null); });
-      req.on('error', () => resolve(null));
+      req.setTimeout(60000, () => { req.destroy(); resolve(null); });
+      req.on('error', e => { console.error('[Vision] HTTPS error:', e.message); resolve(null); });
       req.write(body); req.end();
     } catch (e) { resolve(null); }
   });
