@@ -11,6 +11,7 @@ import squareRouter from "./square";
 import socialRouter from "./social";
 import tapoRouter from "./tapo";
 import filamentDbRouter from "./filamentDb";
+import visionRouter from "./vision";
 
 const router: IRouter = Router();
 
@@ -26,5 +27,6 @@ router.use("/square", squareRouter);
 router.use("/social", socialRouter);
 router.use("/tapo", tapoRouter);
 router.use("/filament-db", filamentDbRouter);
+router.use("/vision", visionRouter);
 
 export default router;
