@@ -16490,9 +16490,9 @@ function renderPiHub(){
   }
   const piUrl=getPiUrl();
   const hasPublic=!!piHubConfig.publicUrl;
-  el.innerHTML='<div style="display:grid;gap:10px">'+
+  el.innerHTML='<div style="display:grid;gap:10px;grid-template-columns:minmax(0,1fr);width:100%">'+
     // Status card
-    '<div class="printer-card">'+
+    '<div class="printer-card" style="min-width:0">'+
       '<div style="font-family:\'Orbitron\',monospace;font-size:9px;font-weight:700;color:var(--gold-b);letter-spacing:2px;margin-bottom:10px">PI HUB STATUS</div>'+
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">'+
         '<div><div style="font-size:7px;color:var(--txt-d);letter-spacing:1px">HUB URL</div><div style="font-size:8px;color:var(--txt-b);margin-top:2px;word-break:break-all">'+piUrl+'</div></div>'+
@@ -16514,7 +16514,7 @@ function renderPiHub(){
     '</div>'+
     // Connectivity guide
     (!hasPublic?
-    '<div class="printer-card" style="border-color:rgba(201,162,39,0.3)">'+
+    '<div class="printer-card" style="min-width:0;border-color:rgba(201,162,39,0.3)">'+
       '<div style="font-family:\'Orbitron\',monospace;font-size:9px;font-weight:700;color:var(--gold-b);letter-spacing:2px;margin-bottom:8px">⚡ ENABLE REMOTE MONITORING</div>'+
       '<div style="font-size:8px;color:var(--txt-d);line-height:1.8;margin-bottom:10px">'+
         'LayerDeck runs on HTTPS servers, which blocks plain HTTP requests to your Pi. Showing as "Offline" even if the Pi is running. '+
@@ -16528,7 +16528,7 @@ function renderPiHub(){
     '</div>':'') +
     // Printer live cards — each printer gets its own full-width printer-card (no extra nesting)
     ((piHubConfig.printers||[]).length>0?
-    '<div style="font-family:\'Orbitron\',monospace;font-size:9px;font-weight:700;color:var(--gold-b);letter-spacing:2px">PRINTER LIVE STATUS</div>'+
+    '<div style="font-family:\'Orbitron\',monospace;font-size:9px;font-weight:700;color:var(--gold-b);letter-spacing:2px;min-width:0">PRINTER LIVE STATUS</div>'+
     (piHubConfig.printers||[]).map(p=>{
       const id=piId(p.name);
       const state=piPrevStates[p.name]?.gcode_state||'OFFLINE';
@@ -16536,7 +16536,7 @@ function renderPiHub(){
       const vRes=piVisionData&&piVisionData.results&&piVisionData.results[p.name];
       const vEnabled=piVisionData&&piVisionData.enabled!==false&&
         !(piVisionData.perPrinter&&piVisionData.perPrinter[p.name]&&piVisionData.perPrinter[p.name].enabled===false);
-      return '<div class="printer-card">'+
+      return '<div class="printer-card" style="min-width:0">'+
         '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">'+
           '<div style="font-size:10px;font-weight:700;color:var(--txt-b)">'+esc(p.name)+'</div>'+
           '<span style="font-size:7px;font-family:\'Orbitron\',monospace;color:'+col+';letter-spacing:1px" id="pi-'+id+'-state">'+(STATE_LABELS[state]||state)+'</span>'+
@@ -16579,7 +16579,7 @@ function renderPiHub(){
       const logItems=(vd&&vd.log)||[];
       const STATUS_COL={ok:'var(--grn)',warning:'var(--gold)',failure:'var(--red-b)',error:'var(--txt-d)'};
       const STATUS_ICON={ok:'✅',warning:'⚠️',failure:'🚨',error:'❓'};
-      return '<div class="printer-card">'+
+      return '<div class="printer-card" style="min-width:0">'+
         '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">'+
           '<div style="font-family:\'Orbitron\',monospace;font-size:9px;font-weight:700;color:var(--gold-b);letter-spacing:2px">🤖 AI VISION</div>'+
           '<div style="flex:1"></div>'+
