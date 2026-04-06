@@ -15313,7 +15313,7 @@ async function _openVisionScanResult(printerName){
   // Load snapshot image
   if(piUrl){
     try{
-      const resp=await fetch('/api/pihub/proxy?hub='+encodeURIComponent(piUrl)+'&path='+encodeURIComponent('/vision/snapshot/'+printerName),{signal:AbortSignal.timeout(10000)});
+      const resp=await fetch('/api/pihub/proxy?hub='+encodeURIComponent(piUrl)+'&path='+encodeURIComponent('/vision/snapshot/'+_resolvePiPrinterName(printerName)),{signal:AbortSignal.timeout(10000)});
       if(resp.ok){
         const d=await resp.json();
         const imgEl=document.getElementById('vsm-img-'+id);
@@ -15382,13 +15382,13 @@ async function openScanLogEntry(idx){
   document.body.appendChild(modal);
   if(piUrl&&l.printerName){
     try{
-      const resp=await fetch('/api/pihub/proxy?hub='+encodeURIComponent(piUrl)+'&path='+encodeURIComponent('/vision/snapshot/'+l.printerName),{signal:AbortSignal.timeout(10000)});
+      const resp=await fetch('/api/pihub/proxy?hub='+encodeURIComponent(piUrl)+'&path='+encodeURIComponent('/vision/snapshot/'+_resolvePiPrinterName(l.printerName||'')),{signal:AbortSignal.timeout(10000)});
       if(resp.ok){
         const d=await resp.json();
         const imgEl=document.getElementById('scan-log-snap-'+id);
         if(imgEl&&d.base64){
           const age=d.timestamp?_fmtAgo(d.timestamp):'';
-          imgEl.innerHTML='<div style="width:100%"><img src="data:image/jpeg;base64,'+d.base64+'" style="max-width:100%;border-radius:6px;border:1px solid var(--bdr)"/><div style="font-size:7px;color:var(--txt-d);margin-top:4px;text-align:center">Latest snapshot — captured '+age+' ago</div></div>';
+          imgEl.innerHTML='<div style="width:100%"><img src="data:image/jpeg;base64,'+d.base64+'" style="max-width:100%;border-radius:6px;border:1px solid var(--bdr)"/><div style="font-size:7px;color:var(--txt-d);margin-top:4px;text-align:center">Latest snapshot — captured '+age+'</div></div>';
         }
       } else {
         const imgEl=document.getElementById('scan-log-snap-'+id);
@@ -15428,7 +15428,7 @@ function openVisionSnapshot(printerName){
   // Load snapshot
   (async()=>{
     try{
-      const resp=await fetch('/api/pihub/proxy?hub='+encodeURIComponent(piUrl)+'&path='+encodeURIComponent('/vision/snapshot/'+printerName),{signal:AbortSignal.timeout(10000)});
+      const resp=await fetch('/api/pihub/proxy?hub='+encodeURIComponent(piUrl)+'&path='+encodeURIComponent('/vision/snapshot/'+_resolvePiPrinterName(printerName)),{signal:AbortSignal.timeout(10000)});
       if(!resp.ok)throw new Error('No snapshot yet');
       const d=await resp.json();
       const imgEl=document.getElementById('vision-snap-img-'+id);
