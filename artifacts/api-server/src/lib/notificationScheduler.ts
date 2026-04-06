@@ -8,7 +8,6 @@ const DATA_DIR = path.join(process.cwd(), "data");
 const PRINTS_FILE = path.join(DATA_DIR, "watched-prints.json");
 const CONVENTIONS_FILE = path.join(DATA_DIR, "watched-conventions.json");
 const ORDERS_FILE = path.join(DATA_DIR, "watched-orders.json");
-const LAST_STOCK_ALERT_FILE = path.join(DATA_DIR, "last-stock-alert.json");
 
 interface WatchedPrint {
   id: string;
@@ -165,69 +164,6 @@ async function getSupabaseCollection(
   }
 }
 
-// ── Low stock / low spool check (runs once daily) ─────────────────────────────
-
-async function checkLowStock() {
-  const webhookUrl = process.env.DISCORD_WEBHOOK_STOCK_ALERTS;
-  if (!webhookUrl) return;
-
-  // Only alert once per calendar day (Eastern)
-  const today = new Date().toLocaleDateString("en-US", {
-    timeZone: "America/New_York",
-    year: "numeric", month: "2-digit", day: "2-digit",
-  });
-  const last = readJson<{ date: string }>(LAST_STOCK_ALERT_FILE, { date: "" });
-  if (last.date === today) return;
-
-  const supabase = makeSupabase();
-  if (!supabase) return;
-
-  const [rawSpools, rawCatalog] = await Promise.all([
-    getSupabaseCollection(supabase, "spools"),
-    getSupabaseCollection(supabase, "catalogItems"),
-  ]);
-
-  type Spool      = { remaining?: number; brand?: string; colorName?: string; name?: string };
-  type CatalogItem = { stockQty?: number; lowStockAt?: number; name?: string };
-
-  const spools  = rawSpools  as Spool[];
-  const catalog = rawCatalog as CatalogItem[];
-
-  // < 100 g remaining = low spool (matches daily report threshold)
-  const lowSpools = spools.filter(s => (s.remaining ?? 0) > 0 && (s.remaining ?? 0) < 100);
-  // qty <= lowStockAt (default 3) = low product stock
-  const lowStock  = catalog.filter(i => (i.stockQty ?? 0) <= (i.lowStockAt ?? 3));
-
-  // Mark as checked even when nothing is low so we don't re-run all day
-  writeJson(LAST_STOCK_ALERT_FILE, { date: today });
-
-  if (!lowSpools.length && !lowStock.length) return;
-
-  const lines: string[] = ["⚠️ **LayerDeck Stock Alert**", "──────────────────"];
-  if (lowStock.length) {
-    lines.push("📦 **Low Product Stock:**");
-    lowStock.slice(0, 8).forEach(i =>
-      lines.push(`  • ${i.name ?? "Unknown"} — ${i.stockQty ?? 0} left`)
-    );
-  }
-  if (lowSpools.length) {
-    lines.push("\n🧵 **Low Filament Spools:**");
-    lowSpools.slice(0, 8).forEach(s =>
-      lines.push(`  • ${s.brand ?? ""} ${s.colorName ?? s.name ?? ""} — ~${Math.round(s.remaining ?? 0)}g left`)
-    );
-  }
-
-  try {
-    await fetch(webhookUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content: lines.join("\n") }),
-    });
-    logger.info({ lowStock: lowStock.length, lowSpools: lowSpools.length }, "Low stock alert sent to Discord");
-  } catch (err) {
-    logger.error({ err }, "Low stock Discord alert failed");
-  }
-}
 
 // ── Daily Discord Report ───────────────────────────────────────────────────────
 
@@ -397,7 +333,6 @@ export function startNotificationScheduler() {
       await checkPrints();
       await checkConventions();
       await checkOrders();
-      await checkLowStock();
     } catch (err) {
       logger.error({ err }, "Notification scheduler error");
     }

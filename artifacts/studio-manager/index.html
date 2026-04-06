@@ -16860,7 +16860,7 @@ const DISCORD_DEFAULT_CHANNELS=[
   {key:'pi-health',       name:'#pi-health',          desc:'Pi service monitoring (5-min)',       url:'',enabled:true},
   {key:'bambu-restock',   name:'#bambu-restock',      desc:'Bambu filament restock alerts',      url:'',enabled:true},
   {key:'convention-prep', name:'#convention-prep',    desc:'Event reminders before conventions', url:'',enabled:true},
-  {key:'print-watch',     name:'#print-watch',        desc:'AI failure detection alerts',        url:'',enabled:true},
+  {key:'print-failure-detected', name:'#print-failure-detected', desc:'AI failure detection alerts', url:'',enabled:true},
 ];
 const DISCORD_DEFAULT_ROUTING={
   print_complete:  {enabled:true,channel:'print-alerts'},
@@ -16873,10 +16873,18 @@ const DISCORD_DEFAULT_ROUTING={
   daily_report:    {enabled:true,channel:'daily-report'},
 };
 let discordCfg={channels:DISCORD_DEFAULT_CHANNELS.map(c=>({...c})),routing:{...DISCORD_DEFAULT_ROUTING},piHealthFreq:'5'};
+function _migrateDiscordChannels(channels){
+  // Rename legacy print-watch → print-failure-detected
+  const hasNew=channels.find(c=>c.key==='print-failure-detected');
+  const old=channels.find(c=>c.key==='print-watch');
+  if(old&&!hasNew){old.key='print-failure-detected';old.name='#print-failure-detected';}
+  else if(old&&hasNew){channels.splice(channels.indexOf(old),1);}
+  return channels;
+}
 function loadDiscord(){
   const stored=gs(KEYS.discord);
   if(stored){
-    discordCfg.channels=stored.channels||DISCORD_DEFAULT_CHANNELS.map(c=>({...c}));
+    discordCfg.channels=_migrateDiscordChannels(stored.channels||DISCORD_DEFAULT_CHANNELS.map(c=>({...c})));
     discordCfg.routing=stored.routing||{...DISCORD_DEFAULT_ROUTING};
     discordCfg.piHealthFreq=stored.piHealthFreq||'5';
     DISCORD_DEFAULT_CHANNELS.forEach(def=>{
@@ -16903,7 +16911,7 @@ async function syncDiscordFromCloud(){
     if(data?.payload){
       const saved=JSON.parse(data.payload);
       if(saved&&typeof saved==='object'){
-        discordCfg.channels=saved.channels||discordCfg.channels;
+        discordCfg.channels=_migrateDiscordChannels(saved.channels||discordCfg.channels);
         discordCfg.routing=saved.routing||discordCfg.routing;
         discordCfg.piHealthFreq=saved.piHealthFreq||discordCfg.piHealthFreq;
         // Merge in any new default channels/routing keys not yet in saved config
