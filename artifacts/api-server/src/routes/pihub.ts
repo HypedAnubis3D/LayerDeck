@@ -197,7 +197,8 @@ router.all('/proxy', async (req, res) => {
     return res.status(400).json({ error: 'hub and path query params required' });
   }
   // Allow only known safe paths (no traversal)
-  if (!/^\/[a-zA-Z0-9/_:%-]+$/.test(piPath)) {
+  // Allow spaces and parens so printer names like "P1 Closet" work in snapshot paths
+  if (!/^\/[a-zA-Z0-9/_:%\- ()]+$/.test(piPath)) {
     return res.status(400).json({ error: 'Invalid path' });
   }
   const method  = req.method;

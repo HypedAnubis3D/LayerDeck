@@ -15313,7 +15313,7 @@ async function _openVisionScanResult(printerName){
   // Load snapshot image
   if(piUrl){
     try{
-      const resp=await fetch('/api/pihub/proxy?hub='+encodeURIComponent(piUrl)+'&path='+encodeURIComponent('/vision/snapshot/'+_resolvePiPrinterName(printerName)),{signal:AbortSignal.timeout(10000)});
+      const resp=await fetch('/api/pihub/proxy?hub='+encodeURIComponent(piUrl)+'&path='+encodeURIComponent('/vision/snapshot/'+encodeURIComponent(_resolvePiPrinterName(printerName))),{signal:AbortSignal.timeout(10000)});
       if(resp.ok){
         const d=await resp.json();
         const imgEl=document.getElementById('vsm-img-'+id);
@@ -15382,7 +15382,7 @@ async function openScanLogEntry(idx){
   document.body.appendChild(modal);
   if(piUrl&&l.printerName){
     try{
-      const resp=await fetch('/api/pihub/proxy?hub='+encodeURIComponent(piUrl)+'&path='+encodeURIComponent('/vision/snapshot/'+_resolvePiPrinterName(l.printerName||'')),{signal:AbortSignal.timeout(10000)});
+      const resp=await fetch('/api/pihub/proxy?hub='+encodeURIComponent(piUrl)+'&path='+encodeURIComponent('/vision/snapshot/'+encodeURIComponent(_resolvePiPrinterName(l.printerName||''))),{signal:AbortSignal.timeout(10000)});
       if(resp.ok){
         const d=await resp.json();
         const imgEl=document.getElementById('scan-log-snap-'+id);
@@ -15428,7 +15428,7 @@ function openVisionSnapshot(printerName){
   // Load snapshot
   (async()=>{
     try{
-      const resp=await fetch('/api/pihub/proxy?hub='+encodeURIComponent(piUrl)+'&path='+encodeURIComponent('/vision/snapshot/'+_resolvePiPrinterName(printerName)),{signal:AbortSignal.timeout(10000)});
+      const resp=await fetch('/api/pihub/proxy?hub='+encodeURIComponent(piUrl)+'&path='+encodeURIComponent('/vision/snapshot/'+encodeURIComponent(_resolvePiPrinterName(printerName))),{signal:AbortSignal.timeout(10000)});
       if(!resp.ok)throw new Error('No snapshot yet');
       const d=await resp.json();
       const imgEl=document.getElementById('vision-snap-img-'+id);
