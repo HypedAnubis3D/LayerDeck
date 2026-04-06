@@ -487,6 +487,25 @@ app.post('/ams/set-ext-spool', (req, res) => {
   res.json({ ok: true });
 });
 
+// POST /discord/config — update Discord webhook URLs in config.json (called by LayerDeck app on save)
+app.post('/discord/config', (req, res) => {
+  try {
+    const { discordWebhookPrintWatch, discordWebhookPrintAlerts, discordWebhookPrinterStatus } = req.body;
+    let cfg = {};
+    if (fs.existsSync(configPath)) {
+      try { cfg = JSON.parse(fs.readFileSync(configPath, 'utf8')); } catch (_) {}
+    }
+    if (discordWebhookPrintWatch   !== undefined) { cfg.discordWebhookPrintWatch   = discordWebhookPrintWatch;   DISCORD_WATCH_URL  = discordWebhookPrintWatch  || DISCORD_WATCH_URL;  }
+    if (discordWebhookPrintAlerts  !== undefined) { cfg.discordWebhookPrintAlerts  = discordWebhookPrintAlerts;  DISCORD_ALERTS_URL = discordWebhookPrintAlerts || DISCORD_ALERTS_URL; }
+    if (discordWebhookPrinterStatus !== undefined){ cfg.discordWebhookPrinterStatus = discordWebhookPrinterStatus; DISCORD_STATUS_URL = discordWebhookPrinterStatus || DISCORD_STATUS_URL; }
+    fs.writeFileSync(configPath, JSON.stringify(cfg, null, 2));
+    console.log('[Config] Discord webhooks updated');
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
 // GET /health — quick health check
 app.get('/health', (req, res) => {
   res.json({

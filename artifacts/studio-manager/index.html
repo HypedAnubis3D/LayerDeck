@@ -16549,6 +16549,14 @@ function openPiHubSetup(){
       '</div>'+
       '<input class="srch" id="pi-go2rtc-public-url" placeholder="https://… (go2rtc public URL, optional)" value="'+esc(existing.go2rtcPublicUrl||'')+'" style="width:100%;box-sizing:border-box"/>'+
     '</div>'+
+    '<div style="background:rgba(88,101,242,0.07);border:1px solid rgba(88,101,242,0.2);border-radius:6px;padding:10px;margin-bottom:12px">'+
+      '<div style="font-size:7px;color:#8B9CF8;letter-spacing:1.5px;font-weight:700;margin-bottom:5px">🔔 DISCORD ALERTS (AI Vision)</div>'+
+      '<div style="font-size:7px;color:var(--txt-d);line-height:1.6;margin-bottom:6px">'+
+        'Paste your <strong style="color:var(--txt-b)">Print Failure Detected</strong> Discord webhook URL here. '+
+        'AI Vision will post failure & warning alerts to this channel. Leave blank to use the Print Alerts webhook instead.'+
+      '</div>'+
+      '<input class="srch" id="pi-discord-watch" placeholder="https://discord.com/api/webhooks/…" value="'+esc(existing.discordWebhookPrintWatch||'')+'" style="width:100%;box-sizing:border-box"/>'+
+    '</div>'+
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">'+
       '<div><div style="font-size:7px;color:var(--txt-d);letter-spacing:1px;margin-bottom:4px">HUB PORT</div>'+
         '<input class="srch" id="pi-hub-port" type="number" value="'+(existing.hubPort||3000)+'" style="width:100%;box-sizing:border-box"/></div>'+
@@ -16610,12 +16618,21 @@ async function savePiHubSetup(){
     }
   }
 
-  const cfg={tailscaleIP:ip,publicUrl,go2rtcPublicUrl,hubPort,go2rtcPort,printers,cameras};
+  const discordWebhookPrintWatch=(document.getElementById('pi-discord-watch')?.value||'').trim();
+  const cfg={tailscaleIP:ip,publicUrl,go2rtcPublicUrl,hubPort,go2rtcPort,printers,cameras,discordWebhookPrintWatch};
   await savePiHubConfig(cfg);
   document.getElementById('pihub-setup-modal')?.remove();
   startPiPolling();
   render();
   const connStr=publicUrl||ip;
+  // Push Discord webhook to Pi config.json automatically
+  if(discordWebhookPrintWatch){
+    const piUrl=getPiUrl();
+    if(piUrl){
+      fetch(piUrl+'/discord/config',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({discordWebhookPrintWatch})}).catch(()=>{});
+    }
+  }
   toast('Pi Hub configured!','Connecting to '+connStr,'success');
 }
 
