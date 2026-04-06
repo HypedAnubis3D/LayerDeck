@@ -16471,7 +16471,7 @@ function _renderPrinterTapoSection(printerName){
         (_tapoFetching?'⏳':'↺')+'</button>'+
     '</div>'+
     plugControls+
-    '<select class="srch" style="width:100%;font-size:8px;padding:3px 6px;margin-top:'+(plugControls?'6px':'0')+'"'+
+    '<select class="flt" style="width:100%;max-width:100%;box-sizing:border-box;font-size:8px;padding:3px 6px;margin-top:'+(plugControls?'6px':'0')+'"'+
       ' onchange="tapoAssignPlug(\''+esc(printerName)+'\',this.value)">'+opts+'</select>'+
     loadHint+
   '</div>';
