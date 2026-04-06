@@ -701,10 +701,53 @@ function _getRtspUrl(name) {
   return MAP[name] || null;
 }
 
+// go2rtc port (reads from config if set, defaults to 1984)
+let _go2rtcPort = 1984;
+try {
+  if (fs.existsSync(configPath)) {
+    const _cfg = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+    if (_cfg.go2rtcPort) _go2rtcPort = parseInt(_cfg.go2rtcPort) || 1984;
+  }
+} catch (_) {}
+
+// Try go2rtc HTTP snapshot first (handles Bambu TLS natively),
+// fall back to ffmpeg if unavailable.
 function _captureFrame(name) {
-  const url = _getRtspUrl(name);
-  if (!url) return null;
-  const out = `/tmp/ld_vs_${name.replace(/[^a-z0-9]/gi, '_')}.jpg`;
+  // go2rtc stream name from CAMERAS map (e.g. "camera_p1_closet")
+  const streamName = CAMERAS[name];
+  if (streamName) {
+    try {
+      const out = `/tmp/ld_vs_${name.replace(/[^a-z0-9]/gi, '_')}.jpg`;
+      const result = _spawnSync('curl', [
+        '-s', '--max-time', '8',
+        '-o', out,
+        `http://localhost:${_go2rtcPort}/api/frame.jpeg?src=${encodeURIComponent(streamName)}`
+      ], { timeout: 10000 });
+      if (result.status === 0 && fs.existsSync(out) && fs.statSync(out).size > 1000) {
+        const b64 = fs.readFileSync(out).toString('base64');
+        try { fs.unlinkSync(out); } catch (_) {}
+        console.log(`[Vision] ${name}: frame via go2rtc (${streamName})`);
+        return b64;
+      }
+      try { fs.unlinkSync(out); } catch (_) {}
+      console.warn(`[Vision] go2rtc snapshot failed for ${name}, trying ffmpeg...`);
+    } catch (e) {
+      console.warn(`[Vision] go2rtc error for ${name}: ${e.message}, trying ffmpeg...`);
+    }
+  }
+
+  // Fallback: direct ffmpeg using env var RTSP URL (Tapo cameras, not Bambu URLs)
+  const envMap = {
+    'A1':        process.env.CAMERA_A1_RTSP,
+    'P1 Room':   process.env.CAMERA_P1_ROOM_RTSP,
+    'P1 Closet': process.env.CAMERA_P1_CLOSET_RTSP
+  };
+  const url = envMap[name];
+  if (!url) {
+    console.warn(`[Vision] No RTSP URL for ${name} — set CAMERA_*_RTSP env var or ensure go2rtc is running`);
+    return null;
+  }
+  const out = `/tmp/ld_vs_${name.replace(/[^a-z0-9]/gi, '_')}_ff.jpg`;
   try {
     _spawnSync('ffmpeg', [
       '-rtsp_transport', 'tcp',
@@ -717,9 +760,10 @@ function _captureFrame(name) {
     if (!fs.existsSync(out)) return null;
     const b64 = fs.readFileSync(out).toString('base64');
     try { fs.unlinkSync(out); } catch (_) {}
+    console.log(`[Vision] ${name}: frame via ffmpeg fallback`);
     return b64;
   } catch (e) {
-    console.warn(`[Vision] capture failed for ${name}: ${e.message}`);
+    console.warn(`[Vision] ffmpeg capture failed for ${name}: ${e.message}`);
     return null;
   }
 }
