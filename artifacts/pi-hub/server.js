@@ -840,12 +840,25 @@ function _askOllama(b64, name) {
         content: [
           { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: b64 } },
           { type: 'text', text:
-            `You monitor a 3D printer named "${name}" for failures. Analyze this camera image.\n` +
-            `Detect: spaghetti (filament extruded into air), layer shift, warping, adhesion failure, nozzle clog, stringing, blobs.\n` +
-            `If the printer appears off, empty, or dark, note that.\n` +
-            `Reply ONLY with valid JSON (no markdown, no extra text):\n` +
-            `{"status":"ok","confidence":0.9,"issues":[],"description":"one sentence"}\n` +
-            `status: ok|warning|failure   confidence: 0.0-1.0`
+            `You are monitoring a Bambu Lab FDM 3D printer named "${name}" via camera during an active print.\n\n` +
+            `REAL FAILURE (status:"failure", confidence 0.9+):\n` +
+            `- Filament actively tangling AROUND the toolhead/nozzle in a chaotic mass NOT attached to the print\n` +
+            `- Print completely detached from the bed and being dragged around by the moving toolhead\n` +
+            `- Large molten blob accumulated on the nozzle itself\n\n` +
+            `WARNING (status:"warning"):\n` +
+            `- Print visibly lifting or curling at edges (warping)\n` +
+            `- Clear layer shift — print looks stepped/misaligned\n` +
+            `- Partial detachment at one corner while rest is still printing\n\n` +
+            `NORMAL — always status:"ok":\n` +
+            `- Completed or in-progress parts sitting FLAT on the build plate (very common, not a failure)\n` +
+            `- Multiple finished-looking parts on the bed (batch printing is normal)\n` +
+            `- Camera showing bed from above with parts that look done or nearly done\n` +
+            `- Empty or dark bed (printer idle or between jobs)\n` +
+            `- Filament strands that are clearly PART OF the print structure\n\n` +
+            `KEY RULE: If you cannot clearly see filament tangled around the toolhead or a print being dragged, use status:"ok". Prefer ok over failure when uncertain.\n\n` +
+            `Reply ONLY with valid JSON, no markdown:\n` +
+            `{"status":"ok","confidence":0.85,"issues":[],"description":"one sentence describing what you see"}\n` +
+            `status: ok|warning|failure   confidence: 0.0–1.0`
           }
         ]
       }]
