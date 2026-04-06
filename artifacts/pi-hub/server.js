@@ -665,10 +665,15 @@ function _saveVisionCfg() {
 // ── Vision state ──────────────────────────────────────────────────────────────
 const _vResults        = {}; // { printerName: { status, confidence, issues, description, timestamp } }
 const _vImages         = {}; // { printerName: { base64, timestamp } }
-const _vLog            = []; // [{ printerName, status, confidence, description, timestamp, autoPaused }] — last 50
+const _vLogPath        = path.join(__dirname, 'vision-log.json');
+const _vLog            = (()=>{ try { if(fs.existsSync(_vLogPath)) return JSON.parse(fs.readFileSync(_vLogPath,'utf8')); } catch(_){} return []; })();
 const _vScanning       = new Set();
 // Printers where AI confirmed no active print (dark/empty view) — skip auto-scans until MQTT says RUNNING again
 const _vVisuallyOffline = new Set();
+
+function _saveVisionLog() {
+  try { fs.writeFileSync(_vLogPath, JSON.stringify(_vLog.slice(0,50)), 'utf8'); } catch(_) {}
+}
 
 // Keywords suggesting no print in progress (printer off, empty plate, dark image)
 const _V_OFFLINE_KEYWORDS = ['empty','no print','no filament','blank','dark','idle','powered off',
@@ -779,6 +784,7 @@ async function _visionScan(name, manual = false) {
       _vResults[name] = entry;
       _vLog.unshift({ printerName: name, ...entry });
       if (_vLog.length > 50) _vLog.length = 50;
+      _saveVisionLog();
       return;
     }
     _vImages[name] = { base64: b64, timestamp: Date.now() };
@@ -790,6 +796,7 @@ async function _visionScan(name, manual = false) {
       _vResults[name] = entry;
       _vLog.unshift({ printerName: name, ...entry });
       if (_vLog.length > 50) _vLog.length = 50;
+      _saveVisionLog();
       return;
     }
 
@@ -837,6 +844,7 @@ async function _visionScan(name, manual = false) {
     _vResults[name] = { ...r, timestamp: ts, autoPaused };
     _vLog.unshift({ printerName: name, ...r, timestamp: ts, autoPaused });
     if (_vLog.length > 50) _vLog.length = 50;
+    _saveVisionLog();
 
     console.log(`[Vision] ${name}: ${r.status} (${Math.round((r.confidence||0)*100)}%) — ${r.description}${autoPaused ? ' [AUTO-PAUSED]' : ''}`);
   } finally {
