@@ -1,0 +1,76 @@
+hypedanubis3d@layerdeck-hub:~ $ ollama list
+NAME                ID              SIZE      MODIFIED
+moondream:latest    55fc3abd3867    1.7 GB    3 minutes ago
+llava:latest        8dd30f6b0cb1    4.7 GB    27 hours ago
+hypedanubis3d@layerdeck-hub:~ $ cat > /tmp/fix_prompt.py << 'EOF'
+f = open('/home/hypedanubis3d/bambu-hub/server.js', 'r')
+s = f.read()
+f.close()
+
+old = 'You monitor a 3D printer named "${name}" for failures. Analyze this camera image.\\nDetect: spaghetti, layer shift, warping, adhesion failure, nozzle clog, stringing, blobs.\\nIf the printer appears off, empty, or dark, note that.\\nReply ONLY with JSON (no markdown):\\n{\\"status\\":\\"ok\\",\\"confidence\\":0.9,\\"issues\\":[],\\"description\\":\\"one sentence\\"}\\nstatus: ok|warning|failure  confidence: 0.0-1.0'
+
+new = 'Analyze this 3D printer camera image for the printer named "${name}". Look for: spaghetti (tangled filament), layer shift, warping or bed adhesion failure, nozzle clog, stringing, blobs. Is the printer off or empty?\\nReply ONLY with this exact JSON format, no other text:\\n{\\"status\\":\\"ok\\",\\"confidence\\":0.9,\\"issues\\":[],\\"description\\":\\"one sentence\\"}\\nUse status ok, warning, or failure. Confidence 0.0 to 1.0.'
+
+s2 = s.replace(old, new, 1)
+if s2 == s:
+    print('WARN: string not found')
+else:
+    open('/home/hypedanubis3d/bambu-hub/server.js', 'w').write(s2)
+    print('OK patched')
+EOF
+python3 /tmp/fix_prompt.py && pm2 restart layerdeck-hub
+WARN: string not found
+Use --update-env to update environment variables
+[PM2] Applying action restartProcessId on app [layerdeck-hub](ids: [ 3 ])
+[PM2] [layerdeck-hub](3) ✓
+┌────┬────────────────────┬──────────┬──────┬───────────┬──────────┬──────────┐
+│ id │ name               │ mode     │ ↺    │ status    │ cpu      │ memory   │
+├────┼────────────────────┼──────────┼──────┼───────────┼──────────┼──────────┤
+│ 1  │ cameras            │ fork     │ 0    │ online    │ 0%       │ 16.3mb   │
+│ 3  │ layerdeck-hub      │ fork     │ 16   │ online    │ 0%       │ 20.0mb   │
+└────┴────────────────────┴──────────┴──────┴───────────┴──────────┴──────────┘
+hypedanubis3d@layerdeck-hub:~ $ pm2 logs layerdeck-hub --lines 20
+[TAILING] Tailing last 20 lines for [layerdeck-hub] process (change the value with --lines option)
+/home/hypedanubis3d/.pm2/logs/layerdeck-hub-error.log last 20 lines:
+3|layerdec | Job: Glaceon_v2
+3|layerdec | Duration: 0h 13m
+3|layerdec | 🔴 **P1 Room** is unreachable (powered off or network issue)
+3|layerdec | ⚠️ **A1** MQTT error: Keepalive timeout
+3|layerdec | 🔴 **A1** is unreachable (powered off or network issue)
+3|layerdec | ⚠️ **P1 Room** MQTT error: Keepalive timeout
+3|layerdec | 🔴 **P1 Room** is unreachable (powered off or network issue)
+3|layerdec | ✅ **Print Complete — P1 Closet**
+3|layerdec | Job: Toxitricity_-_yellow_v11
+3|layerdec | Duration: 2h 1m
+3|layerdec | ⚠️ **P1 Closet** MQTT error: Keepalive timeout
+3|layerdec | 🔴 **P1 Closet** is unreachable (powered off or network issue)
+3|layerdec | ❌ **A1** print **FAILED** at 4%
+3|layerdec | 📄 Urban_street_Skull_Toy_Acrobat_Skeleton_Style_
+3|layerdec | ✅ **Print Complete — A1**
+3|layerdec | Job: Urban_street_Skull_Toy_Acrobat_Skeleton_Style_
+3|layerdec | Duration: 0h 46m
+3|layerdec | ✅ **Print Complete — P1 Room**
+3|layerdec | Job: Urban_street_Skull_Toy_Acrobat_Skeleton_Style_
+3|layerdec | Duration: 2h 53m
+
+/home/hypedanubis3d/.pm2/logs/layerdeck-hub-out.log last 20 lines:
+3|layerdec | [Vision] P1 Closet: ok (0%) — Parse error
+3|layerdec | [Vision] Scanning A1...
+3|layerdec | [Vision] A1: frame via go2rtc HTTP
+3|layerdec | [Vision] Scanning P1 Room...
+3|layerdec | [Vision] P1 Room: frame via go2rtc HTTP
+3|layerdec | [Vision] Scanning P1 Closet...
+3|layerdec | [Vision] P1 Closet: frame via go2rtc HTTP
+3|layerdec | [Vision] A1: ok (0%) — Parse error
+3|layerdec | [Vision] P1 Closet: ok (0%) — Parse error
+3|layerdec | [Vision] P1 Room: ok (0%) — Parse error
+3|layerdec | [Vision] auto-scan every 5 min
+3|layerdec | Loaded 3 printers
+3|layerdec | [Vision] auto-scan every 5 min
+3|layerdec | 🚀 LayerDeck Hub on port 3000
+3|layerdec | Connected: A1
+3|layerdec | Connected: P1 Room
+3|layerdec | Connected: P1 Closet
+3|layerdec | [Vision] Scanning P1 Room (manual)...
+3|layerdec | [Vision] P1 Room: frame via go2rtc HTTP
+3|layerdec | [Vision] auto-scan every 5 min
