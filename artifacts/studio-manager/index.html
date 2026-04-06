@@ -15358,7 +15358,7 @@ async function openScanLogEntry(idx){
           '<div style="font-size:8px;font-weight:700;color:'+col+'">'+s.toUpperCase()+(l.confidence?' · '+Math.round(l.confidence*100)+'% confidence':'')+
             (l.autoPaused?' · ⏸ Auto-paused':'')+
           '</div>'+
-          '<div style="font-size:7px;color:var(--txt-d);margin-top:2px">'+(l.timestamp?_fmtAgo(l.timestamp)+' ago':'')+'</div>'+
+          '<div style="font-size:7px;color:var(--txt-d);margin-top:2px">'+(l.timestamp?_fmtAgo(l.timestamp):'')+'</div>'+
         '</div>'+
       '</div>'+
       (l.description?
