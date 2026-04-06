@@ -15212,6 +15212,38 @@ async function piVisionScan(printerName){
   const id=piId(printerName);
   const btn=document.getElementById('vision-scan-btn-'+id);
   if(btn){btn.disabled=true;btn.textContent='🔍 Scanning…';}
+
+  // Open scan result modal immediately with loading state
+  const existingModal=document.getElementById('vision-scan-modal');
+  if(existingModal)existingModal.remove();
+  const modal=document.createElement('div');
+  modal.id='vision-scan-modal';
+  modal.style='position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.88);display:flex;align-items:center;justify-content:center;padding:16px';
+  modal.onclick=e=>{if(e.target===modal)modal.remove();};
+  modal.innerHTML=
+    '<div style="background:var(--surf);border:1px solid var(--bdr2);border-radius:12px;padding:18px;max-width:480px;width:100%;max-height:90vh;overflow-y:auto">'+
+      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">'+
+        '<div style="font-family:\'Orbitron\',monospace;font-size:10px;font-weight:700;color:var(--gold-b);letter-spacing:1px">🔍 AI SCAN — '+esc(printerName).toUpperCase()+'</div>'+
+        '<button class="btn btn-ghost btn-sm" onclick="document.getElementById(\'vision-scan-modal\').remove()">✕</button>'+
+      '</div>'+
+      '<div id="vsm-body" style="text-align:center;padding:20px 0">'+
+        '<div style="font-size:22px;margin-bottom:10px">🤖</div>'+
+        '<div style="font-size:9px;color:var(--txt-d)" id="vsm-status-text">Capturing frame and analyzing with Claude…</div>'+
+        '<div style="margin-top:12px;height:3px;background:var(--bdr);border-radius:2px;overflow:hidden">'+
+          '<div id="vsm-bar" style="height:100%;width:5%;background:var(--gold);border-radius:2px;transition:width 1s linear"></div>'+
+        '</div>'+
+      '</div>'+
+    '</div>';
+  document.body.appendChild(modal);
+
+  // Animate the progress bar
+  let pct=5;
+  const barTimer=setInterval(()=>{
+    pct=Math.min(pct+(pct<60?3:1),90);
+    const bar=document.getElementById('vsm-bar');
+    if(bar)bar.style.width=pct+'%';
+  },1000);
+
   const piName=_resolvePiPrinterName(printerName);
   try{
     const r=await fetch('/api/pihub/proxy?hub='+encodeURIComponent(piUrl)+'&path='+encodeURIComponent('/vision/scan'),{
@@ -15224,11 +15256,77 @@ async function piVisionScan(printerName){
       const errBody=await r.json().catch(()=>({}));
       throw new Error(errBody.error||'HTTP '+r.status);
     }
-    toast('AI Scan Started','Analyzing '+printerName+' — results in ~30s','info',4000);
-    // Poll vision status after 35s to pick up result
-    setTimeout(()=>fetchPiVisionStatus(),35000);
-  }catch(e){toast('Scan failed',e.message,'error');}
-  finally{if(btn){btn.disabled=false;btn.textContent='🔍 AI Scan';}}
+    // Poll for result after ~35s
+    const statusEl=document.getElementById('vsm-status-text');
+    if(statusEl)statusEl.textContent='Waiting for Claude to finish analysis…';
+    setTimeout(async()=>{
+      clearInterval(barTimer);
+      const bar=document.getElementById('vsm-bar');
+      if(bar)bar.style.width='100%';
+      await fetchPiVisionStatus();
+      _openVisionScanResult(printerName);
+    },35000);
+  }catch(e){
+    clearInterval(barTimer);
+    const body=document.getElementById('vsm-body');
+    if(body)body.innerHTML='<div style="font-size:8px;color:var(--red-b);text-align:center;padding:10px">Scan failed: '+esc(e.message)+'</div>';
+    if(btn){btn.disabled=false;btn.textContent='🔍 AI Scan';}
+  }
+  if(btn){btn.disabled=false;btn.textContent='🔍 AI Scan';}
+}
+
+async function _openVisionScanResult(printerName){
+  const piUrl=getPiUrl();
+  const id=piId(printerName);
+  const r=piVisionData&&piVisionData.results&&(piVisionData.results[printerName]||piVisionData.results[_resolvePiPrinterName(printerName)]);
+  const STATUS_COL={ok:'var(--grn)',warning:'var(--gold)',failure:'var(--red-b)',error:'var(--txt-d)'};
+  const STATUS_ICON={ok:'✅',warning:'⚠️',failure:'🚨',error:'❓'};
+  const s=r?r.status:'error';
+  const col=STATUS_COL[s]||'var(--txt-d)';
+
+  const body=document.getElementById('vsm-body');
+  if(!body)return;
+  body.style.textAlign='left';
+  body.style.padding='0';
+  body.innerHTML=
+    // Status row
+    '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;padding:8px 10px;background:rgba(255,255,255,0.04);border-radius:6px;border:1px solid '+(s==='failure'?'var(--red-d)':s==='warning'?'rgba(201,162,39,0.3)':'var(--bdr)')+'">' +
+      '<span style="font-size:18px">'+(STATUS_ICON[s]||'❓')+'</span>'+
+      '<div style="flex:1">'+
+        '<div style="font-size:9px;font-weight:700;color:'+col+'">'+s.toUpperCase()+(r&&r.confidence?' · '+Math.round(r.confidence*100)+'% confidence':'')+' </div>'+
+        (r&&r.description?'<div style="font-size:8px;color:var(--txt-b);margin-top:3px;line-height:1.5">'+esc(r.description)+'</div>':'')+
+      '</div>'+
+    '</div>'+
+    (r&&r.issues&&r.issues.length?
+      '<div style="margin-bottom:10px"><div style="font-size:6px;color:var(--txt-d);letter-spacing:1px;margin-bottom:4px">DETECTED ISSUES</div>'+
+      r.issues.map(i=>'<div style="font-size:8px;color:var(--red-b);margin-bottom:3px">• '+esc(i)+'</div>').join('')+
+      '</div>':'')+
+    // Image area
+    '<div id="vsm-img-'+id+'" style="text-align:center;min-height:80px;display:flex;align-items:center;justify-content:center;margin-bottom:12px">'+
+      '<div style="font-size:8px;color:var(--txt-d)">Loading snapshot…</div>'+
+    '</div>'+
+    '<div style="display:flex;gap:6px">'+
+      '<button class="btn btn-ghost btn-sm" onclick="piVisionScan(\''+esc(printerName)+'\')">🔍 Scan Again</button>'+
+      '<button class="btn btn-ghost btn-sm" onclick="document.getElementById(\'vision-scan-modal\').remove()">Close</button>'+
+    '</div>';
+
+  // Load snapshot image
+  if(piUrl){
+    try{
+      const resp=await fetch('/api/pihub/proxy?hub='+encodeURIComponent(piUrl)+'&path='+encodeURIComponent('/vision/snapshot/'+printerName),{signal:AbortSignal.timeout(10000)});
+      if(resp.ok){
+        const d=await resp.json();
+        const imgEl=document.getElementById('vsm-img-'+id);
+        if(imgEl&&d.base64){
+          const age=d.timestamp?_fmtAgo(d.timestamp):'';
+          imgEl.innerHTML='<div style="width:100%"><img src="data:image/jpeg;base64,'+d.base64+'" style="max-width:100%;border-radius:6px;border:1px solid var(--bdr)"/><div style="font-size:7px;color:var(--txt-d);margin-top:4px;text-align:center">Captured '+age+'</div></div>';
+        }
+      }
+    }catch(e){
+      const imgEl=document.getElementById('vsm-img-'+id);
+      if(imgEl)imgEl.innerHTML='<div style="font-size:8px;color:var(--txt-d)">No snapshot available</div>';
+    }
+  }
 }
 
 function openVisionSnapshot(printerName){
@@ -15284,15 +15382,14 @@ function openVisionSettings(){
   modal.onclick=e=>{if(e.target===modal)modal.remove();};
   modal.innerHTML='<div style="background:var(--surf);border:1px solid var(--bdr2);border-radius:10px;padding:20px;max-width:420px;width:100%;max-height:90vh;overflow-y:auto">'+
     '<div style="font-family:\'Orbitron\',monospace;font-size:11px;font-weight:700;color:var(--gold-b);letter-spacing:2px;margin-bottom:14px">🤖 AI VISION SETTINGS</div>'+
-    // Dependency check section
+    // Setup info section
     '<div style="background:rgba(0,0,0,0.2);border:1px solid var(--bdr);border-radius:6px;padding:10px;margin-bottom:12px">'+
       '<div style="font-size:7px;color:var(--txt-d);letter-spacing:1px;margin-bottom:8px">PI SETUP REQUIREMENTS</div>'+
       '<div style="font-size:7.5px;color:var(--txt-d);line-height:2">'+
-        '<code style="color:var(--cyn)">sudo apt install ffmpeg</code> — frame capture<br>'+
-        '<code style="color:var(--cyn)">curl https://ollama.ai/install.sh | sh</code> — Ollama<br>'+
-        '<code style="color:var(--cyn)">ollama pull llava:latest</code> — vision model (~4 GB)<br>'+
-        '<code style="color:var(--cyn)">ollama serve</code> — start Ollama (or set systemd)<br>'+
-        'Add <code style="color:var(--cyn)">rtspUrl</code> to each printer in <code style="color:var(--cyn)">printers.json</code>'+
+        '<code style="color:var(--cyn)">sudo apt install ffmpeg</code> — frame capture (fallback)<br>'+
+        'go2rtc handles camera streams — no Ollama needed<br>'+
+        'Vision powered by <span style="color:var(--gold-b)">Claude (Anthropic)</span> via cloud API<br>'+
+        'API key stored in Pi\'s <code style="color:var(--cyn)">config.json</code> as <code style="color:var(--cyn)">anthropicApiKey</code>'+
       '</div>'+
       '<button class="btn btn-ghost btn-sm" style="margin-top:8px" id="vision-check-btn" onclick="checkVisionDeps()">🔍 Check Dependencies</button>'+
       '<div id="vision-check-result" style="margin-top:6px;font-size:7px"></div>'+
@@ -16389,7 +16486,7 @@ function renderPiHub(){
           '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:4px;margin-bottom:5px">'+
             '<div><div style="font-size:6px;color:var(--txt-d)">FILE</div><div style="font-size:7px;color:var(--txt-b);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" id="pi-'+id+'-file">—</div></div>'+
             '<div><div style="font-size:6px;color:var(--txt-d)">PROGRESS</div><div style="font-size:8px;color:var(--grn);font-family:\'Orbitron\',monospace" id="pi-'+id+'-progress">—</div></div>'+
-            '<div><div style="font-size:6px;color:var(--txt-d)">ETA</div><div style="font-size:7px;color:var(--txt-b)" id="pi-'+id+'-remaining">—</div></div>'+
+            '<div><div style="font-size:6px;color:var(--txt-d)">ETA</div><div style="font-size:7px;color:var(--txt-b);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" id="pi-'+id+'-remaining">—</div></div>'+
           '</div>'+
           '<div style="height:3px;background:rgba(255,255,255,0.06);border-radius:2px;overflow:hidden;margin-bottom:5px">'+
             '<div id="pi-'+id+'-bar" style="height:100%;background:var(--grn);border-radius:2px;width:0%;transition:width 0.5s"></div>'+
@@ -16420,7 +16517,7 @@ function renderPiHub(){
       const vd=piVisionData;
       const vStatus=vd&&vd.enabled!==false?'Active':'Disabled';
       const vInterval=vd?vd.intervalMins+'m':'5m';
-      const vModel=vd?esc(vd.ollamaModel||'llava:latest'):'llava:latest';
+      const vModel=vd?esc(vd.ollamaModel||'claude-haiku'):'claude-haiku';
       const logItems=(vd&&vd.log)||[];
       const STATUS_COL={ok:'var(--grn)',warning:'var(--gold)',failure:'var(--red-b)',error:'var(--txt-d)'};
       const STATUS_ICON={ok:'✅',warning:'⚠️',failure:'🚨',error:'❓'};
@@ -16439,8 +16536,7 @@ function renderPiHub(){
           '</div>'
         :
           '<div style="font-size:8px;color:var(--txt-d);margin-bottom:10px;line-height:1.7">'+
-            'AI vision requires Ollama + a vision model on the Pi. Click Settings to configure.<br>'+
-            '<span style="color:var(--cyn)">ollama pull llava:latest</span>'+
+            'AI vision uses Claude to analyze your printer cameras. Click Settings to configure the scan interval and thresholds.'+
           '</div>'
         )+
         // Current results summary
@@ -16475,7 +16571,7 @@ function renderPiHub(){
             '<div style="display:grid;gap:2px;max-height:140px;overflow-y:auto">'+
             logItems.map(l=>{
               const s=l.status||'error';
-              return '<div style="padding:3px 6px;border-radius:3px;background:rgba(255,255,255,0.03);margin-bottom:2px">'+
+              return '<div style="padding:3px 6px;border-radius:3px;background:rgba(255,255,255,0.03);margin-bottom:2px;cursor:pointer" onclick="openVisionSnapshot(\''+esc(l.printerName||'')+'\')">'+
                 '<div style="display:flex;align-items:center;gap:5px">'+
                   '<span style="font-size:7px">'+STATUS_ICON[s]+'</span>'+
                   '<span style="font-size:7px;color:var(--txt-d);flex-shrink:0">'+esc(l.printerName)+'</span>'+
@@ -16485,7 +16581,7 @@ function renderPiHub(){
                   '<span style="flex:1"></span>'+
                   (l.timestamp?'<span style="font-size:6px;color:var(--txt-d);flex-shrink:0">'+_fmtAgo(l.timestamp)+'</span>':'')+
                 '</div>'+
-                (l.description?'<div style="font-size:6px;color:var(--txt-d);margin-top:1px;padding-left:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(l.description)+'</div>':'')+
+                (l.description?'<div style="font-size:6px;color:var(--txt-d);margin-top:1px;padding-left:14px;line-height:1.4">'+esc(l.description)+'</div>':'')+
               '</div>';
             }).join('')+
             '</div>'+
