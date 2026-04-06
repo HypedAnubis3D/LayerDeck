@@ -16038,17 +16038,17 @@ function renderPrinters(){
       (piHubConfig?
         '<div style="margin-top:8px;padding:8px;background:rgba(0,0,0,0.2);border-radius:5px;border:1px solid var(--bdr)">'+
           '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:6px">'+
-            '<div><div style="font-size:6px;color:var(--txt-d);letter-spacing:1px">FILE</div><div style="font-size:7px;color:var(--txt-b);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100px" id="pi-'+id+'-file">—</div></div>'+
-            '<div><div style="font-size:6px;color:var(--txt-d);letter-spacing:1px">PROGRESS</div><div style="font-size:9px;color:var(--grn);font-family:\'Orbitron\',monospace" id="pi-'+id+'-progress">—</div></div>'+
-            '<div><div style="font-size:6px;color:var(--txt-d);letter-spacing:1px">ETA</div><div style="font-size:7px;color:var(--txt-b)" id="pi-'+id+'-remaining">—</div></div>'+
+            '<div style="min-width:0"><div style="font-size:6px;color:var(--txt-d);letter-spacing:1px">FILE</div><div style="font-size:7px;color:var(--txt-b);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" id="pi-'+id+'-file">—</div></div>'+
+            '<div style="min-width:0"><div style="font-size:6px;color:var(--txt-d);letter-spacing:1px">PROGRESS</div><div style="font-size:9px;color:var(--grn);font-family:\'Orbitron\',monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" id="pi-'+id+'-progress">—</div></div>'+
+            '<div style="min-width:0"><div style="font-size:6px;color:var(--txt-d);letter-spacing:1px">ETA</div><div style="font-size:7px;color:var(--txt-b);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" id="pi-'+id+'-remaining">—</div></div>'+
           '</div>'+
           '<div style="height:3px;background:rgba(255,255,255,0.06);border-radius:2px;margin-bottom:6px;overflow:hidden">'+
             '<div id="pi-'+id+'-bar" style="height:100%;background:var(--grn);border-radius:2px;width:0%;transition:width 0.5s"></div>'+
           '</div>'+
           '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:6px">'+
-            '<div><div style="font-size:6px;color:var(--txt-d);letter-spacing:1px">NOZZLE</div><div style="font-size:9px;color:var(--org)" id="pi-'+id+'-nozzle">—</div></div>'+
-            '<div><div style="font-size:6px;color:var(--txt-d);letter-spacing:1px">BED</div><div style="font-size:9px;color:var(--cyn)" id="pi-'+id+'-bed">—</div></div>'+
-            '<div><div style="font-size:6px;color:var(--txt-d);letter-spacing:1px">LAYERS</div><div style="font-size:8px;color:var(--txt-b)" id="pi-'+id+'-layer">—</div></div>'+
+            '<div style="min-width:0"><div style="font-size:6px;color:var(--txt-d);letter-spacing:1px">NOZZLE</div><div style="font-size:9px;color:var(--org);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" id="pi-'+id+'-nozzle">—</div></div>'+
+            '<div style="min-width:0"><div style="font-size:6px;color:var(--txt-d);letter-spacing:1px">BED</div><div style="font-size:9px;color:var(--cyn);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" id="pi-'+id+'-bed">—</div></div>'+
+            '<div style="min-width:0"><div style="font-size:6px;color:var(--txt-d);letter-spacing:1px">LAYERS</div><div style="font-size:8px;color:var(--txt-b);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" id="pi-'+id+'-layer">—</div></div>'+
           '</div>'+
           '<div style="margin-bottom:6px" id="pi-'+id+'-ams"></div>'+
           filPlanHtml+
