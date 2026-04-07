@@ -13267,29 +13267,16 @@ async function _initSqPayments(){
       // Google Pay
       try{
         _sqGooglePay=await _sqPayments.googlePay(payReq);
+        var gpayContainer=document.getElementById('sq-gpay-container');
         await _sqGooglePay.attach('#sq-gpay-container');
-        _sqGooglePay.addEventListener('click',async function(){
-          var statusEl=document.getElementById('sq-payment-status');
-          statusEl.style.color='#94a3b8';
-          statusEl.textContent='Opening Google Pay…';
-          try{
-            var result=await _sqGooglePay.tokenize();
-            if(result.status==='OK'){
-              await _processSqToken(result.token,'google_pay');
-            }else{
-              var gpayErr=(result.errors||[]).map(function(x){return x.message;}).join(' ')||'Google Pay unavailable on this domain.';
-              statusEl.style.color='#f87171';
-              statusEl.textContent=gpayErr;
-              toast('Google Pay',''+gpayErr,'error',6000);
-            }
-          }catch(ex){
-            console.error('[Square] GPay tokenize',ex);
-            var msg=ex.message||String(ex)||'Google Pay failed.';
-            statusEl.style.color='#f87171';
-            statusEl.textContent=msg;
-            toast('Google Pay Error',''+msg,'error',6000);
-          }
-        });
+        // Overlay a transparent tap-target over Square's iframe button so mobile
+        // touch events reach our handler directly (iframes miss touches in modals)
+        gpayContainer.style.position='relative';
+        var gpayOverlay=document.createElement('div');
+        gpayOverlay.style.cssText='position:absolute;inset:0;z-index:10;cursor:pointer;-webkit-tap-highlight-color:transparent';
+        gpayOverlay.addEventListener('click',function(){_sqGpayTap();});
+        gpayOverlay.addEventListener('touchend',function(e){e.preventDefault();_sqGpayTap();});
+        gpayContainer.appendChild(gpayOverlay);
         hasPaymentRequest=true;
       }catch(gpayErr){
         console.info('[Square] Google Pay not available',gpayErr);
@@ -13298,29 +13285,14 @@ async function _initSqPayments(){
       // Apple Pay
       try{
         _sqApplePay=await _sqPayments.applePay(payReq);
+        var apayContainer=document.getElementById('sq-apay-container');
         await _sqApplePay.attach('#sq-apay-container');
-        _sqApplePay.addEventListener('click',async function(){
-          var statusEl=document.getElementById('sq-payment-status');
-          statusEl.style.color='#94a3b8';
-          statusEl.textContent='Opening Apple Pay…';
-          try{
-            var result=await _sqApplePay.tokenize();
-            if(result.status==='OK'){
-              await _processSqToken(result.token,'apple_pay');
-            }else{
-              var apayErr=(result.errors||[]).map(function(x){return x.message;}).join(' ')||'Apple Pay unavailable.';
-              statusEl.style.color='#f87171';
-              statusEl.textContent=apayErr;
-              toast('Apple Pay',''+apayErr,'error',6000);
-            }
-          }catch(ex){
-            console.error('[Square] APay tokenize',ex);
-            var msg=ex.message||String(ex)||'Apple Pay failed.';
-            statusEl.style.color='#f87171';
-            statusEl.textContent=msg;
-            toast('Apple Pay Error',''+msg,'error',6000);
-          }
-        });
+        apayContainer.style.position='relative';
+        var apayOverlay=document.createElement('div');
+        apayOverlay.style.cssText='position:absolute;inset:0;z-index:10;cursor:pointer;-webkit-tap-highlight-color:transparent';
+        apayOverlay.addEventListener('click',function(){_sqApayTap();});
+        apayOverlay.addEventListener('touchend',function(e){e.preventDefault();_sqApayTap();});
+        apayContainer.appendChild(apayOverlay);
         hasPaymentRequest=true;
       }catch(apayErr){
         console.info('[Square] Apple Pay not available',apayErr);
@@ -13406,6 +13378,54 @@ async function _processSqToken(token, methodLabel){
     console.error('[Square] _processSqToken error',e);
     if(statusEl)statusEl.textContent='Network error — please try again.';
     if(btn){btn.disabled=false;btn.textContent='PAY NOW';}
+  }
+}
+
+async function _sqGpayTap(){
+  if(!_sqGooglePay){return;}
+  var statusEl=document.getElementById('sq-payment-status');
+  statusEl.style.color='#94a3b8';
+  statusEl.textContent='Opening Google Pay…';
+  try{
+    var result=await _sqGooglePay.tokenize();
+    if(result.status==='OK'){
+      await _processSqToken(result.token,'google_pay');
+    }else{
+      var errMsg=(result.errors||[]).map(function(x){return x.message;}).join(' ')||'Google Pay unavailable.';
+      statusEl.style.color='#f87171';
+      statusEl.textContent=errMsg;
+      toast('Google Pay',''+errMsg,'error',6000);
+    }
+  }catch(ex){
+    console.error('[Square] GPay tap error',ex);
+    var msg=ex.message||String(ex)||'Google Pay failed.';
+    statusEl.style.color='#f87171';
+    statusEl.textContent=msg;
+    toast('Google Pay Error',''+msg,'error',6000);
+  }
+}
+
+async function _sqApayTap(){
+  if(!_sqApplePay){return;}
+  var statusEl=document.getElementById('sq-payment-status');
+  statusEl.style.color='#94a3b8';
+  statusEl.textContent='Opening Apple Pay…';
+  try{
+    var result=await _sqApplePay.tokenize();
+    if(result.status==='OK'){
+      await _processSqToken(result.token,'apple_pay');
+    }else{
+      var errMsg=(result.errors||[]).map(function(x){return x.message;}).join(' ')||'Apple Pay unavailable.';
+      statusEl.style.color='#f87171';
+      statusEl.textContent=errMsg;
+      toast('Apple Pay',''+errMsg,'error',6000);
+    }
+  }catch(ex){
+    console.error('[Square] APay tap error',ex);
+    var msg=ex.message||String(ex)||'Apple Pay failed.';
+    statusEl.style.color='#f87171';
+    statusEl.textContent=msg;
+    toast('Apple Pay Error',''+msg,'error',6000);
   }
 }
 
