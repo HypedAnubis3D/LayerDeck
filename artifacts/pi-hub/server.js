@@ -524,9 +524,8 @@ app.post('/discord/config', (req, res) => {
     if (fs.existsSync(configPath)) {
       try { cfg = JSON.parse(fs.readFileSync(configPath, 'utf8')); } catch (_) {}
     }
-    if (discordWebhookPrintWatch   !== undefined) { cfg.discordWebhookPrintWatch   = discordWebhookPrintWatch;   DISCORD_WATCH_URL  = discordWebhookPrintWatch  || DISCORD_WATCH_URL;  }
-    if (discordWebhookPrintAlerts  !== undefined) { cfg.discordWebhookPrintAlerts  = discordWebhookPrintAlerts;  DISCORD_ALERTS_URL = discordWebhookPrintAlerts || DISCORD_ALERTS_URL; }
-    if (discordWebhookPrinterStatus !== undefined){ cfg.discordWebhookPrinterStatus = discordWebhookPrinterStatus; DISCORD_STATUS_URL = discordWebhookPrinterStatus || DISCORD_STATUS_URL; }
+    if (discordWebhookPrintAlerts  !== undefined) { cfg.discordWebhookPrintAlerts  = discordWebhookPrintAlerts;  DISCORD_ALERTS_URL    = discordWebhookPrintAlerts    || DISCORD_ALERTS_URL; }
+    if (discordWebhookPrinterStatus !== undefined){ cfg.discordWebhookPrinterStatus = discordWebhookPrinterStatus; DISCORD_PI_HEALTH_URL = discordWebhookPrinterStatus || DISCORD_PI_HEALTH_URL; }
     fs.writeFileSync(configPath, JSON.stringify(cfg, null, 2));
     console.log('[Config] Discord webhooks updated');
     res.json({ ok: true });
