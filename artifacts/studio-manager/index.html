@@ -13251,18 +13251,31 @@ function convChargeViaSquare(){
 }
 
 function _buildSquarePosUrl(squareData){
-  // Standard base64 encoded JSON — Square POS native decoders expect standard base64
+  var isAndroid=/android/i.test(navigator.userAgent);
+  if(isAndroid){
+    // Android uses a named-extra intent (action=CHARGE), NOT the base64 JSON blob.
+    // Square's official mobile-web format for Android:
+    var cents=squareData.amount_money.amount;
+    var cbUrl=squareData.callback_url;
+    return 'intent:#Intent;'
+      +'action=com.squareup.pos.action.CHARGE;'
+      +'package=com.squareup;'
+      +'S.com.squareup.pos.WEB_CALLBACK_URI='+cbUrl+';'
+      +'S.com.squareup.pos.CLIENT_ID='+SQ_APP_ID+';'
+      +'S.com.squareup.pos.API_VERSION=v2.0;'
+      +'i.com.squareup.pos.TOTAL_AMOUNT='+cents+';'
+      +'S.com.squareup.pos.CURRENCY_CODE=USD;'
+      +'S.com.squareup.pos.TENDER_TYPES=com.squareup.pos.TENDER_CARD,com.squareup.pos.TENDER_CASH,com.squareup.pos.TENDER_OTHER;'
+      +'end';
+  }
+  // iOS / desktop: base64-encoded JSON via square-commerce-v1:// custom URL scheme
   var encoded=btoa(unescape(encodeURIComponent(JSON.stringify(squareData))));
-  // Use the square-commerce-v1:// scheme directly on all platforms.
-  // Chrome on Android opens Square POS via registered URL scheme handler (same as iOS).
-  // intent:// wrappers were going to Play Store because Square POS's BROWSABLE intent
-  // filter for this scheme may not be present in all versions.
   return 'square-commerce-v1://payment/create?data='+encodeURIComponent(encoded);
 }
 
 function _launchSquarePosUrl(url){
-  // window.location.href triggers the custom scheme handler in iOS Safari and Android Chrome.
-  // Square POS registers square-commerce-v1:// on both platforms; no intent:// wrapper needed.
+  // window.location.href on Android triggers intent:#Intent;...;end via Chrome's intent handler.
+  // On iOS, it triggers the square-commerce-v1:// custom URL scheme handler.
   window.location.href=url;
 }
 
@@ -15196,12 +15209,27 @@ function _onReady(){
   if(window.location.pathname==='/square/callback'||window.location.pathname.endsWith('/square/callback')){
     const _cbP=new URLSearchParams(window.location.search);
     const _cbD=_cbP.get('data');
+    let _cbR;
     if(_cbD){
+      // iOS format: data is base64-encoded JSON
       try{
-        const _cbR=JSON.parse(decodeURIComponent(escape(atob(_cbD.replace(/-/g,'+').replace(/_/g,'/')))));
-        localStorage.setItem('pos_callback',JSON.stringify(_cbR));
-      }catch(e){localStorage.setItem('pos_callback',JSON.stringify({status:_cbD}));}
+        _cbR=JSON.parse(decodeURIComponent(escape(atob(_cbD.replace(/-/g,'+').replace(/_/g,'/')))));
+      }catch(e){_cbR={status:'ok',raw:_cbD};}
+    } else {
+      // Android v2 format: named query params
+      const _txId=_cbP.get('com.squareup.pos.SERVER_TRANSACTION_ID')||_cbP.get('transaction_id')||'';
+      const _cTxId=_cbP.get('com.squareup.pos.CLIENT_TRANSACTION_ID')||'';
+      const _errCode=_cbP.get('com.squareup.pos.ERROR_CODE')||_cbP.get('error_code')||'';
+      if(_txId){
+        _cbR={status:'ok',transaction_id:_txId,client_transaction_id:_cTxId};
+      } else if(_errCode){
+        _cbR={status:'error',error_code:_errCode};
+      } else {
+        // Unknown params — treat as ok if any params present
+        _cbR={status:_cbP.toString().length>0?'ok':'error',error_code:'no_data'};
+      }
     }
+    localStorage.setItem('pos_callback',JSON.stringify(_cbR));
     window.location.replace('/');
     return;
   }
