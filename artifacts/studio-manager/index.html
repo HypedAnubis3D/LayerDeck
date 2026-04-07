@@ -3975,6 +3975,7 @@ function renderPrints(){
       </div>
       <div class="pcat">${esc(displayCategory)} · ${esc(displayPrinter)} · <span class="print-time-display" style="display:inline-flex;font-size:8px;padding:2px 6px">${formatHms(_dispHrs||p.printTime)||'—'}</span> · ${d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}${jobNameNote}${(st==='done'||st==='failed')?`<span style="color:var(--txt-d)">${finLabel}</span>`:''}</div>
       ${chips?`<div class="pc-colors">${chips}</div>`:''}
+      ${(p.tmfId||p.tmfName)?`<div style="margin:3px 0 1px"><span style="display:inline-flex;align-items:center;gap:3px;background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.3);color:var(--grn-b);padding:1px 7px;border-radius:10px;font-size:7px;letter-spacing:.5px">🔗 ${esc(_tmfTitle||p.tmfName||'3MF')}</span></div>`:`<div style="margin:3px 0 1px"><span style="display:inline-flex;align-items:center;gap:3px;background:rgba(249,115,22,.08);border:1px solid rgba(249,115,22,.25);color:var(--org);padding:1px 7px;border-radius:10px;font-size:7px;letter-spacing:.5px">⚠ No 3MF linked</span></div>`}
       <div class="cost-box">
         <div class="cb-title">Cost Breakdown</div>
         <div class="cb-row"><span style="color:var(--txt-d)">Filament</span><span>$${cost.filCost.toFixed(2)}</span></div>
@@ -4447,7 +4448,8 @@ function applyTmf(t){
     document.getElementById('ep-supports').value=t.supports?'Yes':'No';
     document.getElementById('ep-profile').value=t.profile||'';
   }
-  document.getElementById('tmf-prefill-badge').style.display='inline-flex';
+  const _apBadge=document.getElementById('tmf-prefill-badge');
+  if(_apBadge){_apBadge.style.display='inline-flex';_apBadge.textContent='🔗 '+t.name;}
   // fill filament rows — include color swatches and auto-match spools
   document.getElementById('fil-rows').innerHTML='';
   filRows=[];filRowCount=0;
@@ -5656,6 +5658,11 @@ function openEditPrint(id){
   const _restoreTmf=_restoreTmfId?tmfLib.find(function(t){return t.id===_restoreTmfId;}):null;
   const _tmfSearchInp=document.getElementById('ep-tmf-search');
   if(_tmfSearchInp)_tmfSearchInp.value=_restoreTmf?_restoreTmf.name:'';
+  const _pfBadge=document.getElementById('tmf-prefill-badge');
+  if(_pfBadge){
+    if(_restoreTmf){_pfBadge.style.display='inline-flex';_pfBadge.textContent='🔗 '+_restoreTmf.name;}
+    else{_pfBadge.style.display='none';}
+  }
   if(p.filaments&&p.filaments.length){
     p.filaments.forEach(f=>addFilRow(f.spoolId,f.grams));
   }else if(_restoreTmf){
