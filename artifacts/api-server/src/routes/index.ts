@@ -12,6 +12,7 @@ import socialRouter from "./social";
 import tapoRouter from "./tapo";
 import filamentDbRouter from "./filamentDb";
 import visionRouter from "./vision";
+import emailRouter from "./email";
 
 const router: IRouter = Router();
 
@@ -28,5 +29,6 @@ router.use("/social", socialRouter);
 router.use("/tapo", tapoRouter);
 router.use("/filament-db", filamentDbRouter);
 router.use("/vision", visionRouter);
+router.use("/email", emailRouter);
 
 export default router;

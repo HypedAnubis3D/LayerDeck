@@ -13214,8 +13214,11 @@ function copyEmailListEmails(){
 var SQ_APP_ID='sq0idp-snoi-XftnTFSnqQQUsrOKQ';
 var SQ_LOCATION_ID='LBC978ZGBGS2M';
 var _sqCard=null;
+var _sqGooglePay=null;
+var _sqApplePay=null;
 var _sqPayments=null;
 var _sqCartSnapshot=[];
+var _sqCartTotal=0;
 var _sqCustomerName='';
 var _sqCustomerEmail='';
 var _sqEmailOptIn=false;
@@ -13223,50 +13226,93 @@ var _sqEmailOptIn=false;
 function convChargeViaSquare(){
   var c=getEvt();if(!c){toast('No active convention','Open a convention first','warning');return;}
   if(!convCart.length){toast('Add items to the cart first','','warning');return;}
-  var cartTotal=convCart.reduce(function(a,r){return a+r.qty*r.price;},0);
+  _sqCartTotal=convCart.reduce(function(a,r){return a+r.qty*r.price;},0);
   var cartSummary=convCart.map(function(r){return r.name+(r.qty>1?' ×'+r.qty:'');}).join(', ');
   _sqCartSnapshot=convCart.map(function(r){return{id:r.id,catalogItemId:r.catalogItemId,name:r.name,qty:r.qty,price:r.price};});
-  // Snapshot customer/opt-in state at charge time
   _sqCustomerName=(document.getElementById('em-sale-customer')?.value||'').trim();
   _sqCustomerEmail=(document.getElementById('em-sale-email')?.value||'').trim();
   _sqEmailOptIn=!!(document.getElementById('em-email-optin')?.checked);
-  // Show modal
   var modal=document.getElementById('sq-payment-modal');
   if(!modal)return;
-  document.getElementById('sq-modal-total').textContent='$'+cartTotal.toFixed(2);
+  document.getElementById('sq-modal-total').textContent='$'+_sqCartTotal.toFixed(2);
   document.getElementById('sq-modal-items').textContent=cartSummary;
   document.getElementById('sq-payment-status').textContent='';
   var btn=document.getElementById('sq-pay-now-btn');
   if(btn){btn.disabled=false;btn.textContent='PAY NOW';}
+  // Clear previous payment request buttons
+  document.getElementById('sq-gpay-container').innerHTML='';
+  document.getElementById('sq-apay-container').innerHTML='';
+  document.getElementById('sq-divider').style.display='none';
   modal.style.display='flex';
-  // Destroy any previous card instance then init fresh
-  if(_sqCard){try{_sqCard.destroy();}catch(e){}; _sqCard=null;}
-  _initSqCard();
+  if(_sqCard){try{_sqCard.destroy();}catch(e){}_sqCard=null;}
+  _sqGooglePay=null;_sqApplePay=null;
+  _initSqPayments();
 }
 
-function _initSqCard(){
+async function _initSqPayments(){
   if(!window.Square){
     document.getElementById('sq-payment-status').textContent='Square SDK failed to load — check your connection.';
     return;
   }
   try{
     if(!_sqPayments){_sqPayments=window.Square.payments(SQ_APP_ID,SQ_LOCATION_ID);}
-    _sqPayments.card({
+    var hasPaymentRequest=false;
+    // ── Payment Request (Google Pay / Apple Pay) ──────────────────────────
+    try{
+      var payReq=_sqPayments.paymentRequest({
+        countryCode:'US',
+        currencyCode:'USD',
+        total:{amount:_sqCartTotal.toFixed(2),label:'HypedAnubis3D'},
+        requestBillingContact:false,
+        requestShippingContact:false
+      });
+      // Google Pay
+      try{
+        _sqGooglePay=await _sqPayments.googlePay(payReq);
+        await _sqGooglePay.attach('#sq-gpay-container');
+        _sqGooglePay.addEventListener('click',async function(e){
+          e.stopPropagation();
+          var statusEl=document.getElementById('sq-payment-status');
+          statusEl.textContent='Processing Google Pay…';
+          try{
+            var result=await _sqGooglePay.tokenize();
+            if(result.status==='OK'){await _processSqToken(result.token,'google_pay');}
+            else{statusEl.textContent=(result.errors||[]).map(function(x){return x.message;}).join(' ')||'Google Pay cancelled.';}
+          }catch(ex){statusEl.textContent='Google Pay error: '+(ex.message||ex);}
+        });
+        hasPaymentRequest=true;
+      }catch(gpayErr){console.info('[Square] Google Pay not available',gpayErr);}
+      // Apple Pay
+      try{
+        _sqApplePay=await _sqPayments.applePay(payReq);
+        await _sqApplePay.attach('#sq-apay-container');
+        _sqApplePay.addEventListener('click',async function(e){
+          e.stopPropagation();
+          var statusEl=document.getElementById('sq-payment-status');
+          statusEl.textContent='Processing Apple Pay…';
+          try{
+            var result=await _sqApplePay.tokenize();
+            if(result.status==='OK'){await _processSqToken(result.token,'apple_pay');}
+            else{statusEl.textContent=(result.errors||[]).map(function(x){return x.message;}).join(' ')||'Apple Pay cancelled.';}
+          }catch(ex){statusEl.textContent='Apple Pay error: '+(ex.message||ex);}
+        });
+        hasPaymentRequest=true;
+      }catch(apayErr){console.info('[Square] Apple Pay not available',apayErr);}
+    }catch(prErr){console.info('[Square] Payment request not available',prErr);}
+    if(hasPaymentRequest){document.getElementById('sq-divider').style.display='flex';}
+    // ── Card ──────────────────────────────────────────────────────────────
+    var card=await _sqPayments.card({
       style:{
         '.input-container':{borderColor:'#2a2a40',borderRadius:'6px'},
         '.input-container.is-focus':{borderColor:'#c9a227'},
         input:{color:'#e2e8f0',fontSize:'14px'},
         'input::placeholder':{color:'#4a4a6a'}
       }
-    }).then(function(card){
-      _sqCard=card;
-      return card.attach('#card-container');
-    }).catch(function(e){
-      console.error('[Square] card init error',e);
-      document.getElementById('sq-payment-status').textContent='Card form failed to load: '+(e.message||e);
     });
+    _sqCard=card;
+    await card.attach('#card-container');
   }catch(e){
-    console.error('[Square] payments init error',e);
+    console.error('[Square] init error',e);
     document.getElementById('sq-payment-status').textContent='Square init error: '+(e.message||e);
   }
 }
@@ -13275,6 +13321,64 @@ function dismissSqPayModal(){
   var modal=document.getElementById('sq-payment-modal');
   if(modal)modal.style.display='none';
   if(_sqCard){try{_sqCard.destroy();}catch(e){}_sqCard=null;}
+}
+
+async function _processSqToken(token, methodLabel){
+  var cartSummary=_sqCartSnapshot.map(function(r){return r.name+(r.qty>1?' ×'+r.qty:'');}).join(', ');
+  var statusEl=document.getElementById('sq-payment-status');
+  var btn=document.getElementById('sq-pay-now-btn');
+  if(btn){btn.disabled=true;}
+  try{
+    var resp=await fetch('/api/square/charge',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        sourceId:token,
+        amountCents:Math.round(_sqCartTotal*100),
+        note:cartSummary.substring(0,499),
+        idempotencyKey:'CONV-'+Date.now()
+      })
+    });
+    var data=await resp.json();
+    if(!data.success){
+      if(statusEl)statusEl.textContent=data.error||'Payment declined.';
+      if(btn){btn.disabled=false;btn.textContent='PAY NOW';}
+      return;
+    }
+    var c=getEvt();
+    if(c){
+      if(!c.daySales)c.daySales=[];
+      var sqRef=data.paymentId||'';
+      _sqCartSnapshot.forEach(function(r){
+        c.daySales.push({
+          id:uid(),timestamp:Date.now(),itemName:r.name,catalogItemId:r.catalogItemId,
+          qty:r.qty,price:r.price,method:'square',methodLabel:methodLabel||'card',
+          squareRef:sqRef,customerName:_sqCustomerName,customerEmail:_sqCustomerEmail
+        });
+      });
+      saveEvt();
+    }
+    if(_sqEmailOptIn&&_sqCustomerEmail){addToEmailList(_sqCustomerName,_sqCustomerEmail);}
+    var custEl=document.getElementById('em-sale-customer');if(custEl)custEl.value='';
+    var emailEl=document.getElementById('em-sale-email');if(emailEl)emailEl.value='';
+    var optinEl=document.getElementById('em-email-optin');if(optinEl)optinEl.checked=false;
+    var optrowEl=document.getElementById('em-email-optin-row');if(optrowEl)optrowEl.style.display='none';
+    convCart=[];
+    dismissSqPayModal();
+    renderConvCart();
+    renderDaySales();
+    toast('Payment Complete!','$'+_sqCartTotal.toFixed(2)+' charged via Square','success',5000);
+    if(data.receiptUrl){window.open(data.receiptUrl,'_blank');}
+    if(c){
+      var allSales=c.daySales||[];
+      var dayTotal=allSales.reduce(function(a,s){return a+parseFloat(s.price||0)*parseInt(s.qty||1);},0);
+      postToDiscord('convention_sale','💳 Square — '+(c.name||'Convention')+'\n'+cartSummary+' — $'+_sqCartTotal.toFixed(2)+"\nToday's total: $"+dayTotal.toFixed(2));
+    }
+  }catch(e){
+    console.error('[Square] _processSqToken error',e);
+    if(statusEl)statusEl.textContent='Network error — please try again.';
+    if(btn){btn.disabled=false;btn.textContent='PAY NOW';}
+  }
 }
 
 async function submitSqPayment(){
@@ -13286,61 +13390,51 @@ async function submitSqPayment(){
   try{
     var result=await _sqCard.tokenize();
     if(result.status!=='OK'){
-      statusEl.textContent=(result.errors||[]).map(function(e){return e.message;}).join(' ') || 'Card tokenization failed.';
+      statusEl.textContent=(result.errors||[]).map(function(e){return e.message;}).join(' ')||'Card tokenization failed.';
       btn.disabled=false;btn.textContent='PAY NOW';
       return;
     }
-    var cartTotal=_sqCartSnapshot.reduce(function(a,r){return a+r.qty*r.price;},0);
-    var cartSummary=_sqCartSnapshot.map(function(r){return r.name+(r.qty>1?' ×'+r.qty:'');}).join(', ');
-    var resp=await fetch('/api/square/charge',{
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({
-        sourceId:result.token,
-        amountCents:Math.round(cartTotal*100),
-        note:cartSummary.substring(0,499),
-        idempotencyKey:'CONV-'+Date.now()
-      })
-    });
-    var data=await resp.json();
-    if(!data.success){
-      statusEl.textContent=data.error||'Payment declined.';
-      btn.disabled=false;btn.textContent='PAY NOW';
-      return;
-    }
-    // Record in convention
-    var c=getEvt();
-    if(c){
-      if(!c.daySales)c.daySales=[];
-      var sqRef=data.paymentId||'';
-      _sqCartSnapshot.forEach(function(r){
-        c.daySales.push({id:uid(),timestamp:Date.now(),itemName:r.name,catalogItemId:r.catalogItemId,qty:r.qty,price:r.price,method:'square',squareRef:sqRef});
-      });
-      saveEvt();
-    }
-    // Email list opt-in (captured at charge time)
-    if(_sqEmailOptIn&&_sqCustomerEmail){addToEmailList(_sqCustomerName,_sqCustomerEmail);}
-    // Reset customer/optin fields
-    var custEl=document.getElementById('em-sale-customer');if(custEl)custEl.value='';
-    var emailEl=document.getElementById('em-sale-email');if(emailEl)emailEl.value='';
-    var optinEl=document.getElementById('em-email-optin');if(optinEl)optinEl.checked=false;
-    var optrowEl=document.getElementById('em-email-optin-row');if(optrowEl)optrowEl.style.display='none';
-    convCart=[];
-    dismissSqPayModal();
-    renderConvCart();
-    renderDaySales();
-    toast('Payment Complete!','$'+cartTotal.toFixed(2)+' charged via Square','success',5000);
-    if(data.receiptUrl){window.open(data.receiptUrl,'_blank');}
-    // Discord
-    if(c){
-      var allSales=c.daySales||[];
-      var dayTotal=allSales.reduce(function(a,s){return a+parseFloat(s.price||0)*parseInt(s.qty||1);},0);
-      postToDiscord('convention_sale','💳 Square — '+(c.name||'Convention')+'\n'+cartSummary+' — $'+cartTotal.toFixed(2)+"\nToday's total: $"+dayTotal.toFixed(2));
-    }
+    await _processSqToken(result.token,'card');
   }catch(e){
     console.error('[Square] submitSqPayment error',e);
     statusEl.textContent='Network error — please try again.';
     btn.disabled=false;btn.textContent='PAY NOW';
+  }
+}
+
+// ── Email Receipts ────────────────────────────────────────────────────────────
+async function sendEmailReceipt(saleId){
+  var c=getEvt();if(!c)return;
+  // Find all sales with this timestamp group (if single) or by id
+  var sale=(c.daySales||[]).find(function(s){return s.id===saleId;});
+  if(!sale){toast('Sale not found','','error');return;}
+  var email=sale.customerEmail||'';
+  if(!email){
+    // Prompt for email via a simple modal-free approach using a temp input
+    var entered=window._promptEmail;
+    toast('No email on file','This sale has no customer email attached.','warning');
+    return;
+  }
+  toast('Sending receipt…','','info',2500);
+  try{
+    var resp=await fetch('/api/email/receipt',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        to:email,
+        customerName:sale.customerName||'',
+        items:[{name:sale.itemName,qty:sale.qty,price:sale.price}],
+        total:(parseFloat(sale.price||0)*parseInt(sale.qty||1)).toFixed(2),
+        method:sale.methodLabel||sale.method||'card',
+        conventionName:c.name||'Convention',
+        date:new Date(sale.timestamp).toLocaleDateString()
+      })
+    });
+    var data=await resp.json();
+    if(data.success){toast('Receipt Sent!',email,'success');}
+    else{toast('Failed to send',''+( data.error||'Unknown error'),'error');}
+  }catch(e){
+    toast('Network error','Could not reach the email server.','error');
   }
 }
 
@@ -13463,9 +13557,10 @@ function renderDaySales(){
           ${methodBadge(s.method)}
           <div style="flex:1;min-width:0">
             <div style="color:var(--txt);font-size:7.5px">${esc(s.itemName)} <span style="color:var(--txt-d)">×${s.qty}</span></div>
-            <div style="color:var(--txt-d);font-size:6.5px">${esc(customer)}${s.customerEmail?' · '+esc(s.customerEmail):''}${tStr?' · '+tStr:''}</div>
+            <div style="color:var(--txt-d);font-size:6.5px">${esc(customer)}${s.customerEmail?' · 📧 '+esc(s.customerEmail):''}${tStr?' · '+tStr:''}</div>
           </div>
           <span style="color:var(--grn-b);font-family:Orbitron,monospace;min-width:50px;text-align:right">$${(parseFloat(s.price||0)*parseInt(s.qty||1)).toFixed(2)}</span>
+          ${s.customerEmail?`<button onclick="sendEmailReceipt('${s.id}')" title="Email receipt to ${esc(s.customerEmail)}" style="background:rgba(14,165,233,.12);border:1px solid rgba(14,165,233,.35);color:#38bdf8;font-size:7px;cursor:pointer;padding:2px 6px;border-radius:3px">✉</button>`:''}
           ${alreadyOrdered
             ?'<span style="font-size:6px;color:var(--grn-b);padding:2px 6px;border:1px solid var(--grn);border-radius:2px">✓ Ordered</span>'
             :`<button onclick="recordSaleAsOrder('${s.id}')" title="Create order record" style="background:rgba(168,85,247,.15);border:1px solid rgba(168,85,247,.4);color:#c084fc;font-size:7px;cursor:pointer;padding:2px 6px;border-radius:3px">→ Order</button>`}
@@ -19297,10 +19392,19 @@ function posShowReceipt(sale){
       <button onclick="dismissSqPayModal()" style="background:none;border:none;color:#555;font-size:20px;cursor:pointer;line-height:1;padding:0 4px">×</button>
     </div>
     <div id="sq-modal-items" style="font-size:10px;color:#888;margin-bottom:6px;line-height:1.6"></div>
-    <div style="display:flex;align-items:baseline;gap:6px;margin-bottom:20px">
+    <div style="display:flex;align-items:baseline;gap:6px;margin-bottom:16px">
       <span id="sq-modal-total" style="font-family:Orbitron,monospace;font-size:32px;font-weight:700;color:#fff"></span>
       <span style="font-size:9px;color:#555;letter-spacing:1px">USD</span>
     </div>
+    <!-- Google Pay / Apple Pay buttons -->
+    <div id="sq-gpay-container" style="margin-bottom:8px"></div>
+    <div id="sq-apay-container" style="margin-bottom:8px"></div>
+    <div id="sq-divider" style="display:none;align-items:center;gap:8px;margin-bottom:12px">
+      <div style="flex:1;height:1px;background:#2a2a40"></div>
+      <span style="font-size:8px;color:#444;letter-spacing:1px;white-space:nowrap">OR PAY BY CARD</span>
+      <div style="flex:1;height:1px;background:#2a2a40"></div>
+    </div>
+    <!-- Card entry -->
     <div id="card-container" style="margin-bottom:14px;min-height:90px"></div>
     <div id="sq-payment-status" style="font-size:9px;color:#f87171;min-height:14px;margin-bottom:10px;line-height:1.4"></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
