@@ -209,4 +209,70 @@ router.get(
   }
 );
 
+// ── POST /api/square/charge ───────────────────────────────────────────────────
+// Accepts a Web Payments SDK sourceId (card nonce) and processes the payment.
+router.post(
+  "/charge",
+  async (req: Request, res: Response): Promise<void> => {
+    const token = process.env.SQUARE_ACCESS_TOKEN;
+    const locationId = process.env.SQUARE_LOCATION_ID || "LBC978ZGBGS2M";
+    if (!token) {
+      res.status(500).json({ success: false, error: "Square not configured on server" });
+      return;
+    }
+
+    const { sourceId, amountCents, note, idempotencyKey } = req.body as {
+      sourceId: string;
+      amountCents: number;
+      note?: string;
+      idempotencyKey?: string;
+    };
+
+    if (!sourceId || !amountCents || amountCents < 1) {
+      res.status(400).json({ success: false, error: "sourceId and amountCents (≥1) required" });
+      return;
+    }
+
+    try {
+      const squareRes = await fetch("https://connect.squareup.com/v2/payments", {
+        method: "POST",
+        headers: {
+          "Square-Version": "2024-01-18",
+          "Authorization": `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          source_id:        sourceId,
+          idempotency_key:  idempotencyKey || randomUUID(),
+          amount_money:     { amount: amountCents, currency: "USD" },
+          location_id:      locationId,
+          note:             (note || "").substring(0, 499),
+          autocomplete:     true,
+        }),
+      });
+
+      const data = await squareRes.json() as Record<string, unknown>;
+
+      if (!squareRes.ok) {
+        const errs = (data["errors"] as Array<{ detail: string }> ?? [])
+          .map(e => e.detail).join("; ");
+        res.status(400).json({ success: false, error: errs || "Payment declined" });
+        return;
+      }
+
+      const payment = (data as { payment: Record<string, unknown> }).payment;
+      req.log.info({ paymentId: payment["id"] }, "Square charge succeeded");
+
+      res.json({
+        success:    true,
+        paymentId:  payment["id"] as string,
+        receiptUrl: payment["receipt_url"] as string ?? null,
+      });
+    } catch (err) {
+      req.log.error(err, "Square charge error");
+      res.status(500).json({ success: false, error: "Server error processing payment" });
+    }
+  }
+);
+
 export default router;

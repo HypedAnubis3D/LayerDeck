@@ -18,6 +18,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://web.squarecdn.com/v1/square.js"></script>
 <style>
 :root{
   /* Backgrounds — deep navy palette */
@@ -13102,59 +13103,124 @@ function quickSellItem(catalogItemId){
   setTimeout(function(){renderConvCart();},80);
 }
 
+// ── Square Web Payments SDK ──────────────────────────────────────────────────
+var SQ_APP_ID='sq0idp-snoi-XftnTFSnqQQUsrOKQ';
+var SQ_LOCATION_ID='LBC978ZGBGS2M';
+var _sqCard=null;
+var _sqPayments=null;
+var _sqCartSnapshot=[];
+
 function convChargeViaSquare(){
-  const c=getEvt();if(!c){toast('No active convention','Open a convention first','warning');return;}
+  var c=getEvt();if(!c){toast('No active convention','Open a convention first','warning');return;}
   if(!convCart.length){toast('Add items to the cart first','','warning');return;}
-  const cartTotal=convCart.reduce(function(a,r){return a+r.qty*r.price;},0);
-  const totalCents=Math.round(cartTotal*100);
-  if(totalCents<1){toast('Total must be at least $0.01','','warning');return;}
-  const clientTxId='CONV-'+Date.now();
-  const cartSummary=convCart.map(function(r){return r.name+(r.qty>1?' ×'+r.qty:'');}).join(', ');
-  const pending={
-    source:'convention',
-    evtId:c.id||c.name,
-    items:convCart.map(function(r){return{catalogItemId:r.catalogItemId,name:r.name,qty:r.qty,price:r.price};}),
-    clientTxId,
-    timestamp:Date.now()
-  };
-  localStorage.setItem('pos_pending',JSON.stringify(pending));
-  var squareData={
-    amount_money:{amount:totalCents,currency_code:'USD'},
-    callback_url:'https://layerstack.replit.app/square/callback',
-    client_transaction_id:clientTxId,
-    notes:cartSummary.substring(0,499),
-    supported_tender_types:['CREDIT_CARD','CASH','OTHER','SQUARE_GIFT_CARD','CARD_ON_FILE'],
-    auto_return:true
-  };
-  var encoded=btoa(unescape(encodeURIComponent(JSON.stringify(squareData))));
-  // Android Intent URL — com.squareup is the correct package per Square SDK
-  var intentUrl='intent://payment/create?data='+encodeURIComponent(encoded)
-    +'#Intent;scheme=square-commerce-v1;package=com.squareup;S.browser_fallback_url='
-    +encodeURIComponent('https://play.google.com/store/apps/details?id=com.squareup')+';end';
-  console.log('[Square POS] Intent URL:', intentUrl);
-  console.log('[Square POS] Payload:', JSON.stringify(squareData,null,2));
-  showSquareInterstitial(intentUrl,cartTotal,cartSummary);
+  var cartTotal=convCart.reduce(function(a,r){return a+r.qty*r.price;},0);
+  var cartSummary=convCart.map(function(r){return r.name+(r.qty>1?' ×'+r.qty:'');}).join(', ');
+  _sqCartSnapshot=convCart.map(function(r){return{id:r.id,catalogItemId:r.catalogItemId,name:r.name,qty:r.qty,price:r.price};});
+  // Show modal
+  var modal=document.getElementById('sq-payment-modal');
+  if(!modal)return;
+  document.getElementById('sq-modal-total').textContent='$'+cartTotal.toFixed(2);
+  document.getElementById('sq-modal-items').textContent=cartSummary;
+  document.getElementById('sq-payment-status').textContent='';
+  var btn=document.getElementById('sq-pay-now-btn');
+  if(btn){btn.disabled=false;btn.textContent='PAY NOW';}
+  modal.style.display='flex';
+  // Destroy any previous card instance then init fresh
+  if(_sqCard){try{_sqCard.destroy();}catch(e){}; _sqCard=null;}
+  _initSqCard();
 }
 
-var _squareLaunchUrl='';
-function showSquareInterstitial(url,total,items){
-  _squareLaunchUrl=url;
-  var amtEl=document.getElementById('sq-interstitial-amount');
-  var itmEl=document.getElementById('sq-interstitial-items');
-  if(amtEl)amtEl.textContent='$'+(total||0).toFixed(2);
-  if(itmEl)itmEl.textContent=items||'';
-  var el=document.getElementById('square-interstitial');
-  if(el){el.style.display='flex';}
+function _initSqCard(){
+  if(!window.Square){
+    document.getElementById('sq-payment-status').textContent='Square SDK failed to load — check your connection.';
+    return;
+  }
+  try{
+    if(!_sqPayments){_sqPayments=window.Square.payments(SQ_APP_ID,SQ_LOCATION_ID);}
+    _sqPayments.card({
+      style:{
+        '.input-container':{borderColor:'#2a2a40',borderRadius:'6px'},
+        '.input-container.is-focus':{borderColor:'#c9a227'},
+        input:{color:'#e2e8f0',fontSize:'14px'},
+        'input::placeholder':{color:'#4a4a6a'}
+      }
+    }).then(function(card){
+      _sqCard=card;
+      return card.attach('#card-container');
+    }).catch(function(e){
+      console.error('[Square] card init error',e);
+      document.getElementById('sq-payment-status').textContent='Card form failed to load: '+(e.message||e);
+    });
+  }catch(e){
+    console.error('[Square] payments init error',e);
+    document.getElementById('sq-payment-status').textContent='Square init error: '+(e.message||e);
+  }
 }
-function launchSquarePOS(){
-  var url=_squareLaunchUrl;
-  var el=document.getElementById('square-interstitial');
-  if(el)el.style.display='none';
-  location.href=url;
+
+function dismissSqPayModal(){
+  var modal=document.getElementById('sq-payment-modal');
+  if(modal)modal.style.display='none';
+  if(_sqCard){try{_sqCard.destroy();}catch(e){}_sqCard=null;}
 }
-function dismissSquareInterstitial(){
-  var el=document.getElementById('square-interstitial');
-  if(el)el.style.display='none';
+
+async function submitSqPayment(){
+  if(!_sqCard){document.getElementById('sq-payment-status').textContent='Card form not ready — please wait.';return;}
+  var btn=document.getElementById('sq-pay-now-btn');
+  var statusEl=document.getElementById('sq-payment-status');
+  btn.disabled=true;btn.textContent='Processing…';
+  statusEl.textContent='';
+  try{
+    var result=await _sqCard.tokenize();
+    if(result.status!=='OK'){
+      statusEl.textContent=(result.errors||[]).map(function(e){return e.message;}).join(' ') || 'Card tokenization failed.';
+      btn.disabled=false;btn.textContent='PAY NOW';
+      return;
+    }
+    var cartTotal=_sqCartSnapshot.reduce(function(a,r){return a+r.qty*r.price;},0);
+    var cartSummary=_sqCartSnapshot.map(function(r){return r.name+(r.qty>1?' ×'+r.qty:'');}).join(', ');
+    var resp=await fetch('/api/square/charge',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        sourceId:result.token,
+        amountCents:Math.round(cartTotal*100),
+        note:cartSummary.substring(0,499),
+        idempotencyKey:'CONV-'+Date.now()
+      })
+    });
+    var data=await resp.json();
+    if(!data.success){
+      statusEl.textContent=data.error||'Payment declined.';
+      btn.disabled=false;btn.textContent='PAY NOW';
+      return;
+    }
+    // Record in convention
+    var c=getEvt();
+    if(c){
+      if(!c.daySales)c.daySales=[];
+      var sqRef=data.paymentId||'';
+      _sqCartSnapshot.forEach(function(r){
+        c.daySales.push({id:uid(),timestamp:Date.now(),itemName:r.name,catalogItemId:r.catalogItemId,qty:r.qty,price:r.price,method:'square',squareRef:sqRef});
+      });
+      saveEvt();
+    }
+    convCart=[];
+    dismissSqPayModal();
+    renderConvCart();
+    renderDaySales();
+    toast('Payment Complete!','$'+cartTotal.toFixed(2)+' charged via Square','success',5000);
+    // Discord
+    if(c){
+      var allSales=c.daySales||[];
+      var dayTotal=allSales.reduce(function(a,s){return a+parseFloat(s.price||0)*parseInt(s.qty||1);},0);
+      postToDiscord('convention_sale','💳 Square — '+(c.name||'Convention')+'\n'+cartSummary+' — $'+cartTotal.toFixed(2)+"\nToday's total: $"+dayTotal.toFixed(2));
+    }
+    if(data.receiptUrl){toast('Receipt','<a href="'+data.receiptUrl+'" target="_blank" style="color:var(--cyn)">View Square receipt ↗</a>','info',10000);}
+  }catch(e){
+    console.error('[Square] submitSqPayment error',e);
+    statusEl.textContent='Network error — please try again.';
+    btn.disabled=false;btn.textContent='PAY NOW';
+  }
 }
 
 function filterSaleProducts(){
@@ -19083,18 +19149,25 @@ function posShowReceipt(sale){
   document.body.appendChild(overlay);
 }
 </script>
-<!-- Square POS Interstitial -->
-<div id="square-interstitial" style="display:none;position:fixed;inset:0;z-index:99999;background:#0a0a12;flex-direction:column;align-items:center;justify-content:center;padding:32px;box-sizing:border-box;text-align:center">
-  <div style="font-size:48px;margin-bottom:20px">⬡</div>
-  <div style="font-family:Orbitron,monospace;font-size:18px;font-weight:900;color:#c9a227;letter-spacing:2px;margin-bottom:8px">SQUARE POS</div>
-  <div id="sq-interstitial-amount" style="font-family:Orbitron,monospace;font-size:36px;font-weight:700;color:#fff;margin-bottom:6px"></div>
-  <div id="sq-interstitial-items" style="font-size:11px;color:#888;margin-bottom:32px;max-width:280px;line-height:1.5"></div>
-  <button onclick="launchSquarePOS()" style="background:linear-gradient(135deg,#0d7a3e,#15803d);border:none;color:#fff;font-family:Orbitron,monospace;font-size:14px;font-weight:700;letter-spacing:2px;padding:18px 40px;border-radius:10px;cursor:pointer;width:100%;max-width:300px;margin-bottom:14px;box-shadow:0 4px 24px rgba(21,128,61,.4)">
-    TAP TO OPEN SQUARE POS
-  </button>
-  <button onclick="dismissSquareInterstitial()" style="background:none;border:1px solid #333;color:#666;font-size:11px;padding:10px 24px;border-radius:6px;cursor:pointer;width:100%;max-width:300px">
-    Cancel
-  </button>
+<!-- Square Web Payments Modal -->
+<div id="sq-payment-modal" style="display:none;position:fixed;inset:0;z-index:99998;background:rgba(0,0,0,.88);align-items:center;justify-content:center;padding:16px;box-sizing:border-box">
+  <div style="background:#141420;border:1px solid #2a2a40;border-radius:12px;padding:24px;width:100%;max-width:420px;max-height:90vh;overflow-y:auto;box-shadow:0 8px 48px rgba(0,0,0,.6)">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+      <div style="font-family:Orbitron,monospace;font-size:12px;font-weight:700;color:#c9a227;letter-spacing:2px">SQUARE PAYMENT</div>
+      <button onclick="dismissSqPayModal()" style="background:none;border:none;color:#555;font-size:20px;cursor:pointer;line-height:1;padding:0 4px">×</button>
+    </div>
+    <div id="sq-modal-items" style="font-size:10px;color:#888;margin-bottom:6px;line-height:1.6"></div>
+    <div style="display:flex;align-items:baseline;gap:6px;margin-bottom:20px">
+      <span id="sq-modal-total" style="font-family:Orbitron,monospace;font-size:32px;font-weight:700;color:#fff"></span>
+      <span style="font-size:9px;color:#555;letter-spacing:1px">USD</span>
+    </div>
+    <div id="card-container" style="margin-bottom:14px;min-height:90px"></div>
+    <div id="sq-payment-status" style="font-size:9px;color:#f87171;min-height:14px;margin-bottom:10px;line-height:1.4"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      <button onclick="dismissSqPayModal()" style="background:none;border:1px solid #2a2a40;color:#666;font-size:10px;padding:10px;border-radius:6px;cursor:pointer">Cancel</button>
+      <button id="sq-pay-now-btn" onclick="submitSqPayment()" style="background:linear-gradient(135deg,#0d7a3e,#15803d);border:none;color:#fff;font-family:Orbitron,monospace;font-size:10px;font-weight:700;padding:10px;border-radius:6px;cursor:pointer;letter-spacing:1px">PAY NOW</button>
+    </div>
+  </div>
 </div>
 </body>
 </html>
