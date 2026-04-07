@@ -44,18 +44,19 @@ function anthropicMessages(prompt: string): Promise<string> {
 }
 
 router.post("/search", async (req, res) => {
-  const { city, type } = req.body ?? {};
+  const { city, type, radius } = req.body ?? {};
   if (!city) {
     res.status(400).json({ error: "city is required" });
     return;
   }
 
   const eventType = type || "3D printing collectibles maker";
+  const searchRadius = typeof radius === "number" && radius > 0 ? radius : 50;
   const today = new Date().toISOString().split("T")[0];
 
   const prompt = `You are a helpful assistant for a small business owner who sells 3D printed collectibles at vendor events.
 
-Today is ${today}. Find upcoming conventions, craft fairs, maker markets, anime/pop-culture cons, and artisan markets near "${city}" (this may be a city name, city+state, or US zip code — use it to determine the region) where a vendor selling 3D printed collectibles could book a booth.
+Today is ${today}. Find upcoming conventions, craft fairs, maker markets, anime/pop-culture cons, and artisan markets within approximately ${searchRadius} miles of "${city}" (this may be a city name, city+state, or US zip code — use it to determine the region) where a vendor selling 3D printed collectibles could book a booth. Only include events within roughly ${searchRadius} miles — do not include events that are clearly much farther away.
 
 Focus on event type: ${eventType}
 

@@ -1150,6 +1150,7 @@ body.light-mode ::-webkit-scrollbar-thumb{background:var(--bdr2);}
 .cl-group-addinp{display:flex;gap:6px;padding:6px 0;}
 .sale-method{padding:5px 10px;border-radius:4px;border:1px solid var(--bdr2);background:none;color:var(--txt-d);font-size:7px;cursor:pointer;}
 .sale-method.active{background:var(--pur-d);border-color:var(--pur);color:var(--pur-b);}
+.evf-rad.active{background:var(--pur-d);border-color:var(--pur);color:var(--pur-b);}
 .sale-row{display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--bdr2);font-size:7.5px;}
 .sale-badge{display:inline-block;font-size:6px;padding:2px 5px;border-radius:3px;font-weight:bold;letter-spacing:.5px;}
 .sale-badge-cash{background:rgba(34,197,94,.15);color:#4ade80;border:1px solid rgba(34,197,94,.3);}
@@ -2540,10 +2541,11 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
     </div>
   </div>
   <div class="field"><div class="fl">Linked 3MF File (product default)</div>
-    <input type="text" id="ec-tmf-search" placeholder="🔍 Search 3MF files…" oninput="filterEcTmfSearch(this.value)" style="width:100%;background:var(--bg);border:1px solid var(--bdr2);color:var(--txt);padding:4px 9px;font-family:'Share Tech Mono',monospace;font-size:9px;border-radius:3px;margin-bottom:4px;box-sizing:border-box"/>
-    <select id="ec-tmf" style="width:100%;background:var(--bg);border:1px solid var(--bdr2);color:var(--txt);padding:7px 9px;font-family:'Share Tech Mono',monospace;font-size:9px;border-radius:3px;">
-      <option value="">— None —</option>
-    </select>
+    <div style="position:relative">
+      <input type="text" id="ec-tmf-search" placeholder="🔍 Search 3MF files…" oninput="filterEcTmfSearch(this.value)" onfocus="filterEcTmfSearch(this.value)" autocomplete="off" style="width:100%;background:var(--bg);border:1px solid var(--bdr2);color:var(--txt);padding:4px 9px;font-family:'Share Tech Mono',monospace;font-size:9px;border-radius:3px;box-sizing:border-box"/>
+      <div id="ec-tmf-dd" class="sale-search-dd" style="display:none"></div>
+    </div>
+    <input type="hidden" id="ec-tmf" value=""/>
     <div id="ec-tmf-info" style="font-size:7px;color:var(--txt-d);margin-top:4px"></div>
   </div>
   <div id="ec-variants-wrap" style="display:none">
@@ -2770,6 +2772,17 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
         <option value="gaming tabletop convention vendor">Gaming / Tabletop Convention</option>
         <option value="pop up market local vendor">Pop-up Market</option>
       </select>
+    </div>
+    <div>
+      <div style="font-size:7px;color:var(--txt-d);letter-spacing:1px;margin-bottom:4px">SEARCH RADIUS</div>
+      <div style="display:flex;gap:5px;flex-wrap:wrap" id="evf-radius-btns">
+        <button class="btn btn-ghost btn-sm evf-rad" data-r="25" onclick="setEvfRadius(this)">25 mi</button>
+        <button class="btn btn-ghost btn-sm evf-rad active" data-r="50" onclick="setEvfRadius(this)">50 mi</button>
+        <button class="btn btn-ghost btn-sm evf-rad" data-r="100" onclick="setEvfRadius(this)">100 mi</button>
+        <button class="btn btn-ghost btn-sm evf-rad" data-r="150" onclick="setEvfRadius(this)">150 mi</button>
+        <button class="btn btn-ghost btn-sm evf-rad" data-r="250" onclick="setEvfRadius(this)">250 mi</button>
+        <button class="btn btn-ghost btn-sm evf-rad" data-r="500" onclick="setEvfRadius(this)">500 mi</button>
+      </div>
     </div>
   </div>
   <button class="btn btn-pur" style="width:100%;padding:9px;margin-bottom:14px" onclick="searchEvents()">✨ Find Events with AI</button>
@@ -3021,10 +3034,11 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
   <!-- 3MF SELECTOR -->
   <div class="tmf-selector">
     <div class="tmf-sel-title">📦 Auto-fill from 3MF Library</div>
-    <input type="text" id="ep-tmf-search" placeholder="🔍 Search 3MF files…" oninput="filterEpTmfSearch(this.value)" style="width:100%;background:var(--bg);border:1px solid var(--bdr2);color:var(--txt);padding:4px 8px;font-family:'Share Tech Mono',monospace;font-size:9px;border-radius:3px;margin-bottom:4px;box-sizing:border-box"/>
-    <select id="ep-tmf-select" onchange="applyTmfToPrint()" style="width:100%;background:var(--bg);border:1px solid var(--bdr2);color:var(--txt);padding:6px 8px;font-family:'Share Tech Mono',monospace;font-size:9px;border-radius:3px;">
-      <option value="">— Manual Entry —</option>
-    </select>
+    <div style="position:relative">
+      <input type="text" id="ep-tmf-search" placeholder="🔍 Search 3MF files…" oninput="filterEpTmfSearch(this.value)" onfocus="filterEpTmfSearch(this.value)" autocomplete="off" style="width:100%;background:var(--bg);border:1px solid var(--bdr2);color:var(--txt);padding:4px 8px;font-family:'Share Tech Mono',monospace;font-size:9px;border-radius:3px;box-sizing:border-box"/>
+      <div id="ep-tmf-dd" class="sale-search-dd" style="display:none"></div>
+    </div>
+    <input type="hidden" id="ep-tmf-select" value=""/>
     <div class="tmf-prefill-badge" id="tmf-prefill-badge" style="display:none">✓ Fields pre-filled from 3MF — review and confirm</div>
   </div>
 
@@ -5458,31 +5472,56 @@ function buildSpoolOpts(selId=''){
 function populateTmfDropdown(){
   const inp=document.getElementById('ep-tmf-search');
   if(inp)inp.value='';
-  const sel=document.getElementById('ep-tmf-select');
-  sel.innerHTML=`<option value="">— Manual Entry —</option>`+tmfLib.map(t=>`<option value="${t.id}">${esc(t.name)}${t.hrs?' ('+t.hrs+'h)':''}</option>`).join('');
+  const hid=document.getElementById('ep-tmf-select');
+  if(hid)hid.value='';
+  const dd=document.getElementById('ep-tmf-dd');
+  if(dd)dd.style.display='none';
+}
+function _tmfOpts(filtered,onSelectFn,noneLabel){
+  return `<div class="sale-search-opt" style="border-bottom:1px solid var(--bdr2)" onmousedown="${onSelectFn}('','')"><span style="color:var(--txt-d)">${noneLabel}</span></div>`
+    +filtered.map(function(t){
+      const nm=t.name.replace(/'/g,"\\'");
+      return `<div class="sale-search-opt" onmousedown="${onSelectFn}('${t.id}','${nm}')">
+        <span style="font-family:'Share Tech Mono',monospace;font-size:8px">${esc(t.name)}</span>
+        <span class="opt-price">${t.hrs?formatHms(t.hrs):'—'}</span>
+      </div>`;
+    }).join('');
 }
 function filterEpTmfSearch(q){
-  const sel=document.getElementById('ep-tmf-select');
-  if(!sel)return;
-  const query=q.toLowerCase().trim();
-  const curVal=sel.value;
-  sel.innerHTML='<option value="">— Manual Entry —</option>'+
-    tmfLib
-      .filter(function(t){return !query||t.name.toLowerCase().includes(query)||(t.printer||'').toLowerCase().includes(query)||(t.filamentType||'').toLowerCase().includes(query);})
-      .map(function(t){return '<option value="'+t.id+'"'+(t.id===curVal?' selected':'')+'>'+esc(t.name)+(t.hrs?' ('+formatHms(t.hrs)+')':'')+'</option>';})
-      .join('');
+  const dd=document.getElementById('ep-tmf-dd');if(!dd)return;
+  const query=(q||'').toLowerCase().trim();
+  const filtered=query?tmfLib.filter(function(t){return t.name.toLowerCase().includes(query)||(t.printer||'').toLowerCase().includes(query)||(t.filamentType||'').toLowerCase().includes(query);}):tmfLib;
+  dd.innerHTML=_tmfOpts(filtered,'selectEpTmf','— Manual Entry (no 3MF) —');
+  dd.style.display='block';
+}
+function selectEpTmf(id,name){
+  const inp=document.getElementById('ep-tmf-search');
+  const hid=document.getElementById('ep-tmf-select');
+  const dd=document.getElementById('ep-tmf-dd');
+  if(inp)inp.value=name;
+  if(hid)hid.value=id;
+  if(dd)dd.style.display='none';
+  if(id){const t=tmfLib.find(function(x){return x.id===id;});if(t)applyTmf(t);}
+  else{
+    document.getElementById('tmf-prefill-badge').style.display='none';
+    if(document.getElementById('tmf-extra'))document.getElementById('tmf-extra').style.display='none';
+  }
 }
 function filterEcTmfSearch(q){
-  const sel=document.getElementById('ec-tmf');
-  if(!sel)return;
-  const query=q.toLowerCase().trim();
-  const curVal=sel.value;
-  sel.innerHTML='<option value="">— None —</option>'+
-    tmfLib
-      .filter(function(t){return !query||t.name.toLowerCase().includes(query)||(t.printer||'').toLowerCase().includes(query)||(t.filamentType||'').toLowerCase().includes(query);})
-      .map(function(t){return '<option value="'+t.id+'"'+(t.id===curVal?' selected':'')+'>'+esc(t.name)+(t.hrs?' ('+formatHms(t.hrs)+')':'')+'</option>';})
-      .join('');
-  updateTmfInfo();
+  const dd=document.getElementById('ec-tmf-dd');if(!dd)return;
+  const query=(q||'').toLowerCase().trim();
+  const filtered=query?tmfLib.filter(function(t){return t.name.toLowerCase().includes(query)||(t.printer||'').toLowerCase().includes(query)||(t.filamentType||'').toLowerCase().includes(query);}):tmfLib;
+  dd.innerHTML=_tmfOpts(filtered,'selectEcTmf','— None —');
+  dd.style.display='block';
+}
+function selectEcTmf(id,name){
+  const inp=document.getElementById('ec-tmf-search');
+  const hid=document.getElementById('ec-tmf');
+  const dd=document.getElementById('ec-tmf-dd');
+  if(inp)inp.value=name;
+  if(hid)hid.value=id;
+  if(dd)dd.style.display='none';
+  updateTmfInfo(id||undefined);
 }
 function addFilRow(spoolId='',grams='',colorHex=''){
   const id='fr-'+Date.now()+'-'+(filRowCount++);
@@ -10730,6 +10769,12 @@ document.addEventListener('click',function(e){
   if(!e.target.closest('#em-sale-search')&&!e.target.closest('#em-sale-dropdown')){
     hideSaleDropdown();
   }
+  if(!e.target.closest('#ep-tmf-search')&&!e.target.closest('#ep-tmf-dd')){
+    const d=document.getElementById('ep-tmf-dd');if(d)d.style.display='none';
+  }
+  if(!e.target.closest('#ec-tmf-search')&&!e.target.closest('#ec-tmf-dd')){
+    const d=document.getElementById('ec-tmf-dd');if(d)d.style.display='none';
+  }
 });
 
 let orderFilter='all';
@@ -11232,14 +11277,14 @@ function openAddCatalogItem(){
   document.getElementById('ec-cost').value='';
   document.getElementById('ec-stock').value='';
   document.getElementById('ec-lowstock').value='3';
-  // 3MF dropdown
+  // 3MF autocomplete
   const ecTmfSrch=document.getElementById('ec-tmf-search');
   if(ecTmfSrch)ecTmfSrch.value='';
-  const tmfSel=document.getElementById('ec-tmf');
-  tmfSel.innerHTML='<option value="">— None —</option>'+tmfLib.map(t=>'<option value="'+t.id+'">'+esc(t.name)+(t.hrs?' ('+formatHms(t.hrs)+')':'')+'</option>').join('');
-  tmfSel.value='';
+  const tmfHid=document.getElementById('ec-tmf');
+  if(tmfHid)tmfHid.value='';
+  const ecTmfDd=document.getElementById('ec-tmf-dd');
+  if(ecTmfDd)ecTmfDd.style.display='none';
   document.getElementById('ec-tmf-info').textContent='';
-  tmfSel.onchange=()=>updateTmfInfo();
   renderVariantRows([]);
   // Print profile dropdown
   const sel=document.getElementById('ec-profile');
@@ -11259,12 +11304,13 @@ function openEditCatalogItem(id){
   document.getElementById('ec-desc').value=item.desc||'';
   document.getElementById('ec-photo').value=item.photo||'';
   updateModalPhotoPreview();
-  // 3MF dropdown
+  // 3MF autocomplete — pre-fill with linked 3MF if any
   const ecSrch=document.getElementById('ec-tmf-search');
-  if(ecSrch)ecSrch.value='';
-  const tmfSel=document.getElementById('ec-tmf');
-  tmfSel.innerHTML='<option value="">— None —</option>'+tmfLib.map(t=>'<option value="'+t.id+'"'+(t.id===item.tmfId?' selected':'')+'>'+esc(t.name)+(t.hrs?' ('+formatHms(t.hrs)+')':'')+'</option>').join('');
-  tmfSel.onchange=()=>updateTmfInfo();
+  const ecTmfHid=document.getElementById('ec-tmf');
+  const ecTmfDd2=document.getElementById('ec-tmf-dd');
+  if(ecTmfDd2)ecTmfDd2.style.display='none';
+  if(ecTmfHid)ecTmfHid.value=item.tmfId||'';
+  if(ecSrch){const linked=tmfLib.find(function(t){return t.id===item.tmfId;});ecSrch.value=linked?linked.name:'';}
   updateTmfInfo(item.tmfId);
   // Variant rows with per-variant 3MF
   renderVariantRows(item.variants||[]);
@@ -14314,16 +14360,22 @@ function closeEventFinder(){
 }
 let _evfResults=[];
 let _convFilter='all';
+function setEvfRadius(btn){
+  document.querySelectorAll('#evf-radius-btns .evf-rad').forEach(function(b){b.classList.remove('active');});
+  btn.classList.add('active');
+}
 async function searchEvents(){
   const city=(document.getElementById('evf-city').value||'').trim();
   const type=document.getElementById('evf-type').value||'3D printing collectibles maker';
+  const activeRad=document.querySelector('#evf-radius-btns .evf-rad.active');
+  const radius=activeRad?parseInt(activeRad.dataset.r,10):50;
   const res=document.getElementById('evf-results');
   const btn=document.querySelector('#mod-event-finder .btn-pur');
   if(!city){toast('Enter a location','City, state, or zip code','warning');return;}
   res.innerHTML='<div style="text-align:center;padding:20px;font-size:8px;color:var(--txt-d);letter-spacing:1px">✨ Searching with AI… this takes a moment</div>';
   if(btn){btn.disabled=true;btn.textContent='Searching…';}
   try{
-    const r=await fetch('/api/events/search',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({city,type})});
+    const r=await fetch('/api/events/search',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({city,type,radius})});
     const data=await r.json();
     if(!r.ok||!data.events){throw new Error(data.error||'Search failed');}
     _evfResults=data.events;
