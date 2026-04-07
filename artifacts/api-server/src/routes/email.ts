@@ -77,11 +77,13 @@ router.post("/receipt", async (req, res) => {
         </thead>
         <tbody>${itemRows}</tbody>
       </table>
-      <!-- Total -->
-      <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 8px;background:#1a1a2e;border-radius:6px;margin-bottom:16px">
-        <span style="color:#94a3b8;font-size:12px">Total · ${methodLabel}</span>
-        <span style="color:#4ade80;font-family:Courier New,monospace;font-size:20px;font-weight:700">$${total}</span>
-      </div>
+      <!-- Total (table layout for email client compatibility) -->
+      <table width="100%" cellpadding="0" cellspacing="0" style="background:#1a1a2e;border-radius:6px;margin-bottom:16px">
+        <tr>
+          <td style="padding:14px 12px;color:#94a3b8;font-size:13px;font-family:Arial,sans-serif">Total &middot; ${methodLabel}</td>
+          <td style="padding:14px 12px;color:#4ade80;font-size:18px;font-weight:700;text-align:right;font-family:Courier New,monospace;white-space:nowrap">$${total}</td>
+        </tr>
+      </table>
       <p style="margin:0;color:#475569;font-size:11px;text-align:center">
         Questions? Reply to this email or find us on social media.<br>
         <span style="color:#c9a227">Thanks for supporting HypedAnubis3D! 🎉</span>

@@ -13270,8 +13270,7 @@ async function _initSqPayments(){
       try{
         _sqGooglePay=await _sqPayments.googlePay(payReq);
         await _sqGooglePay.attach('#sq-gpay-container');
-        _sqGooglePay.addEventListener('click',async function(e){
-          e.stopPropagation();
+        _sqGooglePay.addEventListener('click',async function(){
           var statusEl=document.getElementById('sq-payment-status');
           statusEl.textContent='Processing Google Pay…';
           try{
@@ -13286,8 +13285,7 @@ async function _initSqPayments(){
       try{
         _sqApplePay=await _sqPayments.applePay(payReq);
         await _sqApplePay.attach('#sq-apay-container');
-        _sqApplePay.addEventListener('click',async function(e){
-          e.stopPropagation();
+        _sqApplePay.addEventListener('click',async function(){
           var statusEl=document.getElementById('sq-payment-status');
           statusEl.textContent='Processing Apple Pay…';
           try{
