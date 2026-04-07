@@ -1,5 +1,7 @@
 import { Router } from 'express';
 import { logger } from '../lib/logger';
+import path from 'path';
+import fs from 'fs';
 
 const router = Router();
 
@@ -220,6 +222,18 @@ router.all('/proxy', async (req, res) => {
     logger.warn({ err: e?.message, path: piPath, code }, '[PiHub] Proxy failed');
     return res.status(502).json({ error: 'Pi Hub unreachable', code, hint });
   }
+});
+
+// Serve the latest Pi Hub server.js so the Pi can self-update with one curl command:
+//   curl -fsSL https://layerstack.replit.app/api/pihub/server-js -o ~/bambu-hub/server.js && pm2 restart layerdeck-hub
+router.get('/server-js', (_req, res) => {
+  const filePath = path.resolve(process.cwd(), '../pi-hub/server.js');
+  if (!fs.existsSync(filePath)) {
+    return res.status(404).json({ error: 'server.js not found' });
+  }
+  res.setHeader('Content-Type', 'text/javascript; charset=utf-8');
+  res.setHeader('Content-Disposition', 'attachment; filename="server.js"');
+  res.sendFile(filePath);
 });
 
 export default router;
