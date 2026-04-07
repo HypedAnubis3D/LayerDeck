@@ -1006,6 +1006,11 @@ async function _visionScan(name, manual = false) {
       } else {
         sendDiscordWatch(alertText);
       }
+      // Schedule a quick confirmation scan (90s) so we don't wait the full interval
+      if (!manual) {
+        console.log(`[Vision] Scheduling confirmation scan for ${name} in 90s`);
+        setTimeout(() => _visionScan(name).catch(() => {}), 90 * 1000);
+      }
     } else {
       // Reset consecutive failure counter on any non-failure result
       _vConsecFailures[name] = 0;
@@ -1021,6 +1026,11 @@ async function _visionScan(name, manual = false) {
           sendDiscordWatchWithImage(alertText, img.base64);
         } else {
           sendDiscordWatch(alertText);
+        }
+        // Schedule a confirmation scan 2 minutes after a warning alert
+        if (!manual) {
+          console.log(`[Vision] Scheduling confirmation scan for ${name} in 2 min (warning)`);
+          setTimeout(() => _visionScan(name).catch(() => {}), 2 * 60 * 1000);
         }
       }
     }

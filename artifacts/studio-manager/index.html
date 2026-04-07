@@ -3853,8 +3853,7 @@ function renderPrints(){
       '<span class="status-pill sp-printing">⟳ Printing</span>'+
       '</div>'+
       '<div class="pcat">'+(qi.category||'Other')+' · '+(qi.printer||'—')+
-      (qi.hrs?' · <span class="print-time-display" style="display:inline-flex;font-size:8px;padding:2px 6px">'+formatHms(qi.hrs)+'</span>':'')+
-      (startedLabel?'<span style="color:var(--txt-d)">'+startedLabel+'</span>':'')+'</div>'+
+      (function(){var lR=qi.printer&&piPrevStates[qi.printer]?Math.round(piPrevStates[qi.printer].mc_remaining_time||0):0;var ts=lR>0?(formatHms(lR/60)+' left'):(qi.hrs?formatHms(qi.hrs):'');return ts?' · <span class="print-time-display" style="display:inline-flex;font-size:8px;padding:2px 6px">'+ts+'</span>':'';})()+(startedLabel?'<span style="color:var(--txt-d)">'+startedLabel+'</span>':'')+'</div>'+
       '<div class="cost-box">'+
         '<div class="cb-title">Cost Breakdown</div>'+
         '<div class="cb-row"><span style="color:var(--txt-d)">Filament</span><span>$'+qiCost.filCost.toFixed(2)+'</span></div>'+
@@ -4428,17 +4427,17 @@ function renderQueue(){
         '</div>'+
         '<div class="kcard-name">'+esc(q.name)+(q.qty>1?' ×'+q.qty:'')+'</div>'+
         '<div class="kcard-meta">'+esc(q.printer||'?')+' · '+(function(){
-          if(q.hrs)return q.hrs+'h';
-          // Done items: compute elapsed from startedAt→completedAt when hrs not stored
-          if(st.key==='done'&&q.startedAt&&q.completedAt){
-            var elH=Math.round(((q.completedAt-q.startedAt)/3600000)*10)/10;
-            if(elH>0)return elH+'h';
-          }
-          // In-progress: show remaining time from Pi Hub live data
+          // In-progress: always prefer live Pi remaining time over stale stored hrs
           if(st.key==='inprogress'&&q.printer&&piPrevStates[q.printer]){
             var remMin=Math.round(piPrevStates[q.printer].mc_remaining_time||0);
-            if(remMin>0)return Math.round((remMin/60)*10)/10+'h';
+            if(remMin>0)return formatHms(remMin/60)+' left';
           }
+          // Done: elapsed from timestamps is most accurate
+          if(st.key==='done'&&q.startedAt&&q.completedAt){
+            var elH=Math.round(((q.completedAt-q.startedAt)/3600000)*100)/100;
+            if(elH>0)return formatHms(elH);
+          }
+          if(q.hrs)return formatHms(q.hrs);
           return'?h';
         }())+(q.orderId?' · '+esc(q.orderId):'')+' </div>'+
         doneByHtml+
