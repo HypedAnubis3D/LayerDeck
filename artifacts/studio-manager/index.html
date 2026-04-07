@@ -1137,9 +1137,32 @@ body.light-mode ::-webkit-scrollbar-thumb{background:var(--bdr2);}
 .checklist-cb{width:15px;height:15px;accent-color:var(--pur);cursor:pointer;flex-shrink:0;}
 .checklist-lbl{font-size:8px;color:var(--txt);flex:1;cursor:pointer;}
 .checklist-lbl.done{text-decoration:line-through;color:var(--txt-d);}
+.cl-group{border:1px solid var(--bdr);border-radius:6px;margin-bottom:6px;overflow:hidden;}
+.cl-group-hdr{display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--surf);cursor:pointer;user-select:none;}
+.cl-group-hdr:hover{background:var(--surf2);}
+.cl-group-lbl{font-size:8px;font-weight:bold;color:var(--txt-b);flex:1;}
+.cl-group-prog{font-size:7px;color:var(--txt-d);}
+.cl-group-prog.done{color:var(--grn-b);}
+.cl-group-arr{font-size:8px;color:var(--txt-d);transition:transform .2s;}
+.cl-group-arr.open{transform:rotate(90deg);}
+.cl-group-body{padding:0 10px;display:none;}
+.cl-group-body.open{display:block;}
+.cl-group-addinp{display:flex;gap:6px;padding:6px 0;}
 .sale-method{padding:5px 10px;border-radius:4px;border:1px solid var(--bdr2);background:none;color:var(--txt-d);font-size:7px;cursor:pointer;}
 .sale-method.active{background:var(--pur-d);border-color:var(--pur);color:var(--pur-b);}
-.sale-row{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--bdr2);font-size:7.5px;}
+.sale-row{display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--bdr2);font-size:7.5px;}
+.sale-badge{display:inline-block;font-size:6px;padding:2px 5px;border-radius:3px;font-weight:bold;letter-spacing:.5px;}
+.sale-badge-cash{background:rgba(34,197,94,.15);color:#4ade80;border:1px solid rgba(34,197,94,.3);}
+.sale-badge-card{background:rgba(59,130,246,.15);color:#60a5fa;border:1px solid rgba(59,130,246,.3);}
+.sale-badge-venmo{background:rgba(139,92,246,.15);color:#c084fc;border:1px solid rgba(139,92,246,.3);}
+.sale-badge-square{background:rgba(62,155,212,.15);color:#3e9bd4;border:1px solid rgba(62,155,212,.4);}
+.sale-badge-other{background:rgba(255,255,255,.08);color:var(--txt-d);border:1px solid var(--bdr2);}
+.sale-source-sq{font-size:5.5px;padding:1px 4px;border-radius:2px;background:rgba(62,155,212,.2);color:#3e9bd4;letter-spacing:.5px;}
+.sale-search-dd{position:absolute;left:0;right:0;background:var(--surf2);border:1px solid var(--pur);border-top:none;border-radius:0 0 6px 6px;max-height:180px;overflow-y:auto;z-index:200;}
+.sale-search-opt{padding:6px 10px;font-size:8px;color:var(--txt);cursor:pointer;display:flex;justify-content:space-between;align-items:center;}
+.sale-search-opt:hover,.sale-search-opt.active{background:var(--pur-d);}
+.sale-search-opt .opt-price{color:var(--grn-b);font-family:'Orbitron',monospace;font-size:7px;}
+.accuracy-chip{display:inline-block;font-size:6px;padding:2px 5px;border-radius:3px;font-weight:bold;margin-left:4px;}
 .qr-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin-top:10px;}
 .qr-card{background:var(--surf);border:1px solid var(--bdr);border-radius:6px;padding:10px;text-align:center;}
 .qr-card img{width:120px;height:120px;border-radius:4px;background:white;padding:4px;}
@@ -2818,10 +2841,6 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
         <button class="btn btn-ghost btn-sm" style="margin-left:auto" onclick="resetChecklist()">Reset All</button>
       </div>
       <div id="em-checklist"></div>
-      <div style="display:flex;gap:6px;margin-top:10px">
-        <input class="srch" id="em-check-new" placeholder="Add custom item…" style="flex:1" onkeydown="if(event.key==='Enter')addChecklistItem()"/>
-        <button class="btn btn-ghost btn-sm" onclick="addChecklistItem()">+ Add</button>
-      </div>
     </div>
     <!-- DAY SALES -->
     <div class="evt-section" id="esec-sales">
@@ -2830,14 +2849,20 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
         <div style="font-size:8px;font-weight:bold;color:var(--txt-b);margin-bottom:8px">Record a Sale</div>
         <div class="field">
           <div class="fl">Product</div>
-          <select id="em-sale-item" style="font-size:8px" onchange="fillSalePrice();toggleCustomSaleName(this)"></select>
-        </div>
-        <div id="em-custom-name-row" style="display:none">
-          <div class="field"><div class="fl">Item Name</div><input type="text" id="em-custom-name" placeholder="e.g. Anubis Figurine" style="font-size:9px"/></div>
+          <div style="position:relative">
+            <input class="srch" id="em-sale-search" placeholder="Search pack list or type custom…" oninput="filterSaleProducts()" onfocus="filterSaleProducts()" autocomplete="off" style="width:100%;box-sizing:border-box"/>
+            <div id="em-sale-dropdown" class="sale-search-dd" style="display:none"></div>
+          </div>
+          <input type="hidden" id="em-sale-item-id" value=""/>
+          <input type="hidden" id="em-sale-item-name" value=""/>
         </div>
         <div class="fr2">
           <div class="field"><div class="fl">Qty</div><input type="number" id="em-sale-qty" value="1" min="1" style="font-size:9px"/></div>
           <div class="field"><div class="fl">Price Each ($)</div><input type="number" id="em-sale-price" step="0.01" style="font-size:9px"/></div>
+        </div>
+        <div class="fr2">
+          <div class="field"><div class="fl">Customer (optional)</div><input type="text" id="em-sale-customer" placeholder="Guest" style="font-size:9px"/></div>
+          <div class="field"><div class="fl">Email (optional)</div><input type="email" id="em-sale-email" placeholder="name@email.com" style="font-size:9px"/></div>
         </div>
         <div style="display:flex;gap:4px;margin-bottom:8px" id="em-method-btns">
           <button class="sale-method active" data-m="cash"   onclick="setSaleMethod(this)">💵 Cash</button>
@@ -2847,7 +2872,10 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
         </div>
         <button class="btn btn-grn" style="width:100%;padding:8px" onclick="recordSale()">+ Record Sale</button>
       </div>
-      <div style="font-size:8px;font-weight:bold;color:var(--txt-b);margin-bottom:6px">Today's Sales</div>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+        <div style="font-size:8px;font-weight:bold;color:var(--txt-b)">Sales Feed</div>
+        <div id="em-sales-src-note" style="font-size:6.5px;color:var(--txt-d);margin-left:auto"></div>
+      </div>
       <div id="em-sales-list"></div>
     </div>
     <!-- RECONCILE -->
@@ -10699,6 +10727,9 @@ document.addEventListener('click',function(e){
   if(!e.target.closest('.overflow-wrap')){
     document.querySelectorAll('.overflow-menu.open').forEach(function(m){m.classList.remove('open');});
   }
+  if(!e.target.closest('#em-sale-search')&&!e.target.closest('#em-sale-dropdown')){
+    hideSaleDropdown();
+  }
 });
 
 let orderFilter='all';
@@ -12206,15 +12237,38 @@ let currentEventId=null;
 let evtSection='overview';
 let evtSaleMethod='cash';
 
+const CHECKLIST_GROUPS=[
+  {id:'transport', label:'🚗 Transport & Setup'},
+  {id:'printing',  label:'🖨 Printing Equipment'},
+  {id:'payment',   label:'💰 Payment & Sales'},
+  {id:'display',   label:'🏷 Display & Marketing'},
+  {id:'personal',  label:'🎒 Personal & Other'},
+  {id:'custom',    label:'✨ Custom'},
+];
+const _CLG_DEFAULT={
+  transport:['Power strip / extension cord','Extension cable (10m+)','Parking pass / directions','Bags / tissue paper for purchases','Table weights / clips'],
+  printing:['Printer(s) charged and tested','Extra filament spools','Spare nozzle + toolkit','Filament dry box / storage'],
+  payment:['Cash box + change','Square reader + phone mount','Card reader charged','Order log / receipt book'],
+  display:['Price signs / display cards','Display stands / risers','Business cards / flyers','QR code signs printed','Velcro / tape / zip ties'],
+  personal:['Phone charger + battery bank','Hand sanitizer','Event badge / tickets','Water / snacks'],
+  custom:[],
+};
 function defaultChecklist(){
-  return [
-    '🖨 Printer(s) charged and tested','🔌 Power strip / extension cord','🧵 Extra filament spools',
-    '🔧 Spare nozzle + toolkit','📋 Business cards / flyers','🏷 Price signs / display cards',
-    '💰 Cash box + change','📱 Square reader + phone mount','💳 Card reader charged',
-    '📦 Display stands / risers','🪤 Velcro / tape / zip ties','📷 Phone charger + battery bank',
-    '🛍 Bags / tissue paper for purchases','🧼 Hand sanitizer','📝 Order log / receipt book',
-    '🎟 Event badge / tickets','🚗 Parking pass / directions'
-  ].map(function(t){return {id:uid(),text:t,done:false};});
+  const items=[];
+  CHECKLIST_GROUPS.forEach(function(g){
+    (_CLG_DEFAULT[g.id]||[]).forEach(function(t){items.push({id:uid(),text:t,group:g.id,done:false});});
+  });
+  return items;
+}
+function _migrateChecklistItem(item){
+  if(item.group)return item;
+  const t=(item.text||'').toLowerCase();
+  if(/park|bag|power strip|extension|cord|table|clip/.test(t))return Object.assign({},item,{group:'transport'});
+  if(/print|filament|nozzle|toolkit|spool|dry/.test(t))return Object.assign({},item,{group:'printing'});
+  if(/cash|square|card|venmo|receipt|order log/.test(t))return Object.assign({},item,{group:'payment'});
+  if(/sign|stand|riser|business card|flyer|qr|velcro|tape/.test(t))return Object.assign({},item,{group:'display'});
+  if(/phone|sanitizer|badge|ticket|water|snack|charger/.test(t))return Object.assign({},item,{group:'personal'});
+  return Object.assign({},item,{group:'custom'});
 }
 
 function getEvt(){return conventions.find(function(c){return c.id===currentEventId;});}
@@ -12684,16 +12738,47 @@ function addManualPackItem(){
 }
 
 // ── Checklist ──
+var _clOpenGroups={transport:true,printing:true,payment:true,display:true,personal:true,custom:true};
+function toggleChecklistGroup(gid){
+  _clOpenGroups[gid]=!_clOpenGroups[gid];
+  const body=document.getElementById('cl-body-'+gid);
+  const arr=document.getElementById('cl-arr-'+gid);
+  if(body)body.classList.toggle('open',!!_clOpenGroups[gid]);
+  if(arr)arr.classList.toggle('open',!!_clOpenGroups[gid]);
+}
 function renderChecklist(){
   const c=getEvt();if(!c)return;
+  // Migrate old flat items that have no group
+  if(c.checklist&&c.checklist.some(function(x){return !x.group;})){
+    c.checklist=c.checklist.map(_migrateChecklistItem);saveEvt();
+  }
   const items=c.checklist||[];
-  const done=items.filter(function(x){return x.done;}).length;
-  document.getElementById('em-check-progress').textContent=done+'/'+items.length+' done';
-  document.getElementById('em-checklist').innerHTML=items.map(function(item){
-    return `<div class="checklist-item">
-      <input type="checkbox" class="checklist-cb" id="chk-${item.id}" ${item.done?'checked':''} onchange="toggleChecklistItem('${item.id}',this.checked)"/>
-      <label class="checklist-lbl${item.done?' done':''}" for="chk-${item.id}">${esc(item.text)}</label>
-      <button onclick="removeChecklistItem('${item.id}')" style="background:none;border:none;color:var(--txt-d);font-size:10px;cursor:pointer;padding:2px 4px">✕</button>
+  const totalDone=items.filter(function(x){return x.done;}).length;
+  document.getElementById('em-check-progress').textContent=totalDone+'/'+items.length+' done';
+  document.getElementById('em-checklist').innerHTML=CHECKLIST_GROUPS.map(function(g){
+    const gItems=items.filter(function(x){return x.group===g.id;});
+    const gDone=gItems.filter(function(x){return x.done;}).length;
+    const isOpen=_clOpenGroups[g.id]!==false;
+    const allDone=gItems.length>0&&gDone===gItems.length;
+    return `<div class="cl-group">
+      <div class="cl-group-hdr" onclick="toggleChecklistGroup('${g.id}')">
+        <span class="cl-group-arr${isOpen?' open':''}" id="cl-arr-${g.id}">▶</span>
+        <span class="cl-group-lbl">${g.label}</span>
+        <span class="cl-group-prog${allDone?' done':''}">${gDone}/${gItems.length}</span>
+      </div>
+      <div class="cl-group-body${isOpen?' open':''}" id="cl-body-${g.id}">
+        ${gItems.length?gItems.map(function(item){
+          return `<div class="checklist-item">
+            <input type="checkbox" class="checklist-cb" id="chk-${item.id}" ${item.done?'checked':''} onchange="toggleChecklistItem('${item.id}',this.checked)"/>
+            <label class="checklist-lbl${item.done?' done':''}" for="chk-${item.id}">${esc(item.text)}</label>
+            <button onclick="removeChecklistItem('${item.id}')" style="background:none;border:none;color:var(--txt-d);font-size:10px;cursor:pointer;padding:2px 4px">✕</button>
+          </div>`;
+        }).join(''):'<div style="font-size:7px;color:var(--txt-d);padding:8px 0">No items</div>'}
+        <div class="cl-group-addinp">
+          <input class="srch" id="cl-inp-${g.id}" placeholder="Add to ${g.label.replace(/^.+? /,'')}…" style="flex:1;font-size:7.5px" onkeydown="if(event.key==='Enter')addChecklistItem('${g.id}')"/>
+          <button class="btn btn-ghost btn-sm" onclick="addChecklistItem('${g.id}')">+</button>
+        </div>
+      </div>
     </div>`;
   }).join('');
 }
@@ -12707,13 +12792,14 @@ function removeChecklistItem(id){
   c.checklist=(c.checklist||[]).filter(function(x){return x.id!==id;});
   saveEvt();renderChecklist();
 }
-function addChecklistItem(){
-  const inp=document.getElementById('em-check-new');
+function addChecklistItem(gid){
+  const grp=gid||'custom';
+  const inp=document.getElementById('cl-inp-'+grp)||document.getElementById('em-check-new');
   const text=(inp?.value||'').trim();if(!text)return;
   const c=getEvt();if(!c)return;
   if(!c.checklist) c.checklist=[];
-  c.checklist.push({id:uid(),text,done:false});
-  saveEvt();inp.value='';renderChecklist();
+  c.checklist.push({id:uid(),text,group:grp,done:false});
+  saveEvt();if(inp)inp.value='';renderChecklist();
 }
 function resetChecklist(){
   const c=getEvt();if(!c)return;
@@ -12722,33 +12808,72 @@ function resetChecklist(){
 }
 
 // ── Day Sales ──
-function populateSaleDropdown(){
+var _saleSearchSelected={id:'',name:'',price:0}; // currently selected catalog item
+function populateSaleDropdown(){filterSaleProducts();}  // legacy shim
+function filterSaleProducts(){
   const c=getEvt();if(!c)return;
-  const sel=document.getElementById('em-sale-item');if(!sel)return;
+  const inp=document.getElementById('em-sale-search');if(!inp)return;
+  const dd=document.getElementById('em-sale-dropdown');if(!dd)return;
+  const q=(inp.value||'').toLowerCase().trim();
   const items=c.inPersonCatalog||[];
-  sel.innerHTML=items.length
-    ?items.map(function(i){return `<option value="${esc(i.catalogItemId)}" data-price="${i.price||0}">${esc(i.name)} — $${parseFloat(i.price||0).toFixed(2)}</option>`;}).join('')
-    +'<option value="__custom" data-price="0">Custom / unlisted item…</option>'
-    :'<option value="__custom" data-price="0">Custom / unlisted item…</option>';
+  const filtered=q?items.filter(function(i){return (i.name||'').toLowerCase().includes(q);}):items;
+  const opts=filtered.map(function(i){
+    return `<div class="sale-search-opt" onmousedown="selectSaleProduct('${esc(i.catalogItemId)}','${esc(i.name.replace(/'/g,"\\'"))}',${parseFloat(i.price||0)})">
+      <span>${esc(i.name)}</span>
+      <span class="opt-price">$${parseFloat(i.price||0).toFixed(2)}</span>
+    </div>`;
+  }).join('');
+  const customOpt=`<div class="sale-search-opt" style="border-top:1px solid var(--bdr2)" onmousedown="selectSaleProduct('__custom','${q||'Custom Item'}',0)">
+    <span style="color:var(--txt-d)">✏ ${q?'"'+q+'" — Custom item':'Custom / unlisted…'}</span>
+    <span class="opt-price">$0.00</span>
+  </div>`;
+  dd.innerHTML=opts+customOpt;
+  dd.style.display='block';
 }
-function fillSalePrice(){
-  const sel=document.getElementById('em-sale-item');
-  const price=sel?.selectedOptions[0]?.dataset?.price||0;
-  document.getElementById('em-sale-price').value=parseFloat(price).toFixed(2);
+function selectSaleProduct(id,name,price){
+  _saleSearchSelected={id,name,price};
+  const inp=document.getElementById('em-sale-search');
+  const priceEl=document.getElementById('em-sale-price');
+  const dd=document.getElementById('em-sale-dropdown');
+  if(inp)inp.value=id==='__custom'?name:name;
+  if(priceEl&&price>0)priceEl.value=parseFloat(price).toFixed(2);
+  if(dd)dd.style.display='none';
+  document.getElementById('em-sale-item-id').value=id;
+  document.getElementById('em-sale-item-name').value=name;
+}
+function hideSaleDropdown(){
+  const dd=document.getElementById('em-sale-dropdown');
+  if(dd)dd.style.display='none';
 }
 function setSaleMethod(btn){
   evtSaleMethod=btn.dataset.m;
   document.querySelectorAll('#em-method-btns .sale-method').forEach(function(b){b.classList.toggle('active',b===btn);});
 }
+function _getSquareSalesForEvent(c){
+  if(!c||!c.start)return[];
+  const evtStart=new Date(c.start+'T00:00:00').getTime();
+  const evtEnd=c.end?new Date(c.end+'T23:59:59').getTime():evtStart+86399000;
+  return (typeof orders!=='undefined'?orders:[]).filter(function(o){
+    if((o.platform||'').toLowerCase()!=='square')return false;
+    const ts=o.timestamp||o.createdAt||0;
+    if(!ts)return false;
+    const t=typeof ts==='string'?new Date(ts).getTime():ts;
+    return t>=evtStart&&t<=evtEnd;
+  });
+}
 function renderRunningTotal(){
   const c=getEvt();if(!c)return;
-  const sales=c.daySales||[];
-  const total=sales.reduce(function(a,s){return a+parseFloat(s.price||0)*parseInt(s.qty||1);},0);
+  const manualSales=c.daySales||[];
+  const squareSales=_getSquareSalesForEvent(c);
+  const manTotal=manualSales.reduce(function(a,s){return a+parseFloat(s.price||0)*parseInt(s.qty||1);},0);
+  const sqTotal=squareSales.reduce(function(a,o){return a+parseFloat(o.totalPrice||o.total||0);},0);
+  const total=manTotal+sqTotal;
+  const txCount=manualSales.length+squareSales.length;
   const cost=c.cost||0;
   const pct=cost>0?Math.min(100,total/cost*100):100;
   document.getElementById('em-running-total').innerHTML=`
     <div style="font-size:28px;font-weight:bold;color:var(--grn-b);font-family:Orbitron,monospace">$${total.toFixed(2)}</div>
-    <div style="font-size:7px;color:var(--txt-d);margin:4px 0">${sales.length} transaction${sales.length!==1?'s':''} · Break-even: $${cost.toFixed(0)}</div>
+    <div style="font-size:7px;color:var(--txt-d);margin:4px 0">${txCount} transaction${txCount!==1?'s':''} · Break-even: $${cost.toFixed(0)}${squareSales.length?' · <span style="color:#3e9bd4">'+squareSales.length+' via Square</span>':''}</div>
     <div class="break-even-bar" style="max-width:280px;margin:0 auto">
       <div class="break-even-fill" style="width:${pct.toFixed(1)}%;background:${total>=cost?'var(--grn)':'var(--amb)'}"></div>
     </div>
@@ -12756,59 +12881,96 @@ function renderRunningTotal(){
 }
 function renderDaySales(){
   const c=getEvt();if(!c)return;
-  populateSaleDropdown();
-  fillSalePrice();
   renderRunningTotal();
-  const sales=[...c.daySales||[]].reverse();
-  const methodIcons={cash:'💵',card:'💳',venmo:'📱',other:'💰'};
-  const c2=getEvt();
-  document.getElementById('em-sales-list').innerHTML=sales.length
-    ?sales.map(function(s){
-        var alreadyOrdered=orders.some(function(o){return o.conventionSaleId===s.id;});
+  // Build unified feed: merge manual + Square, sort newest first
+  const methodBadge=function(m){
+    const map={cash:'sale-badge-cash',card:'sale-badge-card',venmo:'sale-badge-venmo',square:'sale-badge-square',other:'sale-badge-other'};
+    const labels={cash:'💵 Cash',card:'💳 Card',venmo:'📱 Venmo',square:'SQ',other:'Other'};
+    return `<span class="sale-badge ${map[m]||'sale-badge-other'}">${labels[m]||m||'—'}</span>`;
+  };
+  const manualRows=(c.daySales||[]).map(function(s){
+    return {ts:s.timestamp||0,isSquare:false,sale:s};
+  });
+  const squareSales=_getSquareSalesForEvent(c);
+  const squareRows=squareSales.map(function(o){
+    return {ts:o.timestamp?new Date(o.timestamp).getTime():0,isSquare:true,order:o};
+  });
+  const allRows=[...manualRows,...squareRows].sort(function(a,b){return b.ts-a.ts;});
+  const srcNote=document.getElementById('em-sales-src-note');
+  if(srcNote)srcNote.textContent=squareSales.length?squareSales.length+' Square order'+(squareSales.length!==1?'s':'')+' from event dates':'Manual entries only';
+  document.getElementById('em-sales-list').innerHTML=allRows.length
+    ?allRows.map(function(row){
+      if(row.isSquare){
+        const o=row.order;
+        const customer=(o.customerName||o.name||'').trim()||'Guest';
+        const itemSummary=(o.lineItems||[]).map(function(li){return esc(li.name||'Item')+(li.quantity&&li.quantity>1?' ×'+li.quantity:'');}).join(', ')||esc(o.productName||'Order');
+        const amt=parseFloat(o.totalPrice||o.total||0);
+        const t=new Date(row.ts);
+        const tStr=row.ts?t.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}):'';
         return `<div class="sale-row">
-          <span style="color:var(--txt-d);font-size:10px">${methodIcons[s.method]||'💰'}</span>
-          <span style="flex:1;color:var(--txt)">${esc(s.itemName)}</span>
-          <span style="color:var(--txt-d)">×${s.qty}</span>
+          ${methodBadge('square')}
+          <div style="flex:1;min-width:0">
+            <div style="color:var(--txt);font-size:7.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${itemSummary}</div>
+            <div style="color:var(--txt-d);font-size:6.5px">${esc(customer)}${tStr?' · '+tStr:''} <span class="sale-source-sq">SQUARE</span></div>
+          </div>
+          <span style="color:var(--grn-b);font-family:Orbitron,monospace;min-width:50px;text-align:right">$${amt.toFixed(2)}</span>
+        </div>`;
+      } else {
+        const s=row.sale;
+        const alreadyOrdered=orders.some(function(o){return o.conventionSaleId===s.id;});
+        const customer=(s.customerName||'').trim()||'Guest';
+        const t=new Date(s.timestamp||0);
+        const tStr=s.timestamp?t.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}):'';
+        return `<div class="sale-row">
+          ${methodBadge(s.method)}
+          <div style="flex:1;min-width:0">
+            <div style="color:var(--txt);font-size:7.5px">${esc(s.itemName)} <span style="color:var(--txt-d)">×${s.qty}</span></div>
+            <div style="color:var(--txt-d);font-size:6.5px">${esc(customer)}${s.customerEmail?' · '+esc(s.customerEmail):''}${tStr?' · '+tStr:''}</div>
+          </div>
           <span style="color:var(--grn-b);font-family:Orbitron,monospace;min-width:50px;text-align:right">$${(parseFloat(s.price||0)*parseInt(s.qty||1)).toFixed(2)}</span>
           ${alreadyOrdered
             ?'<span style="font-size:6px;color:var(--grn-b);padding:2px 6px;border:1px solid var(--grn);border-radius:2px">✓ Ordered</span>'
             :`<button onclick="recordSaleAsOrder('${s.id}')" title="Create order record" style="background:rgba(168,85,247,.15);border:1px solid rgba(168,85,247,.4);color:#c084fc;font-size:7px;cursor:pointer;padding:2px 6px;border-radius:3px">→ Order</button>`}
           <button onclick="deleteSale('${s.id}')" style="background:none;border:none;color:var(--txt-d);font-size:10px;cursor:pointer;padding:2px 4px">✕</button>
         </div>`;
+      }
     }).join('')
     :'<div style="text-align:center;color:var(--txt-d);font-size:8px;padding:20px">No sales recorded yet</div>';
 }
-function toggleCustomSaleName(sel){
-  const row=document.getElementById('em-custom-name-row');
-  if(row) row.style.display=(sel&&sel.value==='__custom')?'block':'none';
-  if(sel&&sel.value!=='__custom'){const inp=document.getElementById('em-custom-name');if(inp)inp.value='';}
-}
 function recordSale(){
   const c=getEvt();if(!c)return;
-  const sel=document.getElementById('em-sale-item');
-  const catalogItemId=sel?.value||'__custom';
-  const customNameEl=document.getElementById('em-custom-name');
-  const customName=(customNameEl?.value||'').trim();
-  const itemName=catalogItemId==='__custom'
-    ?customName||'Custom Item'
-    :(c.inPersonCatalog||[]).find(function(i){return i.catalogItemId===catalogItemId;})?.name||'Item';
-  if(catalogItemId==='__custom'&&!customName){toast('Enter an item name','','warning');customNameEl?.focus();return;}
+  const searchInp=document.getElementById('em-sale-search');
+  const searchVal=(searchInp?.value||'').trim();
+  const catalogItemId=document.getElementById('em-sale-item-id')?.value||'__custom';
+  const storedName=document.getElementById('em-sale-item-name')?.value||'';
+  const itemName=storedName||searchVal||'Custom Item';
+  if(!itemName||itemName==='Custom Item'&&!searchVal){toast('Enter or select a product','','warning');searchInp?.focus();return;}
   const qty=parseInt(document.getElementById('em-sale-qty')?.value||1)||1;
   const price=parseFloat(document.getElementById('em-sale-price')?.value||0)||0;
   if(!price){toast('Enter a price','','warning');return;}
+  const customerName=(document.getElementById('em-sale-customer')?.value||'').trim();
+  const customerEmail=(document.getElementById('em-sale-email')?.value||'').trim();
   const sale={id:uid(),timestamp:Date.now(),itemName,catalogItemId,qty,price,method:evtSaleMethod};
+  if(customerName)sale.customerName=customerName;
+  if(customerEmail)sale.customerEmail=customerEmail;
   if(!c.daySales) c.daySales=[];
   c.daySales.push(sale);
+  // reset form
+  if(searchInp)searchInp.value='';
+  _saleSearchSelected={id:'',name:'',price:0};
+  document.getElementById('em-sale-item-id').value='';
+  document.getElementById('em-sale-item-name').value='';
   const qtyEl=document.getElementById('em-sale-qty');if(qtyEl)qtyEl.value=1;
-  if(customNameEl)customNameEl.value='';
+  document.getElementById('em-sale-price').value='';
+  const cust=document.getElementById('em-sale-customer');if(cust)cust.value='';
+  const email=document.getElementById('em-sale-email');if(email)email.value='';
   saveEvt();
   renderDaySales();
   toast('Sale Recorded',itemName+' × '+qty+' — $'+(price*qty).toFixed(2),'success');
-  // Discord: convention sale alert
   (function(){
     const allSales=c.daySales||[];
     const dayTotal=allSales.reduce(function(a,s){return a+(parseFloat(s.price||0)*parseInt(s.qty||1));},0);
-    const badgeMap={square:'[SQ]',cash:'[Cash]',venmo:'[Venmo]',other:'[Other]'};
+    const badgeMap={cash:'[Cash]',card:'[Card]',venmo:'[Venmo]',other:'[Other]'};
     const badge=badgeMap[evtSaleMethod]||'[Manual]';
     const remaining=(c.inPersonCatalog||[]).find(function(i){return i.catalogItemId===catalogItemId;});
     var remQty='?';
@@ -12818,10 +12980,10 @@ function recordSale(){
     }
     const lines=[
       '💰 Sale — '+(c.name||'Convention')+' · '+new Date().toLocaleDateString('en-US',{month:'long',day:'numeric'}),
-      itemName+' × '+qty+' — $'+(price*qty).toFixed(2)+' '+badge,
-      'Pack list remaining: '+itemName+' '+remQty,
+      itemName+' × '+qty+' — $'+(price*qty).toFixed(2)+' '+badge+(customerName?' · '+customerName:''),
+      remaining?'Pack list remaining: '+itemName+' '+remQty:'',
       "Today's total: $"+dayTotal.toFixed(2)+' across '+allSales.length+' sale'+(allSales.length!==1?'s':'')
-    ];
+    ].filter(Boolean);
     postToDiscord('convention_sale',lines.join('\n'));
   })();
 }
@@ -14883,6 +15045,7 @@ async function onPiPrintFinished(name,data){
     const _tapoWSnap=_getTapoWattsForPrinter(name);
     Object.assign(_promotePlaceholder,{
       hrs:actualHrs,
+      estimatedHrs:_finTmf&&_finTmf.hrs?_finTmf.hrs:undefined,
       filaments:_keepFilaments?_promotePlaceholder.filaments:filamentEntries,
       status:'done',
       finishedAt:Date.now(),
@@ -14899,6 +15062,7 @@ async function onPiPrintFinished(name,data){
       category:'Other',
       printer:name,
       hrs:actualHrs,
+      estimatedHrs:_finTmf&&_finTmf.hrs?_finTmf.hrs:undefined,
       qty:1,
       filaments:filamentEntries,
       status:'done',
@@ -15945,6 +16109,44 @@ async function confirmSkipRefund(){
 
 // ── RENDER FUNCTIONS ──
 
+function getPrinterAccuracy(printerName){
+  const recent=(typeof prints!=='undefined'?prints:[])
+    .filter(function(p){return p.printer===printerName&&p.hrs>0&&p.estimatedHrs>0&&p.status==='done';})
+    .slice(-15);
+  if(!recent.length)return null;
+  const deltas=recent.map(function(p){return (p.hrs-p.estimatedHrs)/p.estimatedHrs*100;});
+  const avg=deltas.reduce(function(a,b){return a+b;},0)/deltas.length;
+  // Per-material breakdown
+  const byMat={};
+  recent.forEach(function(p){
+    (p.filaments||[]).forEach(function(f){
+      const spool=(typeof spools!=='undefined'?spools:[]).find(function(s){return s.id===f.spoolId;});
+      const mat=(spool&&spool.material)||'?';
+      if(!byMat[mat])byMat[mat]={sum:0,count:0};
+      byMat[mat].sum+=(p.hrs-p.estimatedHrs)/p.estimatedHrs*100;
+      byMat[mat].count++;
+    });
+    if(!p.filaments||!p.filaments.length){
+      if(!byMat['?'])byMat['?']={sum:0,count:0};
+      byMat['?'].sum+=(p.hrs-p.estimatedHrs)/p.estimatedHrs*100;
+      byMat['?'].count++;
+    }
+  });
+  const matBreakdown=Object.entries(byMat).map(function(e){return {mat:e[0],avg:e[1].sum/e[1].count,count:e[1].count};});
+  return {avg,count:recent.length,matBreakdown};
+}
+function _accuracyChipHtml(acc){
+  if(!acc)return'';
+  const v=acc.avg;
+  const sign=v>=0?'+':'';
+  const cls=Math.abs(v)<=5?'background:rgba(34,197,94,.15);color:#4ade80;border:1px solid rgba(34,197,94,.3)'
+    :Math.abs(v)<=15?'background:rgba(251,191,36,.15);color:#fbbf24;border:1px solid rgba(251,191,36,.3)'
+    :'background:rgba(239,68,68,.15);color:#f87171;border:1px solid rgba(239,68,68,.3)';
+  const tooltip='Based on '+acc.count+' print'+(acc.count!==1?'s':'')
+    +(acc.matBreakdown.length>1?' · '+acc.matBreakdown.map(function(m){return m.mat+': '+( m.avg>=0?'+':'')+m.avg.toFixed(0)+'%';}).join(', '):'');
+  return `<span class="accuracy-chip" style="${cls}" title="${esc(tooltip)}">${sign}${v.toFixed(0)}% time est</span>`;
+}
+
 function renderPrinters(){
   document.getElementById('printers-cnt').textContent=printerRecords.length+' printers';
   const g=document.getElementById('printers-grid');
@@ -16072,11 +16274,13 @@ function renderPrinters(){
       '<span style="font-size:8px;color:'+stateColor+';font-family:\'Orbitron\',monospace;font-weight:700;letter-spacing:1px" id="pi-'+id+'-state">'+stateLabel+'</span>':
       '';
 
+    const _acc=getPrinterAccuracy(p.name);
+    const _accChip=_accuracyChipHtml(_acc);
     return '<div class="printer-card" id="pcard-'+p.id+'" style="">'+
       // Card header — always visible
       '<div style="display:flex;align-items:center;gap:10px;cursor:pointer" onclick="togglePrinterCard(\''+p.id+'\')">'+
         '<div style="flex:1">'+
-          '<div class="printer-card-name">'+esc(p.name)+'</div>'+
+          '<div class="printer-card-name">'+esc(p.name)+(_accChip?' '+_accChip:'')+'</div>'+
           '<div class="printer-card-model" style="font-size:7px;color:var(--txt-d)">'+esc(p.model||'—')+' · '+amsDisplay+' · '+p.nozzle+'mm'+
           '</div>'+
         '</div>'+
