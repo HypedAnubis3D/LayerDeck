@@ -13128,8 +13128,10 @@ function convChargeViaSquare(){
   };
   var encoded=btoa(unescape(encodeURIComponent(JSON.stringify(squareData))));
   var url='square-commerce-v1://payment/create?data='+encodeURIComponent(encoded);
+  console.log('[Square POS] Deep-link URL:', url);
+  console.log('[Square POS] Payload:', JSON.stringify(squareData,null,2));
   toast('Opening Square POS','Switch to the Square POS app — come back when done','info',6000);
-  var a=document.createElement('a');a.href=url;document.body.appendChild(a);a.click();document.body.removeChild(a);
+  window.open(url,'_self');
 }
 
 function filterSaleProducts(){
