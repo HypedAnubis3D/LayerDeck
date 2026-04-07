@@ -13262,9 +13262,7 @@ async function _initSqPayments(){
       var payReq=_sqPayments.paymentRequest({
         countryCode:'US',
         currencyCode:'USD',
-        total:{amount:_sqCartTotal.toFixed(2),label:'HypedAnubis3D'},
-        requestBillingContact:false,
-        requestShippingContact:false
+        total:{amount:_sqCartTotal.toFixed(2),label:'HypedAnubis3D'}
       });
       // Google Pay
       try{
@@ -13272,30 +13270,62 @@ async function _initSqPayments(){
         await _sqGooglePay.attach('#sq-gpay-container');
         _sqGooglePay.addEventListener('click',async function(){
           var statusEl=document.getElementById('sq-payment-status');
-          statusEl.textContent='Processing Google Pay…';
+          statusEl.style.color='#94a3b8';
+          statusEl.textContent='Opening Google Pay…';
           try{
             var result=await _sqGooglePay.tokenize();
-            if(result.status==='OK'){await _processSqToken(result.token,'google_pay');}
-            else{statusEl.textContent=(result.errors||[]).map(function(x){return x.message;}).join(' ')||'Google Pay cancelled.';}
-          }catch(ex){statusEl.textContent='Google Pay error: '+(ex.message||ex);}
+            if(result.status==='OK'){
+              await _processSqToken(result.token,'google_pay');
+            }else{
+              var gpayErr=(result.errors||[]).map(function(x){return x.message;}).join(' ')||'Google Pay unavailable on this domain.';
+              statusEl.style.color='#f87171';
+              statusEl.textContent=gpayErr;
+              toast('Google Pay',''+gpayErr,'error',6000);
+            }
+          }catch(ex){
+            console.error('[Square] GPay tokenize',ex);
+            var msg=ex.message||String(ex)||'Google Pay failed.';
+            statusEl.style.color='#f87171';
+            statusEl.textContent=msg;
+            toast('Google Pay Error',''+msg,'error',6000);
+          }
         });
         hasPaymentRequest=true;
-      }catch(gpayErr){console.info('[Square] Google Pay not available',gpayErr);}
+      }catch(gpayErr){
+        console.info('[Square] Google Pay not available',gpayErr);
+        document.getElementById('sq-gpay-container').style.display='none';
+      }
       // Apple Pay
       try{
         _sqApplePay=await _sqPayments.applePay(payReq);
         await _sqApplePay.attach('#sq-apay-container');
         _sqApplePay.addEventListener('click',async function(){
           var statusEl=document.getElementById('sq-payment-status');
-          statusEl.textContent='Processing Apple Pay…';
+          statusEl.style.color='#94a3b8';
+          statusEl.textContent='Opening Apple Pay…';
           try{
             var result=await _sqApplePay.tokenize();
-            if(result.status==='OK'){await _processSqToken(result.token,'apple_pay');}
-            else{statusEl.textContent=(result.errors||[]).map(function(x){return x.message;}).join(' ')||'Apple Pay cancelled.';}
-          }catch(ex){statusEl.textContent='Apple Pay error: '+(ex.message||ex);}
+            if(result.status==='OK'){
+              await _processSqToken(result.token,'apple_pay');
+            }else{
+              var apayErr=(result.errors||[]).map(function(x){return x.message;}).join(' ')||'Apple Pay unavailable.';
+              statusEl.style.color='#f87171';
+              statusEl.textContent=apayErr;
+              toast('Apple Pay',''+apayErr,'error',6000);
+            }
+          }catch(ex){
+            console.error('[Square] APay tokenize',ex);
+            var msg=ex.message||String(ex)||'Apple Pay failed.';
+            statusEl.style.color='#f87171';
+            statusEl.textContent=msg;
+            toast('Apple Pay Error',''+msg,'error',6000);
+          }
         });
         hasPaymentRequest=true;
-      }catch(apayErr){console.info('[Square] Apple Pay not available',apayErr);}
+      }catch(apayErr){
+        console.info('[Square] Apple Pay not available',apayErr);
+        document.getElementById('sq-apay-container').style.display='none';
+      }
     }catch(prErr){console.info('[Square] Payment request not available',prErr);}
     if(hasPaymentRequest){document.getElementById('sq-divider').style.display='flex';}
     // ── Card ──────────────────────────────────────────────────────────────
