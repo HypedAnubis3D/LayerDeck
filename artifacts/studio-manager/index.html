@@ -407,9 +407,10 @@ input.srch::placeholder{color:var(--txt-d);}
 .tmf-sel-title{font-size:7px;color:var(--pur);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:6px;}
 .tmf-prefill-badge{display:inline-flex;align-items:center;gap:4px;background:rgba(144,96,208,.1);border:1px solid var(--pur-d);color:var(--pur);padding:2px 8px;border-radius:10px;font-size:7px;letter-spacing:1px;margin-top:5px;}
 /* ── Convention POS ── */
-.pos-layout{display:grid;grid-template-columns:1fr 290px;gap:14px;align-items:start;}
+.pos-layout{display:grid;grid-template-columns:1fr 290px;gap:14px;align-items:start;width:100%;overflow-x:hidden;}
 @media(max-width:680px){.pos-layout{grid-template-columns:1fr;}}
-.pos-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px;margin-bottom:8px;}
+.pos-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin-bottom:8px;max-width:100%;overflow:hidden;}
+@media(max-width:500px){.pos-grid{grid-template-columns:repeat(2,1fr);}}
 .pos-item{background:var(--surf2);border:1px solid var(--bdr2);border-radius:8px;padding:10px 10px 32px;cursor:pointer;transition:border-color .15s,box-shadow .15s;position:relative;}
 .pos-item:hover{border-color:var(--gold-dim);box-shadow:0 0 0 1px var(--gold-dim);}
 .pos-item-cat{font-size:6px;color:var(--txt-d);letter-spacing:.5px;text-transform:uppercase;margin-bottom:3px;}
@@ -18770,8 +18771,19 @@ function posCharge(){
   };
   sessionStorage.setItem('pos_pending',JSON.stringify(posActiveSale));
   var encoded=btoa(unescape(encodeURIComponent(JSON.stringify(squareData))));
-  var url='square-commerce-v1://payment/create?data='+encodeURIComponent(encoded);
-  window.location.href=url;
+  var isAndroid=/android/i.test(navigator.userAgent);
+  var url;
+  if(isAndroid){
+    url='intent://payment/create?data='+encodeURIComponent(encoded)+'#Intent;scheme=square-commerce-v1;package=com.squareup;end';
+  } else {
+    url='square-commerce-v1://payment/create?data='+encodeURIComponent(encoded);
+  }
+  toast('Opening Square POS','Switch to the Square app to complete the payment','info',4000);
+  var a=document.createElement('a');
+  a.href=url;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
 }
 
 function posCashSale(){
