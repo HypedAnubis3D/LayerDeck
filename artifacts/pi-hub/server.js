@@ -159,12 +159,13 @@ function mqttAlert(printerName, content, isOfflineAlert) {
     // Already told Discord this printer is down — don't repeat until it comes back
     if (_printerOfflineNotified[printerName]) return;
     _printerOfflineNotified[printerName] = now;
+    sendDiscordStatus(content); // Offline/connection issues → #pi-health
   } else {
-    // Real errors: debounce to at most once per 5 minutes
+    // Print events (complete/failed): debounce to at most once per 5 minutes
     if (_mqttAlertTs[printerName] && now - _mqttAlertTs[printerName] < 5 * 60 * 1000) return;
     _mqttAlertTs[printerName] = now;
+    sendDiscordAlert(content);  // Print complete/failed → #print-alerts
   }
-  sendDiscordStatus(content);
   console.warn(content);
 }
 
@@ -371,7 +372,7 @@ PRINTERS.forEach(printer => {
     printerStates[printer.name].online = false;
     // Only alert if we haven't already flagged this printer as unreachable
     if (!_printerOfflineNotified[printer.name]) {
-      mqttAlert(printer.name, `📡 **${printer.name}** went offline (MQTT disconnected)`, false);
+      mqttAlert(printer.name, `📡 **${printer.name}** went offline (MQTT disconnected)`, true);
     }
   });
 });
@@ -1046,6 +1047,15 @@ function _scheduleVision() {
   console.log(`[Vision] auto-scan every ${_vIntervalM} min`);
 }
 _scheduleVision();
+// Do an initial scan ~90s after startup (gives MQTT time to reconnect and
+// populate printer states) so history is populated immediately after restart
+// rather than waiting for the full interval to elapse.
+setTimeout(() => {
+  if (_vEnabled) {
+    console.log('[Vision] Running initial startup scan');
+    PRINTERS.forEach(p => _visionScan(p.name).catch(() => {}));
+  }
+}, 90 * 1000);
 
 // ── Vision endpoints ──────────────────────────────────────────────────────────
 app.get('/vision/status', (req, res) => res.json({
