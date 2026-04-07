@@ -406,6 +406,17 @@ input.srch::placeholder{color:var(--txt-d);}
 .tmf-selector{background:var(--bg);border:1px solid var(--pur-d);border-radius:4px;padding:9px;margin-bottom:10px;}
 .tmf-sel-title{font-size:7px;color:var(--pur);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:6px;}
 .tmf-prefill-badge{display:inline-flex;align-items:center;gap:4px;background:rgba(144,96,208,.1);border:1px solid var(--pur-d);color:var(--pur);padding:2px 8px;border-radius:10px;font-size:7px;letter-spacing:1px;margin-top:5px;}
+/* ── Convention Cart ── */
+.conv-cart-row{display:flex;align-items:center;gap:6px;padding:6px 0;border-bottom:1px solid var(--bdr2);}
+.conv-cart-row:last-child{border-bottom:none;}
+.conv-cart-name{flex:1;font-size:9px;color:var(--txt-b);font-weight:500;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.conv-cart-price{font-size:9px;color:var(--grn-b);white-space:nowrap;}
+.conv-cart-qty{display:flex;align-items:center;gap:3px;}
+.conv-cart-qty button{background:var(--bdr2);border:none;color:var(--txt-b);width:20px;height:20px;border-radius:4px;cursor:pointer;font-size:11px;line-height:1;}
+.conv-cart-qty span{font-size:9px;min-width:18px;text-align:center;}
+.conv-cart-del{background:none;border:none;color:var(--red-b);cursor:pointer;font-size:13px;padding:2px 4px;line-height:1;flex-shrink:0;}
+.conv-cart-empty{font-size:8px;color:var(--txt-d);text-align:center;padding:8px 0;}
+.conv-cart-total{display:flex;justify-content:space-between;align-items:center;padding:6px 0 0;border-top:1px solid var(--bdr);margin-top:4px;}
 /* ── Convention POS ── */
 .pos-layout{display:grid;grid-template-columns:1fr 290px;gap:14px;align-items:start;width:100%;max-width:100%;overflow-x:hidden;}
 @media(max-width:760px){.pos-layout{grid-template-columns:1fr;}}
@@ -2880,26 +2891,36 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
     </div>
     <!-- DAY SALES -->
     <div class="evt-section" id="esec-sales">
+      <!-- Back + header -->
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+        <button class="btn btn-ghost btn-sm" onclick="setEvtSection('packlist')" style="padding:4px 10px;font-size:9px">← Pack List</button>
+        <div style="font-size:9px;font-weight:bold;color:var(--txt-b)">Record a Sale</div>
+      </div>
+      <!-- Running total -->
       <div id="em-running-total" style="background:var(--surf);border:1px solid var(--bdr);border-radius:6px;padding:12px;margin-bottom:12px;text-align:center"></div>
+      <!-- Cart builder -->
       <div style="background:var(--surf);border:1px solid var(--bdr);border-radius:6px;padding:12px;margin-bottom:12px">
-        <div style="font-size:8px;font-weight:bold;color:var(--txt-b);margin-bottom:8px">Record a Sale</div>
-        <div class="field">
-          <div class="fl">Product</div>
-          <div style="position:relative">
-            <input class="srch" id="em-sale-search" placeholder="Search pack list or type custom…" oninput="filterSaleProducts()" onfocus="filterSaleProducts()" autocomplete="off" style="width:100%;box-sizing:border-box"/>
-            <div id="em-sale-dropdown" class="sale-search-dd" style="display:none"></div>
-          </div>
-          <input type="hidden" id="em-sale-item-id" value=""/>
-          <input type="hidden" id="em-sale-item-name" value=""/>
+        <!-- Cart items -->
+        <div id="em-conv-cart" style="margin-bottom:10px"></div>
+        <!-- Add item search -->
+        <div style="font-size:7px;color:var(--txt-d);letter-spacing:.5px;text-transform:uppercase;margin-bottom:4px">Add Item</div>
+        <div style="position:relative;margin-bottom:8px">
+          <input class="srch" id="em-sale-search" placeholder="Search pack list or type custom…" oninput="filterSaleProducts()" onfocus="filterSaleProducts()" autocomplete="off" style="width:100%;box-sizing:border-box"/>
+          <div id="em-sale-dropdown" class="sale-search-dd" style="display:none"></div>
         </div>
-        <div class="fr2">
-          <div class="field"><div class="fl">Qty</div><input type="number" id="em-sale-qty" value="1" min="1" style="font-size:9px"/></div>
-          <div class="field"><div class="fl">Price Each ($)</div><input type="number" id="em-sale-price" step="0.01" style="font-size:9px"/></div>
+        <input type="hidden" id="em-sale-item-id" value=""/>
+        <input type="hidden" id="em-sale-item-name" value=""/>
+        <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:6px;margin-bottom:10px;align-items:end">
+          <div class="field" style="margin:0"><div class="fl">Qty</div><input type="number" id="em-sale-qty" value="1" min="1" style="font-size:9px"/></div>
+          <div class="field" style="margin:0"><div class="fl">Price Each ($)</div><input type="number" id="em-sale-price" step="0.01" style="font-size:9px"/></div>
+          <button class="btn btn-pur btn-sm" onclick="addToConvCart()" style="white-space:nowrap;height:28px;align-self:end">+ Add</button>
         </div>
-        <div class="fr2">
-          <div class="field"><div class="fl">Customer (optional)</div><input type="text" id="em-sale-customer" placeholder="Guest" style="font-size:9px"/></div>
-          <div class="field"><div class="fl">Email (optional)</div><input type="email" id="em-sale-email" placeholder="name@email.com" style="font-size:9px"/></div>
+        <!-- Customer (optional) -->
+        <div class="fr2" style="margin-bottom:10px">
+          <div class="field" style="margin:0"><div class="fl">Customer (optional)</div><input type="text" id="em-sale-customer" placeholder="Guest" style="font-size:9px"/></div>
+          <div class="field" style="margin:0"><div class="fl">Email (optional)</div><input type="email" id="em-sale-email" placeholder="name@email.com" style="font-size:9px"/></div>
         </div>
+        <!-- Payment method -->
         <div style="display:flex;gap:4px;margin-bottom:8px;flex-wrap:wrap" id="em-method-btns">
           <button class="sale-method active" data-m="cash"   onclick="setSaleMethod(this)">💵 Cash</button>
           <button class="sale-method"        data-m="card"   onclick="setSaleMethod(this)">💳 Card</button>
@@ -2907,11 +2928,13 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
           <button class="sale-method"        data-m="square" onclick="setSaleMethod(this)">⬡ Square</button>
           <button class="sale-method"        data-m="other"  onclick="setSaleMethod(this)">Other</button>
         </div>
+        <!-- Charge buttons -->
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
-          <button class="btn btn-grn" style="padding:8px" onclick="recordSale()">+ Record Sale</button>
+          <button class="btn btn-grn" style="padding:8px" onclick="recordSale()">✓ Record Sale</button>
           <button class="btn" id="em-sq-btn" style="padding:8px;background:linear-gradient(135deg,#0d7a3e,#15803d);border:1px solid #15803d;color:#fff;font-weight:700" onclick="convChargeViaSquare()">⬡ Charge via Square</button>
         </div>
       </div>
+      <!-- Sales feed -->
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
         <div style="font-size:8px;font-weight:bold;color:var(--txt-b)">Sales Feed</div>
         <div id="em-sales-src-note" style="font-size:6.5px;color:var(--txt-d);margin-left:auto"></div>
@@ -12743,7 +12766,7 @@ function setEvtSection(s){
   if(s==='overview') renderEvtOverview();
   else if(s==='packlist') renderPackList();
   else if(s==='checklist') renderChecklist();
-  else if(s==='sales') renderDaySales();
+  else if(s==='sales'){renderDaySales();renderConvCart();}
   else if(s==='reconcile') renderReconcile();
   else if(s==='qr') renderQRTags();
 }
@@ -13000,53 +13023,106 @@ function resetChecklist(){
 
 // ── Day Sales ──
 var _saleSearchSelected={id:'',name:'',price:0}; // currently selected catalog item
+var convCart=[]; // [{id, catalogItemId, name, qty, price}]
 function populateSaleDropdown(){filterSaleProducts();}  // legacy shim
+
+function renderConvCart(){
+  var el=document.getElementById('em-conv-cart');if(!el)return;
+  var rt=document.getElementById('em-running-total');
+  if(!convCart.length){
+    el.innerHTML='<div class="conv-cart-empty">No items yet — search and add items below</div>';
+    if(rt)rt.innerHTML='<span style="font-size:8px;color:var(--txt-d)">Cart is empty</span>';
+    return;
+  }
+  var total=convCart.reduce(function(a,r){return a+r.qty*r.price;},0);
+  var itemCount=convCart.reduce(function(a,r){return a+r.qty;},0);
+  el.innerHTML=convCart.map(function(r,i){
+    return '<div class="conv-cart-row">'
+      +'<div class="conv-cart-name">'+esc(r.name)+'</div>'
+      +'<div class="conv-cart-qty">'
+        +'<button onclick="adjustConvCartQty('+i+',-1)">−</button>'
+        +'<span>'+r.qty+'</span>'
+        +'<button onclick="adjustConvCartQty('+i+',1)">+</button>'
+      +'</div>'
+      +'<div class="conv-cart-price">$'+(r.qty*r.price).toFixed(2)+'</div>'
+      +'<button class="conv-cart-del" onclick="removeConvCartItem('+i+')" title="Remove">×</button>'
+    +'</div>';
+  }).join('')
+  +'<div class="conv-cart-total">'
+    +'<span style="font-size:8px;color:var(--txt-d);font-weight:600">CART TOTAL</span>'
+    +'<span style="font-size:11px;color:var(--grn-b);font-weight:700">$'+total.toFixed(2)+'</span>'
+  +'</div>';
+  if(rt)rt.innerHTML='<div style="display:flex;align-items:center;justify-content:space-between">'
+    +'<span style="font-size:8px;color:var(--txt-d)">'+itemCount+' item'+(itemCount!==1?'s':'')+' in cart</span>'
+    +'<span style="font-size:16px;font-weight:700;color:var(--grn-b);font-family:Orbitron,monospace">$'+total.toFixed(2)+'</span>'
+    +'</div>';
+}
+
+function addToConvCart(){
+  var searchVal=(document.getElementById('em-sale-search')?.value||'').trim();
+  var catalogItemId=document.getElementById('em-sale-item-id')?.value||'';
+  var itemName=document.getElementById('em-sale-item-name')?.value||searchVal;
+  if(!itemName){toast('Enter or select an item first','','warning');return;}
+  var qty=parseInt(document.getElementById('em-sale-qty')?.value||1)||1;
+  var price=parseFloat(document.getElementById('em-sale-price')?.value||0)||0;
+  if(!price){toast('Enter a price','','warning');return;}
+  // Merge if same item already in cart
+  var existing=convCart.find(function(r){return r.catalogItemId&&r.catalogItemId===catalogItemId;});
+  if(existing){existing.qty+=qty;}
+  else{convCart.push({id:uid(),catalogItemId:catalogItemId||'__custom',name:itemName,qty:qty,price:price});}
+  // Clear add-item fields
+  var inp=document.getElementById('em-sale-search');if(inp)inp.value='';
+  var hidId=document.getElementById('em-sale-item-id');if(hidId)hidId.value='';
+  var hidName=document.getElementById('em-sale-item-name');if(hidName)hidName.value='';
+  var qtyEl=document.getElementById('em-sale-qty');if(qtyEl)qtyEl.value=1;
+  document.getElementById('em-sale-price').value='';
+  document.getElementById('em-sale-dropdown').style.display='none';
+  _saleSearchSelected={id:'',name:'',price:0};
+  renderConvCart();
+}
+
+function removeConvCartItem(idx){
+  convCart.splice(idx,1);
+  renderConvCart();
+}
+
+function adjustConvCartQty(idx,delta){
+  convCart[idx].qty=Math.max(1,convCart[idx].qty+delta);
+  renderConvCart();
+}
 
 function quickSellItem(catalogItemId){
   const c=getEvt();if(!c)return;
   const item=(c.inPersonCatalog||[]).find(function(i){return i.catalogItemId===catalogItemId;});if(!item)return;
+  // Add directly to cart
+  var existing=convCart.find(function(r){return r.catalogItemId===catalogItemId;});
+  if(existing){existing.qty+=1;}
+  else{convCart.push({id:uid(),catalogItemId:catalogItemId,name:item.name,qty:1,price:item.price||0});}
   setEvtSection('sales');
-  setTimeout(function(){
-    var inp=document.getElementById('em-sale-search');
-    if(inp){inp.value=item.name;}
-    var hidId=document.getElementById('em-sale-item-id');
-    if(hidId)hidId.value=item.catalogItemId;
-    var hidName=document.getElementById('em-sale-item-name');
-    if(hidName)hidName.value=item.name;
-    var priceEl=document.getElementById('em-sale-price');
-    if(priceEl)priceEl.value=parseFloat(item.price||0).toFixed(2);
-    var qtyEl=document.getElementById('em-sale-qty');
-    if(qtyEl)qtyEl.value=1;
-    _saleSearchSelected={id:item.catalogItemId,name:item.name,price:item.price||0};
-    document.getElementById('em-sq-btn')?.scrollIntoView({behavior:'smooth',block:'nearest'});
-  },100);
+  setTimeout(function(){renderConvCart();},80);
 }
 
 function convChargeViaSquare(){
   const c=getEvt();if(!c){toast('No active convention','Open a convention first','warning');return;}
-  const searchVal=(document.getElementById('em-sale-search')?.value||'').trim();
-  const catalogItemId=document.getElementById('em-sale-item-id')?.value||'__custom';
-  const itemName=document.getElementById('em-sale-item-name')?.value||searchVal||'Custom Item';
-  if(!itemName||itemName==='Custom Item'&&!searchVal){toast('Select a product first','','warning');return;}
-  const qty=parseInt(document.getElementById('em-sale-qty')?.value||1)||1;
-  const price=parseFloat(document.getElementById('em-sale-price')?.value||0)||0;
-  if(!price){toast('Enter a price first','','warning');return;}
-  const total=Math.round(price*qty*100);
-  if(total<1){toast('Total must be at least $0.01','','warning');return;}
+  if(!convCart.length){toast('Add items to the cart first','','warning');return;}
+  const cartTotal=convCart.reduce(function(a,r){return a+r.qty*r.price;},0);
+  const totalCents=Math.round(cartTotal*100);
+  if(totalCents<1){toast('Total must be at least $0.01','','warning');return;}
   const clientTxId='CONV-'+Date.now();
+  const cartSummary=convCart.map(function(r){return r.name+(r.qty>1?' ×'+r.qty:'');}).join(', ');
   const pending={
     source:'convention',
     evtId:c.id||c.name,
-    item:{catalogItemId,name:itemName,qty,price},
+    items:convCart.map(function(r){return{catalogItemId:r.catalogItemId,name:r.name,qty:r.qty,price:r.price};}),
     clientTxId,
     timestamp:Date.now()
   };
   localStorage.setItem('pos_pending',JSON.stringify(pending));
   var squareData={
-    amount_money:{amount:total,currency_code:'USD'},
+    amount_money:{amount:totalCents,currency_code:'USD'},
     callback_url:window.location.origin+'/square/callback',
     client_transaction_id:clientTxId,
-    notes:(itemName+(qty>1?' ×'+qty:'')).substring(0,499),
+    notes:cartSummary.substring(0,499),
     supported_tender_types:['CREDIT_CARD','CASH','OTHER','SQUARE_GIFT_CARD','CARD_ON_FILE'],
     auto_return:true
   };
@@ -13189,53 +13265,41 @@ function renderDaySales(){
 }
 function recordSale(){
   const c=getEvt();if(!c)return;
-  const searchInp=document.getElementById('em-sale-search');
-  const searchVal=(searchInp?.value||'').trim();
-  const catalogItemId=document.getElementById('em-sale-item-id')?.value||'__custom';
-  const storedName=document.getElementById('em-sale-item-name')?.value||'';
-  const itemName=storedName||searchVal||'Custom Item';
-  if(!itemName||itemName==='Custom Item'&&!searchVal){toast('Enter or select a product','','warning');searchInp?.focus();return;}
-  const qty=parseInt(document.getElementById('em-sale-qty')?.value||1)||1;
-  const price=parseFloat(document.getElementById('em-sale-price')?.value||0)||0;
-  if(!price){toast('Enter a price','','warning');return;}
+  // If cart has items in the add-row but not yet added, auto-add them
+  var pendingName=(document.getElementById('em-sale-item-name')?.value||document.getElementById('em-sale-search')?.value||'').trim();
+  var pendingPrice=parseFloat(document.getElementById('em-sale-price')?.value||0)||0;
+  if(pendingName&&pendingPrice&&!convCart.length){addToConvCart();return;}
+  if(!convCart.length){toast('Add at least one item to the cart','','warning');return;}
   const customerName=(document.getElementById('em-sale-customer')?.value||'').trim();
   const customerEmail=(document.getElementById('em-sale-email')?.value||'').trim();
-  const sale={id:uid(),timestamp:Date.now(),itemName,catalogItemId,qty,price,method:evtSaleMethod};
-  if(customerName)sale.customerName=customerName;
-  if(customerEmail)sale.customerEmail=customerEmail;
-  if(!c.daySales) c.daySales=[];
-  c.daySales.push(sale);
-  // reset form
-  if(searchInp)searchInp.value='';
+  const ts=Date.now();
+  if(!c.daySales)c.daySales=[];
+  convCart.forEach(function(r){
+    var sale={id:uid(),timestamp:ts,itemName:r.name,catalogItemId:r.catalogItemId,qty:r.qty,price:r.price,method:evtSaleMethod};
+    if(customerName)sale.customerName=customerName;
+    if(customerEmail)sale.customerEmail=customerEmail;
+    c.daySales.push(sale);
+  });
+  const cartTotal=convCart.reduce(function(a,r){return a+r.qty*r.price;},0);
+  const cartSummary=convCart.map(function(r){return r.name+(r.qty>1?' ×'+r.qty:'');}).join(', ');
+  // Reset
+  convCart=[];
   _saleSearchSelected={id:'',name:'',price:0};
-  document.getElementById('em-sale-item-id').value='';
-  document.getElementById('em-sale-item-name').value='';
-  const qtyEl=document.getElementById('em-sale-qty');if(qtyEl)qtyEl.value=1;
-  document.getElementById('em-sale-price').value='';
-  const cust=document.getElementById('em-sale-customer');if(cust)cust.value='';
-  const email=document.getElementById('em-sale-email');if(email)email.value='';
+  ['em-sale-search','em-sale-item-id','em-sale-item-name','em-sale-price'].forEach(function(id){var el=document.getElementById(id);if(el)el.value='';});
+  document.getElementById('em-sale-qty').value=1;
+  var cust=document.getElementById('em-sale-customer');if(cust)cust.value='';
+  var email=document.getElementById('em-sale-email');if(email)email.value='';
   saveEvt();
+  renderConvCart();
   renderDaySales();
-  toast('Sale Recorded',itemName+' × '+qty+' — $'+(price*qty).toFixed(2),'success');
-  (function(){
-    const allSales=c.daySales||[];
-    const dayTotal=allSales.reduce(function(a,s){return a+(parseFloat(s.price||0)*parseInt(s.qty||1));},0);
-    const badgeMap={cash:'[Cash]',card:'[Card]',venmo:'[Venmo]',other:'[Other]'};
-    const badge=badgeMap[evtSaleMethod]||'[Manual]';
-    const remaining=(c.inPersonCatalog||[]).find(function(i){return i.catalogItemId===catalogItemId;});
-    var remQty='?';
-    if(remaining){
-      var soldQty=allSales.filter(function(s){return s.catalogItemId===catalogItemId;}).reduce(function(a,s){return a+parseInt(s.qty||1);},0);
-      remQty=Math.max(0,(remaining.qtyBring||0)-soldQty);
-    }
-    const lines=[
-      '💰 Sale — '+(c.name||'Convention')+' · '+new Date().toLocaleDateString('en-US',{month:'long',day:'numeric'}),
-      itemName+' × '+qty+' — $'+(price*qty).toFixed(2)+' '+badge+(customerName?' · '+customerName:''),
-      remaining?'Pack list remaining: '+itemName+' '+remQty:'',
-      "Today's total: $"+dayTotal.toFixed(2)+' across '+allSales.length+' sale'+(allSales.length!==1?'s':'')
-    ].filter(Boolean);
-    postToDiscord('convention_sale',lines.join('\n'));
-  })();
+  toast('Sale Recorded',cartSummary+' — $'+cartTotal.toFixed(2),'success');
+  // Discord
+  const allSales=c.daySales||[];
+  const dayTotal=allSales.reduce(function(a,s){return a+(parseFloat(s.price||0)*parseInt(s.qty||1));},0);
+  const badgeMap={cash:'[Cash]',card:'[Card]',venmo:'[Venmo]',square:'[Square]',other:'[Other]'};
+  const badge=badgeMap[evtSaleMethod]||'[Manual]';
+  const lines=['💰 Sale — '+(c.name||'Convention')+' · '+new Date().toLocaleDateString('en-US',{month:'long',day:'numeric'}),cartSummary+' — $'+cartTotal.toFixed(2)+' '+badge+(customerName?' · '+customerName:''),"Today's total: $"+dayTotal.toFixed(2)+' across '+allSales.length+' sale'+(allSales.length!==1?'s':'')];
+  postToDiscord('convention_sale',lines.join('\n'));
 }
 function deleteSale(saleId){
   const c=getEvt();if(!c)return;
@@ -18865,14 +18929,19 @@ function posCheckCallback(){
   if(pendingSale&&pendingSale.source==='convention'){
     if(result.status==='ok'){
       var conv=(conventions||[]).find(function(c){return (c.id||c.name)===pendingSale.evtId;})||(conventions||[])[0];
+      var cartItems=pendingSale.items||(pendingSale.item?[pendingSale.item]:[]);
+      var cartTotal=cartItems.reduce(function(a,it){return a+(it.price||0)*(it.qty||1);},0);
       if(conv){
         if(!conv.daySales)conv.daySales=[];
-        var it=pendingSale.item||{};
-        conv.daySales.push({id:uid(),timestamp:Date.now(),itemName:it.name||'Item',catalogItemId:it.catalogItemId||'__custom',qty:it.qty||1,price:it.price||0,method:'square',squareRef:result.transaction_id||result.client_transaction_id||''});
+        var squareRef=result.transaction_id||result.client_transaction_id||'';
+        cartItems.forEach(function(it){
+          conv.daySales.push({id:uid(),timestamp:Date.now(),itemName:it.name||'Item',catalogItemId:it.catalogItemId||'__custom',qty:it.qty||1,price:it.price||0,method:'square',squareRef:squareRef});
+        });
         saveEvt();
       }
+      convCart=[];
       var _convId=conv?conv.id:null;
-      toast('Payment Complete!','Square sale recorded — $'+((pendingSale.item.price||0)*(pendingSale.item.qty||1)).toFixed(2),'success');
+      toast('Payment Complete!','Square sale recorded — $'+cartTotal.toFixed(2),'success');
       setTimeout(function(){
         navTo('convention',document.getElementById('nav-convention'));
         setTimeout(function(){if(_convId)openEventManage(_convId);setTimeout(function(){setEvtSection('sales');},300);},400);
