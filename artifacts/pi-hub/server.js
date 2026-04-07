@@ -220,6 +220,8 @@ PRINTERS.forEach(printer => {
     printerStates[printer.name].online = true;
     // Clear offline flag so the next power-off will alert again
     delete _printerOfflineNotified[printer.name];
+    // Clear visual-offline block — we're reconnecting and about to request fresh state
+    _vVisuallyOffline.delete(printer.name);
     client.subscribe(REPORT_TOPIC);
     // Request full push on connect so we get all current state immediately
     client.publish(REQUEST_TOPIC, JSON.stringify({
@@ -328,11 +330,16 @@ PRINTERS.forEach(printer => {
         }
 
         // Track print start time for duration calculations
-        if (gcodeState === 'RUNNING' && !printerStates[printer.name].printStartTime) {
-          printerStates[printer.name].printStartTime = Date.now();
-          printerStates[printer.name].lastCompletedDurationMins = null; // clear stale
-          // Clear visual-offline flag — MQTT confirms print is active again
+        if (gcodeState === 'RUNNING') {
+          // Clear visual-offline flag on every RUNNING message — not just the first.
+          // If AI produced a false-positive "empty/dark" result mid-print, this ensures
+          // the auto-scan resumes as soon as MQTT confirms the printer is active again
+          // rather than staying blocked for the rest of the print session.
           _vVisuallyOffline.delete(printer.name);
+          if (!printerStates[printer.name].printStartTime) {
+            printerStates[printer.name].printStartTime = Date.now();
+            printerStates[printer.name].lastCompletedDurationMins = null; // clear stale
+          }
         }
         // When print ends: save duration BEFORE clearing start time so the app
         // can retrieve it on the next poll (avoids "Duration: —" when app missed RUNNING)
