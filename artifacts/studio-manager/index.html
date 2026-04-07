@@ -406,6 +406,29 @@ input.srch::placeholder{color:var(--txt-d);}
 .tmf-selector{background:var(--bg);border:1px solid var(--pur-d);border-radius:4px;padding:9px;margin-bottom:10px;}
 .tmf-sel-title{font-size:7px;color:var(--pur);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:6px;}
 .tmf-prefill-badge{display:inline-flex;align-items:center;gap:4px;background:rgba(144,96,208,.1);border:1px solid var(--pur-d);color:var(--pur);padding:2px 8px;border-radius:10px;font-size:7px;letter-spacing:1px;margin-top:5px;}
+/* ── Convention POS ── */
+.pos-layout{display:grid;grid-template-columns:1fr 290px;gap:14px;align-items:start;}
+@media(max-width:680px){.pos-layout{grid-template-columns:1fr;}}
+.pos-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px;margin-bottom:8px;}
+.pos-item{background:var(--surf2);border:1px solid var(--bdr2);border-radius:8px;padding:10px 10px 32px;cursor:pointer;transition:border-color .15s,box-shadow .15s;position:relative;}
+.pos-item:hover{border-color:var(--gold-dim);box-shadow:0 0 0 1px var(--gold-dim);}
+.pos-item-cat{font-size:6px;color:var(--txt-d);letter-spacing:.5px;text-transform:uppercase;margin-bottom:3px;}
+.pos-item-name{font-size:10px;font-weight:600;color:var(--txt-b);line-height:1.3;margin-bottom:3px;}
+.pos-item-price{font-size:9px;color:var(--grn-b);}
+.pos-item-add{position:absolute;bottom:7px;right:7px;width:24px;height:24px;border-radius:50%;background:var(--gold);border:none;color:#000;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1;font-weight:700;}
+.pos-cart-row{display:flex;align-items:center;gap:5px;padding:6px 0;border-bottom:1px solid var(--bdr);position:relative;}
+.pos-cart-name{flex:1;font-size:9px;color:var(--txt-b);min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.pos-qty-btn{width:22px;height:22px;border-radius:4px;background:var(--surf3);border:1px solid var(--bdr2);color:var(--txt);font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.pos-cart-price{font-size:9px;color:var(--grn-b);width:50px;text-align:right;cursor:pointer;flex-shrink:0;}
+.pos-total-row{display:flex;justify-content:space-between;align-items:center;padding:3px 0;font-size:9px;color:var(--txt-d);}
+.pos-total-final{font-size:15px;font-weight:700;color:var(--grn-b);}
+.pos-charge-btn{width:100%;padding:13px;background:linear-gradient(135deg,#0d7a3e,#15803d);border:1px solid #15803d;border-radius:8px;color:#fff;font-size:12px;font-weight:700;cursor:pointer;margin-top:10px;letter-spacing:.3px;transition:filter .15s;}
+.pos-charge-btn:hover{filter:brightness(1.1);}
+.pos-charge-btn:disabled{opacity:.4;cursor:not-allowed;filter:none;}
+.pos-cash-btn{width:100%;padding:9px;background:var(--surf2);border:1px solid var(--bdr2);border-radius:8px;color:var(--txt-b);font-size:10px;cursor:pointer;margin-top:6px;transition:border-color .15s;}
+.pos-cash-btn:hover{border-color:var(--gold-dim);}
+.pos-sale-row{display:flex;justify-content:space-between;align-items:flex-start;padding:5px 0;border-bottom:1px solid var(--bdr);}
+.pos-price-pop{position:absolute;right:0;top:calc(100% + 2px);background:var(--surf3);border:1px solid var(--bdr2);border-radius:7px;padding:8px;z-index:20;width:168px;box-shadow:0 8px 24px rgba(0,0,0,.5);}
 
 /* FINISH MODAL */
 .finish-modal{background:var(--surf);border:1px solid var(--bdr2);border-radius:7px;padding:20px;width:460px;max-width:94vw;max-height:92vh;overflow-y:auto;}
@@ -1661,6 +1684,7 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
       <div class="sb-group-body">
         <button class="nav-item" id="nav-shopify" onclick="navTo('shopify',this)"><span class="nav-icon">🛍</span><span class="nav-label">Shopify</span></button>
         <button class="nav-item" id="nav-square" onclick="navTo('square',this)"><span class="nav-icon">💳</span><span class="nav-label">Square</span></button>
+        <button class="nav-item" id="nav-pos" onclick="navTo('pos',this)"><span class="nav-icon">🛒</span><span class="nav-label">Convention POS</span></button>
         <button class="nav-item" id="nav-discord" onclick="navTo('discord',this)"><span class="nav-icon">💬</span><span class="nav-label">Discord</span></button>
         <button class="nav-item" id="nav-pihub" onclick="navTo('pihub',this)"><span class="nav-icon">🍓</span><span class="nav-label">Pi Hub</span></button>
       </div>
@@ -1979,6 +2003,11 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
 <!-- SQUARE -->
 <div id="tab-square" style="display:none">
   <div id="square-content"></div>
+</div>
+
+<!-- CONVENTION POS -->
+<div id="tab-pos" style="display:none">
+  <div id="pos-content"></div>
 </div>
 
 <!-- DISCORD -->
@@ -4438,9 +4467,9 @@ function applyTmfToPrint(){
 function applyTmf(t){
   document.getElementById('ep-name').value=t.name;
   if(t.hrs)setHrsToForm(t.hrs);
-  // update dropdown to match
+  // update hidden input to match selected TMF
   const sel=document.getElementById('ep-tmf-select');
-  [...sel.options].forEach(o=>{if(o.value===t.id)sel.value=t.id;});
+  if(sel)sel.value=t.id;
   // show extra info
   if(t.layers||t.profile||t.supports!=null){
     document.getElementById('tmf-extra').style.display='block';
@@ -9230,6 +9259,7 @@ function render(){
   if(curTab==='convention') renderConvention();
   if(curTab==='drying')     renderDrying();
   if(curTab==='square')     renderSquare();
+  if(curTab==='pos')        renderPOS();
   if(curTab==='discord')    renderDiscord();
   if(curTab==='pihub')      renderPiHub();
   if(curTab==='social')     renderSocial();
@@ -11918,16 +11948,19 @@ Object.assign(KEYS,{
 Object.assign(TAB_NAMES,{
   reviews:'Review Tracker', fildb:'Filament Database',
   convention:'Convention Planner', drying:'Dry Time Scheduler',
-  power:'Power Cost Dashboard'
+  power:'Power Cost Dashboard', pos:'Convention POS'
 });
-ALL_TABS.push('reviews','fildb','convention','drying','power');
+ALL_TABS.push('reviews','fildb','convention','drying','power','pos');
 
 let reviewsList=[], conventions=[];
+let posSales=[], posCart=[], posCartSeq=0, posDiscount=0, posActiveSale=null, posCatFilter='all', posSearch='';
 
 function loadV15(){
   reviewsList=gs(KEYS.reviews);
   conventions=gs(KEYS.conventions);
+  try{posSales=JSON.parse(localStorage.getItem('ha3d_possales_v1')||'[]');}catch{posSales=[];}
 }
+function savePosSales(){localStorage.setItem('ha3d_possales_v1',JSON.stringify(posSales));}
 function saveReviews(){ss(KEYS.reviews,reviewsList);}
 function saveConventions(){ss(KEYS.conventions,conventions);queueSync('conventions',conventions);}
 
@@ -14625,6 +14658,19 @@ setInterval(function(){
 <script>
 // ── Check for OAuth redirect params on page load ──
 function _onReady(){
+  // ── Square POS callback: detect redirect from Square POS app ──
+  if(window.location.pathname==='/square/callback'||window.location.pathname.endsWith('/square/callback')){
+    const _cbP=new URLSearchParams(window.location.search);
+    const _cbD=_cbP.get('data');
+    if(_cbD){
+      try{
+        const _cbR=JSON.parse(decodeURIComponent(escape(atob(_cbD.replace(/-/g,'+').replace(/_/g,'/')))));
+        sessionStorage.setItem('pos_callback',JSON.stringify(_cbR));
+      }catch(e){sessionStorage.setItem('pos_callback',JSON.stringify({status:_cbD}));}
+    }
+    window.location.replace('/');
+    return;
+  }
   setTimeout(checkShopifyOAuthCallback,700);
   // Service worker + push notifications
   setTimeout(initPushNotifications,1000);
@@ -14632,6 +14678,8 @@ function _onReady(){
   scheduleDailyDiscordReport();
   // Square webhook order polling — check every 30s for orders received server-side
   setTimeout(function(){pollSquareOrders();setInterval(pollSquareOrders,30000);},3000);
+  // Square POS callback — check if we returned from Square POS app with a payment result
+  setTimeout(posCheckCallback,600);
   // Handle push notification action from URL
   const _sp=new URLSearchParams(window.location.search);
   if(_sp.get('push-action')==='confirm-print'){
@@ -18474,6 +18522,402 @@ function renderSocial(){
 
 // ── Also wire up printers tab to use new renderPrinters ──
 // (already handled — renderPrinters is defined above and replaces the old one)
+</script>
+
+<script>
+// ════════════════════════════════════════════════════════════════
+// CONVENTION POS — Square Bluetooth Reader + Cash
+// ════════════════════════════════════════════════════════════════
+
+function posSubtotal(){
+  return posCart.reduce(function(a,r){return a+(r.overridePrice!=null?r.overridePrice:r.unitPrice)*r.qty;},0);
+}
+function posTaxAmt(){
+  var rate=parseFloat((typeof cfg!=='undefined'&&cfg&&cfg.taxRate)||0);
+  return posSubtotal()*(rate/100);
+}
+function posTotal(){return Math.max(0,posSubtotal()+posTaxAmt()-posDiscount);}
+function posCents(){return Math.round(posTotal()*100);}
+
+function posAddItem(catalogItemId){
+  var cat=(catalogItems||[]).find(function(c){return c.id===catalogItemId;});
+  if(!cat)return;
+  var existing=posCart.find(function(r){return r.catalogItemId===catalogItemId&&r.overridePrice==null;});
+  if(existing){existing.qty++;}
+  else{posCart.push({rowId:++posCartSeq,catalogItemId:catalogItemId,name:cat.name,unitPrice:parseFloat(cat.price||0),qty:1,overridePrice:null});}
+  renderPOSCart();
+  if(document.getElementById('pos-products'))renderPOSProducts();
+}
+
+function posUpdateQty(rowId,delta){
+  var idx=posCart.findIndex(function(r){return r.rowId===rowId;});
+  if(idx<0)return;
+  posCart[idx].qty=Math.max(0,posCart[idx].qty+delta);
+  if(posCart[idx].qty===0)posCart.splice(idx,1);
+  renderPOSCart();
+  if(document.getElementById('pos-products'))renderPOSProducts();
+}
+
+function posOverridePrice(rowId){
+  var pop=document.getElementById('pos-price-pop-'+rowId);
+  if(!pop)return;
+  // Close all other popups
+  document.querySelectorAll('.pos-price-pop').forEach(function(el){if(el.id!=='pos-price-pop-'+rowId)el.style.display='none';});
+  pop.style.display=pop.style.display==='none'?'block':'none';
+  var inp=document.getElementById('pos-override-inp-'+rowId);
+  if(inp&&pop.style.display==='block'){inp.focus();inp.select();}
+}
+
+function posApplyOverride(rowId){
+  var row=posCart.find(function(r){return r.rowId===rowId;});
+  if(!row)return;
+  var inp=document.getElementById('pos-override-inp-'+rowId);
+  if(!inp)return;
+  var val=parseFloat(inp.value);
+  row.overridePrice=(isNaN(val)||val<0)?null:val;
+  var pop=document.getElementById('pos-price-pop-'+rowId);
+  if(pop)pop.style.display='none';
+  renderPOSCart();
+}
+
+function posSetDiscount(val){
+  posDiscount=Math.max(0,parseFloat(val)||0);
+  renderPOSCart();
+}
+
+function posSetCatFilter(cat){
+  posCatFilter=cat;
+  renderPOSProducts();
+}
+
+function renderPOSProducts(){
+  var el=document.getElementById('pos-products');
+  if(!el)return;
+  var items=(catalogItems||[]).filter(function(c){return parseFloat(c.price||0)>0;});
+  if(posCatFilter!=='all')items=items.filter(function(c){return (c.category||'Other')===posCatFilter;});
+  if(posSearch){
+    var q=posSearch.toLowerCase();
+    items=items.filter(function(c){
+      return c.name.toLowerCase().includes(q)||(c.category||'').toLowerCase().includes(q)||(c.tags||[]).some(function(t){return t.toLowerCase().includes(q);});
+    });
+  }
+  if(!items.length){el.innerHTML='<div style="color:var(--txt-d);font-size:9px;padding:20px;text-align:center">No products match</div>';return;}
+  el.innerHTML=items.map(function(c){
+    var inCart=posCart.reduce(function(a,r){return r.catalogItemId===c.id?a+r.qty:a;},0);
+    return '<div class="pos-item" onclick="posAddItem(\''+c.id+'\')">'
+      +'<div class="pos-item-cat">'+esc(c.category||'Other')+'</div>'
+      +'<div class="pos-item-name">'+esc(c.name)+'</div>'
+      +'<div class="pos-item-price">$'+parseFloat(c.price||0).toFixed(2)+(inCart?'<span style="color:var(--gold);font-size:7px;margin-left:4px">×'+inCart+' ✓</span>':'')+'</div>'
+      +'<button class="pos-item-add" onclick="event.stopPropagation();posAddItem(\''+c.id+'\')">+</button>'
+      +'</div>';
+  }).join('');
+}
+
+function renderPOSCart(){
+  var el=document.getElementById('pos-cart-body');
+  var totEl=document.getElementById('pos-totals');
+  if(!el)return;
+  if(!posCart.length){
+    el.innerHTML='<div style="text-align:center;padding:24px;color:var(--txt-d);font-size:9px">Cart empty<br>← Tap a product</div>';
+  }else{
+    el.innerHTML=posCart.map(function(r){
+      var price=r.overridePrice!=null?r.overridePrice:r.unitPrice;
+      return '<div class="pos-cart-row">'
+        +'<div class="pos-cart-name">'+esc(r.name)+(r.overridePrice!=null?'<span style="color:var(--org);font-size:6px"> ✎</span>':'')+'</div>'
+        +'<button class="pos-qty-btn" onclick="posUpdateQty('+r.rowId+',-1)">−</button>'
+        +'<span style="font-size:9px;min-width:16px;text-align:center;flex-shrink:0">'+r.qty+'</span>'
+        +'<button class="pos-qty-btn" onclick="posUpdateQty('+r.rowId+',1)">+</button>'
+        +'<div class="pos-cart-price" onclick="posOverridePrice('+r.rowId+')" title="Override price">$'+(price*r.qty).toFixed(2)+'</div>'
+        +'<div class="pos-price-pop" id="pos-price-pop-'+r.rowId+'" style="display:none">'
+          +'<div style="font-size:7px;color:var(--txt-d);margin-bottom:4px">Price per item ($)</div>'
+          +'<input id="pos-override-inp-'+r.rowId+'" type="number" step="0.01" min="0" value="'+price.toFixed(2)+'" style="width:100%;background:var(--bg);border:1px solid var(--bdr2);border-radius:4px;color:var(--txt-b);font-size:10px;padding:4px 6px" onkeydown="if(event.key===\'Enter\')posApplyOverride('+r.rowId+')">'
+          +'<button class="btn btn-sm btn-grn" style="width:100%;margin-top:4px" onclick="posApplyOverride('+r.rowId+')">Apply</button>'
+          +'<button class="btn btn-sm btn-ghost" style="width:100%;margin-top:3px;font-size:8px" onclick="(function(){var r=posCart.find(function(x){return x.rowId==='+r.rowId+';});if(r){r.overridePrice=null;}document.getElementById(\'pos-price-pop-'+r.rowId+'\').style.display=\'none\';renderPOSCart();})()">Reset to $'+r.unitPrice.toFixed(2)+'</button>'
+        +'</div>'
+        +'</div>';
+    }).join('');
+  }
+  if(totEl){
+    var sub=posSubtotal();
+    var tax=posTaxAmt();
+    var rate=parseFloat((typeof cfg!=='undefined'&&cfg&&cfg.taxRate)||0);
+    var disc=posDiscount;
+    var tot=posTotal();
+    totEl.innerHTML=''
+      +'<div class="pos-total-row"><span>Subtotal</span><span>$'+sub.toFixed(2)+'</span></div>'
+      +(rate>0?'<div class="pos-total-row"><span>Tax ('+rate+'%)</span><span>$'+tax.toFixed(2)+'</span></div>':'')
+      +(disc>0?'<div class="pos-total-row" style="color:var(--org)"><span>Discount</span><span>−$'+disc.toFixed(2)+'</span></div>':'')
+      +'<div class="pos-total-row" style="margin-top:4px;border-top:1px solid var(--bdr);padding-top:6px">'
+        +'<span style="color:var(--txt-b);font-weight:600">Total</span>'
+        +'<span class="pos-total-final">$'+tot.toFixed(2)+'</span>'
+      +'</div>';
+  }
+  var chBtn=document.getElementById('pos-charge-btn');
+  if(chBtn){
+    chBtn.textContent=posCart.length?'⬡  Charge $'+posTotal().toFixed(2)+' via Square':'⬡  Charge via Square';
+    chBtn.disabled=!posCart.length;
+  }
+  var cashBtn=document.getElementById('pos-cash-btn');
+  if(cashBtn)cashBtn.disabled=!posCart.length;
+}
+
+function renderPOSHistory(){
+  var el=document.getElementById('pos-history');
+  if(!el)return;
+  var recent=[].concat(posSales).sort(function(a,b){return b.timestamp-a.timestamp;}).slice(0,25);
+  if(!recent.length){el.innerHTML='<div style="color:var(--txt-d);font-size:8px;padding:8px">No sales yet today</div>';return;}
+  var today=new Date().toDateString();
+  el.innerHTML=recent.map(function(s){
+    var d=new Date(s.timestamp);
+    var isToday=d.toDateString()===today;
+    var method=s.method==='cash'?'💵':'💳';
+    var itemSummary=s.items.map(function(i){return i.name+(i.qty>1?' ×'+i.qty:'');}).join(', ');
+    return '<div class="pos-sale-row">'
+      +'<div style="min-width:0">'
+        +'<div style="font-size:8px;font-weight:600;color:var(--txt-b);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+method+' '+esc(itemSummary)+'</div>'
+        +'<div style="font-size:6px;color:var(--txt-d)">'+(isToday?d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}):d.toLocaleDateString('en-US',{month:'short',day:'numeric'})+'  '+d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'}))+'</div>'
+      +'</div>'
+      +'<div style="text-align:right;flex-shrink:0;margin-left:8px">'
+        +'<div style="color:var(--grn-b);font-size:10px;font-weight:700">$'+parseFloat(s.total).toFixed(2)+'</div>'
+        +(s.squareId?'<div style="font-size:6px;color:var(--txt-d)">'+s.squareId.slice(-6).toUpperCase()+'</div>':'')
+      +'</div>'
+      +'</div>';
+  }).join('');
+}
+
+function renderPOS(){
+  var el=document.getElementById('pos-content');
+  if(!el)return;
+  var validItems=(catalogItems||[]).filter(function(c){return parseFloat(c.price||0)>0;});
+  var cats=['all'].concat([...new Set(validItems.map(function(c){return c.category||'Other';}))]);
+  var taxRate=parseFloat((typeof cfg!=='undefined'&&cfg&&cfg.taxRate)||0);
+  var todaySales=posSales.filter(function(s){return new Date(s.timestamp).toDateString()===new Date().toDateString();});
+  var todayTotal=todaySales.reduce(function(a,s){return a+parseFloat(s.total||0);},0);
+
+  el.innerHTML=
+    '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px">'
+      +'<div>'
+        +'<div style="font-family:\'Orbitron\',monospace;font-size:13px;font-weight:700;color:var(--gold-b)">🛒 Convention POS</div>'
+        +'<div style="font-size:8px;color:var(--txt-d);margin-top:2px">Today: '+todaySales.length+' sale'+(todaySales.length!==1?'s':'')+'  ·  $'+todayTotal.toFixed(2)+' total</div>'
+      +'</div>'
+      +'<div style="display:flex;gap:6px;align-items:center">'
+        +'<input id="pos-search-inp" type="text" class="srch" placeholder="Search…" value="'+esc(posSearch)+'" oninput="posSearch=this.value;renderPOSProducts()" style="width:140px">'
+        +'<button class="btn btn-ghost btn-sm" onclick="posClearCart()">✕ Clear Cart</button>'
+      +'</div>'
+    +'</div>'
+    +'<div class="pos-layout">'
+      +'<div>'
+        +'<div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:10px">'
+          +cats.map(function(c){return '<button class="btn btn-sm '+(posCatFilter===c?'btn-pur':'btn-ghost')+'" onclick="posSetCatFilter(\''+c.replace(/\\/g,'\\\\').replace(/'/g,"\\'")+'\')">'+(c==='all'?'All':esc(c))+'</button>';}).join('')
+        +'</div>'
+        +(validItems.length===0?'<div style="color:var(--txt-d);font-size:9px;padding:20px;text-align:center">No products with prices in your catalog.<br>Add prices in the Product Catalog tab first.</div>':'')
+        +'<div class="pos-grid" id="pos-products"></div>'
+      +'</div>'
+      +'<div>'
+        +'<div style="background:var(--surf2);border:1px solid var(--bdr2);border-radius:10px;padding:12px;margin-bottom:10px">'
+          +'<div style="font-size:8px;font-weight:700;color:var(--txt-d);letter-spacing:1px;text-transform:uppercase;margin-bottom:8px">Cart</div>'
+          +'<div id="pos-cart-body" style="min-height:60px"></div>'
+          +'<div id="pos-totals" style="margin-top:8px"></div>'
+          +'<div style="display:flex;align-items:center;gap:7px;margin-top:8px">'
+            +'<span style="font-size:8px;color:var(--txt-d);white-space:nowrap">Discount $</span>'
+            +'<input type="number" min="0" step="0.50" value="'+(posDiscount||'')+'" placeholder="0.00" oninput="posSetDiscount(this.value)" style="flex:1;background:var(--bg);border:1px solid var(--bdr2);border-radius:4px;color:var(--txt-b);font-size:10px;padding:4px 6px">'
+          +'</div>'
+          +'<button id="pos-charge-btn" class="pos-charge-btn" onclick="posCharge()" disabled>⬡  Charge via Square</button>'
+          +'<button id="pos-cash-btn" class="pos-cash-btn" onclick="posCashSale()" disabled>💵 Log Cash Sale</button>'
+          +(taxRate===0?'<div style="font-size:7px;color:var(--org);margin-top:6px;text-align:center">⚠ Tax rate is 0% — configure in Settings</div>':'')
+        +'</div>'
+        +'<div style="background:var(--surf2);border:1px solid var(--bdr2);border-radius:10px;padding:12px">'
+          +'<div style="font-size:8px;font-weight:700;color:var(--txt-d);letter-spacing:1px;text-transform:uppercase;margin-bottom:8px">Today\'s Sales</div>'
+          +'<div id="pos-history"></div>'
+        +'</div>'
+      +'</div>'
+    +'</div>';
+  renderPOSProducts();
+  renderPOSCart();
+  renderPOSHistory();
+}
+
+function posClearCart(){
+  posCart=[];posDiscount=0;posCartSeq=0;
+  if(document.getElementById('pos-cart-body'))renderPOSCart();
+  if(document.getElementById('pos-products'))renderPOSProducts();
+}
+
+function posCharge(){
+  if(!posCart.length){toast('Empty Cart','Add items first','warning');return;}
+  var total=posTotal();
+  var cents=posCents();
+  if(cents<1){toast('Invalid Total','Total must be at least $0.01','warning');return;}
+  var clientTxId='LD-'+Date.now();
+  var notes=posCart.map(function(r){return r.name+(r.qty>1?' ×'+r.qty:'');}).join(', ');
+  var squareData={
+    amount_money:{amount:cents,currency_code:'USD'},
+    callback_url:'https://layerdeck.replit.app/square/callback',
+    client_transaction_id:clientTxId,
+    notes:notes.substring(0,499),
+    supported_tender_types:['CREDIT_CARD','CASH','OTHER','SQUARE_GIFT_CARD','CARD_ON_FILE'],
+    auto_return:true
+  };
+  posActiveSale={
+    clientTxId:clientTxId,
+    cart:JSON.parse(JSON.stringify(posCart)),
+    discount:posDiscount,
+    taxRate:parseFloat((typeof cfg!=='undefined'&&cfg&&cfg.taxRate)||0),
+    subtotal:posSubtotal(),
+    taxAmt:posTaxAmt(),
+    total:total,
+    timestamp:Date.now()
+  };
+  sessionStorage.setItem('pos_pending',JSON.stringify(posActiveSale));
+  var encoded=btoa(unescape(encodeURIComponent(JSON.stringify(squareData))));
+  var url='square-commerce-v1://payment/create?data='+encodeURIComponent(encoded);
+  window.location.href=url;
+}
+
+function posCashSale(){
+  if(!posCart.length){toast('Empty Cart','Add items first','warning');return;}
+  var sale={
+    id:uid(),
+    method:'cash',
+    squareId:null,
+    clientTxId:'CASH-'+Date.now(),
+    items:posCart.map(function(r){return{catalogItemId:r.catalogItemId,name:r.name,qty:r.qty,unitPrice:r.overridePrice!=null?r.overridePrice:r.unitPrice};}),
+    subtotal:posSubtotal(),
+    discount:posDiscount,
+    taxAmt:posTaxAmt(),
+    total:posTotal(),
+    timestamp:Date.now()
+  };
+  posCompleteSale(sale);
+  posShowReceipt(sale);
+}
+
+function posCheckCallback(){
+  var cb=sessionStorage.getItem('pos_callback');
+  var pending=sessionStorage.getItem('pos_pending');
+  if(!cb)return;
+  sessionStorage.removeItem('pos_callback');
+  sessionStorage.removeItem('pos_pending');
+  var result,pendingSale;
+  try{result=JSON.parse(cb);}catch{return;}
+  try{pendingSale=pending?JSON.parse(pending):null;}catch{pendingSale=null;}
+  if(!pendingSale){
+    if(result.status==='ok'){toast('Payment Received!','Square POS completed successfully','success');}
+    else{toast('Payment Cancelled',result.error_code?result.error_code.replace(/_/g,' '):'Square POS cancelled','warning');}
+    setTimeout(function(){navTo('pos',document.getElementById('nav-pos'));},400);
+    return;
+  }
+  if(result.status==='ok'){
+    var sale={
+      id:uid(),
+      method:'square',
+      squareId:result.transaction_id||result.client_transaction_id,
+      clientTxId:result.client_transaction_id,
+      items:pendingSale.cart.map(function(r){return{catalogItemId:r.catalogItemId,name:r.name,qty:r.qty,unitPrice:r.overridePrice!=null?r.overridePrice:r.unitPrice};}),
+      subtotal:pendingSale.subtotal,
+      discount:pendingSale.discount,
+      taxAmt:pendingSale.taxAmt,
+      total:pendingSale.total,
+      timestamp:Date.now()
+    };
+    posCompleteSale(sale);
+    setTimeout(function(){
+      navTo('pos',document.getElementById('nav-pos'));
+      setTimeout(function(){posShowReceipt(sale);},350);
+    },400);
+  }else{
+    toast('Payment Cancelled',result.error_code?result.error_code.replace(/_/g,' '):'Square POS cancelled','warning');
+    setTimeout(function(){navTo('pos',document.getElementById('nav-pos'));},400);
+  }
+}
+
+function posCompleteSale(sale){
+  posSales.push(sale);
+  savePosSales();
+  posDiscordSale(sale);
+  // Also record in active convention's daySales (if convention running today)
+  var today=new Date().toISOString().split('T')[0];
+  var activeConv=(conventions||[]).find(function(c){
+    return c.date===today||(c.endDate&&today>=c.date&&today<=c.endDate)||(c.dates&&Array.isArray(c.dates)&&c.dates.includes(today));
+  });
+  if(activeConv){
+    if(!activeConv.daySales)activeConv.daySales=[];
+    sale.items.forEach(function(item){
+      activeConv.daySales.push({
+        id:uid(),
+        catalogItemId:item.catalogItemId||'',
+        itemName:item.name,
+        qty:item.qty,
+        price:item.unitPrice,
+        totalPrice:(item.unitPrice*item.qty).toFixed(2),
+        badge:sale.method==='cash'?'cash':'square',
+        timestamp:sale.timestamp,
+        date:today
+      });
+    });
+    saveConventions();
+  }
+  // Supabase sync
+  if(typeof supabaseClient!=='undefined'&&supabaseClient&&typeof currentUser!=='undefined'&&currentUser){
+    supabaseClient.from('ha3d_user_data').upsert({
+      user_id:currentUser.id,
+      collection:'pos_sales',
+      payload:JSON.stringify(posSales),
+      updated_at:new Date().toISOString()
+    }).then(function(){}).catch(function(){});
+  }
+  posClearCart();
+}
+
+function posDiscordSale(sale){
+  var method=sale.method==='cash'?'💵 Cash':'💳 Square';
+  var itemLines=sale.items.map(function(i){return '  • '+i.name+(i.qty>1?' ×'+i.qty:'')+' — $'+(i.unitPrice*i.qty).toFixed(2);}).join('\n');
+  var d=new Date(sale.timestamp);
+  var lines=[
+    '💰 POS Sale — '+d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})+' · '+d.toLocaleDateString('en-US',{month:'short',day:'numeric'}),
+    method,
+    itemLines,
+    sale.discount>0?'  Discount: −$'+sale.discount.toFixed(2):'',
+    sale.taxAmt>0?'  Tax: $'+sale.taxAmt.toFixed(2):'',
+    '**Total: $'+parseFloat(sale.total).toFixed(2)+'**'
+  ].filter(Boolean);
+  if(typeof postToDiscord==='function')postToDiscord('convention_sale',lines.join('\n'));
+}
+
+function posShowReceipt(sale){
+  // Remove any existing receipt overlay
+  var existing=document.getElementById('pos-receipt-overlay');
+  if(existing)existing.remove();
+  var overlay=document.createElement('div');
+  overlay.className='overlay';
+  overlay.id='pos-receipt-overlay';
+  overlay.style.zIndex='260';
+  var method=sale.method==='cash'?'💵 Cash':'💳 Square Reader';
+  var itemRows=sale.items.map(function(i){
+    return '<div class="pos-sale-row" style="border-color:var(--bdr2)">'
+      +'<span style="font-size:9px">'+esc(i.name)+(i.qty>1?' <span style="color:var(--txt-d)">×'+i.qty+'</span>':'')+'</span>'
+      +'<span style="color:var(--grn-b);font-size:9px;font-weight:600">$'+(i.unitPrice*i.qty).toFixed(2)+'</span>'
+      +'</div>';
+  }).join('');
+  overlay.innerHTML=
+    '<div class="modal" style="max-width:340px;width:92vw;text-align:center">'
+      +'<div style="font-size:36px;margin-bottom:6px">✅</div>'
+      +'<div style="font-family:\'Orbitron\',monospace;font-size:14px;font-weight:700;color:var(--grn-b);margin-bottom:2px">Payment '+(sale.method==='cash'?'Logged!':'Received!')+'</div>'
+      +'<div style="font-size:9px;color:var(--txt-d);margin-bottom:16px">'+method+' · '+new Date(sale.timestamp).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})+'</div>'
+      +'<div style="background:var(--surf2);border:1px solid var(--bdr2);border-radius:8px;padding:12px;margin-bottom:14px;text-align:left">'
+        +itemRows
+        +(sale.discount>0?'<div class="pos-sale-row" style="border-color:var(--bdr2);color:var(--org)"><span>Discount</span><span>−$'+sale.discount.toFixed(2)+'</span></div>':'')
+        +(sale.taxAmt>0?'<div class="pos-sale-row" style="border-color:var(--bdr2)"><span style="color:var(--txt-d);font-size:8px">Tax</span><span style="color:var(--txt-d);font-size:8px">$'+sale.taxAmt.toFixed(2)+'</span></div>':'')
+        +'<div class="pos-sale-row" style="border:none;margin-top:6px;padding-top:8px;border-top:1px solid var(--bdr)">'
+          +'<span style="font-weight:700;font-size:10px">Total</span>'
+          +'<span style="font-size:20px;font-weight:700;color:var(--grn-b)">$'+parseFloat(sale.total).toFixed(2)+'</span>'
+        +'</div>'
+      +'</div>'
+      +(sale.squareId?'<div style="font-size:7px;color:var(--txt-d);margin-bottom:12px">Square ref: '+sale.squareId.slice(-8).toUpperCase()+'</div>':'')
+      +'<button class="btn btn-grn" style="width:100%;padding:12px;font-size:12px" onclick="document.getElementById(\'pos-receipt-overlay\').remove();renderPOS()">✓ Next Sale</button>'
+    +'</div>';
+  document.body.appendChild(overlay);
+}
 </script>
 </body>
 </html>
