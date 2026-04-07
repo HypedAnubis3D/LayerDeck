@@ -275,17 +275,10 @@ export async function sendDailyDiscordReport() {
     lines.push(`\n❌ Print Failures: ${todayFails.length}`);
     todayFails.forEach(f => lines.push(`   ${f.printer ?? ""}${f.name ? ` — ${f.name}` : ""}`));
   }
-  if (lowStockItems.length) {
-    lines.push("\n⚠️ Low Stock:");
-    lowStockItems.slice(0, 5).forEach(i => lines.push(`   ${i.name ?? i.productName ?? ""} (${i.stockQty ?? 0} left)`));
-  }
-  if (lowSpools.length) {
-    lines.push("\n🧵 Spools Running Low:");
-    lowSpools.slice(0, 3).forEach(s => lines.push(`   ${s.brand ?? ""} ${s.colorName ?? s.name ?? ""} ~${Math.round(s.remaining ?? 0)}g`));
-  }
   lines.push(`\n📋 Queue: ${queuedJobs.length} jobs pending (~${queueTime} total)`);
   lines.push("──────────────────────────");
-  if (!todayFails.length && !lowStockItems.length && !lowSpools.length) lines.push("No alerts today ✅");
+  if (!todayFails.length) lines.push("No alerts today ✅");
+  // Low stock suppressed — check inventory manually or before conventions
 
   try {
     const r = await fetch(webhookUrl, {
@@ -306,17 +299,17 @@ export async function sendDailyDiscordReport() {
 
 // ── Schedule helpers ───────────────────────────────────────────────────────────
 
-function msUntilNext6amEastern(): number {
+function msUntilNext1130amEastern(): number {
   const now = new Date();
   const eastern = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
-  const next6am = new Date(eastern);
-  next6am.setHours(6, 0, 0, 0);
-  if (next6am <= eastern) next6am.setDate(next6am.getDate() + 1);
-  return next6am.getTime() - eastern.getTime();
+  const next = new Date(eastern);
+  next.setHours(11, 30, 0, 0);
+  if (next <= eastern) next.setDate(next.getDate() + 1);
+  return next.getTime() - eastern.getTime();
 }
 
 function scheduleDailyReport() {
-  const delay = msUntilNext6amEastern();
+  const delay = msUntilNext1130amEastern();
   logger.info({ hoursUntil: Math.round(delay / 3_600_000 * 10) / 10 }, "Daily Discord report scheduled");
   setTimeout(function tick() {
     sendDailyDiscordReport().catch(err => logger.error({ err }, "Daily report error"));

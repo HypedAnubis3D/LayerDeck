@@ -58,21 +58,18 @@ const printerClients = {};
 const _printerPrevGcodeState = {};
 
 // ── Discord alert helpers ──────────────────────────────────────────────────────
-// Print alerts (completed/failed) — loaded from config.json or env var.
+// Print Alerts channel — completed prints, failed prints, AI vision alerts.
+// Consolidated: formerly split between PRINT_ALERTS and PRINT_WATCH.
 let DISCORD_ALERTS_URL = process.env.DISCORD_WEBHOOK_PRINT_ALERTS || '';
-// Printer connectivity/status alerts (unreachable, back online, MQTT errors).
-// Falls back to DISCORD_ALERTS_URL if the dedicated status webhook is not set.
-let DISCORD_STATUS_URL = process.env.DISCORD_WEBHOOK_PRINTER_STATUS || '';
-// Dedicated AI vision watch channel — receives failure/warning alerts from AI scans.
-// Falls back to DISCORD_ALERTS_URL if not set. Set DISCORD_WEBHOOK_PRINT_WATCH in env or config.json.
-let DISCORD_WATCH_URL = process.env.DISCORD_WEBHOOK_PRINT_WATCH || '';
+// Pi Health channel — printer online/offline status, MQTT errors.
+// Falls back to DISCORD_ALERTS_URL when not set.
+let DISCORD_PI_HEALTH_URL = process.env.DISCORD_WEBHOOK_PI_HEALTH || '';
 const configPath = path.join(__dirname, 'config.json');
 if (fs.existsSync(configPath)) {
   try {
     const cfg = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-    if (cfg.discordWebhookPrintAlerts)   DISCORD_ALERTS_URL = cfg.discordWebhookPrintAlerts;
-    if (cfg.discordWebhookPrinterStatus) DISCORD_STATUS_URL = cfg.discordWebhookPrinterStatus;
-    if (cfg.discordWebhookPrintWatch)    DISCORD_WATCH_URL  = cfg.discordWebhookPrintWatch;
+    if (cfg.discordWebhookPrintAlerts) DISCORD_ALERTS_URL   = cfg.discordWebhookPrintAlerts;
+    if (cfg.discordWebhookPiHealth)    DISCORD_PI_HEALTH_URL = cfg.discordWebhookPiHealth;
   } catch (e) { /* ignore */ }
 }
 
@@ -97,14 +94,19 @@ function sendDiscordAlert(content) {
   _postDiscord(DISCORD_ALERTS_URL, content);
 }
 
+// Printer status (online/offline) — goes to Pi Health channel, not Print Alerts
+function sendDiscordStatus(content) {
+  _postDiscord(DISCORD_PI_HEALTH_URL || DISCORD_ALERTS_URL, content);
+}
+
 function sendDiscordWatch(content) {
-  // AI vision alerts go to the dedicated PRINT_WATCH channel (falls back to PRINT_ALERTS)
-  _postDiscord(DISCORD_WATCH_URL || DISCORD_ALERTS_URL, content);
+  // AI vision alerts — consolidated into Print Alerts channel
+  _postDiscord(DISCORD_ALERTS_URL, content);
 }
 
 // Send Discord alert with a JPEG image attached (multipart/form-data)
 function sendDiscordWatchWithImage(content, base64Jpeg) {
-  const webhookUrl = DISCORD_WATCH_URL || DISCORD_ALERTS_URL;
+  const webhookUrl = DISCORD_ALERTS_URL;
   if (!webhookUrl) return;
   try {
     const imgBuf   = Buffer.from(base64Jpeg, 'base64');
@@ -129,10 +131,6 @@ function sendDiscordWatchWithImage(content, base64Jpeg) {
     req.write(body);
     req.end();
   } catch (e) { /* silent */ }
-}
-
-function sendDiscordStatus(content) {
-  _postDiscord(DISCORD_STATUS_URL || DISCORD_ALERTS_URL, content);
 }
 
 // Debounce: at most one MQTT error alert per printer per 5 minutes for real errors
@@ -216,7 +214,7 @@ PRINTERS.forEach(printer => {
     console.log(`Connected to ${printer.name}`);
     // Notify Discord only if we previously told it the printer was offline
     if (wasOffline) {
-      sendDiscordAlert(`✅ **${printer.name}** is back online`);
+      sendDiscordStatus(`✅ **${printer.name}** is back online`);
     }
   });
 
@@ -283,8 +281,10 @@ PRINTERS.forEach(printer => {
           const jobName = (mqttPayload.print.subtask_name || printerStates[printer.name].subtask_name || '')
             .replace(/\.gcode\.3mf$/i, '').replace(/\.3mf$/i, '') || 'Unknown job';
 
-          if (gcodeState === 'FINISH' && prevState) {
-            // Only alert on a real transition FROM a known prior state (not first connect)
+          const _wasActivelyPrinting = prevState === 'RUNNING' || prevState === 'PAUSE' || prevState === 'PAUSED';
+          if (gcodeState === 'FINISH' && _wasActivelyPrinting) {
+            // Only alert when transitioning FROM an active print state — prevents
+            // duplicate alerts when the printer powers back on and replays FINISH
             const _st = printerStates[printer.name].printStartTime;
             const _dur = _st ? Math.round((Date.now() - _st) / 60000) : 0;
             const _durStr = _dur > 0 ? `${Math.floor(_dur/60)}h ${_dur%60}m` : '—';

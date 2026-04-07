@@ -4,8 +4,7 @@ import Anthropic from "@anthropic-ai/sdk";
 const router = Router();
 
 const anthropic = new Anthropic({
-  baseURL: process.env.AI_INTEGRATIONS_ANTHROPIC_BASE_URL,
-  apiKey: process.env.AI_INTEGRATIONS_ANTHROPIC_API_KEY ?? "dummy",
+  apiKey: process.env.ANTHROPIC_API_KEY,
 });
 
 router.post("/search", async (req, res) => {

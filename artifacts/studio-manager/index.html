@@ -922,7 +922,7 @@ body.light-mode ::-webkit-scrollbar-thumb{background:var(--bdr2);}
   #ls-header-sub{font-size:6px!important;letter-spacing:0.5px!important;}
   header img{height:48px!important;}
   /* Main padding */
-  main{padding:10px 12px;}
+  main{padding:10px 12px 80px;}
   /* Buttons full width in modal */
   .macts{flex-direction:column;}
   /* Dashboard grid */
@@ -1465,7 +1465,7 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
 .print-card-sprite{width:40px;height:40px;image-rendering:pixelated;border-radius:3px;float:right;margin-left:6px;}
 
 @media print{
-  header,.ctrl,.sbar,main>*:not(#tab-labels){display:none!important;}
+  header,.ctrl,.sbar,.bottom-nav,main>*:not(#tab-labels){display:none!important;}
   #tab-labels{display:block!important;}
   .labels-grid{grid-template-columns:var(--lbl-cols,repeat(4,1fr));}
   .lbl-card{break-inside:avoid;border:1px solid #ddd;}
@@ -1998,6 +1998,7 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
   <div class="ctrl" style="flex-wrap:wrap;gap:6px">
     <button class="btn btn-ghost btn-sm" onclick="window.print()">🖨 Print Labels</button>
     <select id="label-size-select" onchange="applyLabelSize(this.value)" style="background:var(--surf);border:1px solid var(--bdr2);color:var(--txt-b);font-family:'Share Tech Mono',monospace;font-size:9px;padding:4px 8px;border-radius:3px;cursor:pointer">
+      <option value="thermal-2x2">Thermal 2×2 (1 col)</option>
       <option value="standard">Standard 4×4 (4 cols)</option>
       <option value="avery-2x4">Avery 2×4 (3 cols)</option>
       <option value="thermal-4x6">Thermal 4×6 (2 cols)</option>
@@ -5409,7 +5410,7 @@ function renderLabels(){
 // ════════════════════════════════════════
 let filRows=[];
 function buildSpoolOpts(selId=''){
-  return `<option value="">— Select Spool —</option>`+spools.map(s=>`<option value="${s.id}"${s.id===selId?' selected':''}>${esc(s.name)} — ${s.remaining}g (${pct(s)}%)</option>`).join('');
+  return `<option value="">— Select Spool —</option>`+spools.map(s=>`<option value="${s.id}"${s.id===selId?' selected':''}>${esc(s.brand?s.brand+' ':'')}${esc(s.name)} — ${s.remaining}g (${pct(s)}%)</option>`).join('');
 }
 function populateTmfDropdown(){
   const inp=document.getElementById('ep-tmf-search');
@@ -14083,6 +14084,7 @@ function deleteShinyRoll(idOrTs){
 // ── LABEL SIZE PICKER ──
 function applyLabelSize(size){
   const map={
+    'thermal-2x2':'repeat(1,1fr)',
     'standard':'repeat(4,1fr)',
     'avery-2x4':'repeat(3,1fr)',
     'thermal-4x6':'repeat(2,1fr)',
@@ -14578,7 +14580,7 @@ async function onPiPrintStarted(name,data){
   if(data.vt_tray&&data.vt_tray.remain!=null)_snap['ext']=data.vt_tray.remain;
   piAmsStartRemain[name]=_snap;
   // Move queue card to In Progress if matching job
-  var jobName=(data.subtask_name||'').replace('.gcode.3mf','').replace('.3mf','');
+  var jobName=(data.subtask_name||'').replace(/\.gcode\.3mf$/i,'').replace(/\.3mf$/i,'').replace(/\.gcode$/i,'').replace(/\.bgcode$/i,'');
   var displayName=jobName||('Print on '+name);
 
   // ── Match against 3MF library early (used for queue noTmf flag + warning toast) ──
@@ -14587,8 +14589,10 @@ async function onPiPrintStarted(name,data){
   var _jLowBase=_jLow.replace(/\s+plate\s+\d+$/i,'').trim();
   var matchedTmf=(jobName&&typeof tmfLib!=='undefined')?tmfLib.find(function(t){
     var tName=(t.name||'').toLowerCase().trim();
-    var tFile=(t.filename||'').replace(/\.gcode\.3mf$/i,'').replace(/\.3mf$/i,'').replace(/_/g,' ').toLowerCase().trim();
-    return tName===_jLow||tFile===_jLow||tName===_jLowBase||tFile===_jLowBase;
+    var tNameBase=tName.replace(/\s+plate\s+\d+$/i,'').trim();
+    var tFile=(t.filename||'').replace(/\.gcode\.3mf$/i,'').replace(/\.3mf$/i,'').replace(/\.gcode$/i,'').replace(/_/g,' ').toLowerCase().trim();
+    var tFileBase=tFile.replace(/\s+plate\s+\d+$/i,'').trim();
+    return tName===_jLow||tFile===_jLow||tName===_jLowBase||tFile===_jLowBase||tNameBase===_jLow||tFileBase===_jLow||tNameBase===_jLowBase||tFileBase===_jLowBase;
   }):null;
 
   var changed=false;
@@ -14657,7 +14661,7 @@ async function onPiPrintStarted(name,data){
   }
 }
 
-function _normName(s){return (s||'').toLowerCase().replace(/[\s_\-]+/g,' ').replace(/\.gcode\.3mf$/i,'').replace(/\.3mf$/i,'').trim();}
+function _normName(s){return (s||'').toLowerCase().replace(/[\s_\-]+/g,' ').replace(/\.gcode\.3mf$/i,'').replace(/\.3mf$/i,'').replace(/\.gcode$/i,'').replace(/\.bgcode$/i,'').trim();}
 function reconcileMissingPiPrints(){
   const _todayStart=new Date();_todayStart.setHours(0,0,0,0);
   const _todayMs=_todayStart.getTime();
@@ -14704,7 +14708,7 @@ function reconcileMissingPiPrints(){
 }
 
 async function onPiPrintFinished(name,data){
-  const jobNameCheck=(data.subtask_name||'').replace('.gcode.3mf','').replace('.3mf','')||'Unknown';
+  const jobNameCheck=(data.subtask_name||'').replace(/\.gcode\.3mf$/i,'').replace(/\.3mf$/i,'').replace(/\.gcode$/i,'').replace(/\.bgcode$/i,'')||'Unknown';
   // Dedup for the entire calendar day — prevents duplicate records when the app
   // reloads and re-receives the FINISH MQTT state (can be minutes or hours later)
   const _todayStart=new Date();_todayStart.setHours(0,0,0,0);
@@ -14715,7 +14719,7 @@ async function onPiPrintFinished(name,data){
   // to 'done' instead of skipping. True duplicates (status already 'done'/'failed') skip.
   if(recentDup&&recentDup.status!=='printing'){return;}
   const _promotePlaceholder=recentDup&&recentDup.status==='printing'?recentDup:null;
-  const jobName=(data.subtask_name||'').replace('.gcode.3mf','').replace('.3mf','')||'Unknown';
+  const jobName=(data.subtask_name||'').replace(/\.gcode\.3mf$/i,'').replace(/\.3mf$/i,'').replace(/\.gcode$/i,'').replace(/\.bgcode$/i,'')||'Unknown';
   const material=getPiAMSMaterial(data);
   // Early 3MF lookup — used as fallback for duration & filament when app loads post-print
   // (app sees FINISH before RUNNING so piPrintStartTimes / piAmsStartRemain are empty)
@@ -14765,9 +14769,7 @@ async function onPiPrintFinished(name,data){
           spool.remaining=Math.max(0,(spool.remaining||totalG)-grams);
           spoolsChanged=true;
           usageHist.push({id:uid(),spoolId:spool.id,spoolName:spool.name||spool.material,amount:grams,date:new Date().toISOString().split('T')[0],timestamp:Date.now(),note:'Pi Hub — '+jobName+' (AMS slot '+(ui*4+ti+1)+')'});
-          if((spool.remaining||0)<100){
-            postToDiscord('low_spool','🧵 Spool Running Low — '+(spool.brand||'')+' '+(spool.colorName||spool.name||'')+'\nRemaining: ~'+Math.round(spool.remaining||0)+'g\nPrinter: '+name);
-          }
+          // Low spool alerts suppressed here — check spools manually or before conventions
         }
       });
     });
@@ -14787,9 +14789,7 @@ async function onPiPrintFinished(name,data){
         extSpool.remaining=Math.max(0,(extSpool.remaining||totalG)-grams);
         spoolsChanged=true;
         usageHist.push({id:uid(),spoolId:extSpool.id,spoolName:extSpool.name||extSpool.material,amount:grams,date:new Date().toISOString().split('T')[0],timestamp:Date.now(),note:'Pi Hub — '+jobName+' (Ext spool)'});
-        if((extSpool.remaining||0)<100){
-          postToDiscord('low_spool','🧵 Spool Running Low — '+(extSpool.brand||'')+' '+(extSpool.colorName||extSpool.name||'')+'\nRemaining: ~'+Math.round(extSpool.remaining||0)+'g\nPrinter: '+name);
-        }
+        // Low spool alerts suppressed here — check spools manually or before conventions
       }
     }
   }
@@ -14804,9 +14804,7 @@ async function onPiPrintFinished(name,data){
     if(fallbackSpool&&totalFallbackG>0){
       fallbackSpool.remaining=Math.max(0,(fallbackSpool.remaining||fallbackSpool.totalGrams||1000)-totalFallbackG);
       spoolsChanged=true;
-      if((fallbackSpool.remaining||0)<100){
-        postToDiscord('low_spool','🧵 Spool Running Low — '+(fallbackSpool.brand||'')+' '+(fallbackSpool.colorName||fallbackSpool.name||'')+'\nRemaining: ~'+Math.round(fallbackSpool.remaining||0)+'g\nPrinter: '+name);
-      }
+      // Low spool alerts suppressed here — check spools manually or before conventions
     }
     if(tmfGramsArr){
       const tmfCols=(_earlyTmf.filamentColors||[]);
@@ -16293,6 +16291,21 @@ function _tapoAutoAssignByIp(){
   if(changed)_saveTapoPrinterPlugs();
 }
 
+async function piAllPlugsPower(on){
+  const devices=_tapoDevices.filter(d=>d.deviceId);
+  if(!devices.length){toast('No Tapo plugs found','Add plugs in Tapo settings','warning');return;}
+  toast(on?'⚡ Turning All On':'🔌 Turning All Off','Sending to '+devices.length+' plug'+(devices.length===1?'':'s'),'info',2000);
+  for(const dev of devices){
+    try{
+      const r=await fetch('/api/tapo/power',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({deviceId:dev.deviceId,on,hubUrl:getPiUrl()||null})});
+      const j=await r.json();
+      if(j.ok){const d=_tapoDevices.find(function(x){return x.deviceId===dev.deviceId;});if(d)d.on=on;}
+    }catch(e){/* silent — toast already shown */}
+  }
+  if(curTab==='pihub') renderPiHub();
+  setTimeout(function(){fetchTapoDevices(true);},2000);
+}
+
 async function tapoSetPower(deviceId,on,btnEl){
   if(btnEl){btnEl.disabled=true;btnEl.textContent=on?'Turning ON…':'Turning OFF…';}
   try{
@@ -16507,10 +16520,12 @@ function renderPiHub(){
         '<div><div style="font-size:7px;color:var(--txt-d);letter-spacing:1px">ROUTING</div><div style="font-size:9px;margin-top:2px;color:'+(hasPublic?'var(--grn)':'var(--gold)')+'">'+
           (hasPublic?'✓ Public HTTPS':'⚠ Local/Tailscale only')+'</div></div>'+
       '</div>'+
-      '<div style="display:flex;gap:6px">'+
+      '<div style="display:flex;gap:6px;flex-wrap:wrap">'+
         '<button class="btn btn-ghost btn-sm" onclick="fetchPiStatus()">🔄 Refresh</button>'+
         '<button class="btn btn-ghost btn-sm" onclick="openPiHubSetup()">⚙ Edit Config</button>'+
-      '</div>'+
+        (_tapoDevices.length?'<button class="btn btn-sm" style="background:rgba(0,200,80,.1);border-color:rgba(0,200,80,.4);color:var(--grn)" onclick="piAllPlugsPower(true)">⚡ All On</button>'+
+        '<button class="btn btn-sm" style="background:rgba(255,80,80,.1);border-color:rgba(255,80,80,.4);color:var(--red)" onclick="piAllPlugsPower(false)">🔌 All Off</button>':'')
+      +'</div>'+
     '</div>'+
     // Connectivity guide
     (!hasPublic?
