@@ -8320,10 +8320,20 @@ function savePrint(){
     printer:document.getElementById('ep-printer').value,hrs,qty,filaments,
     notes:document.getElementById('ep-notes').value.trim(),
     tmfName:selectedTmf?selectedTmf.name:(existing?existing.tmfName:null),
+    tmfId:selectedTmfId||null,
     timestamp:id?(existing||{}).timestamp||Date.now():Date.now(),
   };
   if(id){
     prints=prints.map(p=>p.id===id?print:p);
+    // Sync 3MF + fields back to linked queue item when editing an in-progress print
+    if(print.fromQueueItemId&&print.status==='printing'){
+      queueItems=queueItems.map(function(q){
+        return q.id===print.fromQueueItemId
+          ?Object.assign({},q,{name:print.name,category:print.category,printer:print.printer,hrs:print.hrs,qty:print.qty,notes:print.notes,filaments:print.filaments,tmfId:selectedTmfId||q.tmfId,noTmf:!selectedTmfId&&!print.tmfName})
+          :q;
+      });
+      saveQueue();
+    }
     // Deduct / refund delta when filaments change on an existing print
     const oldFils=existing?.filaments||[];
     const oldQty=(existing?.qty)||1;
