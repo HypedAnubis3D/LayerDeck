@@ -2144,7 +2144,6 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
 <!-- PRINTERS -->
 <div id="tab-printers" style="display:none">
   <div class="ctrl">
-    <button class="btn btn-org" onclick="openAddPrinter()">+ Add Printer</button>
     <span style="font-size:7px;color:var(--txt-d);letter-spacing:1px">Printers appear in all dropdowns automatically · Electricity settings move here per-printer</span>
     <span class="cnt" id="printers-cnt"></span>
   </div>
@@ -5654,8 +5653,21 @@ function openEditPrint(id){
   // Restore previous 3MF selection from saved tmfId or fuzzy-match tmfName
   const _restoreTmfId=p.tmfId||(p.tmfName&&(tmfLib.find(function(t){return t.name===p.tmfName;})||{}).id)||'';
   document.getElementById('ep-tmf-select').value=_restoreTmfId;
-  (p.filaments||[]).forEach(f=>addFilRow(f.spoolId,f.grams));
-  if(!p.filaments?.length)addFilRow();
+  const _restoreTmf=_restoreTmfId?tmfLib.find(function(t){return t.id===_restoreTmfId;}):null;
+  const _tmfSearchInp=document.getElementById('ep-tmf-search');
+  if(_tmfSearchInp)_tmfSearchInp.value=_restoreTmf?_restoreTmf.name:'';
+  if(p.filaments&&p.filaments.length){
+    p.filaments.forEach(f=>addFilRow(f.spoolId,f.grams));
+  }else if(_restoreTmf){
+    // No filaments saved yet — auto-fill grams and color-match spools from 3MF
+    const _fc=_restoreTmf.filamentColors&&_restoreTmf.filamentColors.length?_restoreTmf.filamentColors:(_restoreTmf.filamentColor?[_restoreTmf.filamentColor]:[]);
+    const _fg=_restoreTmf.filamentGramsPerColor||_restoreTmf.filamentGrams||[];
+    const _mx=Math.max(_fc.length,_fg.length);
+    if(_mx>0){
+      for(let i=0;i<_mx;i++){const g=_fg[i];if(g===0)continue;addFilRow('',g!=null?g:'',_fc[i]||'');}
+      if(!filRows.length)addFilRow();
+    }else{addFilRow();}
+  }else{addFilRow();}
   updateCostPreview();
   document.getElementById('mod-print').style.display='flex';
 }
