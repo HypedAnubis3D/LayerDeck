@@ -17325,7 +17325,7 @@ function renderSquare(){
     '<div style="font-size:8px;color:var(--txt-b);background:var(--bdr);border-radius:6px;padding:8px;font-family:monospace;word-break:break-all;margin-bottom:14px">'+
       (window.location.hostname.includes('replit')
         ?'https://'+window.location.host+'/api/square/webhook'
-        :'https://layerdeck.replit.app/api/square/webhook')+
+        :'https://layerstack.replit.app/api/square/webhook')+
     '</div>'+
 
     '<div style="font-size:7px;color:var(--txt-d);line-height:1.8;margin-bottom:12px">'+
@@ -18752,7 +18752,7 @@ function posCharge(){
   var notes=posCart.map(function(r){return r.name+(r.qty>1?' ×'+r.qty:'');}).join(', ');
   var squareData={
     amount_money:{amount:cents,currency_code:'USD'},
-    callback_url:'https://layerdeck.replit.app/square/callback',
+    callback_url:window.location.origin+'/square/callback',
     client_transaction_id:clientTxId,
     notes:notes.substring(0,499),
     supported_tender_types:['CREDIT_CARD','CASH','OTHER','SQUARE_GIFT_CARD','CARD_ON_FILE'],

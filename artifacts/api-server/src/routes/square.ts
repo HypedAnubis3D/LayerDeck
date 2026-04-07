@@ -100,7 +100,7 @@ router.post(
         ? `https://${process.env.REPLIT_APP_DOMAIN}/api/square/webhook`
         : process.env.REPLIT_DEV_DOMAIN
         ? `https://${process.env.REPLIT_DEV_DOMAIN}/api/square/webhook`
-        : `https://layerdeck.replit.app/api/square/webhook`);
+        : `https://layerstack.replit.app/api/square/webhook`);
 
     // Validate signature if sig key is configured
     if (sigKey && signature) {
