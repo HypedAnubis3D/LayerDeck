@@ -13250,6 +13250,23 @@ function convChargeViaSquare(){
   _initSqPayments();
 }
 
+function _buildSquarePosUrl(squareData){
+  var encoded=btoa(unescape(encodeURIComponent(JSON.stringify(squareData))));
+  var isAndroid=/android/i.test(navigator.userAgent);
+  if(isAndroid){
+    return 'intent://payment/create?data='+encodeURIComponent(encoded)+'#Intent;scheme=square-commerce-v1;package=com.squareup;S.browser_fallback_url=https%3A%2F%2Fplay.google.com%2Fstore%2Fapps%2Fdetails%3Fid%3Dcom.squareup;end';
+  }
+  return 'square-commerce-v1://payment/create?data='+encodeURIComponent(encoded);
+}
+
+function _launchSquarePosUrl(url){
+  var a=document.createElement('a');
+  a.href=url;a.rel='noopener';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
+
 function convChargeViaReader(){
   var c=getEvt();if(!c){toast('No active convention','Open a convention first','warning');return;}
   if(!convCart.length){toast('Add items to the cart first','','warning');return;}
@@ -13264,10 +13281,15 @@ function convChargeViaReader(){
   var squareData={
     amount_money:{amount:cents,currency_code:'USD'},
     callback_url:window.location.origin+'/square/callback',
+    client_id:SQ_APP_ID,
     client_transaction_id:clientTxId,
+    version:'1.3',
     notes:cartSummary.substring(0,499),
-    supported_tender_types:['CREDIT_CARD','DEBIT_CARD','CASH','OTHER','SQUARE_GIFT_CARD'],
-    auto_return:true
+    options:{
+      supported_tender_types:['CREDIT_CARD','DEBIT_CARD','CASH','OTHER','SQUARE_GIFT_CARD'],
+      auto_return:true,
+      skip_receipt_screen:false
+    }
   };
   var pendingSale={
     source:'convention',
@@ -13281,14 +13303,8 @@ function convChargeViaReader(){
     timestamp:Date.now()
   };
   localStorage.setItem('pos_pending',JSON.stringify(pendingSale));
-  var encoded=btoa(unescape(encodeURIComponent(JSON.stringify(squareData))));
-  var url='square-commerce-v1://payment/create?data='+encodeURIComponent(encoded);
-  toast('Opening Square Reader','Complete payment in the Square POS app — swipe, tap or dip your card','info',6000);
-  var a=document.createElement('a');
-  a.href=url;a.rel='noopener';
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
+  toast('Opening Square Reader','Complete payment in the Square app — swipe, tap or dip the card','info',6000);
+  _launchSquarePosUrl(_buildSquarePosUrl(squareData));
 }
 
 async function _initSqPayments(){
@@ -19272,10 +19288,15 @@ function posCharge(){
   var squareData={
     amount_money:{amount:cents,currency_code:'USD'},
     callback_url:window.location.origin+'/square/callback',
+    client_id:SQ_APP_ID,
     client_transaction_id:clientTxId,
+    version:'1.3',
     notes:notes.substring(0,499),
-    supported_tender_types:['CREDIT_CARD','CASH','OTHER','SQUARE_GIFT_CARD','CARD_ON_FILE'],
-    auto_return:true
+    options:{
+      supported_tender_types:['CREDIT_CARD','DEBIT_CARD','CASH','OTHER','SQUARE_GIFT_CARD','CARD_ON_FILE'],
+      auto_return:true,
+      skip_receipt_screen:false
+    }
   };
   posActiveSale={
     clientTxId:clientTxId,
@@ -19288,15 +19309,8 @@ function posCharge(){
     timestamp:Date.now()
   };
   localStorage.setItem('pos_pending',JSON.stringify(posActiveSale));
-  var encoded=btoa(unescape(encodeURIComponent(JSON.stringify(squareData))));
-  var url='square-commerce-v1://payment/create?data='+encodeURIComponent(encoded);
   toast('Opening Square POS','Switch to the Square POS app to complete payment','info',5000);
-  var a=document.createElement('a');
-  a.href=url;
-  a.rel='noopener';
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
+  _launchSquarePosUrl(_buildSquarePosUrl(squareData));
 }
 
 function posCashSale(){
