@@ -3669,16 +3669,17 @@ function saveSettings(){
 // ════════════════════════════════════════
 // COST CALC
 // ════════════════════════════════════════
-function calcCost(filaments,hrs,qty=1){
+function calcCost(filaments,hrs,qty=1,wattsOverride){
   qty=Math.max(1,qty);
   const filCost=(filaments||[]).reduce((a,f)=>{
     const sp=spools.find(s=>s.id===f.spoolId);
     return a+(sp&&sp.total?(sp.cost/sp.total)*(f.grams||0):0);
   },0);
-  const elec=(cfg.watts/1000)*hrs*cfg.kwh;
+  const watts=wattsOverride||cfg.watts;
+  const elec=(watts/1000)*hrs*cfg.kwh;
   const labor=cfg.labor*hrs;
   const total=(filCost+elec+labor)*qty;
-  return{filCost:filCost*qty,elecCost:elec*qty,laborCost:labor*qty,total,sell:total*(1+cfg.markup/100)};
+  return{filCost:filCost*qty,elecCost:elec*qty,laborCost:labor*qty,total,sell:total*(1+cfg.markup/100),wattsUsed:watts,fromTapo:!!wattsOverride};
 }
 
 // ════════════════════════════════════════
@@ -3872,7 +3873,7 @@ function renderPrints(){
     // If hrs is missing/0, find a matching completed queue item as display fallback
     const _pNorm=_normName(p.name);
     const _dispHrs=p.hrs||(queueItems.find(q=>q.stage==='done'&&q.printer===p.printer&&_normName(q.name)===_pNorm&&q.hrs>0)||{}).hrs||0;
-    const cost=calcCost(p.filaments,_dispHrs||0,p.qty||1);
+    const cost=calcCost(p.filaments,_dispHrs||0,p.qty||1,p.tapoWatts||undefined);
     const chips=(p.filaments||[]).map(f=>{
       const sp=spools.find(s=>s.id===f.spoolId);
       const col=sp?sp.color:'#888';
@@ -5467,11 +5468,14 @@ function getFilRows(){
 }
 function updateCostPreview(){
   const f=getFilRows(),hrs=getHrsFromForm(),qty=parseInt(document.getElementById('ep-qty').value)||1;
-  const c=calcCost(f,hrs,qty);
+  const printerName=document.getElementById('ep-printer')?.value;
+  const tapoW=printerName?_getTapoWattsForPrinter(printerName):null;
+  const c=calcCost(f,hrs,qty,tapoW||undefined);
   const hmsStr=formatHms(hrs);
   document.getElementById('ep-cost-prev').innerHTML=`
-    <div style="font-size:7px;color:var(--gold-dim);letter-spacing:1.5px;margin-bottom:7px">
-      COST ESTIMATE${qty>1?' · ×'+qty+' units':''}${hmsStr?' · '+hmsStr:''}
+    <div style="font-size:7px;color:var(--gold-dim);letter-spacing:1.5px;margin-bottom:7px;display:flex;align-items:center;gap:6px">
+      <span>COST ESTIMATE${qty>1?' · ×'+qty+' units':''}${hmsStr?' · '+hmsStr:''}</span>
+      ${tapoW?`<span style="font-size:6px;background:rgba(0,200,80,.12);border:1px solid rgba(0,200,80,.35);color:var(--grn);border-radius:3px;padding:1px 5px;letter-spacing:0">⚡ ${tapoW}W live</span>`:''}
     </div>
     <div class="cost-preview-grid">
       <div class="cost-preview-cell"><div class="cpv-n" style="color:var(--cyn)">$${c.filCost.toFixed(2)}</div><div class="cpv-l">Filament</div></div>
@@ -8090,10 +8094,22 @@ function onPrinterSelected(){
   if(printerName==='_add'){navTo('printers');return;}
   const pr=getPrinterByName(printerName);
   if(pr){
-    cfg.watts=pr.watts||cfg.watts;
+    const tapoW=_getTapoWattsForPrinter(printerName);
+    cfg.watts=tapoW||pr.watts||cfg.watts;
     cfg.kwh=pr.kwh||cfg.kwh;
     cfg.labor=pr.labor||cfg.labor;
     cfg.markup=pr.markup||cfg.markup;
+    const wEl=document.getElementById('ep2-watts');
+    if(wEl){
+      wEl.value=cfg.watts;
+      if(tapoW){
+        wEl.title='Live from Tapo P115 ('+tapoW+'W measured)';
+        wEl.style.borderColor='var(--grn)';
+      }else{
+        wEl.title='';
+        wEl.style.borderColor='';
+      }
+    }
     updateCostPreview();
   }
 }
@@ -12976,9 +12992,11 @@ function renderPower(){
   const printerStats=printerRecords.map(pr=>{
     const prPrints=relevantPrints.filter(p=>p.printer===pr.name);
     const totalHrs=prPrints.reduce((a,p)=>a+(p.hrs||0),0);
-    const wh=(pr.watts||350)*totalHrs;
+    const liveW=_getTapoWattsForPrinter(pr.name);
+    const watts=pr.watts||350;
+    const wh=watts*totalHrs;
     const cost=wh/1000*(pr.kwh||0.13);
-    return{...pr,prints:prPrints.length,hours:totalHrs,kwh:wh/1000,cost};
+    return{...pr,prints:prPrints.length,hours:totalHrs,kwh:wh/1000,cost,liveWatts:liveW};
   });
   const totalCost=printerStats.reduce((a,p)=>a+p.cost,0);
   const totalHrs=printerStats.reduce((a,p)=>a+p.hours,0);
@@ -12993,7 +13011,7 @@ function renderPower(){
     <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:9px">
       ${printerStats.map(pr=>`<div class="nozzle-card" style="border-left:3px solid var(--gold)">
         <div class="nozzle-printer">${esc(pr.name)}</div>
-        <div class="nozzle-type">${pr.watts||350}W · $${(pr.kwh||0.13).toFixed(2)}/kWh</div>
+        <div class="nozzle-type">${pr.watts||350}W configured${pr.liveWatts?` · <span style="color:var(--grn)">⚡ ${pr.liveWatts}W live</span>`:''} · $${(pr.kwh||0.13).toFixed(2)}/kWh</div>
         <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin-bottom:8px">
           <div class="cstat"><div class="cstat-n" style="color:var(--gold-b)">$${pr.cost.toFixed(2)}</div><div class="cstat-l">Cost</div></div>
           <div class="cstat"><div class="cstat-n" style="color:var(--cyn)">${pr.kwh.toFixed(1)}</div><div class="cstat-l">kWh</div></div>
@@ -14319,6 +14337,16 @@ let _tapoLastFetch=0;
 let _tapoPrinterPlugs={};
 try{var _tpp=localStorage.getItem('tapoPrinterPlugs');if(_tpp)_tapoPrinterPlugs=JSON.parse(_tpp);}catch(e){}
 function _saveTapoPrinterPlugs(){try{localStorage.setItem('tapoPrinterPlugs',JSON.stringify(_tapoPrinterPlugs));}catch(e){}}
+
+// Returns live Tapo watts for a printer (mW → W), or null if not available / reading too low to be real
+function _getTapoWattsForPrinter(printerName){
+  const devId=_tapoPrinterPlugs[printerName];
+  if(!devId)return null;
+  const dev=_tapoDevices.find(function(d){return d.deviceId===devId;});
+  if(!dev||dev.power_mw==null||dev.power_mw<5000)return null; // <5W = idle/standby, not printing
+  return Math.round(dev.power_mw/100)/10; // mW → W, 1 decimal
+}
+
 // Auto-off enabled per printer — { printerName: boolean } — persisted
 let _tapoAutoOffEnabled={};
 try{var _taoe=localStorage.getItem('tapoAutoOffEnabled');if(_taoe)_tapoAutoOffEnabled=JSON.parse(_taoe);}catch(e){}
@@ -14831,16 +14859,19 @@ async function onPiPrintFinished(name,data){
     // Preserve any filament/tmf info the user already filled in, only overwrite
     // duration and add finishedAt. If user manually set filaments, keep them.
     const _keepFilaments=(_promotePlaceholder.filaments&&_promotePlaceholder.filaments.length&&_promotePlaceholder.filaments.some(function(f){return f.spoolId;}));
+    const _tapoWSnap=_getTapoWattsForPrinter(name);
     Object.assign(_promotePlaceholder,{
       hrs:actualHrs,
       filaments:_keepFilaments?_promotePlaceholder.filaments:filamentEntries,
       status:'done',
       finishedAt:Date.now(),
-      tmfName:(_promotePlaceholder.tmfName)||(_finTmf?_finTmf.name:undefined)
+      tmfName:(_promotePlaceholder.tmfName)||(_finTmf?_finTmf.name:undefined),
+      tapoWatts:_tapoWSnap||undefined
     });
     printRecord=_promotePlaceholder;
     prints=prints.map(function(p){return p.id===printRecord.id?printRecord:p;});
   } else {
+    const _tapoWSnap2=_getTapoWattsForPrinter(name);
     printRecord={
       id:uid(),
       name:jobName,
@@ -14854,7 +14885,8 @@ async function onPiPrintFinished(name,data){
       timestamp:Date.now(),
       notes:'Auto-logged by LayerDeck Pi Hub',
       autoFromPi:true,
-      tmfName:_finTmf?_finTmf.name:undefined
+      tmfName:_finTmf?_finTmf.name:undefined,
+      tapoWatts:_tapoWSnap2||undefined
     };
     prints.push(printRecord);
   }
