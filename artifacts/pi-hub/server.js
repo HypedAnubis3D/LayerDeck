@@ -363,8 +363,8 @@ PRINTERS.forEach(printer => {
       // Printer is powered off or unreachable — alert ONCE, then silence until back online
       mqttAlert(printer.name, `🔴 **${printer.name}** is unreachable (powered off or network issue)`, true);
     } else {
-      // Genuine error (auth, protocol, etc.) — debounced real alert
-      mqttAlert(printer.name, `⚠️ **${printer.name}** MQTT error: ${err.message}`, false);
+      // Connection/protocol error (keepalive timeout, auth, etc.) → printer status channel
+      mqttAlert(printer.name, `⚠️ **${printer.name}** MQTT error: ${err.message}`, true);
     }
   });
 
