@@ -19358,10 +19358,52 @@ function posCashSale(){
   posShowReceipt(sale);
 }
 
+function _showPosManualConfirm(pendingJSON){
+  // Remove any existing banner
+  var old=document.getElementById('pos-manual-confirm-banner');if(old)old.remove();
+  var pending;try{pending=JSON.parse(pendingJSON);}catch{localStorage.removeItem('pos_pending');return;}
+  // Only prompt if the sale is recent (< 2 hours old)
+  if(pending.timestamp&&Date.now()-pending.timestamp>2*60*60*1000){localStorage.removeItem('pos_pending');return;}
+  var total=pending.total||pending.items&&pending.items.reduce(function(a,r){return a+r.price*r.qty;},0)||0;
+  var label=pending.source==='convention'?'Convention':'POS';
+  var banner=document.createElement('div');
+  banner.id='pos-manual-confirm-banner';
+  banner.style.cssText='position:fixed;bottom:80px;left:12px;right:12px;z-index:9999;background:#1e1e2e;border:1px solid #f59e0b;border-radius:12px;padding:14px 16px;box-shadow:0 8px 32px rgba(0,0,0,.6);';
+  banner.innerHTML='<div style="font-size:13px;font-weight:700;color:#f59e0b;margin-bottom:6px;">⚠ Square Payment Pending</div>'
+    +'<div style="font-size:12px;color:#ccc;margin-bottom:12px;">Did the $'+total.toFixed(2)+' '+label+' Square payment complete successfully?</div>'
+    +'<div style="display:flex;gap:8px;">'
+    +'<button onclick="_posManualYes()" style="flex:1;padding:9px;background:#22c55e;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;">✓ Yes — Log Sale</button>'
+    +'<button onclick="_posManualNo()" style="flex:1;padding:9px;background:#374151;color:#ccc;border:none;border-radius:8px;font-size:12px;cursor:pointer;">✗ No — Discard</button>'
+    +'</div>';
+  document.body.appendChild(banner);
+}
+function _posManualYes(){
+  var banner=document.getElementById('pos-manual-confirm-banner');if(banner)banner.remove();
+  var pendingJSON=localStorage.getItem('pos_pending');
+  localStorage.removeItem('pos_pending');
+  if(!pendingJSON)return;
+  // Synthesise a successful callback result and run it through posCheckCallback
+  localStorage.setItem('pos_callback',JSON.stringify({status:'ok',transaction_id:'MANUAL-'+Date.now()}));
+  localStorage.setItem('pos_pending',pendingJSON);
+  posCheckCallback();
+}
+function _posManualNo(){
+  var banner=document.getElementById('pos-manual-confirm-banner');if(banner)banner.remove();
+  localStorage.removeItem('pos_pending');
+  toast('Sale discarded','Pending Square sale removed','info');
+}
+
 function posCheckCallback(){
   var cb=localStorage.getItem('pos_callback');
   var pending=localStorage.getItem('pos_pending');
-  if(!cb)return;
+  // No pending sale at all — nothing to do
+  if(!cb && !pending) return;
+  // Returned from Square POS without a callback (auto-return not configured) — prompt user
+  if(!cb && pending){
+    // Show manual confirm banner, but only once per session
+    if(!window._posManualShown){window._posManualShown=true;setTimeout(function(){_showPosManualConfirm(pending);},800);}
+    return;
+  }
   localStorage.removeItem('pos_callback');
   localStorage.removeItem('pos_pending');
   var result,pendingSale;
