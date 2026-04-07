@@ -228,8 +228,8 @@ router.post(
       idempotencyKey?: string;
     };
 
-    if (!sourceId || !amountCents || amountCents < 1) {
-      res.status(400).json({ success: false, error: "sourceId and amountCents (≥1) required" });
+    if (!sourceId || amountCents === undefined || amountCents === null || amountCents < 0) {
+      res.status(400).json({ success: false, error: "sourceId and amountCents (≥0) required" });
       return;
     }
 
