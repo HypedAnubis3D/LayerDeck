@@ -3916,7 +3916,7 @@ function renderPrints(){
     '</div>';
   }).join('');
   const inProgressHtml=inProgressQ.map(function(qi){
-    const noTmfBadge=qi.noTmf?'<span style="background:#3a2200;color:#f90;font-size:8px;padding:2px 6px;border-radius:4px;margin-left:6px">⚠ No 3MF</span>':'';
+    const noTmfBadge='';
     const startedLabel=qi.startedAt?(' · Started '+new Date(qi.startedAt).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})):'';
     const qiCost=calcCost(qi.filaments||[],qi.hrs||0,qi.qty||1);
     return '<div class="print-card" style="border-left:2px solid #1e3a1e">'+
@@ -4504,12 +4504,11 @@ function renderQueue(){
         if(doneByStr)doneByHtml='<div style="font-size:7px;color:var(--cyn);margin-top:3px">Done by '+doneByStr+'</div>';
       }
       var dragAttrs=isQueued?' draggable="true" ondragstart="qDragStart(event,\''+q.id+'\')" ondragover="event.preventDefault()" ondrop="qDrop(event)"':'';
-      return '<div class="kcard'+(isShopify?' kc-shopify':'')+(isWarn?' kc-warn':'')+(isSel?' selected':'')+'" data-selid="'+q.id+'" data-qid="'+q.id+'"'+dragAttrs+' onclick="if(selectMode===\'queue\'){event.stopPropagation();toggleSelect(\''+q.id+'\');}">'+
+      return '<div class="kcard'+(isShopify?' kc-shopify':'')+(isSel?' selected':'')+'" data-selid="'+q.id+'" data-qid="'+q.id+'"'+dragAttrs+' onclick="if(selectMode===\'queue\'){event.stopPropagation();toggleSelect(\''+q.id+'\');}">'+
         '<input type="checkbox" class="sel-checkbox"'+(isSel?' checked':'')+' onclick="event.stopPropagation();toggleSelect(\''+q.id+'\')"/>'+
         (prioIcon?'<div class="k-priority">'+prioIcon+'</div>':'')+
         (isMystery?'<div style="font-size:6px;color:var(--pur-b);letter-spacing:1px;margin-bottom:3px">🎁 MYSTERY GIFT</div>':'')+
         (isShopify&&!isMystery?'<div style="font-size:6px;color:var(--shopify);letter-spacing:1px;margin-bottom:3px">🛍 SHOPIFY ORDER</div>':'')+
-        (isWarn?'<div style="font-size:6px;color:var(--amb);letter-spacing:1px;margin-bottom:3px">⚠ NO 3MF ON FILE</div>':'')+
         '<div style="display:flex;align-items:center;gap:4px;margin-bottom:3px">'+
           printerBadge+
           (isQueued?'<span style="color:var(--txt-d);font-size:13px;line-height:1;cursor:grab;margin-left:auto;user-select:none">⠿</span>':'')+
@@ -14972,17 +14971,21 @@ async function onPiPrintStarted(name,data){
     // has a DIFFERENT job name (e.g. leftover from calibration or a previous print).
     var hadStale=false;
     queueItems=queueItems.filter(function(q){
-      if(q.stage==='inprogress'&&q.printer===name&&q.autoFromPi&&_normName(q.name)!==_normName(displayName)){
-        hadStale=true; return false;
+      if(q.stage==='inprogress'&&q.printer===name&&q.autoFromPi){
+        const sameByTmf=matchedTmf&&q.tmfId===matchedTmf.id;
+        const sameByName=_normName(q.name)===_normName(displayName)||(matchedTmf&&_normName(q.name)===_normName(matchedTmf.name));
+        if(!sameByTmf&&!sameByName){hadStale=true;return false;}
       }
       return true;
     });
     var alreadyInProgress=queueItems.some(function(q){
-      return q.stage==='inprogress'&&q.printer===name&&q.autoFromPi&&_normName(q.name)===_normName(displayName);
+      if(q.stage!=='inprogress'||q.printer!==name||!q.autoFromPi)return false;
+      if(matchedTmf&&q.tmfId===matchedTmf.id)return true;
+      return _normName(q.name)===_normName(displayName)||(matchedTmf&&_normName(q.name)===_normName(matchedTmf.name));
     });
     if(!alreadyInProgress){
       var autoHrs=data.mc_remaining_time?Math.round((data.mc_remaining_time/60)*10)/10:0;
-      var autoItem={id:uid(),name:displayName,category:'Other',printer:name,hrs:autoHrs,qty:1,priority:'normal',stage:'inprogress',startedAt:Date.now(),timestamp:Date.now(),notes:'Auto-added from Pi Hub',autoFromPi:true,noTmf:!matchedTmf,tmfId:matchedTmf?matchedTmf.id:null};
+      var autoItem={id:uid(),name:matchedTmf?matchedTmf.name:displayName,category:'Other',printer:name,hrs:autoHrs,qty:1,priority:'normal',stage:'inprogress',startedAt:Date.now(),timestamp:Date.now(),notes:'Auto-added from Pi Hub',autoFromPi:true,noTmf:!matchedTmf,tmfId:matchedTmf?matchedTmf.id:null};
       queueItems.push(autoItem);
       saveQueue();render();
       toast('Auto-added to In Progress',displayName,'info',3000);
