@@ -13120,18 +13120,21 @@ function convChargeViaSquare(){
   localStorage.setItem('pos_pending',JSON.stringify(pending));
   var squareData={
     amount_money:{amount:totalCents,currency_code:'USD'},
-    callback_url:window.location.origin+'/square/callback',
+    callback_url:'https://layerstack.replit.app/square/callback',
     client_transaction_id:clientTxId,
     notes:cartSummary.substring(0,499),
     supported_tender_types:['CREDIT_CARD','CASH','OTHER','SQUARE_GIFT_CARD','CARD_ON_FILE'],
     auto_return:true
   };
   var encoded=btoa(unescape(encodeURIComponent(JSON.stringify(squareData))));
-  var url='square-commerce-v1://payment/create?data='+encodeURIComponent(encoded);
-  console.log('[Square POS] Deep-link URL:', url);
+  // Android Intent URL — targets Square POS by package name, more reliable than raw custom scheme in Chrome
+  var intentUrl='intent://payment/create?data='+encodeURIComponent(encoded)
+    +'#Intent;scheme=square-commerce-v1;package=com.squareup;S.browser_fallback_url='
+    +encodeURIComponent('https://play.google.com/store/apps/details?id=com.squareup')+';end';
+  console.log('[Square POS] Intent URL:', intentUrl);
   console.log('[Square POS] Payload:', JSON.stringify(squareData,null,2));
   toast('Opening Square POS','Switch to the Square POS app — come back when done','info',6000);
-  window.open(url,'_self');
+  location.href=intentUrl;
 }
 
 function filterSaleProducts(){
