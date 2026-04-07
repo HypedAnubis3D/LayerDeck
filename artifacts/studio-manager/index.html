@@ -13127,14 +13127,34 @@ function convChargeViaSquare(){
     auto_return:true
   };
   var encoded=btoa(unescape(encodeURIComponent(JSON.stringify(squareData))));
-  // Android Intent URL — targets Square POS by package name, more reliable than raw custom scheme in Chrome
+  // Android Intent URL — com.squareup is the correct package per Square SDK
   var intentUrl='intent://payment/create?data='+encodeURIComponent(encoded)
-    +'#Intent;scheme=square-commerce-v1;package=com.squareup.pos;S.browser_fallback_url='
-    +encodeURIComponent('https://play.google.com/store/apps/details?id=com.squareup.pos')+';end';
+    +'#Intent;scheme=square-commerce-v1;package=com.squareup;S.browser_fallback_url='
+    +encodeURIComponent('https://play.google.com/store/apps/details?id=com.squareup')+';end';
   console.log('[Square POS] Intent URL:', intentUrl);
   console.log('[Square POS] Payload:', JSON.stringify(squareData,null,2));
-  toast('Opening Square POS','Switch to the Square POS app — come back when done','info',6000);
-  location.href=intentUrl;
+  showSquareInterstitial(intentUrl,cartTotal,cartSummary);
+}
+
+var _squareLaunchUrl='';
+function showSquareInterstitial(url,total,items){
+  _squareLaunchUrl=url;
+  var amtEl=document.getElementById('sq-interstitial-amount');
+  var itmEl=document.getElementById('sq-interstitial-items');
+  if(amtEl)amtEl.textContent='$'+(total||0).toFixed(2);
+  if(itmEl)itmEl.textContent=items||'';
+  var el=document.getElementById('square-interstitial');
+  if(el){el.style.display='flex';}
+}
+function launchSquarePOS(){
+  var url=_squareLaunchUrl;
+  var el=document.getElementById('square-interstitial');
+  if(el)el.style.display='none';
+  location.href=url;
+}
+function dismissSquareInterstitial(){
+  var el=document.getElementById('square-interstitial');
+  if(el)el.style.display='none';
 }
 
 function filterSaleProducts(){
@@ -19063,5 +19083,18 @@ function posShowReceipt(sale){
   document.body.appendChild(overlay);
 }
 </script>
+<!-- Square POS Interstitial -->
+<div id="square-interstitial" style="display:none;position:fixed;inset:0;z-index:99999;background:#0a0a12;flex-direction:column;align-items:center;justify-content:center;padding:32px;box-sizing:border-box;text-align:center">
+  <div style="font-size:48px;margin-bottom:20px">⬡</div>
+  <div style="font-family:Orbitron,monospace;font-size:18px;font-weight:900;color:#c9a227;letter-spacing:2px;margin-bottom:8px">SQUARE POS</div>
+  <div id="sq-interstitial-amount" style="font-family:Orbitron,monospace;font-size:36px;font-weight:700;color:#fff;margin-bottom:6px"></div>
+  <div id="sq-interstitial-items" style="font-size:11px;color:#888;margin-bottom:32px;max-width:280px;line-height:1.5"></div>
+  <button onclick="launchSquarePOS()" style="background:linear-gradient(135deg,#0d7a3e,#15803d);border:none;color:#fff;font-family:Orbitron,monospace;font-size:14px;font-weight:700;letter-spacing:2px;padding:18px 40px;border-radius:10px;cursor:pointer;width:100%;max-width:300px;margin-bottom:14px;box-shadow:0 4px 24px rgba(21,128,61,.4)">
+    TAP TO OPEN SQUARE POS
+  </button>
+  <button onclick="dismissSquareInterstitial()" style="background:none;border:1px solid #333;color:#666;font-size:11px;padding:10px 24px;border-radius:6px;cursor:pointer;width:100%;max-width:300px">
+    Cancel
+  </button>
+</div>
 </body>
 </html>
