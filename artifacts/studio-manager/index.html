@@ -3883,8 +3883,38 @@ function renderPrints(){
     if(q&&!(qi.name+qi.category+qi.printer+(qi.notes||'')).toLowerCase().includes(q))return false;
     return true;
   });
-  document.getElementById('pr-cnt').textContent=(f.length+inProgressQ.length)+' prints';
+  // Pi Hub printers actively printing but NOT tracked in queue or print records
+  const piLive=[];
+  if(typeof piPrevStates!=='undefined'){
+    Object.keys(piPrevStates||{}).forEach(function(prName){
+      const ps=piPrevStates[prName];
+      if((ps.gcode_state||'').toUpperCase()!=='RUNNING')return;
+      const hasQ=inProgressQ.some(function(qi){return qi.printer===prName;});
+      const hasP=f.some(function(p){return (p.status||'printing')==='printing'&&p.printer===prName;});
+      if(!hasQ&&!hasP)piLive.push({printer:prName,state:ps});
+    });
+  }
+  document.getElementById('pr-cnt').textContent=(f.length+inProgressQ.length+piLive.length)+' prints';
   const g=document.getElementById('prints-grid');
+  const piLiveHtml=piLive.map(function(item){
+    const ps=item.state;
+    const remMin=Math.round(ps.mc_remaining_time||0);
+    const pct=Math.round(ps.mc_percent||0);
+    const fileName=ps.subtask_name||ps.task_name||'Unknown file';
+    return '<div class="print-card" style="border-left:2px solid var(--cyn);opacity:.9">'+
+      '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:5px;margin-bottom:2px">'+
+        '<div class="pname">'+esc(item.printer)+'<span style="font-size:7px;color:var(--txt-d);font-weight:normal;margin-left:6px">— '+esc(fileName)+'</span></div>'+
+        '<span class="status-pill sp-printing">⟳ Printing</span>'+
+      '</div>'+
+      '<div class="pcat">'+esc(item.printer)+
+        (pct?' · <span style="color:var(--grn-b)">'+pct+'%</span>':'')+
+        (remMin?' · <span class="print-time-display" style="display:inline-flex;font-size:8px;padding:2px 6px">'+formatHms(remMin/60)+' left</span>':'')+
+      '</div>'+
+      '<div style="font-size:7px;color:var(--cyn);margin-top:4px;background:rgba(0,200,255,.06);border:1px solid rgba(0,200,255,.15);border-radius:3px;padding:4px 7px">'+
+        'Live from Pi Hub — not yet logged in Studio Manager. <button class="btn btn-ghost btn-xs" style="margin-left:6px;font-size:6px" onclick="openAddPrint()">Log this print</button>'+
+      '</div>'+
+    '</div>';
+  }).join('');
   const inProgressHtml=inProgressQ.map(function(qi){
     const noTmfBadge=qi.noTmf?'<span style="background:#3a2200;color:#f90;font-size:8px;padding:2px 6px;border-radius:4px;margin-left:6px">⚠ No 3MF</span>':'';
     const startedLabel=qi.startedAt?(' · Started '+new Date(qi.startedAt).toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})):'';
@@ -3909,8 +3939,8 @@ function renderPrints(){
       '</div>'+
       '</div>';
   }).join('');
-  if(!f.length&&!inProgressQ.length){g.innerHTML='<div class="empty" style="grid-column:1/-1">No prints yet</div>';return;}
-  g.innerHTML=inProgressHtml+[...f].reverse().map(p=>{
+  if(!f.length&&!inProgressQ.length&&!piLive.length){g.innerHTML='<div class="empty" style="grid-column:1/-1">No prints yet</div>';return;}
+  g.innerHTML=piLiveHtml+inProgressHtml+[...f].reverse().map(p=>{
     // If hrs is missing/0, find a matching completed queue item as display fallback
     const _pNorm=_normName(p.name);
     const _dispHrs=p.hrs||(queueItems.find(q=>q.stage==='done'&&q.printer===p.printer&&_normName(q.name)===_pNorm&&q.hrs>0)||{}).hrs||0;
@@ -4313,18 +4343,18 @@ function renderTmf(){
             '<span style="font-size:6px;color:var(--grn-b);flex:1">✓ Auto-matched: <b>'+esc(_tmfSuggestProd.name)+'</b></span>'+
             '<button class="btn btn-xs" style="font-size:5px;padding:2px 7px;background:var(--grn-d);border-color:var(--grn-dim);color:var(--grn-b);white-space:nowrap" onclick="event.stopPropagation();linkTmfToProduct(\''+t.id+'\',\''+_tmfSuggestProd.id+'\')">Confirm</button>'+
           '</div>':'')+
-        '<input type="text" id="tmf-ps-'+t.id+'" placeholder="🔍 Search products…" '+
-          'style="width:100%;background:var(--bg);border:1px solid var(--bdr2);color:var(--txt);padding:4px 8px;font-family:\'Share Tech Mono\',monospace;font-size:8px;border-radius:3px;margin-bottom:4px;box-sizing:border-box" '+
-          'oninput="filterTmfProdSearch(\''+t.id+'\',this.value)" onclick="event.stopPropagation()" />'+
-        '<select id="tmf-psel-'+t.id+'" style="width:100%;background:var(--bg);border:1px solid var(--bdr2);color:var(--txt);padding:5px 8px;font-family:\'Share Tech Mono\',monospace;font-size:8px;border-radius:3px" '+
-          'onchange="linkTmfToProduct(\''+t.id+'\',this.value)" '+
-          'onclick="event.stopPropagation()">'+
-          '<option value="">— Not linked to any product —</option>'+
-          catalogItems.map(p=>{
-            const linked=p.tmfId===t.id;
-            return '<option value="'+p.id+'"'+(linked?' selected':'')+'>'+esc(p.name)+'</option>';
-          }).join('')+
-        '</select>'+
+        '<div style="position:relative" onclick="event.stopPropagation()">'+
+          '<input type="text" id="tmf-ps-'+t.id+'"'+
+            ' value="'+(_tmfLinkedId?(catalogItems.find(function(p){return p.id===_tmfLinkedId;})||{}).name||'':'')+'"'+
+            ' placeholder="🔍 Search products…"'+
+            ' class="tmf-prod-search"'+
+            ' style="width:100%;background:var(--bg);border:1px solid var(--bdr2);color:var(--txt);padding:4px 8px;font-family:\'Share Tech Mono\',monospace;font-size:8px;border-radius:3px;box-sizing:border-box"'+
+            ' oninput="filterTmfProdSearch(\''+t.id+'\',this.value)"'+
+            ' onfocus="filterTmfProdSearch(\''+t.id+'\',this.value)"'+
+            ' autocomplete="off" />'+
+          '<div id="tmf-pd-'+t.id+'" class="sale-search-dd tmf-prod-dd" style="display:none"></div>'+
+        '</div>'+
+        '<input type="hidden" id="tmf-psel-'+t.id+'" value="'+_tmfLinkedId+'" />'+
       '</div>'+
       '<div class="card-acts">'+
         '<button class="btn btn-org btn-xs" style="flex:1" onclick="useTmfForPrint(\''+t.id+'\')">Use for Print</button>'+
@@ -4355,15 +4385,32 @@ function linkTmfToProduct(tmfId, productId){
   if(curTab==='tmf'||curTab==='catalog')render();
 }
 function filterTmfProdSearch(tmfId, q){
-  const sel=document.getElementById('tmf-psel-'+tmfId);
-  if(!sel)return;
-  const query=q.toLowerCase().trim();
+  const dd=document.getElementById('tmf-pd-'+tmfId);if(!dd)return;
+  const query=(q||'').toLowerCase().trim();
   const linkedId=(catalogItems.find(function(p){return p.tmfId===tmfId;})||{}).id||'';
-  sel.innerHTML='<option value="">— Not linked to any product —</option>'+
-    catalogItems
-      .filter(function(p){return !query||p.name.toLowerCase().includes(query)||(p.category||'').toLowerCase().includes(query);})
-      .map(function(p){return '<option value="'+p.id+'"'+(p.id===linkedId?' selected':'')+'>'+esc(p.name)+'</option>';})
-      .join('');
+  const filtered=query?catalogItems.filter(function(p){
+    const tagMatch=(p.tags||[]).some(function(t){return t.toLowerCase().includes(query);});
+    return p.name.toLowerCase().includes(query)||(p.category||'').toLowerCase().includes(query)||tagMatch;
+  }):catalogItems;
+  dd.innerHTML='<div class="sale-search-opt" style="border-bottom:1px solid var(--bdr2)" onmousedown="event.preventDefault();selectTmfProduct(\''+tmfId+'\',\'\',\'\')"><span style="color:var(--txt-d)">— Not linked to any product —</span></div>'
+    +filtered.map(function(p){
+      const nm=p.name.replace(/'/g,"\\'");
+      const isSel=p.id===linkedId;
+      return '<div class="sale-search-opt" onmousedown="event.preventDefault();selectTmfProduct(\''+tmfId+'\',\''+p.id+'\',\''+nm+'\')" style="'+(isSel?'background:var(--pur-d)':'')+'">'
+        +'<span style="font-size:8px">'+(isSel?'✓ ':'')+esc(p.name)+'</span>'
+        +'<span class="opt-price">$'+parseFloat(p.price||0).toFixed(2)+'</span>'
+        +'</div>';
+    }).join('');
+  dd.style.display='block';
+}
+function selectTmfProduct(tmfId,productId,name){
+  const inp=document.getElementById('tmf-ps-'+tmfId);
+  const hid=document.getElementById('tmf-psel-'+tmfId);
+  const dd=document.getElementById('tmf-pd-'+tmfId);
+  if(inp)inp.value=name;
+  if(hid)hid.value=productId;
+  if(dd)dd.style.display='none';
+  linkTmfToProduct(tmfId,productId);
 }
 
 function useTmfForPrint(tmfId){
@@ -10775,6 +10822,9 @@ document.addEventListener('click',function(e){
   if(!e.target.closest('#ec-tmf-search')&&!e.target.closest('#ec-tmf-dd')){
     const d=document.getElementById('ec-tmf-dd');if(d)d.style.display='none';
   }
+  if(!e.target.closest('.tmf-prod-search')&&!e.target.closest('.tmf-prod-dd')){
+    document.querySelectorAll('.tmf-prod-dd').forEach(function(d){d.style.display='none';});
+  }
 });
 
 let orderFilter='all';
@@ -12717,7 +12767,8 @@ function renderCatalogPicker(){
   const items=catalogItems.filter(function(i){
     if(!q)return true;
     const tmfN=(i.tmfId&&_pTmfMap[i.tmfId]?(_pTmfMap[i.tmfId].name||''):'').toLowerCase();
-    return i.name.toLowerCase().includes(q)||(i.category||'').toLowerCase().includes(q)||tmfN.includes(q);
+    const tagMatch=(i.tags||[]).some(function(t){return t.toLowerCase().includes(q);});
+    return i.name.toLowerCase().includes(q)||(i.category||'').toLowerCase().includes(q)||tmfN.includes(q)||tagMatch;
   });
   document.getElementById('em-picker-grid').innerHTML=items.map(function(item){
     const inList=alreadyIn.has(item.id);
@@ -12862,7 +12913,11 @@ function filterSaleProducts(){
   const dd=document.getElementById('em-sale-dropdown');if(!dd)return;
   const q=(inp.value||'').toLowerCase().trim();
   const items=c.inPersonCatalog||[];
-  const filtered=q?items.filter(function(i){return (i.name||'').toLowerCase().includes(q);}):items;
+  const filtered=q?items.filter(function(i){
+    if((i.name||'').toLowerCase().includes(q))return true;
+    const fullItem=catalogItems.find(function(x){return x.id===i.catalogItemId;});
+    return fullItem?(fullItem.tags||[]).some(function(t){return t.toLowerCase().includes(q);}):false;
+  }):items;
   const opts=filtered.map(function(i){
     return `<div class="sale-search-opt" onmousedown="selectSaleProduct('${esc(i.catalogItemId)}','${esc(i.name.replace(/'/g,"\\'"))}',${parseFloat(i.price||0)})">
       <span>${esc(i.name)}</span>
@@ -13515,7 +13570,7 @@ function setMysteryPickerMode(mode){
 function filterMysteryCatalog(){
   const q=(document.getElementById('mys-catalog-search').value||'').toLowerCase();
   const sel=document.getElementById('mys-print').value;
-  const items=catalogItems.filter(c=>!q||c.name.toLowerCase().includes(q)||(c.category||'').toLowerCase().includes(q));
+  const items=catalogItems.filter(c=>!q||c.name.toLowerCase().includes(q)||(c.category||'').toLowerCase().includes(q)||(c.tags||[]).some(t=>t.toLowerCase().includes(q)));
   const el=document.getElementById('mys-catalog-list');
   if(!items.length){
     el.innerHTML='<div style="padding:10px;font-size:7px;color:var(--txt-d);text-align:center">'+(catalogItems.length?'No items match your search':'No catalog items yet — add items in the Catalog tab')+'</div>';
