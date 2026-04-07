@@ -13129,8 +13129,8 @@ function convChargeViaSquare(){
   var encoded=btoa(unescape(encodeURIComponent(JSON.stringify(squareData))));
   // Android Intent URL — targets Square POS by package name, more reliable than raw custom scheme in Chrome
   var intentUrl='intent://payment/create?data='+encodeURIComponent(encoded)
-    +'#Intent;scheme=square-commerce-v1;package=com.squareup;S.browser_fallback_url='
-    +encodeURIComponent('https://play.google.com/store/apps/details?id=com.squareup')+';end';
+    +'#Intent;scheme=square-commerce-v1;package=com.squareup.pos;S.browser_fallback_url='
+    +encodeURIComponent('https://play.google.com/store/apps/details?id=com.squareup.pos')+';end';
   console.log('[Square POS] Intent URL:', intentUrl);
   console.log('[Square POS] Payload:', JSON.stringify(squareData,null,2));
   toast('Opening Square POS','Switch to the Square POS app — come back when done','info',6000);
