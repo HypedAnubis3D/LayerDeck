@@ -15185,11 +15185,17 @@ function checkConventionDeadlines(){
 // ── VISIBILITY CHANGE — dedicate separate timer so push-queue updates don't reset the gap ──
 let _lastTabSyncTime=0;
 document.addEventListener('visibilitychange',function(){
-  if(document.visibilityState==='visible'&&currentUser&&isOnline){
-    const now=Date.now();
-    if(now-_lastTabSyncTime>5*60*1000){
-      _lastTabSyncTime=now;
-      pullFromCloud(true);
+  if(document.visibilityState==='visible'){
+    // Check for Square POS pending sale every time the app comes back into focus
+    // (covers the case where user manually switches back from Square POS instead of auto-return)
+    window._posManualShown=false;
+    posCheckCallback();
+    if(currentUser&&isOnline){
+      const now=Date.now();
+      if(now-_lastTabSyncTime>5*60*1000){
+        _lastTabSyncTime=now;
+        pullFromCloud(true);
+      }
     }
   }
 });

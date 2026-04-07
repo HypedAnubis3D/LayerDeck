@@ -85,7 +85,8 @@ router.post("/receipt", async (req, res) => {
         </tr>
       </table>
       <p style="margin:0;color:#475569;font-size:11px;text-align:center">
-        Questions? Reply to this email or find us on social media.<br>
+        Questions? Reply to this email or find us on Instagram.<br>
+        <a href="https://www.instagram.com/hypedanubis3d" style="color:#c9a227;text-decoration:none;font-weight:700">@hypedanubis3d</a><br><br>
         <span style="color:#c9a227">Thanks for supporting HypedAnubis3D! 🎉</span>
       </p>
     </div>
