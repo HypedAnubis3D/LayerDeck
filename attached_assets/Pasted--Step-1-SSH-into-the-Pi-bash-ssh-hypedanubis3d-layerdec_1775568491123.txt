@@ -1,0 +1,367 @@
+**Step 1 — SSH into the Pi:**
+```bash
+ssh hypedanubis3d@layerdeck-hub.local
+```
+
+---
+
+**Step 2 — Back up the current file:**
+```bash
+cp ~/bambu-hub/server.js ~/bambu-hub/server.js.bak
+```
+
+---
+
+**Step 3 — Run this command:**
+```bash
+cat > ~/bambu-hub/server.js
+```
+
+Paste this entire block, then press **Ctrl+D:**
+
+```javascript
+/**
+ * LayerDeck Hub — Pi server.js
+ * Updated: Discord alerts, AMS data preservation, calibration + light controls
+ */
+const mqtt    = require('mqtt');
+const express = require('express');
+const cors    = require('cors');
+const fs      = require('fs');
+const path    = require('path');
+const https   = require('https');
+const app = express();
+app.use(cors());
+app.use(express.json());
+let PRINTERS = [];
+const printersPath = path.join(__dirname, 'printers.json');
+if (fs.existsSync(printersPath)) {
+  try {
+    PRINTERS = JSON.parse(fs.readFileSync(printersPath, 'utf8'));
+    console.log(`Loaded ${PRINTERS.length} printers from printers.json`);
+  } catch (e) {
+    console.error('Failed to parse printers.json:', e.message);
+    PRINTERS = [
+      { name: 'A1',        ip: '192.168.1.171', serial: '03919C452404673', accessCode: 'ed7fd800' },
+      { name: 'P1 Room',   ip: '192.168.1.166', serial: '01P09C4C0402468', accessCode: '85467582' },
+      { name: 'P1 Closet', ip: '192.168.1.155', serial: '01P09C471500288', accessCode: '33503749' }
+    ];
+  }
+} else {
+  PRINTERS = [
+    { name: 'A1',        ip: '192.168.1.171', serial: '03919C452404673', accessCode: 'ed7fd800' },
+    { name: 'P1 Room',   ip: '192.168.1.166', serial: '01P09C4C0402468', accessCode: '85467582' },
+    { name: 'P1 Closet', ip: '192.168.1.155', serial: '01P09C471500288', accessCode: '33503749' }
+  ];
+}
+const CAMERAS = {
+  'A1':        'camera_a1',
+  'P1 Room':   'camera_p1_room',
+  'P1 Closet': 'camera_p1_closet'
+};
+const PI_PORT        = 3000;
+const printerStates  = {};
+const printerClients = {};
+let DISCORD_ALERTS_URL = process.env.DISCORD_WEBHOOK_PRINT_ALERTS || '';
+const configPath = path.join(__dirname, 'config.json');
+if (fs.existsSync(configPath)) {
+  try {
+    const cfg = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+    if (cfg.discordWebhookPrintAlerts) DISCORD_ALERTS_URL = cfg.discordWebhookPrintAlerts;
+  } catch (e) {}
+}
+function sendDiscordAlert(content) {
+  if (!DISCORD_ALERTS_URL) return;
+  try {
+    const body = JSON.stringify({ content });
+    const url  = new URL(DISCORD_ALERTS_URL);
+    const req  = https.request({
+      hostname: url.hostname,
+      path:     url.pathname + url.search,
+      method:   'POST',
+      headers:  { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) }
+    }, () => {});
+    req.on('error', () => {});
+    req.write(body);
+    req.end();
+  } catch (e) {}
+}
+const _mqttAlertTs = {};
+function mqttAlert(printerName, content) {
+  const now = Date.now();
+  if (_mqttAlertTs[printerName] && now - _mqttAlertTs[printerName] < 5 * 60 * 1000) return;
+  _mqttAlertTs[printerName] = now;
+  sendDiscordAlert(content);
+  console.warn(content);
+}
+function parseObjectData(mqttPayload) {
+  if (!mqttPayload || !mqttPayload.print) return null;
+  const print = mqttPayload.print;
+  const objList = print.obj_list || print.subtask_obj_list || null;
+  if (!objList || !Array.isArray(objList) || objList.length === 0) return null;
+  const sObj = print.s_obj;
+  let currentObjectIdx = print.current_obj_idx != null ? print.current_obj_idx : 0;
+  let currentObjectId  = print.current_obj_id  != null ? print.current_obj_id  : (objList[0]?.id || null);
+  if (sObj != null && print.current_obj_idx == null) {
+    currentObjectIdx = typeof sObj === 'number' ? sObj : 0;
+  }
+  return {
+    objectList:       objList,
+    currentObjectId:  currentObjectId,
+    currentObjectIdx: currentObjectIdx,
+    totalObjects:     objList.length,
+    hasObjectData:    true,
+    rawSOBJ:          sObj
+  };
+}
+PRINTERS.forEach(printer => {
+  printerStates[printer.name] = { online: false };
+  const client = mqtt.connect(`mqtts://${printer.ip}:8883`, {
+    username:           'bblp',
+    password:           printer.accessCode,
+    rejectUnauthorized: false
+  });
+  const REPORT_TOPIC  = `device/${printer.serial}/report`;
+  const REQUEST_TOPIC = `device/${printer.serial}/request`;
+  printerClients[printer.name] = { client, REQUEST_TOPIC };
+  client.on('connect', () => {
+    printerStates[printer.name].online = true;
+    client.subscribe(REPORT_TOPIC);
+    client.publish(REQUEST_TOPIC, JSON.stringify({
+      pushing: { sequence_id: '0', command: 'pushall' }
+    }));
+    console.log(`Connected to ${printer.name}`);
+  });
+  client.on('message', (topic, message) => {
+    try {
+      const mqttPayload = JSON.parse(message.toString());
+      if (mqttPayload.print) {
+        const prevAms = printerStates[printer.name].ams;
+        const newAms  = mqttPayload.print.ams;
+        const keepAms = (newAms && newAms.ams && newAms.ams.length > 0) ? newAms : (prevAms || newAms);
+        printerStates[printer.name] = {
+          ...printerStates[printer.name],
+          ...mqttPayload.print,
+          ams:         keepAms,
+          online:      true,
+          lastUpdated: Date.now()
+        };
+        const objData = parseObjectData(mqttPayload);
+        if (objData) {
+          printerStates[printer.name].objectData = objData;
+        } else {
+          const accList = printerStates[printer.name].obj_list;
+          if (Array.isArray(accList) && accList.length > 0) {
+            const sObj    = printerStates[printer.name].s_obj;
+            const curIdx  = typeof sObj === 'number' ? sObj : 0;
+            const existing = printerStates[printer.name].objectData;
+            if (!existing || !existing.hasObjectData) {
+              printerStates[printer.name].objectData = {
+                objectList:       accList,
+                currentObjectId:  accList[curIdx] ? accList[curIdx].id : null,
+                currentObjectIdx: curIdx,
+                totalObjects:     accList.length,
+                hasObjectData:    true,
+                rawSOBJ:          sObj
+              };
+            } else if (typeof sObj === 'number' && sObj !== existing.rawSOBJ) {
+              printerStates[printer.name].objectData = {
+                ...existing,
+                currentObjectIdx: sObj,
+                currentObjectId:  accList[sObj] ? accList[sObj].id : null,
+                rawSOBJ:          sObj
+              };
+            }
+          } else if (!printerStates[printer.name].objectData) {
+            printerStates[printer.name].objectData = { hasObjectData: false };
+          }
+        }
+        const gcodeState = mqttPayload.print.gcode_state;
+        if (gcodeState === 'FAILED') {
+          printerStates[printer.name].failureSnapshot = {
+            mcPercent:   mqttPayload.print.mc_percent   || 0,
+            failReason:  mqttPayload.print.print_error  || '',
+            subtaskName: mqttPayload.print.subtask_name || '',
+            failedAt:    new Date().toISOString(),
+            startTime:   printerStates[printer.name].printStartTime || null
+          };
+        }
+        if (gcodeState === 'RUNNING' && !printerStates[printer.name].printStartTime) {
+          printerStates[printer.name].printStartTime = Date.now();
+        }
+        if (['FINISH', 'FAILED', 'IDLE'].includes(gcodeState)) {
+          printerStates[printer.name].printStartTime = null;
+          if (['FINISH', 'IDLE'].includes(gcodeState)) {
+            printerStates[printer.name].objectData = { hasObjectData: false };
+          }
+        }
+      }
+    } catch (e) {}
+  });
+  client.on('error', (err) => {
+    printerStates[printer.name].online = false;
+    mqttAlert(printer.name, `⚠️ **${printer.name}** MQTT error: ${err.message}`);
+  });
+  client.on('offline', () => {
+    printerStates[printer.name].online = false;
+    mqttAlert(printer.name, `📡 **${printer.name}** went offline (MQTT disconnected)`);
+  });
+});
+app.get('/status', (req, res) => {
+  const response = Object.fromEntries(
+    Object.entries(printerStates).map(([name, state]) => [
+      name,
+      {
+        ...state,
+        objectData:      state.objectData      || { hasObjectData: false },
+        failureSnapshot: state.failureSnapshot || null
+      }
+    ])
+  );
+  res.json(response);
+});
+app.get('/status/:name', (req, res) => {
+  const state = printerStates[req.params.name];
+  if (!state) return res.status(404).json({ error: 'Not found' });
+  res.json({
+    ...state,
+    objectData:      state.objectData      || { hasObjectData: false },
+    failureSnapshot: state.failureSnapshot || null
+  });
+});
+app.get('/cameras', (req, res) => res.json(CAMERAS));
+app.post('/control', (req, res) => {
+  const { printer, command, objectId, option } = req.body;
+  const VALID = ['pause','resume','stop','skip','calibration','light_on','light_off'];
+  if (!VALID.includes(command)) return res.status(400).json({ error: 'Invalid command' });
+  const p = printerClients[printer];
+  if (!p) return res.status(404).json({ error: 'Printer not found' });
+  let payload;
+  if (command === 'skip') {
+    if (!objectId) return res.status(400).json({ error: 'objectId required for skip' });
+    payload = JSON.stringify({
+      print: { sequence_id: '0', command: 'skip_objects', obj_list: [objectId] }
+    });
+  } else if (command === 'calibration') {
+    payload = JSON.stringify({
+      print: { sequence_id: '0', command: 'calibration', option: option || 7 }
+    });
+  } else if (command === 'light_on' || command === 'light_off') {
+    payload = JSON.stringify({
+      system: {
+        sequence_id: '0',
+        command:     'ledctrl',
+        led_node:    'work_light',
+        led_mode:    command === 'light_on' ? 'on' : 'off'
+      }
+    });
+  } else {
+    payload = JSON.stringify({ print: { sequence_id: '0', command } });
+  }
+  p.client.publish(p.REQUEST_TOPIC, payload);
+  console.log(`Control: ${printer} → ${command}${objectId?' obj:'+objectId:''}${option?' opt:'+option:''}`);
+  res.json({ ok: true, sent: command, printer });
+});
+app.post('/ams/set-slot', (req, res) => {
+  const { printer, amsId, trayId, filamentType, color } = req.body;
+  const p = printerClients[printer];
+  if (!p) return res.status(404).json({ error: 'Printer not found' });
+  p.client.publish(p.REQUEST_TOPIC, JSON.stringify({
+    print: {
+      sequence_id:   '0',
+      command:       'ams_filament_setting',
+      ams_id:        amsId,
+      tray_id:       trayId,
+      tray_info_idx: filamentType || 'GFL99',
+      tray_color:    color || 'FFFFFFFF'
+    }
+  }));
+  res.json({ ok: true });
+});
+app.post('/ams/load', (req, res) => {
+  const { printer, amsId, trayId } = req.body;
+  const p = printerClients[printer];
+  if (!p) return res.status(404).json({ error: 'Printer not found' });
+  const isExternal = (amsId === 255 || amsId === -1);
+  const target = isExternal ? 255 : ((amsId || 0) * 4 + (trayId || 0));
+  p.client.publish(p.REQUEST_TOPIC, JSON.stringify({
+    print: { sequence_id: '0', command: 'ams_change_filament', target, curr_temp: 0, tar_temp: 0 }
+  }));
+  res.json({ ok: true });
+});
+app.post('/ams/unload', (req, res) => {
+  const { printer } = req.body;
+  const p = printerClients[printer];
+  if (!p) return res.status(404).json({ error: 'Printer not found' });
+  p.client.publish(p.REQUEST_TOPIC, JSON.stringify({
+    print: { sequence_id: '0', command: 'ams_change_filament', target: 255, curr_temp: 220, tar_temp: 220 }
+  }));
+  res.json({ ok: true });
+});
+app.post('/ams/set-ext-spool', (req, res) => {
+  const { printer, color, type, brand } = req.body;
+  const p = printerClients[printer];
+  if (!p) return res.status(404).json({ error: 'Printer not found' });
+  const col = (color || '#1A1A1A').replace('#', '').toUpperCase().slice(0, 6) + 'FF';
+  p.client.publish(p.REQUEST_TOPIC, JSON.stringify({
+    print: {
+      sequence_id:     '0',
+      command:         'ams_filament_setting',
+      ams_id:          255,
+      tray_id:         254,
+      tray_color:      col,
+      tray_type:       type || 'PLA',
+      tray_sub_brands: brand || '',
+      setting_id:      '',
+      tray_info_idx:   ''
+    }
+  }));
+  res.json({ ok: true });
+});
+app.get('/health', (req, res) => {
+  res.json({
+    ok:       true,
+    uptime:   process.uptime(),
+    printers: PRINTERS.map(p => ({
+      name:   p.name,
+      online: printerStates[p.name]?.online || false
+    }))
+  });
+});
+app.post('/health/cron', (req, res) => {
+  const { frequency } = req.body;
+  const { execSync } = require('child_process');
+  const valid = ['5', '15', '30', '60', 'off'];
+  if (!valid.includes(String(frequency))) {
+    return res.status(400).json({ error: 'Invalid frequency. Use: 5, 15, 30, 60, off' });
+  }
+  try {
+    let currentCron = '';
+    try { currentCron = execSync('crontab -l', { encoding: 'utf8' }); } catch (e) { currentCron = ''; }
+    const lines = currentCron.split('\n').filter(l => !l.includes('pi-health.js') && l.trim() !== '');
+    lines.push('0 7 * * * node ~/bambu-hub/pi-health.js daily');
+    if (frequency !== 'off') {
+      const expr = frequency === '60' ? '0 * * * *' : `*/${frequency} * * * *`;
+      lines.push(`${expr} node ~/bambu-hub/pi-health.js`);
+    }
+    const newCron = lines.join('\n') + '\n';
+    execSync(`echo "${newCron.replace(/"/g, '\\"')}" | crontab -`);
+    console.log(`Health check frequency updated: ${frequency}`);
+    res.json({ ok: true, frequency });
+  } catch (e) {
+    console.error('Failed to update crontab:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+app.listen(PI_PORT, () => console.log(`🚀 LayerDeck Hub on port ${PI_PORT}`));
+```
+
+---
+
+**Step 4 — Restart and verify:**
+```bash
+pm2 restart layerdeck-hub
+pm2 logs layerdeck-hub --lines 20
+```
+
+You should see `Loaded 3 printers` and all 3 connected. Press **Ctrl+C** when done.

@@ -1050,13 +1050,7 @@ app.post('/vision/scan', (req, res) => {
 
 app.get('/vision/check', (req, res) => {
   const ff = (() => { try { return _spawnSync('which',['ffmpeg'],{timeout:2000}).status===0; } catch(_){return false;} })();
-  const ol = (() => {
-    try {
-      const r = _spawnSync('curl',['-s','-o','/dev/null','-w','%{http_code}',`${_vOllamaUrl}/api/tags`],{timeout:3000});
-      return (r.stdout||'').toString().trim() === '200';
-    } catch (_) { return false; }
-  })();
-  res.json({ ffmpeg: ff, ollama: ol, model: _vModel, ollamaUrl: _vOllamaUrl });
+  res.json({ ffmpeg: ff, model: _vModel, anthropicKeySet: !!_anthropicKey });
 });
 
 app.post('/vision/config', (req, res) => {
