@@ -13251,25 +13251,18 @@ function convChargeViaSquare(){
 }
 
 function _buildSquarePosUrl(squareData){
-  // Standard base64 — Square POS native decoders expect +/=/  not URL-safe base64
+  // Standard base64 encoded JSON — Square POS native decoders expect standard base64
   var encoded=btoa(unescape(encodeURIComponent(JSON.stringify(squareData))));
-  var isAndroid=/android/i.test(navigator.userAgent);
-  if(isAndroid){
-    // Android intent URL: Chrome parses ?data=... before #Intent; so encodeURIComponent is safe here.
-    // The %2B/%2F/%3D in the query param are decoded by Android's URL parser before Square POS sees them.
-    return 'intent://payment/create?data='+encodeURIComponent(encoded)
-      +'#Intent;scheme=square-commerce-v1;package=com.squareup'
-      +';S.browser_fallback_url=https%3A%2F%2Fplay.google.com%2Fstore%2Fapps%2Fdetails%3Fid%3Dcom.squareup'
-      +';end';
-  }
-  // iOS / desktop — standard custom URL scheme; encodeURIComponent handles +/= in base64
+  // Use the square-commerce-v1:// scheme directly on all platforms.
+  // Chrome on Android opens Square POS via registered URL scheme handler (same as iOS).
+  // intent:// wrappers were going to Play Store because Square POS's BROWSABLE intent
+  // filter for this scheme may not be present in all versions.
   return 'square-commerce-v1://payment/create?data='+encodeURIComponent(encoded);
 }
 
 function _launchSquarePosUrl(url){
-  // Use window.location.href for real top-level navigation so Chrome handles intent:// correctly.
-  // App-switching doesn't change window.location, so we can't detect success here —
-  // just navigate and let Square POS handle it.
+  // window.location.href triggers the custom scheme handler in iOS Safari and Android Chrome.
+  // Square POS registers square-commerce-v1:// on both platforms; no intent:// wrapper needed.
   window.location.href=url;
 }
 
