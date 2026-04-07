@@ -1996,7 +1996,7 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
 <!-- LABELS -->
 <div id="tab-labels" style="display:none">
   <div class="ctrl" style="flex-wrap:wrap;gap:6px">
-    <button class="btn btn-ghost btn-sm" onclick="window.print()">🖨 Print Labels</button>
+    <button class="btn btn-ghost btn-sm" onclick="triggerLabelPrint()">🖨 Print Labels</button>
     <select id="label-size-select" onchange="applyLabelSize(this.value)" style="background:var(--surf);border:1px solid var(--bdr2);color:var(--txt-b);font-family:'Share Tech Mono',monospace;font-size:9px;padding:4px 8px;border-radius:3px;cursor:pointer">
       <option value="thermal-2x2">Thermal 2×2 (1 col)</option>
       <option value="standard">Standard 4×4 (4 cols)</option>
@@ -5394,6 +5394,21 @@ function renderStats(){
     return `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--bdr)"><div style="display:flex;align-items:center;gap:7px"><div style="width:8px;height:8px;border-radius:50%;background:${s.color};flex-shrink:0"></div><div><div style="font-size:9px;color:var(--txt-b)">${esc(s.name)}</div><div style="font-size:6px;color:var(--txt-d)">${esc(s.material)} · ${s.remaining}g</div></div></div><div style="font-family:'Orbitron',monospace;font-size:11px;font-weight:700;color:${u?'var(--red)':'var(--amb)'}">${p}%</div></div>`;
   }).join(''):'<div style="color:var(--txt-d);font-size:9px;padding:7px 0">All healthy ✓</div>';
 }
+function triggerLabelPrint(){
+  // Hide bottom nav (fixed position on mobile — @media print alone may not cover it)
+  var nav=document.getElementById('bottom-nav');
+  var hdr=document.querySelector('header');
+  if(nav)nav.style.setProperty('display','none','important');
+  if(hdr)hdr.style.setProperty('display','none','important');
+  setTimeout(function(){
+    window.print();
+    // Restore after print dialog closes (short delay for mobile browsers)
+    setTimeout(function(){
+      if(nav)nav.style.removeProperty('display');
+      if(hdr)hdr.style.removeProperty('display');
+    },800);
+  },50);
+}
 function renderLabels(){
   const g=document.getElementById('labels-grid');
   if(!spools.length){g.innerHTML='<div class="empty">No spools</div>';return;}
@@ -5524,7 +5539,9 @@ function openEditPrint(id){
   document.getElementById('fil-rows').innerHTML='';
   filRows=[];filRowCount=0;
   populateTmfDropdown();
-  document.getElementById('ep-tmf-select').value='';
+  // Restore previous 3MF selection from saved tmfId or fuzzy-match tmfName
+  const _restoreTmfId=p.tmfId||(p.tmfName&&(tmfLib.find(function(t){return t.name===p.tmfName;})||{}).id)||'';
+  document.getElementById('ep-tmf-select').value=_restoreTmfId;
   (p.filaments||[]).forEach(f=>addFilRow(f.spoolId,f.grams));
   if(!p.filaments?.length)addFilRow();
   updateCostPreview();
@@ -5546,6 +5563,7 @@ function savePrint(){
     printer:document.getElementById('ep-printer').value,hrs,qty,filaments,
     notes:document.getElementById('ep-notes').value.trim(),
     tmfName:selectedTmf?selectedTmf.name:(existing?existing.tmfName:null),
+    tmfId:selectedTmfId||null,
     timestamp:id?(existing||{}).timestamp||Date.now():Date.now(),
   };
   if(id){
@@ -14746,7 +14764,11 @@ async function onPiPrintFinished(name,data){
   // If the dup is a 'printing' placeholder (created when user clicked Edit), promote it
   // to 'done' instead of skipping. True duplicates (status already 'done'/'failed') skip.
   if(recentDup&&recentDup.status!=='printing'){return;}
-  const _promotePlaceholder=recentDup&&recentDup.status==='printing'?recentDup:null;
+  // Also check for a non-autoFromPi 'printing' placeholder (user opened Edit on a manually-added queue item)
+  const _anyPrintingPlaceholder=prints.find(function(r){
+    return r.status==='printing'&&r.printer===name&&_normName(r.name)===_normName(jobNameCheck);
+  });
+  const _promotePlaceholder=_anyPrintingPlaceholder||(recentDup&&recentDup.status==='printing'?recentDup:null);
   const jobName=(data.subtask_name||'').replace(/\.gcode\.3mf$/i,'').replace(/\.3mf$/i,'').replace(/\.gcode$/i,'').replace(/\.bgcode$/i,'')||'Unknown';
   const material=getPiAMSMaterial(data);
   // Early 3MF lookup — used as fallback for duration & filament when app loads post-print

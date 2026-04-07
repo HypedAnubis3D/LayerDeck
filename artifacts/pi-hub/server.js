@@ -55,7 +55,20 @@ const printerClients = {};
 
 // Track previous gcode state per printer so we can detect transitions
 // (RUNNING → FINISH, * → FAILED) without re-alerting on every poll tick
-const _printerPrevGcodeState = {};
+const _prevStatePath = path.join(__dirname, '.prev_gcode_state.json');
+const _printerPrevGcodeState = (() => {
+  try {
+    if (fs.existsSync(_prevStatePath)) {
+      const saved = JSON.parse(fs.readFileSync(_prevStatePath, 'utf8'));
+      console.log('[Hub] Restored prev gcode states:', JSON.stringify(saved));
+      return saved;
+    }
+  } catch (e) { console.warn('[Hub] Could not restore prev gcode states:', e.message); }
+  return {};
+})();
+function _savePrevGcodeState() {
+  try { fs.writeFileSync(_prevStatePath, JSON.stringify(_printerPrevGcodeState)); } catch(e) {}
+}
 
 // ── Discord alert helpers ──────────────────────────────────────────────────────
 // Print Alerts channel — completed prints, failed prints, AI vision alerts.
@@ -299,6 +312,7 @@ PRINTERS.forEach(printer => {
           }
 
           _printerPrevGcodeState[printer.name] = gcodeState;
+          _savePrevGcodeState();
         }
 
         // Section 30: snapshot full state on FAILED for post-failure dialog
@@ -463,13 +477,20 @@ app.post('/ams/load', (req, res) => {
   if (!p) return res.status(404).json({ error: 'Printer not found' });
   const isExternal = (amsId === 255 || amsId === -1);
   const target = isExternal ? 255 : ((amsId || 0) * 4 + (trayId || 0));
+  // Use live nozzle temp (or safe PLA default). Sending 0/0 can cause some printers to
+  // misinterpret the command as an unload. The printer uses curr_temp to know when to
+  // retract and tar_temp for the new slot's expected nozzle temp.
+  const _state = printerStates[printer] || {};
+  const _nozzle = Math.round(_state.nozzle_temper || 0);
+  const _currTemp = _nozzle > 170 ? _nozzle : 220;  // default PLA temp if cold
+  const _tarTemp  = _currTemp;
   p.client.publish(p.REQUEST_TOPIC, JSON.stringify({
     print: {
       sequence_id: '0',
       command:     'ams_change_filament',
       target:      target,
-      curr_temp:   0,
-      tar_temp:    0
+      curr_temp:   _currTemp,
+      tar_temp:    _tarTemp
     }
   }));
   res.json({ ok: true });

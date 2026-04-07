@@ -1,11 +1,47 @@
 import { Router } from "express";
-import Anthropic from "@anthropic-ai/sdk";
+import https from "https";
 
 const router = Router();
 
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
-});
+// Call Anthropic directly via raw HTTPS to avoid Replit network proxy interception
+function anthropicMessages(prompt: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const apiKey = process.env.ANTHROPIC_API_KEY || "";
+    const body = JSON.stringify({
+      model: "claude-haiku-4-5",
+      max_tokens: 2048,
+      messages: [{ role: "user", content: prompt }],
+    });
+    const options = {
+      hostname: "api.anthropic.com",
+      path: "/v1/messages",
+      method: "POST",
+      headers: {
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json",
+        "content-length": Buffer.byteLength(body),
+      },
+    };
+    const req = https.request(options, (res) => {
+      let data = "";
+      res.on("data", (chunk) => (data += chunk));
+      res.on("end", () => {
+        try {
+          const parsed = JSON.parse(data);
+          if (parsed.error) return reject(new Error(parsed.error.message || JSON.stringify(parsed.error)));
+          const text = parsed.content?.[0]?.text ?? "";
+          resolve(text);
+        } catch (e) {
+          reject(e);
+        }
+      });
+    });
+    req.on("error", reject);
+    req.write(body);
+    req.end();
+  });
+}
 
 router.post("/search", async (req, res) => {
   const { city, type } = req.body ?? {};
@@ -39,14 +75,7 @@ If you don't know of specific confirmed events, include well-known recurring eve
 Only return the raw JSON array, starting with [ and ending with ].`;
 
   try {
-    const message = await anthropic.messages.create({
-      model: "claude-haiku-4-5",
-      max_tokens: 2048,
-      messages: [{ role: "user", content: prompt }],
-    });
-
-    const raw = message.content[0].type === "text" ? message.content[0].text.trim() : "[]";
-
+    const raw = await anthropicMessages(prompt);
     let events: unknown[];
     try {
       const jsonStart = raw.indexOf("[");
@@ -56,7 +85,6 @@ Only return the raw JSON array, starting with [ and ending with ].`;
     } catch {
       events = [];
     }
-
     res.json({ events, city });
   } catch (err) {
     console.error("Event search error:", err);
