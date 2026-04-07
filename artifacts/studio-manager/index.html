@@ -2918,10 +2918,15 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
           <button class="btn btn-pur btn-sm" onclick="addToConvCart()" style="white-space:nowrap;height:28px;align-self:end">+ Add</button>
         </div>
         <!-- Customer (optional) -->
-        <div class="fr2" style="margin-bottom:10px">
-          <div class="field" style="margin:0"><div class="fl">Customer (optional)</div><input type="text" id="em-sale-customer" placeholder="Guest" style="font-size:9px"/></div>
-          <div class="field" style="margin:0"><div class="fl">Email (optional)</div><input type="email" id="em-sale-email" placeholder="name@email.com" style="font-size:9px"/></div>
+        <div class="fr2" style="margin-bottom:6px">
+          <div class="field" style="margin:0"><div class="fl">Customer Name (optional)</div><input type="text" id="em-sale-customer" placeholder="Guest" style="font-size:9px"/></div>
+          <div class="field" style="margin:0"><div class="fl">Email (optional)</div><input type="email" id="em-sale-email" placeholder="name@email.com" style="font-size:9px" oninput="updateEmailOptIn()"/></div>
         </div>
+        <!-- Email list opt-in -->
+        <label id="em-email-optin-row" style="display:none;align-items:center;gap:8px;margin-bottom:10px;cursor:pointer;background:rgba(99,102,241,.08);border:1px solid rgba(99,102,241,.25);border-radius:7px;padding:8px 10px">
+          <input type="checkbox" id="em-email-optin" style="width:15px;height:15px;accent-color:#818cf8;cursor:pointer;flex-shrink:0"/>
+          <span style="font-size:9px;line-height:1.4;color:var(--txt-b)"><strong style="color:#a5b4fc">Join our email list</strong> for exclusive discounts, website promos &amp; early access to new prints!</span>
+        </label>
         <!-- Payment method -->
         <div style="display:flex;gap:4px;margin-bottom:8px;flex-wrap:wrap" id="em-method-btns">
           <button class="sale-method active" data-m="cash"   onclick="setSaleMethod(this)">💵 Cash</button>
@@ -2939,7 +2944,8 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
       <!-- Sales feed -->
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
         <div style="font-size:8px;font-weight:bold;color:var(--txt-b)">Sales Feed</div>
-        <div id="em-sales-src-note" style="font-size:6.5px;color:var(--txt-d);margin-left:auto"></div>
+        <div id="em-sales-src-note" style="font-size:6.5px;color:var(--txt-d)"></div>
+        <button onclick="openEmailListModal()" style="margin-left:auto;background:rgba(99,102,241,.15);border:1px solid rgba(99,102,241,.35);color:#a5b4fc;font-size:7px;padding:3px 8px;border-radius:4px;cursor:pointer;white-space:nowrap">📧 Email List <span id="email-list-badge" style="background:#818cf8;color:#fff;border-radius:8px;padding:0 4px;font-size:6px;margin-left:2px">0</span></button>
       </div>
       <div id="em-sales-list"></div>
     </div>
@@ -13104,12 +13110,115 @@ function quickSellItem(catalogItemId){
   setTimeout(function(){renderConvCart();},80);
 }
 
+// ── Email List ───────────────────────────────────────────────────────────────
+var emailList=JSON.parse(localStorage.getItem('ha3d_emailList')||'[]');
+
+function saveEmailList(){
+  localStorage.setItem('ha3d_emailList',JSON.stringify(emailList));
+  var badge=document.getElementById('email-list-badge');
+  if(badge)badge.textContent=emailList.length;
+}
+
+function updateEmailOptIn(){
+  var emailVal=(document.getElementById('em-sale-email')?.value||'').trim();
+  var row=document.getElementById('em-email-optin-row');
+  if(row)row.style.display=emailVal.includes('@')?'flex':'none';
+}
+
+function maybeAddToEmailList(){
+  var optin=document.getElementById('em-email-optin');
+  if(!optin||!optin.checked)return;
+  var email=(document.getElementById('em-sale-email')?.value||'').trim();
+  var name=(document.getElementById('em-sale-customer')?.value||'').trim();
+  if(!email||!email.includes('@'))return;
+  addToEmailList(name,email);
+}
+
+function addToEmailList(name,email){
+  if(!email||!email.includes('@'))return;
+  email=email.toLowerCase().trim();
+  if(emailList.find(function(e){return e.email===email;})){return;}
+  emailList.push({id:uid(),name:name||'',email:email,signedUp:Date.now(),source:'convention'});
+  saveEmailList();
+  toast('Added to Email List',email,'success',3000);
+}
+
+function openEmailListModal(){
+  var modal=document.getElementById('email-list-modal');
+  if(modal)modal.style.display='flex';
+  renderEmailListModal();
+}
+
+function closeEmailListModal(){
+  var modal=document.getElementById('email-list-modal');
+  if(modal)modal.style.display='none';
+}
+
+function renderEmailListModal(){
+  var count=document.getElementById('elmod-count');
+  var body=document.getElementById('elmod-body');
+  if(count)count.textContent=emailList.length+' subscriber'+(emailList.length!==1?'s':'');
+  if(!body)return;
+  if(!emailList.length){
+    body.innerHTML='<div style="text-align:center;color:var(--txt-d);font-size:9px;padding:32px">No subscribers yet — they\'ll appear here after opting in at checkout</div>';
+    return;
+  }
+  var sorted=[...emailList].sort(function(a,b){return b.signedUp-a.signedUp;});
+  body.innerHTML='<div style="display:grid;gap:6px">'+sorted.map(function(e,i){
+    var date=new Date(e.signedUp).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+    return '<div style="display:flex;align-items:center;gap:10px;background:#0d1020;border:1px solid #1e2240;border-radius:7px;padding:10px 12px">'
+      +'<div style="width:28px;height:28px;border-radius:50%;background:rgba(99,102,241,.2);border:1px solid rgba(99,102,241,.3);display:flex;align-items:center;justify-content:center;font-size:11px;color:#818cf8;flex-shrink:0">'+(e.name?e.name[0].toUpperCase():'?')+'</div>'
+      +'<div style="flex:1;min-width:0">'
+        +'<div style="font-size:10px;font-weight:600;color:#e2e8f0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(e.name?esc(e.name):'<span style="color:#4a5568">Guest</span>')+'</div>'
+        +'<div style="font-size:9px;color:#818cf8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(e.email)+'</div>'
+        +'<div style="font-size:7.5px;color:#4a5568;margin-top:1px">Joined '+esc(date)+'</div>'
+      +'</div>'
+      +'<button onclick="removeFromEmailList(\''+e.id+'\')" style="background:none;border:none;color:#374151;font-size:14px;cursor:pointer;padding:2px 4px;flex-shrink:0" title="Remove">✕</button>'
+    +'</div>';
+  }).join('')+'</div>';
+}
+
+function removeFromEmailList(id){
+  emailList=emailList.filter(function(e){return e.id!==id;});
+  saveEmailList();
+  renderEmailListModal();
+}
+
+function exportEmailListCsv(){
+  if(!emailList.length){toast('Email list is empty','','warning');return;}
+  var rows=[['Name','Email','Signed Up','Source']];
+  emailList.forEach(function(e){
+    rows.push([e.name||'',e.email,new Date(e.signedUp).toLocaleDateString(),e.source||'convention']);
+  });
+  var csv=rows.map(function(r){return r.map(function(v){return '"'+String(v).replace(/"/g,'""')+'"';}).join(',');}).join('\n');
+  var blob=new Blob([csv],{type:'text/csv'});
+  var a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='hypedanubis3d_email_list_'+new Date().toISOString().slice(0,10)+'.csv';
+  a.click();
+  toast('Exported',''+emailList.length+' subscribers downloaded','success');
+}
+
+function copyEmailListEmails(){
+  if(!emailList.length){toast('Email list is empty','','warning');return;}
+  var emails=emailList.map(function(e){return e.email;}).join(', ');
+  navigator.clipboard.writeText(emails).then(function(){
+    toast('Copied!',emailList.length+' emails copied to clipboard','success',3000);
+  }).catch(function(){toast('Copy failed','Try exporting as CSV instead','error');});
+}
+
+// Init badge on load
+(function(){var badge=document.getElementById('email-list-badge');if(badge)badge.textContent=emailList.length;})();
+
 // ── Square Web Payments SDK ──────────────────────────────────────────────────
 var SQ_APP_ID='sq0idp-snoi-XftnTFSnqQQUsrOKQ';
 var SQ_LOCATION_ID='LBC978ZGBGS2M';
 var _sqCard=null;
 var _sqPayments=null;
 var _sqCartSnapshot=[];
+var _sqCustomerName='';
+var _sqCustomerEmail='';
+var _sqEmailOptIn=false;
 
 function convChargeViaSquare(){
   var c=getEvt();if(!c){toast('No active convention','Open a convention first','warning');return;}
@@ -13117,6 +13226,10 @@ function convChargeViaSquare(){
   var cartTotal=convCart.reduce(function(a,r){return a+r.qty*r.price;},0);
   var cartSummary=convCart.map(function(r){return r.name+(r.qty>1?' ×'+r.qty:'');}).join(', ');
   _sqCartSnapshot=convCart.map(function(r){return{id:r.id,catalogItemId:r.catalogItemId,name:r.name,qty:r.qty,price:r.price};});
+  // Snapshot customer/opt-in state at charge time
+  _sqCustomerName=(document.getElementById('em-sale-customer')?.value||'').trim();
+  _sqCustomerEmail=(document.getElementById('em-sale-email')?.value||'').trim();
+  _sqEmailOptIn=!!(document.getElementById('em-email-optin')?.checked);
   // Show modal
   var modal=document.getElementById('sq-payment-modal');
   if(!modal)return;
@@ -13205,6 +13318,13 @@ async function submitSqPayment(){
       });
       saveEvt();
     }
+    // Email list opt-in (captured at charge time)
+    if(_sqEmailOptIn&&_sqCustomerEmail){addToEmailList(_sqCustomerName,_sqCustomerEmail);}
+    // Reset customer/optin fields
+    var custEl=document.getElementById('em-sale-customer');if(custEl)custEl.value='';
+    var emailEl=document.getElementById('em-sale-email');if(emailEl)emailEl.value='';
+    var optinEl=document.getElementById('em-email-optin');if(optinEl)optinEl.checked=false;
+    var optrowEl=document.getElementById('em-email-optin-row');if(optrowEl)optrowEl.style.display='none';
     convCart=[];
     dismissSqPayModal();
     renderConvCart();
@@ -13374,6 +13494,8 @@ function recordSale(){
   });
   const cartTotal=convCart.reduce(function(a,r){return a+r.qty*r.price;},0);
   const cartSummary=convCart.map(function(r){return r.name+(r.qty>1?' ×'+r.qty:'');}).join(', ');
+  // Email list opt-in
+  maybeAddToEmailList();
   // Reset
   convCart=[];
   _saleSearchSelected={id:'',name:'',price:0};
@@ -13381,6 +13503,8 @@ function recordSale(){
   document.getElementById('em-sale-qty').value=1;
   var cust=document.getElementById('em-sale-customer');if(cust)cust.value='';
   var email=document.getElementById('em-sale-email');if(email)email.value='';
+  var optin=document.getElementById('em-email-optin');if(optin)optin.checked=false;
+  var optrow=document.getElementById('em-email-optin-row');if(optrow)optrow.style.display='none';
   saveEvt();
   renderConvCart();
   renderDaySales();
@@ -19150,6 +19274,21 @@ function posShowReceipt(sale){
   document.body.appendChild(overlay);
 }
 </script>
+<!-- Email List Modal -->
+<div id="email-list-modal" style="display:none;position:fixed;inset:0;z-index:9998;background:rgba(0,0,0,.82);align-items:center;justify-content:center;padding:16px;box-sizing:border-box">
+  <div style="background:#141420;border:1px solid #2a2a40;border-radius:12px;width:100%;max-width:480px;max-height:85vh;display:flex;flex-direction:column;box-shadow:0 8px 48px rgba(0,0,0,.6)">
+    <div style="padding:18px 20px 14px;border-bottom:1px solid #1e2240;display:flex;align-items:center;gap:10px;flex-shrink:0">
+      <div style="font-family:Orbitron,monospace;font-size:12px;font-weight:700;color:#a5b4fc;letter-spacing:2px">📧 EMAIL LIST</div>
+      <span id="elmod-count" style="font-size:9px;color:#6b7280;background:#1e2240;padding:2px 8px;border-radius:10px"></span>
+      <div style="margin-left:auto;display:flex;gap:6px">
+        <button onclick="exportEmailListCsv()" style="background:rgba(99,102,241,.15);border:1px solid rgba(99,102,241,.3);color:#a5b4fc;font-size:8px;padding:4px 10px;border-radius:5px;cursor:pointer">⬇ Export CSV</button>
+        <button onclick="copyEmailListEmails()" style="background:rgba(99,102,241,.15);border:1px solid rgba(99,102,241,.3);color:#a5b4fc;font-size:8px;padding:4px 10px;border-radius:5px;cursor:pointer">⎘ Copy Emails</button>
+        <button onclick="closeEmailListModal()" style="background:none;border:none;color:#555;font-size:20px;cursor:pointer;line-height:1;padding:0 2px">×</button>
+      </div>
+    </div>
+    <div id="elmod-body" style="overflow-y:auto;flex:1;padding:16px"></div>
+  </div>
+</div>
 <!-- Square Web Payments Modal -->
 <div id="sq-payment-modal" style="display:none;position:fixed;inset:0;z-index:99998;background:rgba(0,0,0,.88);align-items:center;justify-content:center;padding:16px;box-sizing:border-box">
   <div style="background:#141420;border:1px solid #2a2a40;border-radius:12px;padding:24px;width:100%;max-width:420px;max-height:90vh;overflow-y:auto;box-shadow:0 8px 48px rgba(0,0,0,.6)">
