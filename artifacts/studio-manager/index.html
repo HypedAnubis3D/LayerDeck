@@ -2936,10 +2936,11 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
           <button class="sale-method"        data-m="other"  onclick="setSaleMethod(this)">Other</button>
         </div>
         <!-- Charge buttons -->
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:5px">
           <button class="btn btn-grn" style="padding:8px" onclick="recordSale()">✓ Record Sale</button>
-          <button class="btn" id="em-sq-btn" style="padding:8px;background:linear-gradient(135deg,#0d7a3e,#15803d);border:1px solid #15803d;color:#fff;font-weight:700" onclick="convChargeViaSquare()">⬡ Charge via Square</button>
+          <button class="btn" id="em-sq-btn" style="padding:8px;background:linear-gradient(135deg,#0d7a3e,#15803d);border:1px solid #15803d;color:#fff;font-weight:700" onclick="convChargeViaSquare()">⬡ Online Card</button>
         </div>
+        <button class="btn" style="width:100%;padding:9px;background:linear-gradient(135deg,#1a237e,#283593);border:1px solid #3949ab;color:#fff;font-weight:700;font-size:10px;letter-spacing:.5px" onclick="convChargeViaReader()">📲 Square Reader (Physical Card Reader)</button>
       </div>
       <!-- Sales feed -->
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
@@ -13249,6 +13250,47 @@ function convChargeViaSquare(){
   _initSqPayments();
 }
 
+function convChargeViaReader(){
+  var c=getEvt();if(!c){toast('No active convention','Open a convention first','warning');return;}
+  if(!convCart.length){toast('Add items to the cart first','','warning');return;}
+  var cartTotal=convCart.reduce(function(a,r){return a+r.qty*r.price;},0);
+  var cents=Math.round(cartTotal*100);
+  if(cents<1){toast('Invalid total','Total must be at least $0.01','warning');return;}
+  var cartSummary=convCart.map(function(r){return r.name+(r.qty>1?' ×'+r.qty:'');}).join(', ');
+  var customerName=(document.getElementById('em-sale-customer')?.value||'').trim();
+  var customerEmail=(document.getElementById('em-sale-email')?.value||'').trim();
+  var emailOptIn=!!(document.getElementById('em-email-optin')?.checked);
+  var clientTxId='CONV-RDR-'+Date.now();
+  var squareData={
+    amount_money:{amount:cents,currency_code:'USD'},
+    callback_url:window.location.origin+'/square/callback',
+    client_transaction_id:clientTxId,
+    notes:cartSummary.substring(0,499),
+    supported_tender_types:['CREDIT_CARD','DEBIT_CARD','CASH','OTHER','SQUARE_GIFT_CARD'],
+    auto_return:true
+  };
+  var pendingSale={
+    source:'convention',
+    evtId:c.id||c.name,
+    items:convCart.map(function(r){return{name:r.name,catalogItemId:r.catalogItemId||'__custom',qty:r.qty,price:r.price};}),
+    customerName:customerName,
+    customerEmail:customerEmail,
+    emailOptIn:emailOptIn,
+    total:cartTotal,
+    clientTxId:clientTxId,
+    timestamp:Date.now()
+  };
+  localStorage.setItem('pos_pending',JSON.stringify(pendingSale));
+  var encoded=btoa(unescape(encodeURIComponent(JSON.stringify(squareData))));
+  var url='square-commerce-v1://payment/create?data='+encodeURIComponent(encoded);
+  toast('Opening Square Reader','Complete payment in the Square POS app — swipe, tap or dip your card','info',6000);
+  var a=document.createElement('a');
+  a.href=url;a.rel='noopener';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
+
 async function _initSqPayments(){
   if(!window.Square){
     document.getElementById('sq-payment-status').textContent='Square SDK failed to load — check your connection.';
@@ -19290,17 +19332,31 @@ function posCheckCallback(){
       var conv=(conventions||[]).find(function(c){return (c.id||c.name)===pendingSale.evtId;})||(conventions||[])[0];
       var cartItems=pendingSale.items||(pendingSale.item?[pendingSale.item]:[]);
       var cartTotal=cartItems.reduce(function(a,it){return a+(it.price||0)*(it.qty||1);},0);
+      var cName=pendingSale.customerName||'';
+      var cEmail=pendingSale.customerEmail||'';
       if(conv){
         if(!conv.daySales)conv.daySales=[];
         var squareRef=result.transaction_id||result.client_transaction_id||'';
         cartItems.forEach(function(it){
-          conv.daySales.push({id:uid(),timestamp:Date.now(),itemName:it.name||'Item',catalogItemId:it.catalogItemId||'__custom',qty:it.qty||1,price:it.price||0,method:'square',squareRef:squareRef});
+          conv.daySales.push({
+            id:uid(),timestamp:Date.now(),
+            itemName:it.name||'Item',catalogItemId:it.catalogItemId||'__custom',
+            qty:it.qty||1,price:it.price||0,
+            method:'square',methodLabel:'reader',squareRef:squareRef,
+            customerName:cName,customerEmail:cEmail
+          });
         });
         saveEvt();
       }
+      // Email opt-in
+      if(pendingSale.emailOptIn&&cEmail){addToEmailList(cName,cEmail);}
+      // Reset convention form
       convCart=[];
+      ['em-sale-customer','em-sale-email','em-sale-search','em-sale-item-name','em-sale-price'].forEach(function(id){var el=document.getElementById(id);if(el)el.value='';});
+      var optinEl=document.getElementById('em-email-optin');if(optinEl)optinEl.checked=false;
+      var optrowEl=document.getElementById('em-email-optin-row');if(optrowEl)optrowEl.style.display='none';
       var _convId=conv?conv.id:null;
-      toast('Payment Complete!','Square sale recorded — $'+cartTotal.toFixed(2),'success');
+      toast('Payment Complete!','Reader sale recorded — $'+cartTotal.toFixed(2),'success',5000);
       setTimeout(function(){
         navTo('convention',document.getElementById('nav-convention'));
         setTimeout(function(){if(_convId)openEventManage(_convId);setTimeout(function(){setEvtSection('sales');},300);},400);
