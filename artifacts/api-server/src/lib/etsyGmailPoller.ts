@@ -328,11 +328,6 @@ async function pollGmail(): Promise<void> {
       const htmlBody = (typeof parsed.html === "string" ? parsed.html : "") ?? "";
       const date = parsed.date ?? new Date();
 
-      if (date < firstRunAt) {
-        await markMessageImported(messageId, "");
-        continue;
-      }
-
       const order = parseEtsyEmail(subject, textBody, htmlBody, messageId, date);
       if (!order) {
         await markMessageImported(messageId, "");
