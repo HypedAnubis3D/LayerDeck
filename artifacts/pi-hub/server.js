@@ -948,10 +948,18 @@ async function _visionScan(name, manual = false) {
       if (!_vEnabled) return;
       if (_vPerPrint[name]?.enabled === false) return;
       if (!['RUNNING','PAUSE','PAUSED'].includes(st?.gcode_state || '')) return;
-      // Skip if AI previously confirmed no active print — wait for MQTT to confirm RUNNING
+      // Skip if AI previously confirmed no active print — BUT if MQTT currently shows
+      // RUNNING, trust MQTT and clear the stale visual-offline flag so scanning resumes.
+      // Bambu printers send incremental MQTT updates so gcode_state isn't in every message;
+      // printerStates always holds the last-known value, which is reliable enough here.
       if (_vVisuallyOffline.has(name)) {
-        console.log(`[Vision] Skipping ${name} — visually confirmed no active print`);
-        return;
+        if (st?.gcode_state === 'RUNNING') {
+          _vVisuallyOffline.delete(name);
+          console.log(`[Vision] ${name}: MQTT says RUNNING — clearing stale visual-offline flag, resuming scans`);
+        } else {
+          console.log(`[Vision] Skipping ${name} — visually confirmed no active print`);
+          return;
+        }
       }
     }
 
