@@ -46,4 +46,17 @@ router.get("/debug", async (_req: Request, res: Response): Promise<void> => {
   res.json({ results });
 });
 
+router.post("/resync", async (_req: Request, res: Response): Promise<void> => {
+  const { clearAndResyncEtsy } = await import("../lib/etsyGmailPoller.js");
+  const result = await clearAndResyncEtsy();
+  res.json({ ok: true, ...result });
+});
+
+router.get("/debug/html/:uid", async (req: Request, res: Response): Promise<void> => {
+  const { debugEtsyEmailHtml } = await import("../lib/etsyGmailPoller.js");
+  const html = await debugEtsyEmailHtml(Number(req.params.uid));
+  res.setHeader("Content-Type", "text/plain; charset=utf-8");
+  res.send(html);
+});
+
 export default router;

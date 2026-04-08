@@ -187,24 +187,25 @@ function _isValidName(s: string): boolean {
 }
 
 function parseBuyerName(text: string): string {
+  // Etsy text body has shipping address as HTML spans — name is in <span class='name'>
+  const spanM = text.match(/<span class=['"]name['"]>([^<]+)<\/span>/i);
+  if (spanM) {
+    const n = spanM[1].trim();
+    if (_isValidName(n)) return n;
+  }
+
   const candidates: string[] = [];
   let m: RegExpMatchArray | null;
 
-  // "new order from John Smith" or "from jux1dmqx" — skip usernames (no space = username)
+  // "new order from John Smith" (only if multi-word, i.e. real name not Etsy username)
   m = text.match(/new order from\s+([A-Za-z][a-zA-Z'' -]{1,40})/i);
   if (m && m[1].includes(" ")) candidates.push(m[1].trim());
 
-  // "Sold by... Bought by John Smith"
   m = text.match(/bought by[:\s]+([A-Za-z][a-zA-Z'' -]{2,40})/i);
   if (m) candidates.push(m[1].trim());
 
-  // Shipping "To:\nJohn Smith\n..."
   m = text.match(/ship(?:ping)?\s+to[:\s]*\n([A-Za-z][a-zA-Z'' \-]{2,40})\n/i);
   if (m) candidates.push(m[1].trim());
-
-  // "order from <Name>" in the body
-  m = text.match(/order for [0-9]+ items? from ([a-zA-Z][a-zA-Z0-9_]+)\./i);
-  // ^ skip: that's the Etsy username, not a real name
 
   for (const c of candidates) {
     if (_isValidName(c)) return c;
@@ -233,6 +234,30 @@ function parseShipping(text: string): number {
 
 function parseItems(text: string): EtsyOrderItem[] {
   const items: EtsyOrderItem[] = [];
+
+  // Primary: Etsy's structured text format — extract fields independently then zip
+  //   Item:        Yellow and Black Hero Mask Cosplay Display Piece
+  //   [optional personalization lines, e.g. "Pick your Starter: Popplio"]
+  //   Quantity:    1
+  //   Item price:  $70.99
+  const decodeEntities = (s: string) => s
+    .replace(/&#39;/g, "'").replace(/&amp;/g, "&").replace(/&quot;/g, '"')
+    .replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&#(\d+);/g, (_, n) => String.fromCharCode(n));
+  const itemNames = Array.from(text.matchAll(/^Item:\s{2,}(.+)/gm)).map(m2 => decodeEntities(m2[1].trim().replace(/\s+/g, " ")));
+  const quantities = Array.from(text.matchAll(/^Quantity:\s{2,}(\d+)/gm)).map(m2 => parseInt(m2[1]));
+  const itemPrices = Array.from(text.matchAll(/^Item price:\s{2,}\$?([\d,]+\.?\d*)/gm)).map(m2 => parseFloat(m2[1].replace(/,/g, "")));
+  const count = Math.min(itemNames.length, quantities.length, itemPrices.length);
+  for (let i = 0; i < count; i++) {
+    const name = itemNames[i];
+    const qty = quantities[i] || 1;
+    const price = itemPrices[i];
+    if (name.length >= 3 && qty > 0 && price > 0 && !name.match(/delivery fee|retail delivery|sales tax|gift card|refund|discount/i)) {
+      items.push({ name, qty, price });
+    }
+  }
+  if (items.length > 0) return items;
+
+  // Secondary: "name × qty — $price" or similar inline format
   const lineRe = /([A-Za-z][^\n$×xX]{4,80?}?)\s*(?:×|x|qty[:\s]*|quantity[:\s]*)(\d+)\s*(?:[–—-]\s*)?\$?([\d,]+\.?\d*)/gi;
   let m: RegExpExecArray | null;
   while ((m = lineRe.exec(text)) !== null) {
@@ -243,16 +268,17 @@ function parseItems(text: string): EtsyOrderItem[] {
       items.push({ name, qty, price });
     }
   }
-  if (items.length === 0) {
-    const lines = text.split("\n").map((l) => l.trim()).filter((l) => l.length > 3);
-    for (const line of lines) {
-      const pm = line.match(/\$\s*([\d,]+\.\d{2})/);
-      if (pm && line.length < 120 && !line.match(/total|shipping|tax|discount|subtotal|order|invoice/i)) {
-        const price = parseFloat(pm[1].replace(/,/g, ""));
-        const name = line.replace(/\$[\d,.]+/, "").replace(/^\s*[-–•·]\s*/, "").trim().replace(/\s+/g, " ");
-        if (name.length >= 3 && price > 0) {
-          items.push({ name, qty: 1, price });
-        }
+  if (items.length > 0) return items;
+
+  // Tertiary: any line with a dollar amount that isn't a total/shipping line
+  const lines = text.split("\n").map((l) => l.trim()).filter((l) => l.length > 3);
+  for (const line of lines) {
+    const pm = line.match(/\$\s*([\d,]+\.\d{2})/);
+    if (pm && line.length < 120 && !line.match(/total|shipping|tax|discount|subtotal|order|invoice/i)) {
+      const price = parseFloat(pm[1].replace(/,/g, ""));
+      const name = line.replace(/\$[\d,.]+/, "").replace(/^\s*[-–•·]\s*/, "").trim().replace(/\s+/g, " ");
+      if (name.length >= 3 && price > 0) {
+        items.push({ name, qty: 1, price });
       }
     }
   }
@@ -260,15 +286,134 @@ function parseItems(text: string): EtsyOrderItem[] {
 }
 
 function parseShippingAddress(text: string): string {
-  let m = text.match(/ship(?:ping)?\s+(?:to|address)[:\s]*\n([\s\S]{10,300?}?)(?:\n\s*\n|\nOrder|\nTotal|$)/i);
+  // Etsy text body embeds address as HTML spans
+  // <span class='name'>Corey Parham</span><br/><span class='first-line'>5127 Mcclellan St</span>...
+  const spanM = text.match(/<span class=['"]name['"]>([^<]+)<\/span>[\s\S]{0,20}<span class=['"]first-line['"]>([^<]+)<\/span>[\s\S]{0,20}<span class=['"]city['"]>([^<]+)<\/span>,\s*<span class=['"]state['"]>([^<]+)<\/span>\s*<span class=['"]zip['"]>([^<]+)<\/span>/i);
+  if (spanM) {
+    return `${spanM[1].trim()}, ${spanM[2].trim()}, ${spanM[3].trim()}, ${spanM[4].trim()} ${spanM[5].trim()}`;
+  }
+  // Fallback: plain text "Shipping Address:\n..."
+  const m = text.match(/[Ss]hipping\s+[Aa]ddress:?\s*\n([\s\S]{10,300}?)(?:\n\s*\n|\nOrder|\nTotal|$)/i);
   if (m) {
     return m[1]
+      .replace(/<[^>]+>/g, " ")
       .split("\n")
       .map((l) => l.trim())
       .filter((l) => l.length > 0)
       .join(", ");
   }
   return "";
+}
+
+function htmlToText(html: string): string {
+  return html
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/p>/gi, "\n")
+    .replace(/<\/tr>/gi, "\n")
+    .replace(/<\/td>/gi, " | ")
+    .replace(/<\/li>/gi, "\n")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&#\d+;/g, " ")
+    .replace(/\s*\|\s*$/gm, "")
+    .replace(/[ \t]{2,}/g, " ")
+    .replace(/ \n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function parseFromHtml(html: string): {
+  items: EtsyOrderItem[];
+  shippingAddress: string;
+  buyerName: string;
+  customerEmail: string;
+} {
+  const result = { items: [] as EtsyOrderItem[], shippingAddress: "", buyerName: "", customerEmail: "" };
+  const h = html
+    .replace(/<style[\s\S]*?<\/style>/gi, "")
+    .replace(/<script[\s\S]*?<\/script>/gi, "");
+
+  // ── ITEMS: scan each <tr> for a price cell + name cell ──
+  const trRe = /<tr[\s\S]*?<\/tr>/gi;
+  let trM: RegExpExecArray | null;
+  while ((trM = trRe.exec(h)) !== null) {
+    const cells: string[] = [];
+    const cellRe = /<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/gi;
+    let cellM: RegExpExecArray | null;
+    while ((cellM = cellRe.exec(trM[0])) !== null) {
+      const t = cellM[1]
+        .replace(/<br\s*\/?>/gi, " ")
+        .replace(/<[^>]+>/g, " ")
+        .replace(/&amp;/g, "&")
+        .replace(/&nbsp;/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+      if (t) cells.push(t);
+    }
+    // Find price cell — must be a bare dollar amount
+    for (let ci = 0; ci < cells.length; ci++) {
+      const pm = cells[ci].match(/^\$?\s*([\d,]+\.\d{2})$/);
+      if (!pm) continue;
+      const price = parseFloat(pm[1].replace(/,/g, ""));
+      if (price <= 0) continue;
+      // Look for a name in other cells
+      for (let ni = 0; ni < cells.length; ni++) {
+        if (ni === ci) continue;
+        const raw = cells[ni];
+        if (raw.match(/total|subtotal|shipping|tax|discount|handling|etsy|order|invoice/i)) continue;
+        if (/^\$/.test(raw) || /^\d+$/.test(raw)) continue;
+        const qtyM = raw.match(/\bqty:?\s*(\d+)/i) || raw.match(/^(\d+)\s*[×x]\s/i);
+        const qty = qtyM ? parseInt(qtyM[1]) : 1;
+        const name = raw
+          .replace(/\bqty:?\s*\d+/gi, "")
+          .replace(/^\d+\s*[×x]\s*/i, "")
+          .replace(/\s+/g, " ")
+          .trim();
+        if (name.length >= 4 && !_BAD_NAME_WORDS.test(name.split(" ")[0])) {
+          result.items.push({ name, qty, price });
+          break;
+        }
+      }
+      break;
+    }
+  }
+
+  // ── SHIPPING ADDRESS: find "Ship to" block ──
+  // Etsy uses various patterns; look for the label then grab the next text block
+  const shipPatterns = [
+    /[Ss]hip(?:ping)?\s+(?:to|address):?[\s\S]{0,80}?(<(?:td|p|div)[^>]*>)([\s\S]{15,400}?)(?:<\/(?:td|p|div)>)/i,
+    /[Dd]eliver\s+to:?[\s\S]{0,80}?(<(?:td|p|div)[^>]*>)([\s\S]{15,400}?)(?:<\/(?:td|p|div)>)/i,
+  ];
+  for (const pat of shipPatterns) {
+    const sm = h.match(pat);
+    if (sm) {
+      const raw = sm[2]
+        .replace(/<br\s*\/?>/gi, "\n")
+        .replace(/<[^>]+>/g, " ")
+        .replace(/&amp;/g, "&")
+        .replace(/&nbsp;/g, " ")
+        .split("\n")
+        .map((l: string) => l.trim())
+        .filter((l: string) => l.length > 1);
+      if (raw.length >= 2) {
+        result.shippingAddress = raw.join(", ");
+        const firstLine = raw[0];
+        if (_isValidName(firstLine)) result.buyerName = firstLine;
+        break;
+      }
+    }
+  }
+
+  // ── EMAIL: buyer email address ──
+  const emailM = h.match(/(?:buyer|from)[^<]{0,40}([a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,})/i);
+  if (emailM && !emailM[1].includes("etsy.com") && !emailM[1].includes("google.com")) {
+    result.customerEmail = emailM[1].toLowerCase();
+  }
+
+  return result;
 }
 
 function parseEtsyEmail(
@@ -278,18 +423,9 @@ function parseEtsyEmail(
   messageId: string,
   date: Date
 ): EtsyOrder | null {
-  const text =
-    textBody ||
-    htmlBody
-      .replace(/<br\s*\/?>/gi, "\n")
-      .replace(/<\/p>/gi, "\n")
-      .replace(/<[^>]+>/g, " ")
-      .replace(/&amp;/g, "&")
-      .replace(/&nbsp;/g, " ")
-      .replace(/&lt;/g, "<")
-      .replace(/&gt;/g, ">")
-      .replace(/\s{2,}/g, " ")
-      .replace(/ \n/g, "\n");
+  // Prefer the text body — it has structured data ("Item:", "Quantity:", "Item price:") and
+  // the shipping address as HTML spans (<span class='name'>). Only fall back to HTML→text if no text.
+  const text = textBody || htmlToText(htmlBody);
 
   const orderNumber = parseOrderNumber(subject, text);
   if (!orderNumber) {
@@ -297,12 +433,14 @@ function parseEtsyEmail(
     return null;
   }
 
-  const buyer = parseBuyerName(text);
+  // HTML-aware extraction first (richer than plain text)
+  const fromHtml = htmlBody ? parseFromHtml(htmlBody) : null;
+
   const total = parseTotal(subject, text);
   const shipping = parseShipping(text);
-  const items = parseItems(text);
-  const shippingAddress = parseShippingAddress(text);
 
+  // Items: prefer HTML table extraction, fall back to text parsing
+  const items: EtsyOrderItem[] = (fromHtml?.items.length ? fromHtml.items : parseItems(text));
   if (items.length === 0) {
     if (total > 0) {
       items.push({ name: `Etsy Order #${orderNumber}`, qty: 1, price: total });
@@ -312,12 +450,20 @@ function parseEtsyEmail(
     }
   }
 
+  // Customer: prefer HTML shipping address name, then text heuristics
+  const buyer =
+    (fromHtml?.buyerName && fromHtml.buyerName !== "Etsy Customer" ? fromHtml.buyerName : null) ??
+    parseBuyerName(text);
+
+  const shippingAddress = fromHtml?.shippingAddress || parseShippingAddress(text);
+  const customerEmail = fromHtml?.customerEmail || "";
+
   return {
     id: `etsy-${orderNumber}-${Date.now()}`,
     orderId: `#${orderNumber}`,
     orderNumber: `#${orderNumber}`,
     customer: buyer,
-    customerEmail: "",
+    customerEmail,
     shippingAddress,
     items,
     total: total || items.reduce((s, i) => s + i.price * i.qty, 0),
@@ -509,6 +655,7 @@ export async function debugEtsyGmailInbox(): Promise<object[]> {
           alreadyImported,
           parsedOrderNumber: orderNumMatch || "(could not parse)",
           textPreview: (parsed.text ?? "").slice(0, 300).replace(/\s+/g, " "),
+          htmlExtracted: parsed.html ? parseFromHtml(typeof parsed.html === "string" ? parsed.html : "") : null,
         });
       } catch (e) {
         results.push({ uid, error: String(e) });
@@ -520,6 +667,36 @@ export async function debugEtsyGmailInbox(): Promise<object[]> {
     try { await client.logout(); } catch (_) {}
   }
   return results;
+}
+
+export async function debugEtsyEmailHtml(uid: number): Promise<string> {
+  const user = process.env.ETSY_GMAIL_ADDRESS;
+  const pass = process.env.ETSY_GMAIL_APP_PASSWORD;
+  if (!user || !pass) return "not configured";
+  const client = new ImapFlow({ host: "imap.gmail.com", port: 993, secure: true, auth: { user, pass }, logger: false });
+  try {
+    await client.connect();
+    await client.mailboxOpen("INBOX");
+    const fetched = await client.fetchOne(String(uid), { source: true });
+    const parsed = await (await import("mailparser")).simpleParser(fetched.source as Buffer);
+    const html = typeof parsed.html === "string" ? parsed.html : "";
+    // Return a stripped version showing structure
+    const stripped = html.replace(/<style[\s\S]*?<\/style>/gi, "").replace(/<script[\s\S]*?<\/script>/gi, "");
+    // Show first 8000 chars of cleaned HTML
+    return `=== SUBJECT: ${parsed.subject} ===\n\n=== HTML (first 8000 chars) ===\n${stripped.slice(0, 8000)}\n\n=== TEXT ===\n${(parsed.text ?? "").slice(0, 2000)}`;
+  } finally {
+    try { await client.logout(); } catch (_) {}
+  }
+}
+
+export async function clearAndResyncEtsy(): Promise<{ cleared: number; imported: number }> {
+  const res = await pool.query(`SELECT COUNT(*) FROM etsy_gmail_imports`);
+  const cleared = parseInt(res.rows[0].count ?? "0");
+  await pool.query(`DELETE FROM etsy_gmail_imports`);
+  pendingEtsyOrders.length = 0;
+  isPolling = false;
+  await pollGmail();
+  return { cleared, imported: pendingEtsyOrders.length };
 }
 
 export async function triggerEtsyGmailPoll(): Promise<{ imported: number }> {
