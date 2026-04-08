@@ -4787,7 +4787,7 @@ function renderColourView(){
     var livePr=_liveMap[pr.name]||{};
     var piAms=livePr.ams;
     var vtTray=livePr.vt_tray;
-    var activeTrayId=piAms&&piAms.tray_now!=null?String(piAms.tray_now):'';
+    var activeTrayId=livePr.tray_now!=null?String(livePr.tray_now):(piAms&&piAms.tray_now!=null?String(piAms.tray_now):'');
     var trays=[];
     if(piAms&&piAms.ams&&piAms.ams.length){
       piAms.ams.forEach(function(unit,ui){
@@ -10498,7 +10498,7 @@ function renderAmsMap(printerName,compact=false){
   const livePrinterData=piLiveData[printerName]||{};
   const piAms=livePrinterData.ams;
   const vtTray=livePrinterData.vt_tray;
-  const activeTrayId=piAms&&piAms.tray_now!=null?String(piAms.tray_now):'';
+  const activeTrayId=livePrinterData!=null&&livePrinterData.tray_now!=null?String(livePrinterData.tray_now):(piAms&&piAms.tray_now!=null?String(piAms.tray_now):'');
   const hasPi=!!piHubConfig;
 
   // Build AMS unit groups from Pi Hub if available, otherwise fall back to flat slot count
@@ -10648,7 +10648,7 @@ function renderAmsMapDash(printerName){
   const livePr=_liveMap[printerName]||{};
   const piAms=livePr.ams;
   const vtTray=livePr.vt_tray;
-  const activeTrayId=piAms&&piAms.tray_now!=null?String(piAms.tray_now):'';
+  const activeTrayId=livePr.tray_now!=null?String(livePr.tray_now):(piAms&&piAms.tray_now!=null?String(piAms.tray_now):'');
 
   // Build AMS unit groups: prefer Pi live structure, fall back to printerRecords slot count
   var units=[];
@@ -16864,7 +16864,7 @@ function getPiAMSMaterial(printerData){
 }
 
 // ── AMS color swatches ──
-function renderAmsSwatches(amsData,vtTray,printerName){
+function renderAmsSwatches(amsData,vtTray,printerName,trayNow){
   const hasAms=amsData&&amsData.ams&&amsData.ams.length;
   const hasExt=!!(vtTray&&vtTray.tray_type);
   if(!hasAms&&!hasExt)return'<span style="font-size:7px;color:var(--txt-d)">No AMS data</span>';
@@ -16886,7 +16886,7 @@ function renderAmsSwatches(amsData,vtTray,printerName){
   }
 
   // ── AMS ──────────────────────────────────────────────────────────────
-  const activeTrayId=amsData.tray_now!=null?String(amsData.tray_now):'';
+  const activeTrayId=trayNow!=null?String(trayNow):(amsData.tray_now!=null?String(amsData.tray_now):'');
   let html='<div style="display:flex;gap:3px;flex-wrap:wrap;align-items:center">'
     +'<span style="font-size:5px;color:var(--txt-d);font-family:monospace" title="tray_now debug">[T:'+activeTrayId+']</span>';
   let anyFilled=false;
@@ -17998,11 +17998,11 @@ function updatePrinterCardLive(name,data,state){
   // AMS swatches — update all matching containers (Pi Hub tab + Printers tab)
   // Also handles external spool (vt_tray) for printers with no AMS
   {
-    const amsHtml=renderAmsSwatches(data.ams,data.vt_tray,name);
+    const amsHtml=renderAmsSwatches(data.ams,data.vt_tray,name,data.tray_now);
     allId('ams').forEach(el=>{el.innerHTML=amsHtml;});
     // Debug: show raw tray_now value
     const tnEl=document.getElementById('pi-'+id+'-traynow');
-    if(tnEl){const tn=data.ams!=null?data.ams.tray_now:undefined;tnEl.textContent='tray_now='+JSON.stringify(tn)+' type='+typeof tn+(data.ams&&data.ams.ams?' ams_units='+data.ams.ams.length:'');}
+    if(tnEl){const tn=data.tray_now;const tnAms=data.ams!=null?data.ams.tray_now:undefined;tnEl.textContent='top:'+JSON.stringify(tn)+'('+typeof tn+') ams:'+JSON.stringify(tnAms)+(data.ams&&data.ams.ams?' units='+data.ams.ams.length:'');}
   }
   // Dashboard mini-AMS grid — update in-place so colors sync without full re-render
   const dashAmsEl=document.getElementById('dash-ams-'+id);
