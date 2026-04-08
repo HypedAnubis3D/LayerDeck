@@ -3,7 +3,7 @@ import nodemailer from "nodemailer";
 import path from "path";
 
 // Inline logo attachment — travels inside the email, no external URL needed
-const LOGO_PATH = path.join(process.cwd(), "..", "studio-manager", "public", "ha3d-logo.png");
+const LOGO_PATH = path.join(process.cwd(), "artifacts", "studio-manager", "public", "ha3d-logo.png");
 const LOGO_CID = "ha3d-logo@hypedanubis3d";
 
 const router = Router();

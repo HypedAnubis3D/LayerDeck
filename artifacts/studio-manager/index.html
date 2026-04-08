@@ -15317,7 +15317,11 @@ function saveMyseryConfig(){localStorage.setItem(KEYS.mysteryCfg,JSON.stringify(
 
 // Check if an order should trigger a mystery print
 function isMysteryOrder(order){
-  const code=(order.discountCode||order.promoCode||order.coupon||order.notes||'').toLowerCase();
+  // Catalog and Convention orders are local/in-person — they never have Shopify promo codes
+  if(order.fromCatalogOrder||order.fromConvention||(order.platform||'').toLowerCase()==='catalog'||(order.platform||'').toLowerCase()==='convention')return false;
+  // Only check actual discount/promo/coupon code fields — not notes (too broad, causes false positives)
+  const code=(order.discountCode||order.promoCode||order.coupon||'').toLowerCase();
+  if(!code)return false;
   return mysteryCfg.codes.some(c=>code.includes(c.toLowerCase()));
 }
 
