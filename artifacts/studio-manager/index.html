@@ -3042,7 +3042,7 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
       <div id="lb-browse">
         <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px">
           <button class="lb-src-btn active" id="lb-src-all" onclick="lbBrowseSource('all')">All Items</button>
-          <button class="lb-src-btn" id="lb-src-n3d" onclick="lbBrowseSource('n3d')">N3D Melbourne</button>
+          <button class="lb-src-btn" id="lb-src-n3d" onclick="lbBrowseSource('n3d')">N3D</button>
           <button class="lb-src-btn" id="lb-src-cpl" onclick="lbBrowseSource('cpl')">CPL3D</button>
           <button class="lb-src-btn" id="lb-src-myitems" onclick="lbBrowseSource('myitems')">My Items</button>
         </div>
@@ -3074,12 +3074,12 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
             <div class="field"><div class="fl">Email *</div><input type="email" id="lb-co-email" placeholder="jane@example.com" style="font-size:8px"/></div>
             <div class="field"><div class="fl">Address *</div><input type="text" id="lb-co-addr" placeholder="123 Main Street" style="font-size:8px"/></div>
             <div class="fr2">
-              <div class="field"><div class="fl">Suburb</div><input type="text" id="lb-co-suburb" placeholder="Melbourne" style="font-size:8px"/></div>
-              <div class="field"><div class="fl">State</div><input type="text" id="lb-co-state" placeholder="VIC" style="font-size:8px"/></div>
+              <div class="field"><div class="fl">City</div><input type="text" id="lb-co-suburb" placeholder="New York" style="font-size:8px"/></div>
+              <div class="field"><div class="fl">State</div><input type="text" id="lb-co-state" placeholder="NY" style="font-size:8px"/></div>
             </div>
             <div class="fr2">
-              <div class="field"><div class="fl">Postcode</div><input type="text" id="lb-co-postcode" placeholder="3000" style="font-size:8px"/></div>
-              <div class="field"><div class="fl">Country</div><input type="text" id="lb-co-country" value="Australia" style="font-size:8px"/></div>
+              <div class="field"><div class="fl">ZIP</div><input type="text" id="lb-co-postcode" placeholder="10001" style="font-size:8px"/></div>
+              <div class="field"><div class="fl">Country</div><input type="text" id="lb-co-country" value="USA" style="font-size:8px"/></div>
             </div>
             <div class="field"><div class="fl">Notes / Colour Pref</div><textarea id="lb-co-notes" rows="2" placeholder="Colour preference, special requests…" style="font-size:8px;width:100%;box-sizing:border-box;resize:vertical"></textarea></div>
             <div style="display:flex;gap:8px;margin-top:8px">
@@ -14180,7 +14180,7 @@ function _catDoSquarePayment(){
     suburb:(document.getElementById('lb-co-suburb')?.value||'').trim(),
     state:(document.getElementById('lb-co-state')?.value||'').trim(),
     postcode:(document.getElementById('lb-co-postcode')?.value||'').trim(),
-    country:(document.getElementById('lb-co-country')?.value||'Australia').trim(),
+    country:(document.getElementById('lb-co-country')?.value||'USA').trim(),
     notes:(document.getElementById('lb-co-notes')?.value||'').trim(),
   };
   try{sessionStorage.setItem('_catPendingCheckout',JSON.stringify({cart:_catCart.slice(),form}));}catch(_){}
@@ -14226,7 +14226,7 @@ function _catPlaceOrder(payMethod,formOverride){
     suburb:(document.getElementById('lb-co-suburb')?.value||'').trim(),
     state:(document.getElementById('lb-co-state')?.value||'').trim(),
     postcode:(document.getElementById('lb-co-postcode')?.value||'').trim(),
-    country:(document.getElementById('lb-co-country')?.value||'Australia').trim(),
+    country:(document.getElementById('lb-co-country')?.value||'USA').trim(),
     notes:(document.getElementById('lb-co-notes')?.value||'').trim(),
   };
   var orderId=uid();
@@ -14276,7 +14276,7 @@ function _catPlaceOrder(payMethod,formOverride){
   ['lb-co-name','lb-co-email','lb-co-addr','lb-co-suburb','lb-co-state','lb-co-postcode','lb-co-notes'].forEach(function(id){
     var el=document.getElementById(id);if(el)el.value='';
   });
-  var cc=document.getElementById('lb-co-country');if(cc)cc.value='Australia';
+  var cc=document.getElementById('lb-co-country');if(cc)cc.value='USA';
   toast('Order Placed!',items.length+' item(s) added to print queue for post-event shipping','success',5000);
   lbShowBrowseView();
   lbBrowseLoad(1);
