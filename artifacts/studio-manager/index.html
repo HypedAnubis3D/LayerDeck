@@ -3060,9 +3060,8 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
       <!-- ── CART + CHECKOUT PANEL ── -->
       <div id="lb-cart-view" style="display:none">
         <button class="btn btn-ghost btn-sm" onclick="lbShowBrowseView()" style="font-size:8px;margin-bottom:10px">← Back to Browse</button>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:start">
-          <!-- Cart items -->
-          <div style="background:var(--surf);border:1px solid var(--bdr);border-radius:8px;padding:10px">
+        <!-- Cart items -->
+          <div style="background:var(--surf);border:1px solid var(--bdr);border-radius:8px;padding:10px;margin-bottom:10px">
             <div style="font-size:8px;font-weight:bold;color:var(--txt-b);margin-bottom:8px">🛒 Cart Items</div>
             <div id="lb-cart-items"></div>
             <div id="lb-cart-total" style="text-align:right;font-size:10px;font-weight:bold;color:var(--gold);margin-top:10px;padding-top:8px;border-top:1px solid var(--bdr)"></div>
@@ -3073,13 +3072,13 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
             <div class="field"><div class="fl">Full Name *</div><input type="text" id="lb-co-name" placeholder="Jane Smith" style="font-size:8px"/></div>
             <div class="field"><div class="fl">Email *</div><input type="email" id="lb-co-email" placeholder="jane@example.com" style="font-size:8px"/></div>
             <div class="field"><div class="fl">Address *</div><input type="text" id="lb-co-addr" placeholder="123 Main Street" style="font-size:8px"/></div>
-            <div class="fr2">
-              <div class="field"><div class="fl">City</div><input type="text" id="lb-co-suburb" placeholder="New York" style="font-size:8px"/></div>
-              <div class="field"><div class="fl">State</div><input type="text" id="lb-co-state" placeholder="NY" style="font-size:8px"/></div>
+            <div style="display:grid;grid-template-columns:2fr 1fr;gap:6px">
+              <div class="field" style="margin-bottom:4px"><div class="fl">City</div><input type="text" id="lb-co-suburb" placeholder="New York" style="font-size:8px"/></div>
+              <div class="field" style="margin-bottom:4px"><div class="fl">State</div><input type="text" id="lb-co-state" placeholder="NY" style="font-size:8px;text-transform:uppercase"/></div>
             </div>
-            <div class="fr2">
-              <div class="field"><div class="fl">ZIP</div><input type="text" id="lb-co-postcode" placeholder="10001" style="font-size:8px"/></div>
-              <div class="field"><div class="fl">Country</div><input type="text" id="lb-co-country" value="USA" style="font-size:8px"/></div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+              <div class="field" style="margin-bottom:4px"><div class="fl">ZIP Code</div><input type="text" id="lb-co-postcode" placeholder="10001" style="font-size:8px"/></div>
+              <div class="field" style="margin-bottom:4px"><div class="fl">Country</div><input type="text" id="lb-co-country" value="USA" style="font-size:8px"/></div>
             </div>
             <div class="field"><div class="fl">Notes / Colour Pref</div><textarea id="lb-co-notes" rows="2" placeholder="Colour preference, special requests…" style="font-size:8px;width:100%;box-sizing:border-box;resize:vertical"></textarea></div>
             <div style="display:flex;gap:8px;margin-top:8px">
@@ -3087,7 +3086,6 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
               <button class="btn btn-gold" onclick="lbCheckout('cash')" style="flex:1;font-size:9px;padding:7px 0">💵 Cash</button>
             </div>
           </div>
-        </div>
       </div>
     </div>
   </div>
@@ -14182,11 +14180,11 @@ function lbCheckout(method){
 }
 
 function _catDoSquarePayment(){
+  var c=getEvt();if(!c){toast('No active convention','','warning');return;}
   var total=_catCart.reduce(function(a,r){return a+r.qty*r.price;},0);
   var totalCents=Math.round(total*100);
   if(totalCents<=0){toast('Invalid total','','warning');return;}
   var cartSummary=_catCart.map(function(r){return r.name+(r.qty>1?' ×'+r.qty:'');}).join(', ');
-  // Save pending checkout to session storage so we can restore after Square returns
   var form={
     name:(document.getElementById('lb-co-name')?.value||'').trim(),
     email:(document.getElementById('lb-co-email')?.value||'').trim(),
@@ -14197,39 +14195,32 @@ function _catDoSquarePayment(){
     country:(document.getElementById('lb-co-country')?.value||'USA').trim(),
     notes:(document.getElementById('lb-co-notes')?.value||'').trim(),
   };
-  try{sessionStorage.setItem('_catPendingCheckout',JSON.stringify({cart:_catCart.slice(),form}));}catch(_){}
-  var callbackUrl=location.href.split('?')[0]+'?sq_catalog=1';
-  var params=new URLSearchParams({'data':JSON.stringify({
-    action:'charge',
+  var clientTxId='CAT-'+Date.now();
+  var pendingSale={
+    source:'catalog',
+    evtId:c.id||c.name,
+    cart:_catCart.slice(),
+    form:form,
+    total:total,
+    clientTxId:clientTxId,
+    timestamp:Date.now()
+  };
+  localStorage.setItem('pos_pending',JSON.stringify(pendingSale));
+  var squareData={
     amount_money:{amount:totalCents,currency_code:'USD'},
-    callback_url:callbackUrl,
+    callback_url:window.location.origin+'/square/callback',
     client_id:SQ_APP_ID,
+    client_transaction_id:clientTxId,
     version:'1.3',
-    note:'HypedAnubis3D Catalog: '+cartSummary,
-    options:{supported_tender_types:['CREDIT_CARD','APPLE_PAY','GOOGLE_PAY']}
-  })});
-  window.location.href='intent://'+params.toString()
-    +'#Intent;scheme=squareup;package=com.squareup;'
-    +'S.browser_fallback_url='+encodeURIComponent('https://squareup.com/download')+';'
-    +'S.com.squareup.pos.CLIENT_ID='+SQ_APP_ID+';end';
-}
-
-// Restore from Square catalog payment return
-(function(){
-  var url=new URL(location.href);
-  if(url.searchParams.get('sq_catalog')){
-    var pending=null;
-    try{pending=JSON.parse(sessionStorage.getItem('_catPendingCheckout')||'null');}catch(_){}
-    if(pending){
-      _catCart=pending.cart||[];
-      _catSyncCartBadge();
-      setTimeout(function(){_catPlaceOrder('card',pending.form);},600);
+    notes:('HypedAnubis3D Catalog: '+cartSummary).substring(0,499),
+    options:{
+      supported_tender_types:['CREDIT_CARD','DEBIT_CARD','CASH','OTHER','SQUARE_GIFT_CARD'],
+      auto_return:true,
+      skip_receipt_screen:false
     }
-    url.searchParams.delete('sq_catalog');
-    history.replaceState({},'',url.toString());
-    try{sessionStorage.removeItem('_catPendingCheckout');}catch(_){}
-  }
-})();
+  };
+  _launchSquarePosUrl(_buildSquarePosUrl(squareData));
+}
 
 function _catPlaceOrder(payMethod,formOverride){
   var c=getEvt();if(!c){toast('No active convention','','warning');return;}
@@ -20341,7 +20332,7 @@ function _showPosManualConfirm(pendingJSON){
   // Only prompt if the sale is recent (< 2 hours old)
   if(pending.timestamp&&Date.now()-pending.timestamp>2*60*60*1000){localStorage.removeItem('pos_pending');return;}
   var total=pending.total||pending.items&&pending.items.reduce(function(a,r){return a+r.price*r.qty;},0)||0;
-  var label=pending.source==='convention'?'Convention':'POS';
+  var label=pending.source==='convention'?'Convention':pending.source==='catalog'?'Catalog Order':'POS';
   var banner=document.createElement('div');
   banner.id='pos-manual-confirm-banner';
   banner.style.cssText='position:fixed;bottom:80px;left:12px;right:12px;z-index:9999;background:#1e1e2e;border:1px solid #f59e0b;border-radius:12px;padding:14px 16px;box-shadow:0 8px 32px rgba(0,0,0,.6);';
@@ -20423,6 +20414,18 @@ function posCheckCallback(){
     }else{
       toast('Payment Cancelled',result.error_code?result.error_code.replace(/_/g,' '):'Square POS cancelled','warning');
       setTimeout(function(){navTo('convention',document.getElementById('nav-convention'));},300);
+    }
+    return;
+  }
+  // Catalog order source
+  if(pendingSale&&pendingSale.source==='catalog'){
+    if(result.status==='ok'){
+      // Restore cart and form then place the order
+      _catCart=pendingSale.cart||[];
+      _catSyncCartBadge();
+      setTimeout(function(){_catPlaceOrder('card',pendingSale.form);},400);
+    }else{
+      toast('Payment Cancelled',result.error_code?result.error_code.replace(/_/g,' '):'Square POS cancelled','warning');
     }
     return;
   }
