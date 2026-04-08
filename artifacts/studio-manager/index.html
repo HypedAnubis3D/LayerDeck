@@ -16886,7 +16886,8 @@ function renderAmsSwatches(amsData,vtTray,printerName){
 
   // ── AMS ──────────────────────────────────────────────────────────────
   const activeTrayId=amsData.tray_now!=null?String(amsData.tray_now):'';
-  let html='<div style="display:flex;gap:3px;flex-wrap:wrap;align-items:center">';
+  let html='<div style="display:flex;gap:3px;flex-wrap:wrap;align-items:center">'
+    +'<span style="font-size:5px;color:var(--txt-d);font-family:monospace" title="tray_now debug">[T:'+activeTrayId+']</span>';
   let anyFilled=false;
   amsData.ams.forEach((unit,ui)=>{
     const trays=unit.tray||[];

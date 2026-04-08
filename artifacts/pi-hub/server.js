@@ -242,9 +242,23 @@ PRINTERS.forEach(printer => {
         // Merge MQTT print fields into printerStates.
         // Preserve AMS data: incremental updates often omit ams entirely — don't clobber
         // a good pushall payload with an empty/missing ams from a progress update.
+        // BUT do merge tray_now/tray_pre/tray_tar from incremental updates so active-slot
+        // highlighting stays current during filament switches.
         const prevAms = printerStates[printer.name].ams;
         const newAms  = mqttPayload.print.ams;
-        const keepAms = (newAms && newAms.ams && newAms.ams.length > 0) ? newAms : (prevAms || newAms);
+        let keepAms;
+        if (newAms && newAms.ams && newAms.ams.length > 0) {
+          // Full AMS data — use it wholesale
+          keepAms = newAms;
+        } else if (prevAms && newAms) {
+          // Incremental update — keep previous tray data but merge tray_now / tray_pre / tray_tar
+          keepAms = { ...prevAms };
+          if (newAms.tray_now != null) keepAms.tray_now = newAms.tray_now;
+          if (newAms.tray_pre != null) keepAms.tray_pre = newAms.tray_pre;
+          if (newAms.tray_tar != null) keepAms.tray_tar = newAms.tray_tar;
+        } else {
+          keepAms = prevAms || newAms;
+        }
         printerStates[printer.name] = {
           ...printerStates[printer.name],
           ...mqttPayload.print,
