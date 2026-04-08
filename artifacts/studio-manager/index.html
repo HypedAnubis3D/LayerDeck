@@ -5595,7 +5595,7 @@ async function triggerEtsySync(){
 
 function startEtsyPolling(){
   if(_etsyPollInterval)clearInterval(_etsyPollInterval);
-  _etsyPollInterval=setInterval(function(){pollEtsyOrders(true);},5*60*1000);
+  _etsyPollInterval=setInterval(function(){pollEtsyOrders(true);},60*60*1000);
 }
 
 function renderEtsy(){}

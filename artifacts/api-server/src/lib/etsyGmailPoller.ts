@@ -33,9 +33,12 @@ export let lastSyncAt: number | null = null;
 export let lastSyncError: string | null = null;
 export let isPolling = false;
 
-const POLL_INTERVAL_MS = 5 * 60 * 1000;
+const POLL_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
 let _pollerTimer: NodeJS.Timeout | null = null;
 const _inMemoryMessageIds = new Set<string>();
+// Tracks order numbers already Discord-notified this server session.
+// Survives DB resyncs so we never fire duplicate notifications.
+const _discordNotifiedOrders = new Set<string>();
 let _firstRunAt: Date | null = null;
 
 async function initDb(): Promise<void> {
@@ -575,8 +578,11 @@ async function pollGmail(): Promise<void> {
         "Etsy Gmail: order imported"
       );
 
+      // Only notify Discord for genuinely new orders — never re-fire for already-seen order numbers.
+      // _discordNotifiedOrders survives DB resyncs, so resync won't spam the channel.
       const discordUrl = process.env.DISCORD_WEBHOOK_ORDERS;
-      if (discordUrl) {
+      if (discordUrl && !alreadyDone && !_discordNotifiedOrders.has(order.orderNumber)) {
+        _discordNotifiedOrders.add(order.orderNumber);
         try {
           const itemLines = order.items
             .map((i) => `  • ${i.name}${i.qty > 1 ? ` ×${i.qty}` : ""} — $${i.price.toFixed(2)}`)
