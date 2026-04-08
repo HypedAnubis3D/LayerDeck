@@ -1,5 +1,6 @@
 import { Router } from "express";
 import https from "https";
+import http from "http";
 
 const router = Router();
 
@@ -43,6 +44,57 @@ function anthropicMessages(prompt: string): Promise<string> {
   });
 }
 
+// Check if a URL is reachable by making a HEAD request (falls back to GET on 405).
+// Returns true only if we get a 2xx or 3xx response within the timeout.
+function checkUrl(rawUrl: string, timeoutMs = 6000): Promise<boolean> {
+  return new Promise((resolve) => {
+    let settled = false;
+    const done = (ok: boolean) => { if (!settled) { settled = true; resolve(ok); } };
+
+    let url: URL;
+    try { url = new URL(rawUrl); } catch { return done(false); }
+
+    const lib = url.protocol === "https:" ? https : http;
+    const options = {
+      hostname: url.hostname,
+      port: url.port || (url.protocol === "https:" ? 443 : 80),
+      path: url.pathname + url.search,
+      method: "HEAD",
+      headers: { "User-Agent": "Mozilla/5.0 (compatible; LayerDeck/1.0)" },
+    };
+
+    const attempt = (method: string) => {
+      const opts = { ...options, method };
+      const req = lib.request(opts, (res) => {
+        const code = res.statusCode ?? 0;
+        // Consume the body so the socket closes cleanly
+        res.resume();
+        if (code === 405 && method === "HEAD") {
+          // Server doesn't allow HEAD — retry with GET
+          return attempt("GET");
+        }
+        done(code >= 200 && code < 400);
+      });
+      req.setTimeout(timeoutMs, () => { req.destroy(); done(false); });
+      req.on("error", () => done(false));
+      req.end();
+    };
+
+    attempt("HEAD");
+  });
+}
+
+// Validate all event websites in parallel, blanking out any that fail
+async function validateWebsites(events: Record<string, unknown>[]): Promise<Record<string, unknown>[]> {
+  const checks = events.map(async (evt) => {
+    const site = typeof evt.website === "string" ? evt.website.trim() : "";
+    if (!site) return evt;
+    const ok = await checkUrl(site);
+    return ok ? evt : { ...evt, website: "" };
+  });
+  return Promise.all(checks);
+}
+
 router.post("/search", async (req, res) => {
   const { city, type, radius } = req.body ?? {};
   if (!city) {
@@ -81,7 +133,7 @@ Only return the raw JSON array, starting with [ and ending with ].`;
 
   try {
     const raw = await anthropicMessages(prompt);
-    let events: unknown[];
+    let events: Record<string, unknown>[];
     try {
       const jsonStart = raw.indexOf("[");
       const jsonEnd = raw.lastIndexOf("]");
@@ -90,7 +142,11 @@ Only return the raw JSON array, starting with [ and ending with ].`;
     } catch {
       events = [];
     }
-    res.json({ events, city });
+
+    // Validate all websites in parallel — blank out any that don't resolve
+    const validated = await validateWebsites(events);
+
+    res.json({ events: validated, city });
   } catch (err) {
     console.error("Event search error:", err);
     res.status(500).json({ error: "Failed to search events" });
