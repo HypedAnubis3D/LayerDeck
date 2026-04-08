@@ -14019,6 +14019,7 @@ var _catBrowseTotal=0;
 var _catBrowseLimit=24;
 var _catBrowseLoading=false;
 var _catBrowseTimer=null;
+var _catBrowseCache={};  // key → {src,srcId,name,img,cat} for items fetched from API
 var _catN3dCats=['character','chibi','funko','accessory'];
 var _catCplTypes=['poke-ball'];
 var _catPickerSrc='n3d';
@@ -14086,22 +14087,35 @@ function _catSyncCartBadge(){
 function lbAddToCart(itemKey,e){
   if(e) e.stopPropagation();
   var c=getEvt();if(!c)return;
-  var items=(c.catalogOrderItems||[]);
-  // Support both id-based keys and src|srcId keys (for newly-priced API items)
+  if(!c.catalogOrderItems)c.catalogOrderItems=[];
+  var items=c.catalogOrderItems;
+  // Resolve by id first, then by src|srcId
   var item=items.find(function(i){return i.id===itemKey;});
   if(!item&&itemKey&&itemKey.includes('|')){
     var parts=itemKey.split('|');
     item=items.find(function(i){return i.src===parts[0]&&i.srcId===parts[1];});
     if(item) itemKey=item.id;
   }
+  // Auto-save N3D/CPL items at their current displayed price (default $23.99)
+  if(!item&&itemKey&&itemKey.includes('|')){
+    var cached=_catBrowseCache[itemKey];
+    if(!cached){toast('Item not found','','warning');return;}
+    var priceEl=document.getElementById('lb-price-'+itemKey);
+    var autoPrice=priceEl?parseFloat(priceEl.value)||23.99:23.99;
+    var newEntry={id:uid(),src:cached.src,srcId:cached.srcId,name:cached.name,img:cached.img,cat:cached.cat,price:autoPrice,ts:Date.now()};
+    c.catalogOrderItems.push(newEntry);
+    saveConventions();
+    item=newEntry;
+    itemKey=newEntry.id;
+  }
   if(!item){toast('Item not found','','warning');return;}
-  if(!item.price){toast('Price not set','Enter a price and tap ✓ first','warning');return;}
+  var usePrice=item.price>0?item.price:23.99;
   var existing=_catCart.find(function(r){return r.catItemId===itemKey;});
   if(existing){
     existing.qty++;
     toast(item.name,'×'+existing.qty+' in cart','success',1800);
   } else {
-    _catCart.push({catItemId:itemKey,name:item.name,img:item.img||'',cat:item.cat||'',qty:1,price:item.price});
+    _catCart.push({catItemId:itemKey,name:item.name,img:item.img||'',cat:item.cat||'',qty:1,price:usePrice});
     toast(item.name,'Added to cart','success',1800);
   }
   _catSyncCartBadge();
@@ -14346,6 +14360,7 @@ async function lbBrowseLoad(page){
     var needN3d=(_catBrowseSrc==='all'||_catBrowseSrc==='n3d');
     var needCpl=(_catBrowseSrc==='all'||_catBrowseSrc==='cpl');
 
+    var DEFAULT_PRICE=23.99;
     if(needN3d){
       var qsN=new URLSearchParams({page:_catBrowsePage,limit:50});
       if(search) qsN.set('search',search);
@@ -14360,7 +14375,12 @@ async function lbBrowseLoad(page){
           var nm=(i.title||i.name||'').toLowerCase();
           var ct=(i.category||'').toLowerCase();
           if(!search||nm.includes(search)||ct.includes(search)){
-            fetchedItems.push({id:cfg?cfg.id:null,srcId:srcId,src:'n3d',name:i.title||i.name||'Unknown',img:i.image_url||'',cat:i.category||'',price:cfg?cfg.price:0});
+            var name=i.title||i.name||'Unknown';
+            var img=i.image_url||'';
+            var cat=i.category||'';
+            var key='n3d|'+srcId;
+            _catBrowseCache[key]={src:'n3d',srcId:srcId,name:name,img:img,cat:cat};
+            fetchedItems.push({id:cfg?cfg.id:null,srcId:srcId,src:'n3d',name:name,img:img,cat:cat,price:cfg?cfg.price:DEFAULT_PRICE});
           }
         });
         if(n3dAll.length){
@@ -14383,7 +14403,12 @@ async function lbBrowseLoad(page){
           var nm=(i.name||'').toLowerCase();
           var ct=(i.type||'').toLowerCase();
           if(!search||nm.includes(search)||ct.includes(search)){
-            fetchedItems.push({id:cfg?cfg.id:null,srcId:srcId,src:'cpl',name:i.name||'Unknown',img:i.thumbnail||'',cat:i.type||'',price:cfg?cfg.price:0});
+            var name=i.name||'Unknown';
+            var img=i.thumbnail||'';
+            var cat=i.type||'';
+            var key='cpl|'+srcId;
+            _catBrowseCache[key]={src:'cpl',srcId:srcId,name:name,img:img,cat:cat};
+            fetchedItems.push({id:cfg?cfg.id:null,srcId:srcId,src:'cpl',name:name,img:img,cat:cat,price:cfg?cfg.price:DEFAULT_PRICE});
           }
         });
         if(cplAll.length){
@@ -14426,38 +14451,37 @@ function lbSetItemPrice(src,srcId,name,img,cat,val){
 }
 
 function _catBrowseCardHtml(item){
-  // itemKey: use the saved id if priced, otherwise use src|srcId as a temporary key
   var itemKey=item.id||(item.src+'|'+item.srcId);
   var inCart=_catCart.find(function(r){return r.catItemId===itemKey||(item.id&&r.catItemId===item.id);});
-  var hasPrice=!!(item.price&&item.price>0);
-  var safeKey=itemKey.replace(/['"\\]/g,'');
+  var currentPrice=item.price>0?item.price:23.99;
+  var isApiItem=item.src==='n3d'||item.src==='cpl';
+  var safeKey=(itemKey||'').replace(/['"\\]/g,'');
   var safeSrc=(item.src||'').replace(/['"\\]/g,'');
   var safeSrcId=(item.srcId||'').replace(/['"\\]/g,'');
-  var safeName=(item.name||'').replace(/'/g,"\\'");
-  var safeImg=(item.img||'').replace(/'/g,"\\'");
-  var safeCat=(item.cat||'').replace(/'/g,"\\'");
+  var safeName=(item.name||'').replace(/['"\\]/g,'');
+  var safeImg=(item.img||'').replace(/['"\\]/g,'');
+  var safeCat=(item.cat||'').replace(/['"\\]/g,'');
+  // For N3D/CPL: show editable price input + Add to Cart (price always defaults to $23.99)
+  // For My Items / Manual: show static price only
+  var priceSection=isApiItem
+    ?'<div style="display:flex;gap:2px;align-items:center;width:100%;margin-bottom:3px">'
+        +'<span style="font-size:7px;color:var(--txt-d);flex-shrink:0">$</span>'
+        +'<input type="number" min="0" step="0.01" value="'+parseFloat(currentPrice).toFixed(2)+'" id="lb-price-'+safeKey+'"'
+          +' style="flex:1;width:0;background:var(--bg);border:1px solid var(--bdr2);color:var(--txt);padding:2px 3px;font-size:8px;border-radius:3px;font-family:inherit"'
+          +' onkeydown="if(event.key===\'Enter\')lbSetItemPrice(\''+safeSrc+'\',\''+safeSrcId+'\',\''+safeName+'\',\''+safeImg+'\',\''+safeCat+'\',this.value)"/>'
+        +'<button class="btn btn-ghost btn-xs" onclick="lbSetItemPrice(\''+safeSrc+'\',\''+safeSrcId+'\',\''+safeName+'\',\''+safeImg+'\',\''+safeCat+'\',document.getElementById(\'lb-price-'+safeKey+'\').value)" style="font-size:7px;padding:2px 4px;flex-shrink:0">✓</button>'
+      +'</div>'
+    :'<div style="font-size:9px;font-weight:bold;color:var(--grn-b);margin-top:2px;margin-bottom:3px">$'+parseFloat(currentPrice).toFixed(2)+' USD</div>';
   return '<div class="lb-card">'
     +(item.img?'<img src="'+esc(item.img)+'" alt="'+esc(item.name)+'" loading="lazy" onerror="this.style.display=\'none\'">'
       :'<div style="width:100%;aspect-ratio:1;background:#1a1a2e;display:flex;align-items:center;justify-content:center;font-size:22px">🎮</div>')
     +'<div class="lb-card-body">'
       +'<div class="lb-card-name">'+esc(item.name)+'</div>'
       +(item.cat?'<div class="lb-card-cat">'+esc(item.cat)+'</div>':'')
-      +(hasPrice?'<div style="font-size:9px;font-weight:bold;color:var(--grn-b);margin-top:3px">$'+parseFloat(item.price).toFixed(2)+' USD</div>':'')
     +'</div>'
-    +'<div class="lb-card-actions">'
-      +(hasPrice
-        ?'<button id="lb-atc-'+safeKey+'" class="btn '+(inCart?'btn-grn':'btn-pur')+' btn-xs" onclick="lbAddToCart(\''+safeKey+'\',event)" style="font-size:8px;width:100%;padding:3px 0">'+(inCart?'✓ In Cart':'🛒 Add to Cart')+'</button>'
-        :(item.src==='n3d'||item.src==='cpl'
-          ?'<div style="display:flex;gap:2px;align-items:center;width:100%">'
-            +'<span style="font-size:7px;color:var(--txt-d);flex-shrink:0">$</span>'
-            +'<input type="number" min="0" step="0.01" placeholder="Price…" id="lb-price-'+safeKey+'"'
-              +' style="flex:1;width:0;background:var(--bg);border:1px solid var(--bdr2);color:var(--txt);padding:2px 3px;font-size:8px;border-radius:3px;font-family:inherit"'
-              +' onkeydown="if(event.key===\'Enter\')lbSetItemPrice(\''+safeSrc+'\',\''+safeSrcId+'\',\''+safeName+'\',\''+safeImg+'\',\''+safeCat+'\',this.value)"/>'
-            +'<button class="btn btn-pur btn-xs" onclick="lbSetItemPrice(\''+safeSrc+'\',\''+safeSrcId+'\',\''+safeName+'\',\''+safeImg+'\',\''+safeCat+'\',document.getElementById(\'lb-price-'+safeKey+'\').value)" style="font-size:7px;padding:2px 5px;flex-shrink:0">✓</button>'
-          +'</div>'
-          :'<span style="font-size:7px;color:var(--txt-d)">No price</span>'
-        )
-      )
+    +'<div class="lb-card-actions" style="flex-direction:column;gap:2px">'
+      +priceSection
+      +'<button id="lb-atc-'+safeKey+'" class="btn '+(inCart?'btn-grn':'btn-pur')+' btn-xs" onclick="lbAddToCart(\''+safeKey+'\',event)" style="font-size:8px;width:100%;padding:3px 0">'+(inCart?'✓ In Cart':'🛒 Add to Cart')+'</button>'
     +'</div>'
   +'</div>';
 }
