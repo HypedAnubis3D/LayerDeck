@@ -9,7 +9,7 @@ function anthropicMessages(prompt: string): Promise<string> {
     const apiKey = process.env.ANTHROPIC_API_KEY || "";
     const body = JSON.stringify({
       model: "claude-haiku-4-5",
-      max_tokens: 2048,
+      max_tokens: 4096,
       messages: [{ role: "user", content: prompt }],
     });
     const options = {
@@ -60,18 +60,22 @@ Today is ${today}. Find upcoming conventions, craft fairs, maker markets, anime/
 
 Focus on event type: ${eventType}
 
-Return ONLY a valid JSON array (no markdown, no explanation) of up to 8 events. Each event object must have these fields:
+CRITICAL RULES — follow these exactly:
+1. FUTURE DATES ONLY: Only include events that have not yet occurred as of ${today}. Do not include events whose dates have already passed. If an annual event's next occurrence date is unknown, use "TBD (annual)" but only include it if it plausibly occurs after ${today}.
+2. ACCURATE WEBSITES: Only include a website URL if you are confident it is the real, active official website. If you are not sure the URL is correct and working, leave website as an empty string "". Never guess or fabricate a URL — a missing website is far better than a broken link.
+3. DATE ACCURACY: If you are not certain of exact dates, say "TBD" or give a rough timeframe (e.g. "Fall 2026 (TBD)"). Do not invent specific dates you are not confident about.
+4. QUANTITY: Return up to 16 events — aim for the full 16 by including well-known recurring regional events even if you only know the approximate season. Spread across different event types when possible.
+
+Return ONLY a valid JSON array (no markdown, no explanation) of up to 16 events. Each event object must have these fields:
 - name: string (event name)
-- date: string (date or date range, e.g. "June 14-16, 2026" or "TBD")
+- date: string (future date or date range, e.g. "June 14-16, 2026", "Fall 2026 (TBD)", or "TBD (annual)")
 - venue: string (venue name and city)
 - type: string (one of: "Convention", "Craft Fair", "Maker Market", "Pop-up Market", "Anime/Comic Con", "Gaming Con", "Artisan Market")
 - attendance: string (estimated attendance, e.g. "~2,000" or "Unknown")
 - boothCost: string (typical vendor booth cost, e.g. "$150–$250/day" or "Unknown")
-- website: string (official website URL or empty string if unknown)
+- website: string (confirmed official website URL, or empty string "" if uncertain)
 - vendorDeadline: string (vendor/exhibitor application deadline, e.g. "March 15, 2026" — use "Unknown" if not known)
 - notes: string (any useful notes: indoor/outdoor, recurring, special requirements, etc.)
-
-If you don't know of specific confirmed events, include well-known recurring events in that region that typically occur annually. Be honest — use "TBD" for dates you're not certain about and note if the event is recurring/annual.
 
 Only return the raw JSON array, starting with [ and ending with ].`;
 

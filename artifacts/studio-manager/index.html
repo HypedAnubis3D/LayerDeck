@@ -15274,7 +15274,7 @@ function _onReady(){
   setTimeout(checkShopifyOAuthCallback,700);
   // Service worker + push notifications
   setTimeout(initPushNotifications,1000);
-  // Discord daily report scheduler (fires at 6AM)
+  // Discord daily report scheduler (fires at 11:30PM Eastern)
   scheduleDailyDiscordReport();
   // Square webhook order polling — check every 30s for orders received server-side
   setTimeout(function(){pollSquareOrders();setInterval(pollSquareOrders,30000);},3000);
@@ -18078,7 +18078,7 @@ function renderDiscord(){
     '</div>'+
     '<div class="printer-card">'+
       '<div style="font-family:\'Orbitron\',monospace;font-size:9px;font-weight:700;color:var(--gold-b);letter-spacing:2px;margin-bottom:6px">📊 DAILY REPORT</div>'+
-      '<div style="font-size:7px;color:var(--txt-d);margin-bottom:10px">The daily summary posts to #daily-report automatically at <b>6AM Eastern</b> every day via the server — no browser tab needed. Use the button below to send it right now.</div>'+
+      '<div style="font-size:7px;color:var(--txt-d);margin-bottom:10px">The daily summary posts to #daily-report automatically at <b>11:30PM Eastern</b> every day via the server — no browser tab needed. Use the button below to send it right now.</div>'+
       '<button class="btn btn-org btn-sm" style="width:100%;padding:7px" onclick="sendDailyReportNow()">Send Report Now</button>'+
     '</div>'+
     '</div>';
@@ -18103,7 +18103,7 @@ const DISCORD_DEFAULT_CHANNELS=[
   {key:'printer-status',  name:'#printer-status',    desc:'Printer connectivity alerts (unreachable, back online, MQTT errors)', url:'',enabled:true},
   {key:'orders',          name:'#orders',             desc:'New Shopify and Square order alerts', url:'',enabled:true},
   {key:'stock-alerts',    name:'#stock-alerts',       desc:'Low stock & spool alerts',           url:'',enabled:true},
-  {key:'daily-report',    name:'#daily-report',       desc:'Daily summary at 6AM Eastern (server-side — no tab needed)', url:'',enabled:true},
+  {key:'daily-report',    name:'#daily-report',       desc:'Daily summary at 11:30PM Eastern (server-side — no tab needed)', url:'',enabled:true},
   {key:'convention-sales',name:'#convention-sales',   desc:'Real-time convention sales feed',    url:'',enabled:true},
   {key:'pi-health',       name:'#pi-health',          desc:'Pi service monitoring (5-min)',       url:'',enabled:true},
   {key:'bambu-restock',   name:'#bambu-restock',      desc:'Bambu filament restock alerts',      url:'',enabled:true},

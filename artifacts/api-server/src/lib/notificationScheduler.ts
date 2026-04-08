@@ -299,17 +299,17 @@ export async function sendDailyDiscordReport() {
 
 // ── Schedule helpers ───────────────────────────────────────────────────────────
 
-function msUntilNext1130amEastern(): number {
+function msUntilNext1130pmEastern(): number {
   const now = new Date();
   const eastern = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
   const next = new Date(eastern);
-  next.setHours(11, 30, 0, 0);
+  next.setHours(23, 30, 0, 0);
   if (next <= eastern) next.setDate(next.getDate() + 1);
   return next.getTime() - eastern.getTime();
 }
 
 function scheduleDailyReport() {
-  const delay = msUntilNext1130amEastern();
+  const delay = msUntilNext1130pmEastern();
   logger.info({ hoursUntil: Math.round(delay / 3_600_000 * 10) / 10 }, "Daily Discord report scheduled");
   setTimeout(function tick() {
     sendDailyDiscordReport().catch(err => logger.error({ err }, "Daily report error"));
