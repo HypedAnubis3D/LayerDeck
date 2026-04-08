@@ -18003,10 +18003,9 @@ function updatePrinterCardLive(name,data,state){
     // Debug: show raw tray_now value
     const tnEl=document.getElementById('pi-'+id+'-traynow');
     if(tnEl){
-      const trayKeys=Object.keys(data).filter(k=>k.toLowerCase().includes('tray'));
-      const amsKeys=data.ams?Object.keys(data.ams).filter(k=>k.toLowerCase().includes('tray')):[];
-      const amsUnit0Keys=data.ams&&data.ams.ams&&data.ams.ams[0]?Object.keys(data.ams.ams[0]):[];
-      tnEl.textContent='top-tray:['+trayKeys.map(k=>k+'='+JSON.stringify(data[k])).join(',')+'] ams-tray:['+amsKeys.map(k=>k+'='+JSON.stringify(data.ams[k])).join(',')+'] u0keys:['+amsUnit0Keys.join(',')+']';
+      const trayKeys=Object.keys(data).filter(k=>k.toLowerCase().includes('tray')||k==='ams_status'||k==='ams_rfid_status');
+      const amsAllKeys=data.ams?Object.keys(data.ams).filter(k=>!k.startsWith('ams')||k.includes('tray')||k==='ams'):[];
+      tnEl.textContent='TOP:['+trayKeys.map(k=>k+'='+JSON.stringify(data[k])).join(' | ')+'] AMS:['+amsAllKeys.map(k=>k+'='+JSON.stringify(data.ams[k])).join(' | ')+']';
     }
   }
   // Dashboard mini-AMS grid — update in-place so colors sync without full re-render

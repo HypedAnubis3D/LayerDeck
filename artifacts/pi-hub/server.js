@@ -248,12 +248,23 @@ PRINTERS.forEach(printer => {
         const newAms  = mqttPayload.print.ams;
         let keepAms;
         if (newAms && newAms.ams && newAms.ams.length > 0) {
-          // Full AMS data — use it wholesale
-          keepAms = newAms;
+          // Full AMS data — copy it but preserve tray_now/pre/tar from previous state
+          // if the new pushall omits them (Bambu only sends tray_now during filament changes,
+          // not necessarily in every periodic pushall)
+          keepAms = { ...newAms };
+          if (keepAms.tray_now == null && prevAms && prevAms.tray_now != null) {
+            keepAms.tray_now = prevAms.tray_now;
+            if (prevAms.tray_pre != null) keepAms.tray_pre = prevAms.tray_pre;
+            if (prevAms.tray_tar != null) keepAms.tray_tar = prevAms.tray_tar;
+          }
+          if (keepAms.tray_now != null) console.log('[TRAY]', printer.name, 'pushall tray_now='+keepAms.tray_now);
         } else if (prevAms && newAms) {
           // Incremental update — keep previous tray data but merge tray_now / tray_pre / tray_tar
           keepAms = { ...prevAms };
-          if (newAms.tray_now != null) keepAms.tray_now = newAms.tray_now;
+          if (newAms.tray_now != null) {
+            keepAms.tray_now = newAms.tray_now;
+            console.log('[TRAY]', printer.name, 'incremental tray_now='+newAms.tray_now);
+          }
           if (newAms.tray_pre != null) keepAms.tray_pre = newAms.tray_pre;
           if (newAms.tray_tar != null) keepAms.tray_tar = newAms.tray_tar;
         } else {
