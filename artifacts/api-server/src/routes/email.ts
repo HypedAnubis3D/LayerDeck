@@ -1,5 +1,10 @@
 import { Router } from "express";
 import nodemailer from "nodemailer";
+import path from "path";
+
+// Inline logo attachment — travels inside the email, no external URL needed
+const LOGO_PATH = path.join(process.cwd(), "..", "studio-manager", "public", "ha3d-logo.png");
+const LOGO_CID = "ha3d-logo@hypedanubis3d";
 
 const router = Router();
 
@@ -168,15 +173,13 @@ router.post("/catalog-order", async (req, res) => {
       ? `<div style="background:#1a1a2e;border-left:3px solid #c9a227;border-radius:0 6px 6px 0;padding:10px 14px;margin-bottom:16px;font-size:12px;color:#94a3b8;font-style:italic">📝 Notes: ${notes}</div>`
       : "";
 
-    const logoUrl = "https://layerstack.replit.app/ha3d-logo.png";
-
     const html = `<!DOCTYPE html>
 <html>
 <head><meta charset="utf-8"><title>Order Confirmed</title></head>
 <body style="margin:0;padding:0;background:#0d0d1a;font-family:Arial,sans-serif">
   <div style="max-width:540px;margin:0 auto;padding:28px 16px">
     <div style="text-align:center;margin-bottom:28px">
-      <img src="${logoUrl}" alt="HypedAnubis3D" width="160" style="max-width:160px;height:auto;display:block;margin:0 auto 8px"/>
+      <img src="cid:${LOGO_CID}" alt="HypedAnubis3D" width="160" style="max-width:160px;height:auto;display:block;margin:0 auto 8px"/>
       <div style="font-size:9px;color:#555;letter-spacing:2px;margin-top:2px">ORDER CONFIRMED</div>
     </div>
     <div style="background:#141420;border:1px solid #2a2a40;border-radius:12px;padding:28px">
@@ -233,6 +236,7 @@ router.post("/catalog-order", async (req, res) => {
       subject: `Your HypedAnubis3D order is confirmed! ✅ Ships in 1-2 weeks`,
       html,
       text: `${greeting}\n\nThank you for your order${conventionName ? ` at ${conventionName}` : ""}!\n\nYour items will be custom 3D printed and shipped within 1-2 weeks.\n\nItems:\n${items.map((i) => `${i.name} ×${i.qty} — $${(parseFloat(String(i.price)) * parseInt(String(i.qty))).toFixed(2)}`).join("\n")}\n\nTotal: $${total} (${methodLabel})\n\n${addrLines.length > 0 ? `Shipping to:\n${addrLines.join("\n")}\n\n` : ""}We'll send you a tracking number as soon as it ships!\n\nThanks for supporting HypedAnubis3D!`,
+      attachments: [{ filename: "ha3d-logo.png", path: LOGO_PATH, cid: LOGO_CID }],
     });
 
     res.json({ success: true });
@@ -286,7 +290,6 @@ router.post("/shipping", async (req, res) => {
 
     const firstName = (customerName || "").split(" ")[0] || "there";
     const itemSummary = (items || []).map(i => `${i.name}${i.qty > 1 ? ` ×${i.qty}` : ""}`).join(", ");
-    const logoUrl = "https://layerstack.replit.app/ha3d-logo.png";
 
     const html = `<!DOCTYPE html>
 <html>
@@ -295,7 +298,7 @@ router.post("/shipping", async (req, res) => {
   <!-- Hero gradient banner -->
   <div style="background:linear-gradient(135deg,#0d2b1a 0%,#0a1f2e 50%,#1a0d2e 100%);padding:36px 20px 0">
     <div style="max-width:540px;margin:0 auto;text-align:center">
-      <img src="${logoUrl}" alt="HypedAnubis3D" width="120" style="max-width:120px;height:auto;display:block;margin:0 auto 20px"/>
+      <img src="cid:${LOGO_CID}" alt="HypedAnubis3D" width="120" style="max-width:120px;height:auto;display:block;margin:0 auto 20px"/>
       <!-- Big rocket animation substitute -->
       <div style="font-size:52px;margin-bottom:8px">🚀</div>
       <div style="font-size:26px;font-weight:900;color:#ffffff;letter-spacing:2px;text-transform:uppercase;line-height:1.2;font-family:Georgia,serif">It's on its way!</div>
@@ -355,6 +358,7 @@ router.post("/shipping", async (req, res) => {
       subject: `🚀 Your order is on its way! Tracking: ${trackingNumber}`,
       html,
       text: `Hey ${firstName}!\n\nGreat news — your HypedAnubis3D order has shipped!\n\n${carrier} Tracking: ${trackingNumber}\nTrack it here: ${trackingUrl}\n\n${shippingAddress ? `Delivering to: ${shippingAddress}\n\n` : ""}Tag us on Instagram when it arrives: @hypedanubis3d\n\nQuestions? Just reply to this email.\n\nHypedAnubis3D`,
+      attachments: [{ filename: "ha3d-logo.png", path: LOGO_PATH, cid: LOGO_CID }],
     });
 
     res.json({ success: true });
