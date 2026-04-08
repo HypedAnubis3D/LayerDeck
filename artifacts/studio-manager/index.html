@@ -18347,7 +18347,7 @@ function renderPrinters(){
     return;
   }
 
-  const printerCards=printerRecords.map(p=>{
+  const printerCards=printerRecords.map(p=>{try{
     const amsUnits=p.amsUnits!==undefined?p.amsUnits:1;
     const totalSlots=amsUnits*4;
     const expanded=p._expanded||false;
@@ -18505,6 +18505,7 @@ function renderPrinters(){
         '</div>'+
       '</div>'+
     '</div>';
+  }catch(e){console.error('renderPrinters card error',p&&p.name,e);return '<div class="printer-card" style="border:1px solid var(--red-d);margin-bottom:8px;padding:10px"><span style="color:var(--red);font-size:9px">⚠ '+(p?esc(p.name):'?')+' render error: '+e.message+'</span></div>';}
   }).join('');
 
   g.innerHTML=piCard+'<div style="margin-top:6px"><button class="btn btn-org btn-sm" onclick="openAddPrinter()">+ Add Printer</button></div>'+printerCards;
