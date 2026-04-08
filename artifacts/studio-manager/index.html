@@ -16890,8 +16890,7 @@ function renderAmsSwatches(amsData,vtTray,printerName,trayNow){
 
   // ── AMS ──────────────────────────────────────────────────────────────
   const activeTrayId=trayNow!=null?String(trayNow):(amsData.tray_now!=null?String(amsData.tray_now):'');
-  let html='<div style="display:flex;gap:3px;flex-wrap:wrap;align-items:center">'
-    +'<span style="font-size:5px;color:var(--txt-d);font-family:monospace" title="tray_now debug">[T:'+activeTrayId+']</span>';
+  let html='<div style="display:flex;gap:3px;flex-wrap:wrap;align-items:center">';
   let anyFilled=false;
   amsData.ams.forEach((unit,ui)=>{
     const trays=unit.tray||[];
@@ -18011,13 +18010,6 @@ function updatePrinterCardLive(name,data,state){
   {
     const amsHtml=renderAmsSwatches(data.ams,data.vt_tray,name,data.tray_now);
     allId('ams').forEach(el=>{el.innerHTML=amsHtml;});
-    // Debug: show raw tray_now value
-    const tnEl=document.getElementById('pi-'+id+'-traynow');
-    if(tnEl){
-      const trayKeys=Object.keys(data).filter(k=>k.toLowerCase().includes('tray')||k==='ams_status'||k==='ams_rfid_status');
-      const amsAllKeys=data.ams?Object.keys(data.ams).filter(k=>!k.startsWith('ams')||k.includes('tray')||k==='ams'):[];
-      tnEl.textContent='TOP:['+trayKeys.map(k=>k+'='+JSON.stringify(data[k])).join(' | ')+'] AMS:['+amsAllKeys.map(k=>k+'='+JSON.stringify(data.ams[k])).join(' | ')+']';
-    }
   }
   // Dashboard mini-AMS grid — update in-place so colors sync without full re-render
   const dashAmsEl=document.getElementById('dash-ams-'+id);
@@ -18489,7 +18481,6 @@ function renderPrinters(){
             '<div style="min-width:0"><div style="font-size:6px;color:var(--txt-d);letter-spacing:1px">LAYERS</div><div style="font-size:8px;color:var(--txt-b);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" id="pi-'+id+'-layer">—</div></div>'+
           '</div>'+
           '<div style="margin-bottom:6px" id="pi-'+id+'-ams"></div>'+
-          '<div id="pi-'+id+'-traynow" style="font-size:5px;color:var(--txt-d);font-family:monospace;margin-bottom:3px"></div>'+
           filPlanHtml+
           '<div id="pi-'+id+'-obj-info" style="display:none;font-size:7px;color:var(--txt-d);margin-bottom:5px"></div>'+
           '<div style="display:flex;gap:5px;flex-wrap:wrap">'+
