@@ -1158,6 +1158,16 @@ body.light-mode ::-webkit-scrollbar-thumb{background:var(--bdr2);}
 .evt-manage-tabs{display:flex;gap:3px;padding:8px 12px;background:var(--bg);border-bottom:1px solid var(--bdr2);overflow-x:auto;flex-shrink:0;}
 .evt-tab{padding:5px 11px;border-radius:5px;border:1px solid var(--bdr2);background:none;color:var(--txt-d);font-size:7.5px;cursor:pointer;white-space:nowrap;font-family:inherit;}
 .evt-tab.active{background:var(--pur-d);border-color:var(--pur);color:var(--pur-b);}
+.lb-src-btn{padding:4px 10px;border-radius:5px;border:1px solid var(--bdr2);background:none;color:var(--txt-d);font-size:7.5px;cursor:pointer;white-space:nowrap;font-family:inherit;}
+.lb-src-btn.active{background:var(--gold-d,#2a220a);border-color:var(--gold);color:var(--gold);}
+.lb-card{background:var(--surf);border:1px solid var(--bdr);border-radius:8px;overflow:hidden;display:flex;flex-direction:column;cursor:pointer;transition:border-color .15s;}
+.lb-card:hover{border-color:var(--gold);}
+.lb-card img{width:100%;aspect-ratio:1;object-fit:cover;background:#111;}
+.lb-card-body{padding:7px 8px;flex:1;display:flex;flex-direction:column;gap:3px;}
+.lb-card-name{font-size:8px;font-weight:700;color:var(--txt-b);line-height:1.2;}
+.lb-card-cat{font-size:7px;color:var(--txt-d);text-transform:capitalize;}
+.lb-card-actions{display:flex;gap:4px;padding:0 8px 8px;margin-top:auto;}
+.lb-wishlisted{color:var(--red)!important;}
 .evt-manage-body{flex:1;overflow-y:auto;padding:14px;}
 .evt-section{display:none;}.evt-section.active{display:block;}
 .pack-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin-top:10px;}
@@ -2847,6 +2857,7 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
     <button class="evt-tab"        id="etab-sales"     onclick="setEvtSection('sales')">💰 Day Sales</button>
     <button class="evt-tab"        id="etab-reconcile" onclick="setEvtSection('reconcile')">🔄 Reconcile</button>
     <button class="evt-tab"        id="etab-qr"        onclick="setEvtSection('qr')">🏷 Price Tags</button>
+    <button class="evt-tab"        id="etab-lookbook"  onclick="setEvtSection('lookbook')">🛍 Catalog</button>
   </div>
   <div class="evt-manage-body">
     <!-- OVERVIEW -->
@@ -2964,6 +2975,51 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
       </div>
       <div style="font-size:7px;color:var(--txt-d);margin-bottom:10px">QR codes link to your Shopify product page. Items without a Shopify handle link to a product search.</div>
       <div class="qr-grid" id="em-qr-grid"></div>
+    </div>
+    <!-- CATALOG LOOKBOOK -->
+    <div class="evt-section" id="esec-lookbook">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+        <div style="font-size:9px;color:var(--txt-b);font-weight:bold;margin-right:4px">🛍 Product Catalog</div>
+        <!-- Source tabs -->
+        <div style="display:flex;gap:4px;flex:1">
+          <button class="lb-src-btn active" id="lb-src-n3d" onclick="lbSetSource('n3d')">N3D Melbourne</button>
+          <button class="lb-src-btn" id="lb-src-cpl" onclick="lbSetSource('cpl')">CPL3D</button>
+          <button class="lb-src-btn" id="lb-src-manual" onclick="lbSetSource('manual')">My Entries</button>
+        </div>
+        <!-- Wishlist toggle -->
+        <button id="lb-wishlist-btn" class="btn btn-ghost btn-sm" onclick="lbToggleWishlist()" style="font-size:8px;padding:3px 8px">♡ Wishlist (<span id="lb-wishlist-count">0</span>)</button>
+      </div>
+      <!-- Search + filter bar -->
+      <div id="lb-filters" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">
+        <input type="text" id="lb-search" placeholder="🔍 Search designs…" oninput="lbOnSearch()" autocomplete="off"
+          style="flex:1;min-width:120px;background:var(--bg);border:1px solid var(--bdr2);color:var(--txt);padding:5px 9px;font-family:'Share Tech Mono',monospace;font-size:9px;border-radius:4px;box-sizing:border-box"/>
+        <select id="lb-filter-cat" onchange="lbLoad(1)" style="background:var(--bg);border:1px solid var(--bdr2);color:var(--txt);padding:4px 8px;font-size:8px;border-radius:4px;font-family:inherit">
+          <option value="">All Categories</option>
+        </select>
+        <select id="lb-sort" onchange="lbLoad(1)" style="background:var(--bg);border:1px solid var(--bdr2);color:var(--txt);padding:4px 8px;font-size:8px;border-radius:4px;font-family:inherit">
+          <option value="created_at|desc">Newest First</option>
+          <option value="name|asc">A → Z</option>
+          <option value="name|desc">Z → A</option>
+        </select>
+      </div>
+      <!-- Manual entry form (hidden by default) -->
+      <div id="lb-manual-form" style="display:none;background:var(--surf);border:1px solid var(--bdr);border-radius:8px;padding:12px;margin-bottom:12px">
+        <div style="font-size:8px;font-weight:bold;color:var(--txt-b);margin-bottom:8px">Add Manual Entry</div>
+        <div class="fr2">
+          <div class="field"><div class="fl">Name</div><input type="text" id="lb-m-name" placeholder="Design name" style="font-size:8px"/></div>
+          <div class="field"><div class="fl">Category</div><input type="text" id="lb-m-cat" placeholder="character, poke-ball…" style="font-size:8px"/></div>
+        </div>
+        <div class="fr2">
+          <div class="field"><div class="fl">Image URL</div><input type="text" id="lb-m-img" placeholder="https://…" style="font-size:8px"/></div>
+          <div class="field"><div class="fl">Product URL (QR)</div><input type="text" id="lb-m-url" placeholder="https://…" style="font-size:8px"/></div>
+        </div>
+        <div class="field"><div class="fl">Description</div><textarea id="lb-m-desc" rows="2" placeholder="Optional description" style="font-size:8px;width:100%;box-sizing:border-box;resize:vertical"></textarea></div>
+        <button class="btn btn-pur btn-sm" onclick="lbSaveManual()" style="margin-top:4px">Save Entry</button>
+      </div>
+      <!-- Grid -->
+      <div id="lb-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px"></div>
+      <!-- Pagination -->
+      <div id="lb-pagination" style="display:flex;justify-content:center;gap:6px;margin-top:14px;flex-wrap:wrap"></div>
     </div>
   </div>
 </div>
@@ -12768,9 +12824,11 @@ function closeEventManage(){
 }
 function setEvtSection(s){
   evtSection=s;
-  ['overview','packlist','checklist','sales','reconcile','qr'].forEach(function(k){
-    document.getElementById('esec-'+k).classList.toggle('active',k===s);
-    document.getElementById('etab-'+k).classList.toggle('active',k===s);
+  ['overview','packlist','checklist','sales','reconcile','qr','lookbook'].forEach(function(k){
+    var sec=document.getElementById('esec-'+k);
+    var tab=document.getElementById('etab-'+k);
+    if(sec) sec.classList.toggle('active',k===s);
+    if(tab) tab.classList.toggle('active',k===s);
   });
   if(s==='overview') renderEvtOverview();
   else if(s==='packlist') renderPackList();
@@ -12778,6 +12836,7 @@ function setEvtSection(s){
   else if(s==='sales'){renderDaySales();renderConvCart();}
   else if(s==='reconcile') renderReconcile();
   else if(s==='qr') renderQRTags();
+  else if(s==='lookbook') lbInit();
 }
 
 // ── Overview ──
@@ -13862,6 +13921,309 @@ function printQRTags(){
   win.document.write(html);
   win.document.close();
   setTimeout(function(){win.print();},600);
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Section 25 — Convention Catalog Lookbook
+// Sources: N3D Melbourne API, CPL3D API, Manual entries (stored per-convention)
+// All API calls go through /api/catalog/* proxy to keep keys server-side.
+// ──────────────────────────────────────────────────────────────────────────────
+var _lbSource='n3d';            // 'n3d' | 'cpl' | 'manual'
+var _lbPage=1;
+var _lbTotal=0;
+var _lbLimit=24;
+var _lbLoading=false;
+var _lbSearchTimer=null;
+var _lbWishlistOnly=false;
+var _lbWishlist={};             // { id: {source,item} }
+var _lbManualEntries={};        // { conventionId: [entry,...] }
+var _lbN3dCategories=['character','chibi','funko','accessory'];
+var _lbCplTypes=['poke-ball'];  // populated after first fetch
+
+// Persistent storage for wishlist + manual entries
+function _lbSave(){
+  try{localStorage.setItem('ha3d_lb_wishlist',JSON.stringify(_lbWishlist));}catch(_){}
+  try{localStorage.setItem('ha3d_lb_manual',JSON.stringify(_lbManualEntries));}catch(_){}
+}
+function _lbLoad(){
+  try{_lbWishlist=JSON.parse(localStorage.getItem('ha3d_lb_wishlist')||'{}');}catch(_){_lbWishlist={};}
+  try{_lbManualEntries=JSON.parse(localStorage.getItem('ha3d_lb_manual')||'{}');}catch(_){_lbManualEntries={};}
+}
+_lbLoad();
+
+function lbInit(){
+  _lbSource='n3d';
+  _lbPage=1;
+  _lbWishlistOnly=false;
+  _lbSyncWishlistBtn();
+  _lbSetSourceUI('n3d');
+  _lbPopulateCategories();
+  lbLoad(1);
+}
+
+function lbSetSource(src){
+  _lbSource=src;
+  _lbPage=1;
+  _lbWishlistOnly=false;
+  _lbSetSourceUI(src);
+  _lbPopulateCategories();
+  // Show manual entry form only on manual tab
+  var mf=document.getElementById('lb-manual-form');
+  if(mf) mf.style.display=src==='manual'?'block':'none';
+  lbLoad(1);
+}
+
+function _lbSetSourceUI(src){
+  ['n3d','cpl','manual'].forEach(function(s){
+    var b=document.getElementById('lb-src-'+s);
+    if(b) b.classList.toggle('active',s===src);
+  });
+  // Show/hide sort (manual doesn't use it)
+  var sb=document.getElementById('lb-sort');
+  if(sb) sb.style.display=src==='manual'?'none':'';
+  var fb=document.getElementById('lb-filter-cat');
+  if(fb) fb.style.display=src==='manual'?'none':'';
+}
+
+function _lbPopulateCategories(){
+  var sel=document.getElementById('lb-filter-cat');
+  if(!sel) return;
+  sel.innerHTML='<option value="">All Categories</option>';
+  var cats=_lbSource==='n3d'?_lbN3dCategories:_lbSource==='cpl'?_lbCplTypes:[];
+  cats.forEach(function(c){
+    var o=document.createElement('option');
+    o.value=c;o.textContent=c.replace(/-/g,' ').replace(/\b\w/g,function(l){return l.toUpperCase();});
+    sel.appendChild(o);
+  });
+}
+
+function lbOnSearch(){
+  clearTimeout(_lbSearchTimer);
+  _lbSearchTimer=setTimeout(function(){lbLoad(1);},400);
+}
+
+async function lbLoad(page){
+  if(_lbLoading) return;
+  _lbLoading=true;
+  _lbPage=page||_lbPage;
+  var grid=document.getElementById('lb-grid');
+  var pag=document.getElementById('lb-pagination');
+  if(!grid){_lbLoading=false;return;}
+  grid.innerHTML='<div style="text-align:center;color:var(--txt-d);font-size:8px;padding:24px;grid-column:1/-1">Loading…</div>';
+  if(pag) pag.innerHTML='';
+
+  if(_lbSource==='manual'){
+    _lbLoading=false;
+    _lbRenderManual();
+    return;
+  }
+
+  var search=(document.getElementById('lb-search')?.value||'').trim();
+  var cat=document.getElementById('lb-filter-cat')?.value||'';
+  var sortVal=document.getElementById('lb-sort')?.value||'created_at|desc';
+  var sortParts=sortVal.split('|');
+  var sort=sortParts[0],sortDir=sortParts[1];
+
+  try{
+    var qs=new URLSearchParams({page:_lbPage,limit:_lbLimit,sort:sort,sortDir:sortDir});
+    if(search) qs.set('search',search);
+    if(cat){
+      if(_lbSource==='n3d') qs.set('category',cat);
+      else qs.set('type',cat);
+    }
+    var r=await fetch('/api/catalog/'+_lbSource+'?'+qs.toString());
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    var data=await r.json();
+
+    var items=[];
+    var total=0;
+    if(_lbSource==='n3d'){
+      items=(data.data||[]);
+      total=(data.pagination?.total)||0;
+      // Extract unique categories from first page for filter dropdown
+      if(_lbPage===1){
+        var cats=items.map(function(i){return i.category;}).filter(Boolean);
+        var uniq=[...new Set(cats)].sort();
+        if(uniq.length) { _lbN3dCategories=uniq; _lbPopulateCategories(); }
+      }
+    } else {
+      items=(data.models||[]);
+      total=(data.total)||0;
+      if(_lbPage===1){
+        var types=items.map(function(i){return i.type;}).filter(Boolean);
+        var uniqT=[...new Set(types)].sort();
+        if(uniqT.length){ _lbCplTypes=uniqT; _lbPopulateCategories(); }
+      }
+    }
+    _lbTotal=total;
+
+    if(_lbWishlistOnly){
+      items=items.filter(function(i){ return !!_lbWishlist[_lbSource+'|'+(i.slug||i.id)]; });
+    }
+
+    if(!items.length){
+      grid.innerHTML='<div style="text-align:center;color:var(--txt-d);font-size:8px;padding:24px;grid-column:1/-1">No designs found</div>';
+      _lbLoading=false;
+      return;
+    }
+
+    grid.innerHTML=items.map(function(item){return _lbCardHtml(item,_lbSource);}).join('');
+    _lbRenderPagination(total);
+  }catch(e){
+    grid.innerHTML='<div style="text-align:center;color:var(--red);font-size:8px;padding:24px;grid-column:1/-1">Failed to load — '+esc(e.message)+'</div>';
+  }
+  _lbLoading=false;
+}
+
+function _lbCardHtml(item,src){
+  var id=item.slug||item.id;
+  var key=src+'|'+id;
+  var wishlisted=!!_lbWishlist[key];
+  var name=item.title||item.name||'Unknown';
+  var cat=item.category||item.type||'';
+  var img=item.image_url||item.thumbnail||'';
+  var productUrl='';
+  if(src==='n3d') productUrl='https://www.n3dmelbourne.com/designs/'+encodeURIComponent(id);
+  else if(src==='cpl') productUrl='https://www.cpl3d.com/models/'+encodeURIComponent(id);
+  var qrUrl=productUrl?'https://api.qrserver.com/v1/create-qr-code/?size=160x160&color=000000&bgcolor=ffffff&data='+encodeURIComponent(productUrl):'';
+  var wHtml=wishlisted
+    ?'<button class="btn btn-ghost btn-xs lb-wishlisted" onclick="lbWishlist(\''+esc(key)+'\',this,event)" style="font-size:8px;padding:2px 6px" title="Remove from wishlist">♥</button>'
+    :'<button class="btn btn-ghost btn-xs" onclick="lbWishlist(\''+esc(key)+'\',this,event)" style="font-size:8px;padding:2px 6px" title="Add to wishlist">♡</button>';
+  var qrBtn=qrUrl?'<button class="btn btn-ghost btn-xs" onclick="lbShowQR(\''+esc(productUrl)+'\',\''+esc(name)+'\',event)" style="font-size:8px;padding:2px 6px" title="Show QR code">⬡ QR</button>':'';
+  var linkBtn=productUrl?'<a href="'+esc(productUrl)+'" target="_blank" rel="noopener" onclick="event.stopPropagation()" class="btn btn-ghost btn-xs" style="font-size:8px;padding:2px 6px" title="View online">↗</a>':'';
+  return '<div class="lb-card" onclick="lbCardDetail(\''+esc(key)+'\',\''+src+'\')">'
+    +(img?'<img src="'+esc(img)+'" alt="'+esc(name)+'" loading="lazy" onerror="this.style.display=\'none\'">'
+      :'<div style="width:100%;aspect-ratio:1;background:#1a1a2e;display:flex;align-items:center;justify-content:center;font-size:22px">🎮</div>')
+    +'<div class="lb-card-body">'
+      +'<div class="lb-card-name">'+esc(name)+'</div>'
+      +(cat?'<div class="lb-card-cat">'+esc(cat)+'</div>':'')
+    +'</div>'
+    +'<div class="lb-card-actions">'+wHtml+qrBtn+linkBtn+'</div>'
+  +'</div>';
+}
+
+function _lbRenderManual(){
+  var conv=getEvt();
+  var cid=conv?conv.id:'__global';
+  var entries=(_lbManualEntries[cid]||[]);
+  var grid=document.getElementById('lb-grid');
+  if(!grid) return;
+  if(!entries.length){
+    grid.innerHTML='<div style="text-align:center;color:var(--txt-d);font-size:8px;padding:24px;grid-column:1/-1">No manual entries yet — add one above</div>';
+    return;
+  }
+  var search=(document.getElementById('lb-search')?.value||'').trim().toLowerCase();
+  var shown=search?entries.filter(function(e){return (e.name||'').toLowerCase().includes(search);}):entries;
+  grid.innerHTML=shown.map(function(e,i){
+    var key='manual|'+i;
+    var wishlisted=!!_lbWishlist[key];
+    var qrUrl=e.url?'https://api.qrserver.com/v1/create-qr-code/?size=160x160&color=000000&bgcolor=ffffff&data='+encodeURIComponent(e.url):'';
+    var wHtml=wishlisted
+      ?'<button class="btn btn-ghost btn-xs lb-wishlisted" onclick="lbWishlist(\''+key+'\',this,event)" style="font-size:8px;padding:2px 6px">♥</button>'
+      :'<button class="btn btn-ghost btn-xs" onclick="lbWishlist(\''+key+'\',this,event)" style="font-size:8px;padding:2px 6px">♡</button>';
+    var delBtn='<button class="btn btn-ghost btn-xs" onclick="lbDeleteManual('+i+',\''+esc(cid)+'\',event)" style="font-size:8px;padding:2px 6px;color:var(--red)">✕</button>';
+    var qrBtn=qrUrl?'<button class="btn btn-ghost btn-xs" onclick="lbShowQR(\''+esc(e.url)+'\',\''+esc(e.name||'')+'\',event)" style="font-size:8px;padding:2px 6px">⬡ QR</button>':'';
+    var linkBtn=e.url?'<a href="'+esc(e.url)+'" target="_blank" rel="noopener" onclick="event.stopPropagation()" class="btn btn-ghost btn-xs" style="font-size:8px;padding:2px 6px">↗</a>':'';
+    return '<div class="lb-card">'
+      +(e.img?'<img src="'+esc(e.img)+'" alt="'+esc(e.name||'')+'" loading="lazy" onerror="this.style.display=\'none\'">':'<div style="width:100%;aspect-ratio:1;background:#1a1a2e;display:flex;align-items:center;justify-content:center;font-size:22px">🎮</div>')
+      +'<div class="lb-card-body"><div class="lb-card-name">'+esc(e.name||'Untitled')+'</div>'+(e.cat?'<div class="lb-card-cat">'+esc(e.cat)+'</div>':'')+'</div>'
+      +'<div class="lb-card-actions">'+wHtml+qrBtn+linkBtn+delBtn+'</div>'
+    +'</div>';
+  }).join('');
+}
+
+function lbSaveManual(){
+  var name=(document.getElementById('lb-m-name')?.value||'').trim();
+  if(!name){toast('Name required','','warning');return;}
+  var cat=(document.getElementById('lb-m-cat')?.value||'').trim();
+  var img=(document.getElementById('lb-m-img')?.value||'').trim();
+  var url=(document.getElementById('lb-m-url')?.value||'').trim();
+  var desc=(document.getElementById('lb-m-desc')?.value||'').trim();
+  var conv=getEvt();
+  var cid=conv?conv.id:'__global';
+  if(!_lbManualEntries[cid]) _lbManualEntries[cid]=[];
+  _lbManualEntries[cid].push({name,cat,img,url,desc,ts:Date.now()});
+  _lbSave();
+  ['lb-m-name','lb-m-cat','lb-m-img','lb-m-url','lb-m-desc'].forEach(function(id){var el=document.getElementById(id);if(el)el.value='';});
+  toast('Entry saved','','success',2500);
+  _lbRenderManual();
+}
+
+function lbDeleteManual(idx,cid,e){
+  if(e) e.stopPropagation();
+  if(!_lbManualEntries[cid]) return;
+  _lbManualEntries[cid].splice(idx,1);
+  _lbSave();
+  _lbRenderManual();
+}
+
+function lbWishlist(key,btn,e){
+  if(e) e.stopPropagation();
+  if(_lbWishlist[key]){
+    delete _lbWishlist[key];
+    if(btn){btn.textContent='♡';btn.classList.remove('lb-wishlisted');}
+  } else {
+    _lbWishlist[key]={ts:Date.now()};
+    if(btn){btn.textContent='♥';btn.classList.add('lb-wishlisted');}
+  }
+  _lbSave();
+  _lbSyncWishlistBtn();
+}
+
+function _lbSyncWishlistBtn(){
+  var cnt=Object.keys(_lbWishlist).length;
+  var el=document.getElementById('lb-wishlist-count');
+  if(el) el.textContent=cnt;
+  var btn=document.getElementById('lb-wishlist-btn');
+  if(btn) btn.style.color=_lbWishlistOnly?'var(--red)':'';
+}
+
+function lbToggleWishlist(){
+  _lbWishlistOnly=!_lbWishlistOnly;
+  var btn=document.getElementById('lb-wishlist-btn');
+  if(btn) btn.style.color=_lbWishlistOnly?'var(--red)':'';
+  lbLoad(1);
+}
+
+function _lbRenderPagination(total){
+  var pag=document.getElementById('lb-pagination');
+  if(!pag) return;
+  var pages=Math.ceil(total/_lbLimit);
+  if(pages<=1){pag.innerHTML='';return;}
+  var html='';
+  var start=Math.max(1,_lbPage-2);
+  var end=Math.min(pages,_lbPage+2);
+  if(_lbPage>1) html+='<button class="btn btn-ghost btn-sm" onclick="lbLoad('+(_lbPage-1)+')" style="font-size:8px;padding:3px 8px">‹ Prev</button>';
+  for(var p=start;p<=end;p++){
+    html+='<button class="btn '+(p===_lbPage?'btn-pur':'btn-ghost')+' btn-sm" onclick="lbLoad('+p+')" style="font-size:8px;padding:3px 8px">'+p+'</button>';
+  }
+  if(_lbPage<pages) html+='<button class="btn btn-ghost btn-sm" onclick="lbLoad('+(_lbPage+1)+')" style="font-size:8px;padding:3px 8px">Next ›</button>';
+  pag.innerHTML=html;
+}
+
+function lbCardDetail(key,src){
+  // Just toggle wishlist on card click — QR/link buttons handle their own actions
+}
+
+function lbShowQR(url,name,e){
+  if(e) e.stopPropagation();
+  // Remove any existing QR overlay
+  var old=document.getElementById('lb-qr-overlay');
+  if(old) old.remove();
+  var qrUrl='https://api.qrserver.com/v1/create-qr-code/?size=260x260&color=000000&bgcolor=ffffff&data='+encodeURIComponent(url);
+  var ov=document.createElement('div');
+  ov.id='lb-qr-overlay';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:9500;display:flex;align-items:center;justify-content:center';
+  ov.innerHTML='<div style="background:var(--surf);border:1px solid var(--bdr);border-radius:12px;padding:20px 24px;text-align:center;max-width:320px;width:90%">'
+    +'<div style="font-size:11px;font-weight:700;color:var(--txt-b);margin-bottom:14px">'+esc(name)+'</div>'
+    +'<img src="'+esc(qrUrl)+'" style="border-radius:6px;border:4px solid #fff;width:200px;height:200px"/>'
+    +'<div style="font-size:7px;color:var(--txt-d);margin-top:8px;word-break:break-all">'+esc(url)+'</div>'
+    +'<div style="display:flex;gap:8px;margin-top:14px;justify-content:center">'
+    +'<a href="'+esc(url)+'" target="_blank" rel="noopener" onclick="document.getElementById(\'lb-qr-overlay\').remove()" class="btn btn-pur btn-sm" style="text-decoration:none;font-size:9px">↗ Visit Page</a>'
+    +'<button class="btn btn-ghost btn-sm" onclick="document.getElementById(\'lb-qr-overlay\').remove()" style="font-size:9px">✕ Close</button>'
+    +'</div></div>';
+  ov.addEventListener('click',function(ev){if(ev.target===ov)ov.remove();});
+  document.body.appendChild(ov);
 }
 
 // ── FILAMENT DRY TIME SCHEDULER ──
