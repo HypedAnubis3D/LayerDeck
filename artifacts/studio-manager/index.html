@@ -14284,6 +14284,21 @@ function _catPlaceOrder(payMethod,formOverride){
     queueItemIds,
   });
   saveEvt();
+  // Send order confirmation email
+  if(form.email){
+    var _convName=(c.name||c.title||'');
+    var _orderDate=new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
+    fetch('/api/email/receipt',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+      to:form.email,
+      customerName:form.name,
+      items:items.map(function(i){return{name:i.name,qty:i.qty,price:i.price};}),
+      total:total.toFixed(2),
+      method:payMethod,
+      conventionName:_convName,
+      date:_orderDate
+    })}).then(function(r){if(!r.ok)r.json().then(function(d){console.warn('[email] receipt failed',d.error);});})
+      .catch(function(e){console.warn('[email] receipt error',e);});
+  }
   // Clear cart + reset form
   _catCart=[];
   _catSyncCartBadge();
@@ -14685,15 +14700,38 @@ function lbRenderOrders(){
   }
   el.innerHTML=orders.map(function(o){
     var d=new Date(o.timestamp);
-    var dateStr=d.toLocaleDateString('en-AU')+' '+d.toLocaleTimeString('en-AU',{hour:'2-digit',minute:'2-digit'});
+    var dateStr=d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})+' '+d.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
     var itemsStr=(o.items||[]).map(function(i){return i.name+(i.qty>1?' ×'+i.qty:'');}).join(', ');
     var shipAddr=[o.address,o.suburb,o.state,o.postcode,o.country].filter(Boolean).join(', ');
     var payIcon=o.payMethod==='card'?'💳':o.payMethod==='cash'?'💵':'📋';
+    var isShipped=o.status==='shipped';
+    var statusBadge=isShipped
+      ?'<span style="font-size:6px;font-weight:700;color:var(--grn-b);background:rgba(74,222,128,0.12);border:1px solid rgba(74,222,128,0.3);border-radius:3px;padding:1px 5px;letter-spacing:1px">✓ SHIPPED</span>'
+      :'<span style="font-size:6px;font-weight:700;color:var(--amb);background:rgba(251,191,36,0.12);border:1px solid rgba(251,191,36,0.3);border-radius:3px;padding:1px 5px;letter-spacing:1px">PAID</span>';
+    // Tracking section
+    var trackingSection=isShipped
+      ?'<div style="display:flex;align-items:center;gap:6px;margin-top:6px;padding:5px 7px;background:rgba(74,222,128,0.07);border-radius:4px;border:1px solid rgba(74,222,128,0.2)">'
+          +'<span style="font-size:8px;color:var(--grn-b)">📦</span>'
+          +'<div style="flex:1">'
+            +'<div style="font-size:6px;color:var(--txt-d);letter-spacing:1px;text-transform:uppercase">Tracking</div>'
+            +'<div style="font-size:8px;font-family:monospace;color:var(--grn-b);font-weight:bold">'+esc(o.trackingNumber||'')+'</div>'
+          +'</div>'
+          +'<button class="btn btn-ghost btn-xs" onclick="lbResendShipping(\''+o.id+'\')" style="font-size:6px;padding:2px 5px;color:var(--txt-d)">Resend Email</button>'
+        +'</div>'
+      :'<div style="display:flex;gap:4px;align-items:center;margin-top:6px">'
+          +'<input type="text" id="lb-track-'+o.id+'" placeholder="Enter tracking number…" value="'+(o.trackingNumber?esc(o.trackingNumber):'')+'" '
+            +'style="flex:1;background:var(--bg);border:1px solid var(--bdr2);color:var(--txt);padding:3px 6px;font-size:7px;border-radius:3px;font-family:monospace" '
+            +'onkeydown="if(event.key===\'Enter\')lbMarkShipped(\''+o.id+'\')" />'
+          +'<button class="btn btn-grn btn-xs" onclick="lbMarkShipped(\''+o.id+'\')" style="font-size:7px;padding:3px 7px;flex-shrink:0;white-space:nowrap">📦 Mark Shipped</button>'
+        +'</div>';
     return '<div style="border:1px solid var(--bdr);border-radius:6px;padding:8px;margin-bottom:6px">'
       +'<div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:4px">'
         +'<div style="flex:1">'
-          +'<div style="font-size:8px;font-weight:bold;color:var(--txt-b)">'+esc(o.customerName)
-            +(o.email?' <span style="font-size:7px;color:var(--txt-d);font-weight:normal">'+esc(o.email)+'</span>':'')+'</div>'
+          +'<div style="display:flex;align-items:center;gap:5px;margin-bottom:2px">'
+            +'<span style="font-size:8px;font-weight:bold;color:var(--txt-b)">'+esc(o.customerName)+'</span>'
+            +statusBadge
+          +'</div>'
+          +(o.email?'<div style="font-size:7px;color:var(--txt-d)">'+esc(o.email)+'</div>':'')
           +'<div style="font-size:7px;color:var(--txt-d)">'+esc(shipAddr)+'</div>'
         +'</div>'
         +'<div style="text-align:right;flex-shrink:0">'
@@ -14703,8 +14741,57 @@ function lbRenderOrders(){
       +'</div>'
       +'<div style="font-size:7px;color:var(--txt-d)">'+esc(itemsStr)+'</div>'
       +(o.notes?'<div style="font-size:7px;color:var(--txt-d);font-style:italic;margin-top:2px">Note: '+esc(o.notes)+'</div>':'')
+      +trackingSection
     +'</div>';
   }).join('');
+}
+
+function lbMarkShipped(orderId){
+  var c=getEvt();if(!c)return;
+  var order=(c.catalogOrders||[]).find(function(o){return o.id===orderId;});
+  if(!order){toast('Order not found','','warning');return;}
+  var trackEl=document.getElementById('lb-track-'+orderId);
+  var trackingNo=(trackEl?trackEl.value:'').trim();
+  if(!trackingNo){toast('Enter a tracking number first','Paste it in the field and tap Mark Shipped','warning');return;}
+  order.trackingNumber=trackingNo;
+  order.status='shipped';
+  order.shippedAt=Date.now();
+  saveEvt();
+  // Send shipping email
+  if(order.email){
+    fetch('/api/email/shipping',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+      to:order.email,
+      customerName:order.customerName,
+      items:(order.items||[]).map(function(i){return{name:i.name,qty:i.qty,price:i.price};}),
+      total:parseFloat(order.total||0).toFixed(2),
+      trackingNumber:trackingNo,
+      conventionName:c.name||c.title||''
+    })}).then(function(r){
+      if(r.ok){toast('Shipped!','Tracking email sent to '+order.email,'success',4000);}
+      else{r.json().then(function(d){toast('Shipped — email failed',d.error||'Check email config','warning',4000);});}
+    }).catch(function(){toast('Shipped — email error','Check API server','warning',4000);});
+  } else {
+    toast('Marked as Shipped','No email address on record','info',3000);
+  }
+  lbRenderOrders();
+}
+
+function lbResendShipping(orderId){
+  var c=getEvt();if(!c)return;
+  var order=(c.catalogOrders||[]).find(function(o){return o.id===orderId;});
+  if(!order||!order.trackingNumber){toast('No tracking info','','warning');return;}
+  if(!order.email){toast('No email address on record','','warning');return;}
+  fetch('/api/email/shipping',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+    to:order.email,
+    customerName:order.customerName,
+    items:(order.items||[]).map(function(i){return{name:i.name,qty:i.qty,price:i.price};}),
+    total:parseFloat(order.total||0).toFixed(2),
+    trackingNumber:order.trackingNumber,
+    conventionName:c.name||c.title||''
+  })}).then(function(r){
+    if(r.ok){toast('Shipping email resent','Sent to '+order.email,'success',3000);}
+    else{r.json().then(function(d){toast('Resend failed',d.error||'','warning',3000);});}
+  }).catch(function(){toast('Resend failed','Check API server','warning',3000);});
 }
 
 // ── FILAMENT DRY TIME SCHEDULER ──
