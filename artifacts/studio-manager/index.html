@@ -2978,48 +2978,112 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
     </div>
     <!-- CATALOG LOOKBOOK -->
     <div class="evt-section" id="esec-lookbook">
-      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px">
-        <div style="font-size:9px;color:var(--txt-b);font-weight:bold;margin-right:4px">🛍 Product Catalog</div>
-        <!-- Source tabs -->
-        <div style="display:flex;gap:4px;flex:1">
-          <button class="lb-src-btn active" id="lb-src-n3d" onclick="lbSetSource('n3d')">N3D Melbourne</button>
-          <button class="lb-src-btn" id="lb-src-cpl" onclick="lbSetSource('cpl')">CPL3D</button>
-          <button class="lb-src-btn" id="lb-src-manual" onclick="lbSetSource('manual')">My Entries</button>
-        </div>
-        <!-- Wishlist toggle -->
-        <button id="lb-wishlist-btn" class="btn btn-ghost btn-sm" onclick="lbToggleWishlist()" style="font-size:8px;padding:3px 8px">♡ Wishlist (<span id="lb-wishlist-count">0</span>)</button>
+      <!-- Top bar -->
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap">
+        <div style="font-size:9px;color:var(--txt-b);font-weight:bold;flex:1">🛍 Catalog Orders</div>
+        <button id="lb-admin-btn" class="btn btn-ghost btn-sm" onclick="lbToggleAdmin()" style="font-size:8px;padding:3px 8px">⚙ Manage Catalog</button>
+        <button id="lb-cart-btn" class="btn btn-pur btn-sm" onclick="lbShowCartView()" style="font-size:8px;padding:3px 10px">🛒 Cart (<span id="lb-cart-count">0</span>)</button>
       </div>
-      <!-- Search + filter bar -->
-      <div id="lb-filters" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">
-        <input type="text" id="lb-search" placeholder="🔍 Search designs…" oninput="lbOnSearch()" autocomplete="off"
-          style="flex:1;min-width:120px;background:var(--bg);border:1px solid var(--bdr2);color:var(--txt);padding:5px 9px;font-family:'Share Tech Mono',monospace;font-size:9px;border-radius:4px;box-sizing:border-box"/>
-        <select id="lb-filter-cat" onchange="lbLoad(1)" style="background:var(--bg);border:1px solid var(--bdr2);color:var(--txt);padding:4px 8px;font-size:8px;border-radius:4px;font-family:inherit">
-          <option value="">All Categories</option>
-        </select>
-        <select id="lb-sort" onchange="lbLoad(1)" style="background:var(--bg);border:1px solid var(--bdr2);color:var(--txt);padding:4px 8px;font-size:8px;border-radius:4px;font-family:inherit">
-          <option value="created_at|desc">Newest First</option>
-          <option value="name|asc">A → Z</option>
-          <option value="name|desc">Z → A</option>
-        </select>
-      </div>
-      <!-- Manual entry form (hidden by default) -->
-      <div id="lb-manual-form" style="display:none;background:var(--surf);border:1px solid var(--bdr);border-radius:8px;padding:12px;margin-bottom:12px">
-        <div style="font-size:8px;font-weight:bold;color:var(--txt-b);margin-bottom:8px">Add Manual Entry</div>
-        <div class="fr2">
-          <div class="field"><div class="fl">Name</div><input type="text" id="lb-m-name" placeholder="Design name" style="font-size:8px"/></div>
-          <div class="field"><div class="fl">Category</div><input type="text" id="lb-m-cat" placeholder="character, poke-ball…" style="font-size:8px"/></div>
+
+      <!-- ── ADMIN PANEL ── -->
+      <div id="lb-admin" style="display:none">
+        <div style="background:var(--surf);border:1px solid var(--bdr);border-radius:8px;padding:10px;margin-bottom:10px">
+          <div style="font-size:8px;font-weight:bold;color:var(--org-b);margin-bottom:8px;text-transform:uppercase;letter-spacing:1px">Catalog Items — set prices below, then customers can add to cart</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
+            <button class="btn btn-sm btn-pur" onclick="lbAdminOpenPicker('n3d')" style="font-size:8px">+ From N3D</button>
+            <button class="btn btn-sm btn-pur" onclick="lbAdminOpenPicker('cpl')" style="font-size:8px">+ From CPL3D</button>
+            <button class="btn btn-sm btn-pur" onclick="lbAdminOpenPicker('catalog')" style="font-size:8px">+ From My Products</button>
+            <button class="btn btn-sm btn-ghost" onclick="lbAdminToggleManual()" style="font-size:8px">+ Manual Entry</button>
+          </div>
+          <!-- Manual add form -->
+          <div id="lb-manual-form" style="display:none;background:var(--bg);border:1px solid var(--bdr2);border-radius:6px;padding:10px;margin-bottom:8px">
+            <div class="fr2">
+              <div class="field"><div class="fl">Name *</div><input type="text" id="lb-m-name" placeholder="Charizard Figurine" style="font-size:8px"/></div>
+              <div class="field"><div class="fl">Category</div><input type="text" id="lb-m-cat" placeholder="character, poke-ball…" style="font-size:8px"/></div>
+            </div>
+            <div class="fr2">
+              <div class="field"><div class="fl">Price (AUD) *</div><input type="number" id="lb-m-price" placeholder="25.00" min="0" step="0.01" style="font-size:8px"/></div>
+              <div class="field"><div class="fl">Image URL</div><input type="text" id="lb-m-img" placeholder="https://…" style="font-size:8px"/></div>
+            </div>
+            <div style="display:flex;gap:6px;margin-top:6px">
+              <button class="btn btn-pur btn-sm" onclick="lbAdminSaveManual()" style="font-size:8px">Add to Catalog</button>
+              <button class="btn btn-ghost btn-sm" onclick="document.getElementById('lb-manual-form').style.display='none'" style="font-size:8px">Cancel</button>
+            </div>
+          </div>
+          <!-- Picker panel for N3D / CPL / My Products -->
+          <div id="lb-picker-panel" style="display:none;background:var(--bg);border:1px solid var(--bdr2);border-radius:6px;padding:10px;margin-bottom:8px">
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
+              <input type="text" id="lb-picker-search" placeholder="🔍 Search…" oninput="lbPickerSearch()" autocomplete="off"
+                style="flex:1;background:var(--surf);border:1px solid var(--bdr2);color:var(--txt);padding:4px 8px;font-size:8px;border-radius:4px;font-family:inherit"/>
+              <button class="btn btn-ghost btn-sm" onclick="lbAdminClosePicker()" style="font-size:8px">✕ Close</button>
+            </div>
+            <div id="lb-picker-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:6px;max-height:220px;overflow-y:auto"></div>
+            <div id="lb-picker-pag" style="display:flex;justify-content:center;gap:4px;margin-top:8px"></div>
+          </div>
+          <!-- Configured items grid -->
+          <div id="lb-admin-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px">
+            <div style="grid-column:1/-1;text-align:center;color:var(--txt-d);font-size:8px;padding:20px">No items yet — add from N3D, CPL, or your products above</div>
+          </div>
         </div>
-        <div class="fr2">
-          <div class="field"><div class="fl">Image URL</div><input type="text" id="lb-m-img" placeholder="https://…" style="font-size:8px"/></div>
-          <div class="field"><div class="fl">Product URL (QR)</div><input type="text" id="lb-m-url" placeholder="https://…" style="font-size:8px"/></div>
+        <!-- Past Orders -->
+        <div style="background:var(--surf);border:1px solid var(--bdr);border-radius:8px;padding:10px">
+          <div style="font-size:8px;font-weight:bold;color:var(--txt-b);margin-bottom:8px;text-transform:uppercase;letter-spacing:1px">📦 Catalog Orders Placed</div>
+          <div id="lb-orders-list"><div style="text-align:center;color:var(--txt-d);font-size:8px;padding:16px">No orders yet</div></div>
         </div>
-        <div class="field"><div class="fl">Description</div><textarea id="lb-m-desc" rows="2" placeholder="Optional description" style="font-size:8px;width:100%;box-sizing:border-box;resize:vertical"></textarea></div>
-        <button class="btn btn-pur btn-sm" onclick="lbSaveManual()" style="margin-top:4px">Save Entry</button>
       </div>
-      <!-- Grid -->
-      <div id="lb-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px"></div>
-      <!-- Pagination -->
-      <div id="lb-pagination" style="display:flex;justify-content:center;gap:6px;margin-top:14px;flex-wrap:wrap"></div>
+
+      <!-- ── BROWSE PANEL ── -->
+      <div id="lb-browse">
+        <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px">
+          <button class="lb-src-btn active" id="lb-src-all" onclick="lbBrowseSource('all')">All Items</button>
+          <button class="lb-src-btn" id="lb-src-n3d" onclick="lbBrowseSource('n3d')">N3D Melbourne</button>
+          <button class="lb-src-btn" id="lb-src-cpl" onclick="lbBrowseSource('cpl')">CPL3D</button>
+          <button class="lb-src-btn" id="lb-src-myitems" onclick="lbBrowseSource('myitems')">My Items</button>
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">
+          <input type="text" id="lb-search" placeholder="🔍 Search designs…" oninput="lbBrowseSearch()" autocomplete="off"
+            style="flex:1;min-width:120px;background:var(--bg);border:1px solid var(--bdr2);color:var(--txt);padding:5px 9px;font-family:'Share Tech Mono',monospace;font-size:9px;border-radius:4px;box-sizing:border-box"/>
+          <select id="lb-filter-cat" onchange="lbBrowseLoad(1)" style="background:var(--bg);border:1px solid var(--bdr2);color:var(--txt);padding:4px 8px;font-size:8px;border-radius:4px;font-family:inherit">
+            <option value="">All Categories</option>
+          </select>
+        </div>
+        <div id="lb-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px"></div>
+        <div id="lb-pagination" style="display:flex;justify-content:center;gap:6px;margin-top:14px;flex-wrap:wrap"></div>
+      </div>
+
+      <!-- ── CART + CHECKOUT PANEL ── -->
+      <div id="lb-cart-view" style="display:none">
+        <button class="btn btn-ghost btn-sm" onclick="lbShowBrowseView()" style="font-size:8px;margin-bottom:10px">← Back to Browse</button>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:start">
+          <!-- Cart items -->
+          <div style="background:var(--surf);border:1px solid var(--bdr);border-radius:8px;padding:10px">
+            <div style="font-size:8px;font-weight:bold;color:var(--txt-b);margin-bottom:8px">🛒 Cart Items</div>
+            <div id="lb-cart-items"></div>
+            <div id="lb-cart-total" style="text-align:right;font-size:10px;font-weight:bold;color:var(--gold);margin-top:10px;padding-top:8px;border-top:1px solid var(--bdr)"></div>
+          </div>
+          <!-- Checkout form -->
+          <div style="background:var(--surf);border:1px solid var(--bdr);border-radius:8px;padding:10px">
+            <div style="font-size:8px;font-weight:bold;color:var(--txt-b);margin-bottom:8px">📋 Customer Details</div>
+            <div class="field"><div class="fl">Full Name *</div><input type="text" id="lb-co-name" placeholder="Jane Smith" style="font-size:8px"/></div>
+            <div class="field"><div class="fl">Email *</div><input type="email" id="lb-co-email" placeholder="jane@example.com" style="font-size:8px"/></div>
+            <div class="field"><div class="fl">Address *</div><input type="text" id="lb-co-addr" placeholder="123 Main Street" style="font-size:8px"/></div>
+            <div class="fr2">
+              <div class="field"><div class="fl">Suburb</div><input type="text" id="lb-co-suburb" placeholder="Melbourne" style="font-size:8px"/></div>
+              <div class="field"><div class="fl">State</div><input type="text" id="lb-co-state" placeholder="VIC" style="font-size:8px"/></div>
+            </div>
+            <div class="fr2">
+              <div class="field"><div class="fl">Postcode</div><input type="text" id="lb-co-postcode" placeholder="3000" style="font-size:8px"/></div>
+              <div class="field"><div class="fl">Country</div><input type="text" id="lb-co-country" value="Australia" style="font-size:8px"/></div>
+            </div>
+            <div class="field"><div class="fl">Notes / Colour Pref</div><textarea id="lb-co-notes" rows="2" placeholder="Colour preference, special requests…" style="font-size:8px;width:100%;box-sizing:border-box;resize:vertical"></textarea></div>
+            <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">
+              <button class="btn btn-grn" onclick="lbCheckout('card')" style="flex:1;font-size:8px;min-width:80px">💳 Card (Square)</button>
+              <button class="btn btn-gold" onclick="lbCheckout('cash')" style="flex:1;font-size:8px;min-width:80px">💵 Cash</button>
+              <button class="btn btn-ghost" onclick="lbCheckout('manual')" style="flex:1;font-size:8px;min-width:80px">📋 Manual/Other</button>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </div>
@@ -13924,306 +13988,640 @@ function printQRTags(){
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
-// Section 25 — Convention Catalog Lookbook
-// Sources: N3D Melbourne API, CPL3D API, Manual entries (stored per-convention)
+// Section 25 — Convention Catalog Order System
+// Customers browse available designs → add to cart → checkout → print queue
+// Admin configures which items are available (N3D/CPL/My Products/Manual)
 // All API calls go through /api/catalog/* proxy to keep keys server-side.
 // ──────────────────────────────────────────────────────────────────────────────
-var _lbSource='n3d';            // 'n3d' | 'cpl' | 'manual'
-var _lbPage=1;
-var _lbTotal=0;
-var _lbLimit=24;
-var _lbLoading=false;
-var _lbSearchTimer=null;
-var _lbWishlistOnly=false;
-var _lbWishlist={};             // { id: {source,item} }
-var _lbManualEntries={};        // { conventionId: [entry,...] }
-var _lbN3dCategories=['character','chibi','funko','accessory'];
-var _lbCplTypes=['poke-ball'];  // populated after first fetch
+var _catCart=[];          // [{catItemId,name,img,cat,qty,price}]
+var _catView='browse';    // 'browse'|'cart'|'admin'
+var _catBrowseSrc='all';  // 'all'|'n3d'|'cpl'|'myitems'
+var _catBrowsePage=1;
+var _catBrowseTotal=0;
+var _catBrowseLimit=24;
+var _catBrowseLoading=false;
+var _catBrowseTimer=null;
+var _catN3dCats=['character','chibi','funko','accessory'];
+var _catCplTypes=['poke-ball'];
+var _catPickerSrc='n3d';
+var _catPickerPage=1;
+var _catPickerLoading=false;
+var _catPickerTimer=null;
 
-// Persistent storage for wishlist + manual entries
-function _lbSave(){
-  try{localStorage.setItem('ha3d_lb_wishlist',JSON.stringify(_lbWishlist));}catch(_){}
-  try{localStorage.setItem('ha3d_lb_manual',JSON.stringify(_lbManualEntries));}catch(_){}
-}
-function _lbLoad(){
-  try{_lbWishlist=JSON.parse(localStorage.getItem('ha3d_lb_wishlist')||'{}');}catch(_){_lbWishlist={};}
-  try{_lbManualEntries=JSON.parse(localStorage.getItem('ha3d_lb_manual')||'{}');}catch(_){_lbManualEntries={};}
-}
-_lbLoad();
-
+// ── Init ──
 function lbInit(){
-  _lbSource='n3d';
-  _lbPage=1;
-  _lbWishlistOnly=false;
-  _lbSyncWishlistBtn();
-  _lbSetSourceUI('n3d');
-  _lbPopulateCategories();
-  lbLoad(1);
+  _catView='browse';
+  _catBrowseSrc='all';
+  _catBrowsePage=1;
+  var adm=document.getElementById('lb-admin');
+  var brw=document.getElementById('lb-browse');
+  var cart=document.getElementById('lb-cart-view');
+  if(adm) adm.style.display='none';
+  if(brw) brw.style.display='';
+  if(cart) cart.style.display='none';
+  _catSyncCartBadge();
+  lbBrowseLoad(1);
 }
 
-function lbSetSource(src){
-  _lbSource=src;
-  _lbPage=1;
-  _lbWishlistOnly=false;
-  _lbSetSourceUI(src);
-  _lbPopulateCategories();
-  // Show manual entry form only on manual tab
-  var mf=document.getElementById('lb-manual-form');
-  if(mf) mf.style.display=src==='manual'?'block':'none';
-  lbLoad(1);
+// ── View toggle ──
+function lbToggleAdmin(){
+  var adm=document.getElementById('lb-admin');
+  var brw=document.getElementById('lb-browse');
+  var cart=document.getElementById('lb-cart-view');
+  _catView=_catView==='admin'?'browse':'admin';
+  if(adm) adm.style.display=_catView==='admin'?'':'none';
+  if(brw) brw.style.display=_catView==='browse'?'':'none';
+  if(cart) cart.style.display='none';
+  if(_catView==='admin'){lbAdminRenderGrid();lbRenderOrders();}
+  else lbBrowseLoad(1);
 }
 
-function _lbSetSourceUI(src){
-  ['n3d','cpl','manual'].forEach(function(s){
+function lbShowCartView(){
+  if(!_catCart.length){toast('Cart is empty','Add items first','warning');return;}
+  _catView='cart';
+  var adm=document.getElementById('lb-admin');
+  var brw=document.getElementById('lb-browse');
+  var cart=document.getElementById('lb-cart-view');
+  if(adm) adm.style.display='none';
+  if(brw) brw.style.display='none';
+  if(cart) cart.style.display='';
+  _catRenderCart();
+}
+
+function lbShowBrowseView(){
+  _catView='browse';
+  var adm=document.getElementById('lb-admin');
+  var brw=document.getElementById('lb-browse');
+  var cart=document.getElementById('lb-cart-view');
+  if(adm) adm.style.display='none';
+  if(brw) brw.style.display='';
+  if(cart) cart.style.display='none';
+}
+
+// ── Cart ──
+function _catSyncCartBadge(){
+  var count=_catCart.reduce(function(a,r){return a+r.qty;},0);
+  var el=document.getElementById('lb-cart-count');
+  if(el) el.textContent=count;
+}
+
+function lbAddToCart(catItemId,e){
+  if(e) e.stopPropagation();
+  var c=getEvt();if(!c)return;
+  var items=(c.catalogOrderItems||[]);
+  var item=items.find(function(i){return i.id===catItemId;});
+  if(!item){toast('Item not found','','warning');return;}
+  if(!item.price){toast('Price not set','Set a price in Manage Catalog first','warning');return;}
+  var existing=_catCart.find(function(r){return r.catItemId===catItemId;});
+  if(existing){
+    existing.qty++;
+    toast(item.name,'×'+existing.qty+' in cart','success',1800);
+  } else {
+    _catCart.push({catItemId,name:item.name,img:item.img||'',cat:item.cat||'',qty:1,price:item.price});
+    toast(item.name,'Added to cart','success',1800);
+  }
+  _catSyncCartBadge();
+  var btn=document.getElementById('lb-atc-'+catItemId);
+  if(btn){btn.textContent='✓ In Cart';btn.style.background='var(--grn-d)';}
+}
+
+function lbRemoveFromCart(catItemId){
+  _catCart=_catCart.filter(function(r){return r.catItemId!==catItemId;});
+  _catSyncCartBadge();
+  _catRenderCart();
+  if(!_catCart.length) lbShowBrowseView();
+}
+
+function lbCartQty(catItemId,delta){
+  var r=_catCart.find(function(x){return x.catItemId===catItemId;});
+  if(!r) return;
+  r.qty=Math.max(1,r.qty+delta);
+  _catRenderCart();
+  _catSyncCartBadge();
+}
+
+function _catRenderCart(){
+  var el=document.getElementById('lb-cart-items');
+  var tot=document.getElementById('lb-cart-total');
+  if(!el) return;
+  if(!_catCart.length){
+    el.innerHTML='<div style="color:var(--txt-d);font-size:8px;text-align:center;padding:20px">Cart is empty</div>';
+    if(tot) tot.textContent='';
+    return;
+  }
+  el.innerHTML=_catCart.map(function(r){
+    return '<div style="display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--bdr);padding:6px 0">'
+      +(r.img?'<img src="'+esc(r.img)+'" style="width:36px;height:36px;object-fit:cover;border-radius:4px;flex-shrink:0" onerror="this.style.display=\'none\'">'
+        :'<div style="width:36px;height:36px;background:var(--bg);border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">🏷</div>')
+      +'<div style="flex:1;min-width:0">'
+        +'<div style="font-size:8px;color:var(--txt-b);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(r.name)+'</div>'
+        +(r.cat?'<div style="font-size:7px;color:var(--txt-d)">'+esc(r.cat)+'</div>':'')
+      +'</div>'
+      +'<div style="display:flex;align-items:center;gap:3px">'
+        +'<button class="pack-qty-btn" onclick="lbCartQty(\''+r.catItemId+'\',-1)">−</button>'
+        +'<span style="font-size:8px;color:var(--txt-b);min-width:16px;text-align:center">'+r.qty+'</span>'
+        +'<button class="pack-qty-btn" onclick="lbCartQty(\''+r.catItemId+'\',1)">+</button>'
+      +'</div>'
+      +'<div style="font-size:9px;color:var(--grn-b);min-width:46px;text-align:right">$'+(r.qty*r.price).toFixed(2)+'</div>'
+      +'<button onclick="lbRemoveFromCart(\''+r.catItemId+'\')" style="background:none;border:none;color:var(--red-b);cursor:pointer;font-size:13px;padding:0 2px;flex-shrink:0">✕</button>'
+    +'</div>';
+  }).join('');
+  var total=_catCart.reduce(function(a,r){return a+r.qty*r.price;},0);
+  if(tot) tot.innerHTML='Total: <span style="color:var(--gold)">$'+total.toFixed(2)+' AUD</span>';
+}
+
+// ── Checkout ──
+function lbCheckout(method){
+  if(!_catCart.length){toast('Cart is empty','','warning');return;}
+  var name=(document.getElementById('lb-co-name')?.value||'').trim();
+  var email=(document.getElementById('lb-co-email')?.value||'').trim();
+  var addr=(document.getElementById('lb-co-addr')?.value||'').trim();
+  if(!name){document.getElementById('lb-co-name').focus();toast('Name required','','warning');return;}
+  if(!email){document.getElementById('lb-co-email').focus();toast('Email required','','warning');return;}
+  if(!addr){document.getElementById('lb-co-addr').focus();toast('Address required','','warning');return;}
+  if(method==='card') _catDoSquarePayment();
+  else _catPlaceOrder(method,null);
+}
+
+function _catDoSquarePayment(){
+  var total=_catCart.reduce(function(a,r){return a+r.qty*r.price;},0);
+  var totalCents=Math.round(total*100);
+  if(totalCents<=0){toast('Invalid total','','warning');return;}
+  var cartSummary=_catCart.map(function(r){return r.name+(r.qty>1?' ×'+r.qty:'');}).join(', ');
+  // Save pending checkout to session storage so we can restore after Square returns
+  var form={
+    name:(document.getElementById('lb-co-name')?.value||'').trim(),
+    email:(document.getElementById('lb-co-email')?.value||'').trim(),
+    addr:(document.getElementById('lb-co-addr')?.value||'').trim(),
+    suburb:(document.getElementById('lb-co-suburb')?.value||'').trim(),
+    state:(document.getElementById('lb-co-state')?.value||'').trim(),
+    postcode:(document.getElementById('lb-co-postcode')?.value||'').trim(),
+    country:(document.getElementById('lb-co-country')?.value||'Australia').trim(),
+    notes:(document.getElementById('lb-co-notes')?.value||'').trim(),
+  };
+  try{sessionStorage.setItem('_catPendingCheckout',JSON.stringify({cart:_catCart.slice(),form}));}catch(_){}
+  var callbackUrl=location.href.split('?')[0]+'?sq_catalog=1';
+  var params=new URLSearchParams({'data':JSON.stringify({
+    action:'charge',
+    amount_money:{amount:totalCents,currency_code:'AUD'},
+    callback_url:callbackUrl,
+    client_id:SQ_APP_ID,
+    version:'1.3',
+    note:'HypedAnubis3D Catalog: '+cartSummary,
+    options:{supported_tender_types:['CREDIT_CARD','APPLE_PAY','GOOGLE_PAY']}
+  })});
+  window.location.href='intent://'+params.toString()
+    +'#Intent;scheme=squareup;package=com.squareup;'
+    +'S.browser_fallback_url='+encodeURIComponent('https://squareup.com/download')+';'
+    +'S.com.squareup.pos.CLIENT_ID='+SQ_APP_ID+';end';
+}
+
+// Restore from Square catalog payment return
+(function(){
+  var url=new URL(location.href);
+  if(url.searchParams.get('sq_catalog')){
+    var pending=null;
+    try{pending=JSON.parse(sessionStorage.getItem('_catPendingCheckout')||'null');}catch(_){}
+    if(pending){
+      _catCart=pending.cart||[];
+      _catSyncCartBadge();
+      setTimeout(function(){_catPlaceOrder('card',pending.form);},600);
+    }
+    url.searchParams.delete('sq_catalog');
+    history.replaceState({},'',url.toString());
+    try{sessionStorage.removeItem('_catPendingCheckout');}catch(_){}
+  }
+})();
+
+function _catPlaceOrder(payMethod,formOverride){
+  var c=getEvt();if(!c){toast('No active convention','','warning');return;}
+  var form=formOverride||{
+    name:(document.getElementById('lb-co-name')?.value||'').trim(),
+    email:(document.getElementById('lb-co-email')?.value||'').trim(),
+    addr:(document.getElementById('lb-co-addr')?.value||'').trim(),
+    suburb:(document.getElementById('lb-co-suburb')?.value||'').trim(),
+    state:(document.getElementById('lb-co-state')?.value||'').trim(),
+    postcode:(document.getElementById('lb-co-postcode')?.value||'').trim(),
+    country:(document.getElementById('lb-co-country')?.value||'Australia').trim(),
+    notes:(document.getElementById('lb-co-notes')?.value||'').trim(),
+  };
+  var orderId=uid();
+  var items=_catCart.map(function(r){return{catItemId:r.catItemId,name:r.name,qty:r.qty,price:r.price,img:r.img};});
+  var total=_catCart.reduce(function(a,r){return a+r.qty*r.price;},0);
+  var shipAddr=[form.addr,form.suburb,form.state,form.postcode,form.country].filter(Boolean).join(', ');
+  // Push each item into the print queue
+  var queueItemIds=[];
+  items.forEach(function(it){
+    var qid=uid();
+    queueItemIds.push(qid);
+    queueItems.push({
+      id:qid,
+      name:it.name,
+      category:'Convention Catalog',
+      printer:printerRecords[0]?.name||'X1C',
+      hrs:0,qty:it.qty,
+      priority:'normal',
+      stage:'queued',
+      fromCatalogOrder:orderId,
+      notes:'📦 Post-event ship → '+form.name+' ('+form.email+') · '+shipAddr+(form.notes?' · Note: '+form.notes:''),
+      timestamp:Date.now(),
+    });
+  });
+  saveQueue();
+  // Save order on convention record
+  if(!c.catalogOrders) c.catalogOrders=[];
+  c.catalogOrders.push({
+    id:orderId,
+    customerName:form.name,
+    email:form.email,
+    address:form.addr,
+    suburb:form.suburb,
+    state:form.state,
+    postcode:form.postcode,
+    country:form.country,
+    notes:form.notes,
+    items,total,payMethod,
+    status:'paid',
+    timestamp:Date.now(),
+    queueItemIds,
+  });
+  saveEvt();
+  // Clear cart + reset form
+  _catCart=[];
+  _catSyncCartBadge();
+  ['lb-co-name','lb-co-email','lb-co-addr','lb-co-suburb','lb-co-state','lb-co-postcode','lb-co-notes'].forEach(function(id){
+    var el=document.getElementById(id);if(el)el.value='';
+  });
+  var cc=document.getElementById('lb-co-country');if(cc)cc.value='Australia';
+  toast('Order Placed!',items.length+' item(s) added to print queue for post-event shipping','success',5000);
+  lbShowBrowseView();
+  lbBrowseLoad(1);
+}
+
+// ── Browse ──
+function lbBrowseSource(src){
+  _catBrowseSrc=src;
+  _catBrowsePage=1;
+  ['all','n3d','cpl','myitems'].forEach(function(s){
     var b=document.getElementById('lb-src-'+s);
     if(b) b.classList.toggle('active',s===src);
   });
-  // Show/hide sort (manual doesn't use it)
-  var sb=document.getElementById('lb-sort');
-  if(sb) sb.style.display=src==='manual'?'none':'';
-  var fb=document.getElementById('lb-filter-cat');
-  if(fb) fb.style.display=src==='manual'?'none':'';
+  var catSel=document.getElementById('lb-filter-cat');
+  if(catSel){
+    catSel.innerHTML='<option value="">All Categories</option>';
+    var cats=src==='n3d'?_catN3dCats:src==='cpl'?_catCplTypes:[];
+    cats.forEach(function(cat){
+      var o=document.createElement('option');
+      o.value=cat;o.textContent=cat.replace(/-/g,' ').replace(/\b\w/g,function(l){return l.toUpperCase();});
+      catSel.appendChild(o);
+    });
+  }
+  lbBrowseLoad(1);
 }
 
-function _lbPopulateCategories(){
-  var sel=document.getElementById('lb-filter-cat');
-  if(!sel) return;
-  sel.innerHTML='<option value="">All Categories</option>';
-  var cats=_lbSource==='n3d'?_lbN3dCategories:_lbSource==='cpl'?_lbCplTypes:[];
-  cats.forEach(function(c){
-    var o=document.createElement('option');
-    o.value=c;o.textContent=c.replace(/-/g,' ').replace(/\b\w/g,function(l){return l.toUpperCase();});
-    sel.appendChild(o);
-  });
+function lbBrowseSearch(){
+  clearTimeout(_catBrowseTimer);
+  _catBrowseTimer=setTimeout(function(){lbBrowseLoad(1);},400);
 }
 
-function lbOnSearch(){
-  clearTimeout(_lbSearchTimer);
-  _lbSearchTimer=setTimeout(function(){lbLoad(1);},400);
-}
-
-async function lbLoad(page){
-  if(_lbLoading) return;
-  _lbLoading=true;
-  _lbPage=page||_lbPage;
+async function lbBrowseLoad(page){
+  if(_catBrowseLoading) return;
+  _catBrowseLoading=true;
+  _catBrowsePage=page||_catBrowsePage;
   var grid=document.getElementById('lb-grid');
   var pag=document.getElementById('lb-pagination');
-  if(!grid){_lbLoading=false;return;}
+  if(!grid){_catBrowseLoading=false;return;}
   grid.innerHTML='<div style="text-align:center;color:var(--txt-d);font-size:8px;padding:24px;grid-column:1/-1">Loading…</div>';
   if(pag) pag.innerHTML='';
 
-  if(_lbSource==='manual'){
-    _lbLoading=false;
-    _lbRenderManual();
+  var c=getEvt();
+  var catalogOrderItems=(c&&c.catalogOrderItems)||[];
+  var search=(document.getElementById('lb-search')?.value||'').trim().toLowerCase();
+  var catF=document.getElementById('lb-filter-cat')?.value||'';
+
+  // "My Items" or no items configured — show only local items
+  if(_catBrowseSrc==='myitems'||!catalogOrderItems.length){
+    _catBrowseLoading=false;
+    var myItems=catalogOrderItems.filter(function(i){
+      var m=!search||(i.name||'').toLowerCase().includes(search)||(i.cat||'').toLowerCase().includes(search);
+      var cf=!catF||(i.cat||'')===catF;
+      return m&&cf;
+    });
+    if(!myItems.length){
+      grid.innerHTML='<div style="text-align:center;color:var(--txt-d);font-size:8px;padding:24px;grid-column:1/-1">'
+        +(_catBrowseSrc==='myitems'?'No custom items — tap ⚙ Manage Catalog to add':'No catalog items configured yet — tap ⚙ Manage Catalog to add items')
+        +'</div>';
+      return;
+    }
+    grid.innerHTML=myItems.map(function(item){return _catBrowseCardHtml(item);}).join('');
     return;
   }
 
-  var search=(document.getElementById('lb-search')?.value||'').trim();
-  var cat=document.getElementById('lb-filter-cat')?.value||'';
-  var sortVal=document.getElementById('lb-sort')?.value||'created_at|desc';
-  var sortParts=sortVal.split('|');
-  var sort=sortParts[0],sortDir=sortParts[1];
+  // For 'all', 'n3d', 'cpl' — fetch from API then filter to only items in catalogOrderItems
+  var n3dIds=new Set(catalogOrderItems.filter(function(i){return i.src==='n3d';}).map(function(i){return i.srcId;}));
+  var cplIds=new Set(catalogOrderItems.filter(function(i){return i.src==='cpl';}).map(function(i){return i.srcId;}));
+  var localItems=catalogOrderItems.filter(function(i){return i.src==='catalog'||i.src==='manual';});
 
   try{
-    var qs=new URLSearchParams({page:_lbPage,limit:_lbLimit,sort:sort,sortDir:sortDir});
-    if(search) qs.set('search',search);
-    if(cat){
-      if(_lbSource==='n3d') qs.set('category',cat);
-      else qs.set('type',cat);
-    }
-    var r=await fetch('/api/catalog/'+_lbSource+'?'+qs.toString());
-    if(!r.ok) throw new Error('HTTP '+r.status);
-    var data=await r.json();
+    var fetchedItems=[];
+    var needN3d=(_catBrowseSrc==='all'||_catBrowseSrc==='n3d')&&n3dIds.size>0;
+    var needCpl=(_catBrowseSrc==='all'||_catBrowseSrc==='cpl')&&cplIds.size>0;
 
-    var items=[];
-    var total=0;
-    if(_lbSource==='n3d'){
-      items=(data.data||[]);
-      total=(data.pagination?.total)||0;
-      // Extract unique categories from first page for filter dropdown
-      if(_lbPage===1){
-        var cats=items.map(function(i){return i.category;}).filter(Boolean);
-        var uniq=[...new Set(cats)].sort();
-        if(uniq.length) { _lbN3dCategories=uniq; _lbPopulateCategories(); }
-      }
-    } else {
-      items=(data.models||[]);
-      total=(data.total)||0;
-      if(_lbPage===1){
-        var types=items.map(function(i){return i.type;}).filter(Boolean);
-        var uniqT=[...new Set(types)].sort();
-        if(uniqT.length){ _lbCplTypes=uniqT; _lbPopulateCategories(); }
+    if(needN3d){
+      var qsN=new URLSearchParams({page:_catBrowsePage,limit:50});
+      if(search) qsN.set('search',search);
+      if(catF&&_catBrowseSrc==='n3d') qsN.set('category',catF);
+      var rN=await fetch('/api/catalog/n3d?'+qsN);
+      if(rN.ok){
+        var dN=await rN.json();
+        var n3dAll=dN.data||[];
+        n3dAll.filter(function(i){return n3dIds.has(i.slug||i.id);}).forEach(function(i){
+          var cfg=catalogOrderItems.find(function(ci){return ci.srcId===(i.slug||i.id)&&ci.src==='n3d';});
+          fetchedItems.push({id:cfg?cfg.id:'n3d|'+(i.slug||i.id),name:i.title||i.name||'Unknown',img:i.image_url||'',cat:i.category||'',price:cfg?cfg.price:0,src:'n3d'});
+        });
+        if(n3dAll.length){
+          var ucats=[...new Set(n3dAll.map(function(i){return i.category;}).filter(Boolean))].sort();
+          if(ucats.length) _catN3dCats=ucats;
+        }
       }
     }
-    _lbTotal=total;
-
-    if(_lbWishlistOnly){
-      items=items.filter(function(i){ return !!_lbWishlist[_lbSource+'|'+(i.slug||i.id)]; });
+    if(needCpl){
+      var qsC=new URLSearchParams({page:_catBrowsePage,limit:50});
+      if(search) qsC.set('search',search);
+      if(catF&&_catBrowseSrc==='cpl') qsC.set('type',catF);
+      var rC=await fetch('/api/catalog/cpl?'+qsC);
+      if(rC.ok){
+        var dC=await rC.json();
+        var cplAll=dC.models||[];
+        cplAll.filter(function(i){return cplIds.has(i.slug||String(i.id));}).forEach(function(i){
+          var cfg=catalogOrderItems.find(function(ci){return ci.srcId===(i.slug||String(i.id))&&ci.src==='cpl';});
+          fetchedItems.push({id:cfg?cfg.id:'cpl|'+(i.slug||i.id),name:i.name||'Unknown',img:i.thumbnail||'',cat:i.type||'',price:cfg?cfg.price:0,src:'cpl'});
+        });
+        if(cplAll.length){
+          var utypes=[...new Set(cplAll.map(function(i){return i.type;}).filter(Boolean))].sort();
+          if(utypes.length) _catCplTypes=utypes;
+        }
+      }
     }
-
-    if(!items.length){
-      grid.innerHTML='<div style="text-align:center;color:var(--txt-d);font-size:8px;padding:24px;grid-column:1/-1">No designs found</div>';
-      _lbLoading=false;
-      return;
+    // Include catalog + manual items when showing 'all'
+    if(_catBrowseSrc==='all'){
+      localItems.forEach(function(item){
+        var sq=!search||((item.name||'').toLowerCase().includes(search)||(item.cat||'').toLowerCase().includes(search));
+        if(sq) fetchedItems.push(item);
+      });
     }
-
-    grid.innerHTML=items.map(function(item){return _lbCardHtml(item,_lbSource);}).join('');
-    _lbRenderPagination(total);
-  }catch(e){
-    grid.innerHTML='<div style="text-align:center;color:var(--red);font-size:8px;padding:24px;grid-column:1/-1">Failed to load — '+esc(e.message)+'</div>';
+    if(!fetchedItems.length){
+      grid.innerHTML='<div style="text-align:center;color:var(--txt-d);font-size:8px;padding:24px;grid-column:1/-1">No items found</div>';
+      _catBrowseLoading=false;return;
+    }
+    grid.innerHTML=fetchedItems.map(function(item){return _catBrowseCardHtml(item);}).join('');
+    if(pag) pag.innerHTML='';
+  }catch(err){
+    grid.innerHTML='<div style="text-align:center;color:var(--red);font-size:8px;padding:24px;grid-column:1/-1">Failed to load — '+esc(err.message||'')+'</div>';
   }
-  _lbLoading=false;
+  _catBrowseLoading=false;
 }
 
-function _lbCardHtml(item,src){
-  var id=item.slug||item.id;
-  var key=src+'|'+id;
-  var wishlisted=!!_lbWishlist[key];
-  var name=item.title||item.name||'Unknown';
-  var cat=item.category||item.type||'';
-  var img=item.image_url||item.thumbnail||'';
-  var productUrl='';
-  if(src==='n3d') productUrl='https://www.n3dmelbourne.com/designs/'+encodeURIComponent(id);
-  else if(src==='cpl') productUrl='https://www.cpl3d.com/models/'+encodeURIComponent(id);
-  var qrUrl=productUrl?'https://api.qrserver.com/v1/create-qr-code/?size=160x160&color=000000&bgcolor=ffffff&data='+encodeURIComponent(productUrl):'';
-  var wHtml=wishlisted
-    ?'<button class="btn btn-ghost btn-xs lb-wishlisted" onclick="lbWishlist(\''+esc(key)+'\',this,event)" style="font-size:8px;padding:2px 6px" title="Remove from wishlist">♥</button>'
-    :'<button class="btn btn-ghost btn-xs" onclick="lbWishlist(\''+esc(key)+'\',this,event)" style="font-size:8px;padding:2px 6px" title="Add to wishlist">♡</button>';
-  var qrBtn=qrUrl?'<button class="btn btn-ghost btn-xs" onclick="lbShowQR(\''+esc(productUrl)+'\',\''+esc(name)+'\',event)" style="font-size:8px;padding:2px 6px" title="Show QR code">⬡ QR</button>':'';
-  var linkBtn=productUrl?'<a href="'+esc(productUrl)+'" target="_blank" rel="noopener" onclick="event.stopPropagation()" class="btn btn-ghost btn-xs" style="font-size:8px;padding:2px 6px" title="View online">↗</a>':'';
-  return '<div class="lb-card" onclick="lbCardDetail(\''+esc(key)+'\',\''+src+'\')">'
-    +(img?'<img src="'+esc(img)+'" alt="'+esc(name)+'" loading="lazy" onerror="this.style.display=\'none\'">'
+function _catBrowseCardHtml(item){
+  var inCart=_catCart.find(function(r){return r.catItemId===item.id;});
+  var hasPrice=!!(item.price&&item.price>0);
+  return '<div class="lb-card">'
+    +(item.img?'<img src="'+esc(item.img)+'" alt="'+esc(item.name)+'" loading="lazy" onerror="this.style.display=\'none\'">'
       :'<div style="width:100%;aspect-ratio:1;background:#1a1a2e;display:flex;align-items:center;justify-content:center;font-size:22px">🎮</div>')
     +'<div class="lb-card-body">'
-      +'<div class="lb-card-name">'+esc(name)+'</div>'
-      +(cat?'<div class="lb-card-cat">'+esc(cat)+'</div>':'')
+      +'<div class="lb-card-name">'+esc(item.name)+'</div>'
+      +(item.cat?'<div class="lb-card-cat">'+esc(item.cat)+'</div>':'')
+      +(hasPrice?'<div style="font-size:9px;font-weight:bold;color:var(--grn-b);margin-top:3px">$'+parseFloat(item.price).toFixed(2)+'</div>'
+        :'<div style="font-size:7px;color:var(--red-b);margin-top:3px">Price not set</div>')
     +'</div>'
-    +'<div class="lb-card-actions">'+wHtml+qrBtn+linkBtn+'</div>'
+    +'<div class="lb-card-actions">'
+      +(hasPrice
+        ?'<button id="lb-atc-'+item.id+'" class="btn '+(inCart?'btn-grn':'btn-pur')+' btn-xs" onclick="lbAddToCart(\''+esc(item.id)+'\',event)" style="font-size:8px;width:100%;padding:3px 0">'+(inCart?'✓ In Cart':'🛒 Add to Cart')+'</button>'
+        :'<span style="font-size:7px;color:var(--txt-d)">Not available</span>'
+      )
+    +'</div>'
   +'</div>';
 }
 
-function _lbRenderManual(){
-  var conv=getEvt();
-  var cid=conv?conv.id:'__global';
-  var entries=(_lbManualEntries[cid]||[]);
-  var grid=document.getElementById('lb-grid');
+// ── Admin: Manage Catalog Items ──
+function lbAdminRenderGrid(){
+  var c=getEvt();if(!c)return;
+  var items=c.catalogOrderItems||[];
+  var grid=document.getElementById('lb-admin-grid');
   if(!grid) return;
-  if(!entries.length){
-    grid.innerHTML='<div style="text-align:center;color:var(--txt-d);font-size:8px;padding:24px;grid-column:1/-1">No manual entries yet — add one above</div>';
+  if(!items.length){
+    grid.innerHTML='<div style="grid-column:1/-1;text-align:center;color:var(--txt-d);font-size:8px;padding:20px">No items yet — add from N3D, CPL, or your products above</div>';
     return;
   }
-  var search=(document.getElementById('lb-search')?.value||'').trim().toLowerCase();
-  var shown=search?entries.filter(function(e){return (e.name||'').toLowerCase().includes(search);}):entries;
-  grid.innerHTML=shown.map(function(e,i){
-    var key='manual|'+i;
-    var wishlisted=!!_lbWishlist[key];
-    var qrUrl=e.url?'https://api.qrserver.com/v1/create-qr-code/?size=160x160&color=000000&bgcolor=ffffff&data='+encodeURIComponent(e.url):'';
-    var wHtml=wishlisted
-      ?'<button class="btn btn-ghost btn-xs lb-wishlisted" onclick="lbWishlist(\''+key+'\',this,event)" style="font-size:8px;padding:2px 6px">♥</button>'
-      :'<button class="btn btn-ghost btn-xs" onclick="lbWishlist(\''+key+'\',this,event)" style="font-size:8px;padding:2px 6px">♡</button>';
-    var delBtn='<button class="btn btn-ghost btn-xs" onclick="lbDeleteManual('+i+',\''+esc(cid)+'\',event)" style="font-size:8px;padding:2px 6px;color:var(--red)">✕</button>';
-    var qrBtn=qrUrl?'<button class="btn btn-ghost btn-xs" onclick="lbShowQR(\''+esc(e.url)+'\',\''+esc(e.name||'')+'\',event)" style="font-size:8px;padding:2px 6px">⬡ QR</button>':'';
-    var linkBtn=e.url?'<a href="'+esc(e.url)+'" target="_blank" rel="noopener" onclick="event.stopPropagation()" class="btn btn-ghost btn-xs" style="font-size:8px;padding:2px 6px">↗</a>':'';
+  grid.innerHTML=items.map(function(item){
+    var srcLabel=item.src==='n3d'?'N3D':item.src==='cpl'?'CPL3D':item.src==='catalog'?'My Products':'Manual';
     return '<div class="lb-card">'
-      +(e.img?'<img src="'+esc(e.img)+'" alt="'+esc(e.name||'')+'" loading="lazy" onerror="this.style.display=\'none\'">':'<div style="width:100%;aspect-ratio:1;background:#1a1a2e;display:flex;align-items:center;justify-content:center;font-size:22px">🎮</div>')
-      +'<div class="lb-card-body"><div class="lb-card-name">'+esc(e.name||'Untitled')+'</div>'+(e.cat?'<div class="lb-card-cat">'+esc(e.cat)+'</div>':'')+'</div>'
-      +'<div class="lb-card-actions">'+wHtml+qrBtn+linkBtn+delBtn+'</div>'
+      +(item.img?'<img src="'+esc(item.img)+'" alt="'+esc(item.name)+'" loading="lazy" onerror="this.style.display=\'none\'">'
+        :'<div style="width:100%;aspect-ratio:1;background:#1a1a2e;display:flex;align-items:center;justify-content:center;font-size:22px">🎮</div>')
+      +'<div class="lb-card-body">'
+        +'<div class="lb-card-name">'+esc(item.name)+'</div>'
+        +(item.cat?'<div class="lb-card-cat">'+esc(item.cat)+'</div>':'')
+        +'<div style="font-size:6px;color:var(--txt-d);margin-top:1px">'+srcLabel+'</div>'
+      +'</div>'
+      +'<div class="lb-card-actions" style="flex-direction:column;gap:4px">'
+        +'<div style="display:flex;align-items:center;gap:3px">'
+          +'<span style="font-size:7px;color:var(--txt-d)">$AUD</span>'
+          +'<input type="number" value="'+parseFloat(item.price||0).toFixed(2)+'" min="0" step="0.01"'
+            +' onchange="lbAdminSetPrice(\''+item.id+'\',this.value)"'
+            +' style="flex:1;width:0;background:var(--bg);border:1px solid var(--bdr2);color:var(--txt);padding:2px 4px;font-size:8px;border-radius:3px;font-family:inherit"'
+            +' placeholder="0.00"/>'
+        +'</div>'
+        +'<button class="btn btn-ghost btn-xs" onclick="lbAdminRemoveItem(\''+item.id+'\')" style="font-size:7px;color:var(--red-b);width:100%;padding:2px 0">✕ Remove</button>'
+      +'</div>'
     +'</div>';
   }).join('');
 }
 
-function lbSaveManual(){
+function lbAdminSetPrice(itemId,val){
+  var c=getEvt();if(!c)return;
+  var item=(c.catalogOrderItems||[]).find(function(i){return i.id===itemId;});
+  if(!item) return;
+  item.price=parseFloat(val)||0;
+  saveEvt();
+}
+
+function lbAdminRemoveItem(itemId){
+  var c=getEvt();if(!c)return;
+  c.catalogOrderItems=(c.catalogOrderItems||[]).filter(function(i){return i.id!==itemId;});
+  saveEvt();
+  lbAdminRenderGrid();
+}
+
+function lbAdminToggleManual(){
+  var el=document.getElementById('lb-manual-form');
+  if(!el) return;
+  el.style.display=el.style.display==='none'?'':'none';
+  var pp=document.getElementById('lb-picker-panel');
+  if(pp) pp.style.display='none';
+}
+
+function lbAdminSaveManual(){
   var name=(document.getElementById('lb-m-name')?.value||'').trim();
   if(!name){toast('Name required','','warning');return;}
   var cat=(document.getElementById('lb-m-cat')?.value||'').trim();
+  var price=parseFloat(document.getElementById('lb-m-price')?.value||0)||0;
   var img=(document.getElementById('lb-m-img')?.value||'').trim();
-  var url=(document.getElementById('lb-m-url')?.value||'').trim();
-  var desc=(document.getElementById('lb-m-desc')?.value||'').trim();
-  var conv=getEvt();
-  var cid=conv?conv.id:'__global';
-  if(!_lbManualEntries[cid]) _lbManualEntries[cid]=[];
-  _lbManualEntries[cid].push({name,cat,img,url,desc,ts:Date.now()});
-  _lbSave();
-  ['lb-m-name','lb-m-cat','lb-m-img','lb-m-url','lb-m-desc'].forEach(function(id){var el=document.getElementById(id);if(el)el.value='';});
-  toast('Entry saved','','success',2500);
-  _lbRenderManual();
+  var c=getEvt();if(!c)return;
+  if(!c.catalogOrderItems) c.catalogOrderItems=[];
+  c.catalogOrderItems.push({id:uid(),src:'manual',srcId:null,name,cat,img,price,ts:Date.now()});
+  saveEvt();
+  ['lb-m-name','lb-m-cat','lb-m-price','lb-m-img'].forEach(function(id){var el=document.getElementById(id);if(el)el.value='';});
+  document.getElementById('lb-manual-form').style.display='none';
+  toast('Added',name+' added to catalog','success',2500);
+  lbAdminRenderGrid();
 }
 
-function lbDeleteManual(idx,cid,e){
-  if(e) e.stopPropagation();
-  if(!_lbManualEntries[cid]) return;
-  _lbManualEntries[cid].splice(idx,1);
-  _lbSave();
-  _lbRenderManual();
+// ── Admin Picker (N3D / CPL / My Products) ──
+function lbAdminOpenPicker(src){
+  _catPickerSrc=src;
+  _catPickerPage=1;
+  var pp=document.getElementById('lb-picker-panel');
+  var mf=document.getElementById('lb-manual-form');
+  if(pp) pp.style.display='';
+  if(mf) mf.style.display='none';
+  var si=document.getElementById('lb-picker-search');
+  if(si) si.value='';
+  _catPickerLoad(1);
 }
 
-function lbWishlist(key,btn,e){
-  if(e) e.stopPropagation();
-  if(_lbWishlist[key]){
-    delete _lbWishlist[key];
-    if(btn){btn.textContent='♡';btn.classList.remove('lb-wishlisted');}
-  } else {
-    _lbWishlist[key]={ts:Date.now()};
-    if(btn){btn.textContent='♥';btn.classList.add('lb-wishlisted');}
+function lbAdminClosePicker(){
+  var pp=document.getElementById('lb-picker-panel');
+  if(pp) pp.style.display='none';
+}
+
+function lbPickerSearch(){
+  clearTimeout(_catPickerTimer);
+  _catPickerTimer=setTimeout(function(){_catPickerLoad(1);},400);
+}
+
+async function _catPickerLoad(page){
+  if(_catPickerLoading) return;
+  _catPickerLoading=true;
+  _catPickerPage=page||_catPickerPage;
+  var grid=document.getElementById('lb-picker-grid');
+  var pag=document.getElementById('lb-picker-pag');
+  if(!grid){_catPickerLoading=false;return;}
+  grid.innerHTML='<div style="text-align:center;color:var(--txt-d);font-size:8px;padding:12px;grid-column:1/-1">Loading…</div>';
+  if(pag) pag.innerHTML='';
+
+  var c=getEvt();
+  var already=new Set((c?.catalogOrderItems||[]).map(function(i){return i.src+'|'+i.srcId;}));
+
+  if(_catPickerSrc==='catalog'){
+    _catPickerLoading=false;
+    var search=(document.getElementById('lb-picker-search')?.value||'').toLowerCase();
+    var items=catalogItems.filter(function(i){
+      return !search||(i.name||'').toLowerCase().includes(search)||(i.category||'').toLowerCase().includes(search);
+    });
+    if(!items.length){
+      grid.innerHTML='<div style="text-align:center;color:var(--txt-d);font-size:8px;padding:12px;grid-column:1/-1">No products found</div>';
+      return;
+    }
+    grid.innerHTML=items.map(function(item){
+      var key='catalog|'+item.id;
+      var added=already.has(key);
+      return '<div style="background:var(--surf);border:1px solid '+(added?'var(--pur)':'var(--bdr)')+';border-radius:5px;padding:6px;cursor:pointer;text-align:center" onclick="'+(added?'':'lbPickerSelect(\'catalog\',\''+item.id+'\',\''+esc(item.name)+'\',\''+esc(item.photo||'')+'\',\''+esc(item.category||'')+'\','+(item.price||0)+')')+'">'
+        +(item.photo?'<img src="'+esc(item.photo)+'" style="width:100%;height:55px;object-fit:cover;border-radius:3px;margin-bottom:3px" onerror="this.style.display=\'none\'">':'<div style="height:40px;display:flex;align-items:center;justify-content:center;font-size:18px">🏷</div>')
+        +'<div style="font-size:6.5px;color:'+(added?'var(--pur-b)':'var(--txt-b)')+';font-weight:bold;line-height:1.2">'+esc(item.name)+'</div>'
+        +'<div style="font-size:6px;color:var(--grn-b)">$'+parseFloat(item.price||0).toFixed(2)+'</div>'
+        +'<div style="font-size:6px;color:'+(added?'var(--pur-b)':'var(--txt-d)')+';margin-top:2px">'+(added?'✓ Added':'+ Add')+'</div>'
+      +'</div>';
+    }).join('');
+    return;
   }
-  _lbSave();
-  _lbSyncWishlistBtn();
-}
 
-function _lbSyncWishlistBtn(){
-  var cnt=Object.keys(_lbWishlist).length;
-  var el=document.getElementById('lb-wishlist-count');
-  if(el) el.textContent=cnt;
-  var btn=document.getElementById('lb-wishlist-btn');
-  if(btn) btn.style.color=_lbWishlistOnly?'var(--red)':'';
-}
-
-function lbToggleWishlist(){
-  _lbWishlistOnly=!_lbWishlistOnly;
-  var btn=document.getElementById('lb-wishlist-btn');
-  if(btn) btn.style.color=_lbWishlistOnly?'var(--red)':'';
-  lbLoad(1);
-}
-
-function _lbRenderPagination(total){
-  var pag=document.getElementById('lb-pagination');
-  if(!pag) return;
-  var pages=Math.ceil(total/_lbLimit);
-  if(pages<=1){pag.innerHTML='';return;}
-  var html='';
-  var start=Math.max(1,_lbPage-2);
-  var end=Math.min(pages,_lbPage+2);
-  if(_lbPage>1) html+='<button class="btn btn-ghost btn-sm" onclick="lbLoad('+(_lbPage-1)+')" style="font-size:8px;padding:3px 8px">‹ Prev</button>';
-  for(var p=start;p<=end;p++){
-    html+='<button class="btn '+(p===_lbPage?'btn-pur':'btn-ghost')+' btn-sm" onclick="lbLoad('+p+')" style="font-size:8px;padding:3px 8px">'+p+'</button>';
+  try{
+    var q=document.getElementById('lb-picker-search')?.value||'';
+    var qs=new URLSearchParams({page:_catPickerPage,limit:24});
+    if(q) qs.set('search',q);
+    var r=await fetch('/api/catalog/'+_catPickerSrc+'?'+qs);
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    var data=await r.json();
+    var items2=_catPickerSrc==='n3d'?(data.data||[]):(data.models||[]);
+    var total2=_catPickerSrc==='n3d'?(data.pagination?.total||0):(data.total||0);
+    if(!items2.length){
+      grid.innerHTML='<div style="text-align:center;color:var(--txt-d);font-size:8px;padding:12px;grid-column:1/-1">No results</div>';
+      _catPickerLoading=false;return;
+    }
+    grid.innerHTML=items2.map(function(item){
+      var id=item.slug||String(item.id);
+      var name=item.title||item.name||'Unknown';
+      var img=item.image_url||item.thumbnail||'';
+      var cat=item.category||item.type||'';
+      var key=_catPickerSrc+'|'+id;
+      var added=already.has(key);
+      return '<div style="background:var(--surf);border:1px solid '+(added?'var(--pur)':'var(--bdr)')+';border-radius:5px;padding:6px;cursor:'+(added?'default':'pointer')+';text-align:center"'
+        +(added?'':' onclick="lbPickerSelect(\''+_catPickerSrc+'\',\''+esc(id)+'\',\''+esc(name)+'\',\''+esc(img)+'\',\''+esc(cat)+'\',0)"')+'>'
+        +(img?'<img src="'+esc(img)+'" style="width:100%;height:55px;object-fit:cover;border-radius:3px;margin-bottom:3px" onerror="this.style.display=\'none\'">':'<div style="height:40px;display:flex;align-items:center;justify-content:center;font-size:18px">🎮</div>')
+        +'<div style="font-size:6.5px;color:'+(added?'var(--pur-b)':'var(--txt-b)')+';font-weight:bold;line-height:1.2">'+esc(name)+'</div>'
+        +(cat?'<div style="font-size:6px;color:var(--txt-d)">'+esc(cat)+'</div>':'')
+        +'<div style="font-size:6px;color:'+(added?'var(--pur-b)':'var(--txt-d)')+';margin-top:2px">'+(added?'✓ Added':'+ Add')+'</div>'
+      +'</div>';
+    }).join('');
+    var pages2=Math.ceil(total2/24);
+    if(pages2>1&&pag){
+      var ph='';
+      if(_catPickerPage>1) ph+='<button class="btn btn-ghost btn-sm" onclick="_catPickerLoad('+(_catPickerPage-1)+')" style="font-size:7px;padding:2px 6px">‹</button>';
+      ph+='<span style="font-size:7px;color:var(--txt-d);padding:0 4px">'+_catPickerPage+' / '+pages2+'</span>';
+      if(_catPickerPage<pages2) ph+='<button class="btn btn-ghost btn-sm" onclick="_catPickerLoad('+(_catPickerPage+1)+')" style="font-size:7px;padding:2px 6px">›</button>';
+      pag.innerHTML=ph;
+    }
+  }catch(err){
+    grid.innerHTML='<div style="text-align:center;color:var(--red);font-size:8px;padding:12px;grid-column:1/-1">Error: '+esc(err.message||'')+'</div>';
   }
-  if(_lbPage<pages) html+='<button class="btn btn-ghost btn-sm" onclick="lbLoad('+(_lbPage+1)+')" style="font-size:8px;padding:3px 8px">Next ›</button>';
-  pag.innerHTML=html;
+  _catPickerLoading=false;
 }
 
-function lbCardDetail(key,src){
-  // Just toggle wishlist on card click — QR/link buttons handle their own actions
+function lbPickerSelect(src,srcId,name,img,cat,price){
+  var c=getEvt();if(!c)return;
+  if(!c.catalogOrderItems) c.catalogOrderItems=[];
+  if(c.catalogOrderItems.find(function(i){return i.src===src&&i.srcId===srcId;})){
+    toast('Already added',name+' is already in catalog','info');return;
+  }
+  c.catalogOrderItems.push({id:uid(),src,srcId,name,img:img||'',cat:cat||'',price:parseFloat(price)||0,ts:Date.now()});
+  saveEvt();
+  toast('Added to catalog','Set a price for '+name,'success',2500);
+  lbAdminRenderGrid();
+  _catPickerLoad(_catPickerPage);
 }
 
-function lbShowQR(url,name,e){
-  if(e) e.stopPropagation();
-  // Remove any existing QR overlay
-  var old=document.getElementById('lb-qr-overlay');
-  if(old) old.remove();
-  var qrUrl='https://api.qrserver.com/v1/create-qr-code/?size=260x260&color=000000&bgcolor=ffffff&data='+encodeURIComponent(url);
-  var ov=document.createElement('div');
-  ov.id='lb-qr-overlay';
-  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:9500;display:flex;align-items:center;justify-content:center';
-  ov.innerHTML='<div style="background:var(--surf);border:1px solid var(--bdr);border-radius:12px;padding:20px 24px;text-align:center;max-width:320px;width:90%">'
-    +'<div style="font-size:11px;font-weight:700;color:var(--txt-b);margin-bottom:14px">'+esc(name)+'</div>'
-    +'<img src="'+esc(qrUrl)+'" style="border-radius:6px;border:4px solid #fff;width:200px;height:200px"/>'
-    +'<div style="font-size:7px;color:var(--txt-d);margin-top:8px;word-break:break-all">'+esc(url)+'</div>'
-    +'<div style="display:flex;gap:8px;margin-top:14px;justify-content:center">'
-    +'<a href="'+esc(url)+'" target="_blank" rel="noopener" onclick="document.getElementById(\'lb-qr-overlay\').remove()" class="btn btn-pur btn-sm" style="text-decoration:none;font-size:9px">↗ Visit Page</a>'
-    +'<button class="btn btn-ghost btn-sm" onclick="document.getElementById(\'lb-qr-overlay\').remove()" style="font-size:9px">✕ Close</button>'
-    +'</div></div>';
-  ov.addEventListener('click',function(ev){if(ev.target===ov)ov.remove();});
-  document.body.appendChild(ov);
+// ── Orders List ──
+function lbRenderOrders(){
+  var c=getEvt();if(!c)return;
+  var orders=(c.catalogOrders||[]).slice().reverse();
+  var el=document.getElementById('lb-orders-list');
+  if(!el) return;
+  if(!orders.length){
+    el.innerHTML='<div style="text-align:center;color:var(--txt-d);font-size:8px;padding:16px">No orders yet</div>';
+    return;
+  }
+  el.innerHTML=orders.map(function(o){
+    var d=new Date(o.timestamp);
+    var dateStr=d.toLocaleDateString('en-AU')+' '+d.toLocaleTimeString('en-AU',{hour:'2-digit',minute:'2-digit'});
+    var itemsStr=(o.items||[]).map(function(i){return i.name+(i.qty>1?' ×'+i.qty:'');}).join(', ');
+    var shipAddr=[o.address,o.suburb,o.state,o.postcode,o.country].filter(Boolean).join(', ');
+    var payIcon=o.payMethod==='card'?'💳':o.payMethod==='cash'?'💵':'📋';
+    return '<div style="border:1px solid var(--bdr);border-radius:6px;padding:8px;margin-bottom:6px">'
+      +'<div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:4px">'
+        +'<div style="flex:1">'
+          +'<div style="font-size:8px;font-weight:bold;color:var(--txt-b)">'+esc(o.customerName)
+            +(o.email?' <span style="font-size:7px;color:var(--txt-d);font-weight:normal">'+esc(o.email)+'</span>':'')+'</div>'
+          +'<div style="font-size:7px;color:var(--txt-d)">'+esc(shipAddr)+'</div>'
+        +'</div>'
+        +'<div style="text-align:right;flex-shrink:0">'
+          +'<div style="font-size:9px;font-weight:bold;color:var(--gold)">$'+parseFloat(o.total||0).toFixed(2)+'</div>'
+          +'<div style="font-size:7px;color:var(--txt-d)">'+payIcon+' '+esc(dateStr)+'</div>'
+        +'</div>'
+      +'</div>'
+      +'<div style="font-size:7px;color:var(--txt-d)">'+esc(itemsStr)+'</div>'
+      +(o.notes?'<div style="font-size:7px;color:var(--txt-d);font-style:italic;margin-top:2px">Note: '+esc(o.notes)+'</div>':'')
+    +'</div>';
+  }).join('');
 }
 
 // ── FILAMENT DRY TIME SCHEDULER ──
