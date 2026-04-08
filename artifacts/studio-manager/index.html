@@ -13273,9 +13273,32 @@ function _buildSquarePosUrl(squareData){
   return 'square-commerce-v1://payment/create?data='+encodeURIComponent(encoded);
 }
 
+var _sqReturnPoller=null;
+function _startSqReturnPoller(){
+  if(_sqReturnPoller)clearInterval(_sqReturnPoller);
+  var _sqPollStart=Date.now();
+  _sqReturnPoller=setInterval(function(){
+    // Stop if timed out or pos_pending cleared (payment handled or discarded)
+    if(Date.now()-_sqPollStart>10*60*1000||!localStorage.getItem('pos_pending')){
+      clearInterval(_sqReturnPoller);_sqReturnPoller=null;return;
+    }
+    // Only act when the page is actually visible (user has returned from Square POS)
+    if(document.visibilityState!=='visible')return;
+    // Stop polling once the banner/callback has already been handled this session
+    if(window._posManualShown||localStorage.getItem('pos_callback')){
+      clearInterval(_sqReturnPoller);_sqReturnPoller=null;return;
+    }
+    // User is back on the page — trigger the check (will show the manual-confirm banner)
+    posCheckCallback();
+  },1500);
+}
 function _launchSquarePosUrl(url){
   // window.location.href on Android triggers intent:#Intent;...;end via Chrome's intent handler.
   // On iOS, it triggers the square-commerce-v1:// custom URL scheme handler.
+  // Start a polling loop so the manual-confirm banner fires reliably when the user
+  // returns from Square POS — visibilitychange alone is unreliable on Android Chrome
+  // when the tab is restored from bfcache or killed/reloaded under memory pressure.
+  _startSqReturnPoller();
   window.location.href=url;
 }
 
@@ -15184,6 +15207,15 @@ function checkConventionDeadlines(){
 
 // ── VISIBILITY CHANGE — dedicate separate timer so push-queue updates don't reset the gap ──
 let _lastTabSyncTime=0;
+// pageshow fires on bfcache restore (common on Android Chrome after returning from a native app).
+// This is the most reliable signal that the user has come back from Square POS when the tab
+// was cached rather than kept alive in the background.
+window.addEventListener('pageshow',function(e){
+  if(e.persisted&&localStorage.getItem('pos_pending')){
+    window._posManualShown=false;
+    posCheckCallback();
+  }
+});
 document.addEventListener('visibilitychange',function(){
   if(document.visibilityState==='visible'){
     // Check for Square POS pending sale every time the app comes back into focus
