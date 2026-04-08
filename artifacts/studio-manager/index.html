@@ -16895,14 +16895,14 @@ function renderAmsSwatches(amsData,vtTray,printerName){
     if(amsData.ams.length>1){
       html+='<span style="font-size:6px;color:var(--txt-d);margin-right:1px">AMS'+(ui+1)+'</span>';
     }
-    trays.forEach(tray=>{
+    trays.forEach((tray,ti)=>{
       if(!tray.tray_type)return;
       const rawCol=tray.tray_color||'888888';
       const col='#'+rawCol.slice(0,6);
       const mat=tray.tray_sub_brands||tray.tray_type||'?';
       const rem=tray.remain>0?tray.remain+'% left':'';
       const label='Slot '+(parseInt(tray.id)+1)+': '+mat+(rem?' ('+rem+')':'');
-      const isActive=activeTrayId===String(tray.id);
+      const isActive=activeTrayId!==''&&String(ui*4+ti)===activeTrayId;
       const ring=isActive?'box-shadow:0 0 0 2px var(--grn);':'';
       html+='<div title="'+label+'" style="width:12px;height:12px;border-radius:50%;background:'+col+';border:1px solid rgba(255,255,255,0.25);flex-shrink:0;'+ring+'"></div>';
     });
@@ -19000,6 +19000,10 @@ function renderPiHub(){
           '<button class="btn btn-ghost btn-xs" style="color:var(--gold-b)" onclick="piCalibrateMenu(\''+esc(p.name)+'\')">🔧 Calibrate</button>'+
           '<button id="vision-scan-btn-'+id+'" class="btn btn-ghost btn-xs" style="color:var(--cyn)" onclick="piVisionScan(\''+esc(p.name)+'\')">🔍 AI Scan</button>'+
           (vRes?'<button class="btn btn-ghost btn-xs" style="color:var(--txt-d)" onclick="openVisionSnapshot(\''+esc(p.name)+'\')">📷 Snapshot</button>':'')+
+        '</div>'+
+        '<div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:4px">'+
+          '<button class="btn btn-ghost btn-xs" style="color:var(--grn-b)" onclick="openAmsModal(\''+esc(p.name)+'\',1)">📥 Load Filament</button>'+
+          '<button class="btn btn-ghost btn-xs" style="color:var(--amb)" onclick="piAmsUnload(\''+esc(p.name)+'\')">📤 Unload Filament</button>'+
         '</div>'+
         _renderPrinterTapoSection(p.name)+
       '</div>';
