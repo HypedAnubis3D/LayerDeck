@@ -159,8 +159,8 @@ input.srch::placeholder{color:var(--txt-d);}
 
 /* PRINTS */
 .prints-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:10px;}
-.print-card{background:var(--surf);border:1px solid var(--bdr);border-radius:12px;padding:14px;border-left:3px solid var(--org);transition:border-color .2s,box-shadow .2s;}
-.print-card:hover{border-color:var(--bdr2);box-shadow:0 6px 24px rgba(0,0,0,.4);}
+.print-card{background:var(--surf);border:1px solid var(--bdr);border-radius:6px;padding:12px;border-left:3px solid var(--org);transition:border-color .2s,box-shadow .2s;}
+.print-card:hover{border-color:var(--bdr2);box-shadow:0 4px 16px rgba(0,0,0,.35);}
 .print-card.card-done{border-left-color:var(--grn);}
 .print-card.card-failed{border-left-color:var(--red);opacity:.82;}
 .pname{font-size:13px;font-weight:600;color:var(--txt-b);margin-bottom:3px;}
@@ -168,10 +168,10 @@ input.srch::placeholder{color:var(--txt-d);}
 .pc-colors{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:9px;}
 .pc-chip{display:flex;align-items:center;gap:5px;background:var(--bg);border:1px solid var(--bdr2);padding:4px 8px;border-radius:8px;font-size:10px;}
 .pc-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0;}
-.cost-box{background:var(--bg);border:1px solid var(--bdr);border-radius:8px;padding:10px;margin-bottom:9px;}
-.cb-title{font-size:9px;color:var(--txt-d);font-weight:600;text-transform:uppercase;margin-bottom:7px;}
-.cb-row{display:flex;justify-content:space-between;font-size:10px;padding:3px 0;border-bottom:1px solid var(--bdr);}
-.cb-row:last-child{border-bottom:none;padding-top:5px;margin-top:3px;}
+.cost-box{background:var(--bg);border:1px solid var(--bdr);border-radius:4px;padding:8px;margin-bottom:8px;}
+.cb-title{font-size:6px;color:var(--txt-d);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:5px;}
+.cb-row{display:flex;justify-content:space-between;align-items:center;font-size:8px;padding:2px 0;border-bottom:1px solid var(--bdr);}
+.cb-row:last-child{border-bottom:none;padding-top:4px;margin-top:2px;}
 .cb-total{font-family:'Orbitron',monospace;font-size:11px;font-weight:700;color:var(--grn);}
 .cb-sell{font-family:'Orbitron',monospace;font-size:11px;font-weight:700;color:var(--org);}
 .status-pill{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:20px;font-size:9px;border:1px solid;font-weight:600;white-space:nowrap;}
@@ -4124,9 +4124,9 @@ function renderPrints(){
       (function(){var lR=qi.printer&&piPrevStates[qi.printer]?Math.round(piPrevStates[qi.printer].mc_remaining_time||0):0;var ts=lR>0?(formatHms(lR/60)+' left'):(qi.hrs?formatHms(qi.hrs):'');return ts?' · <span class="print-time-display" style="display:inline-flex;font-size:8px;padding:2px 6px">'+ts+'</span>':'';})()+(startedLabel?'<span style="color:var(--txt-d)">'+startedLabel+'</span>':'')+'</div>'+
       '<div class="cost-box">'+
         '<div class="cb-title">Cost Breakdown</div>'+
-        '<div class="cb-row"><span style="color:var(--txt-d)">Filament</span><span>$'+qiCost.filCost.toFixed(2)+'</span></div>'+
-        '<div class="cb-row"><span style="color:var(--txt-d)">Electricity</span><span>$'+qiCost.elecCost.toFixed(2)+'</span></div>'+
-        '<div class="cb-row"><span>Total Cost</span><span class="cb-total">$'+qiCost.total.toFixed(2)+'</span></div>'+
+        '<div class="cb-row"><span style="color:var(--txt-d)">Filament</span><span style="color:var(--txt)">$'+qiCost.filCost.toFixed(2)+'</span></div>'+
+        '<div class="cb-row"><span style="color:var(--txt-d)">Electricity</span><span style="color:var(--txt)">$'+qiCost.elecCost.toFixed(2)+'</span></div>'+
+        '<div class="cb-row"><span style="color:var(--txt)">Total Cost</span><span class="cb-total">$'+qiCost.total.toFixed(2)+'</span></div>'+
         '<div class="cb-row"><span style="color:var(--org)">Sell ('+cfg.markup+'% markup)</span><span class="cb-sell">$'+qiCost.sell.toFixed(2)+'</span></div>'+
       '</div>'+
       (qi.notes?'<div class="notes-box">'+esc(qi.notes)+'</div>':'')+
@@ -4175,10 +4175,10 @@ function renderPrints(){
       ${(p.tmfId||p.tmfName)?`<div style="margin:3px 0 1px"><span style="display:inline-flex;align-items:center;gap:3px;background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.3);color:var(--grn-b);padding:1px 7px;border-radius:10px;font-size:7px;letter-spacing:.5px">🔗 ${esc(_tmfTitle||p.tmfName||'3MF')}</span></div>`:`<div style="margin:3px 0 1px"><span style="display:inline-flex;align-items:center;gap:3px;background:rgba(249,115,22,.08);border:1px solid rgba(249,115,22,.25);color:var(--org);padding:1px 7px;border-radius:10px;font-size:7px;letter-spacing:.5px">⚠ No 3MF linked</span></div>`}
       <div class="cost-box">
         <div class="cb-title">Cost Breakdown</div>
-        <div class="cb-row"><span style="color:var(--txt-d)">Filament</span><span>$${cost.filCost.toFixed(2)}</span></div>
-        <div class="cb-row"><span style="color:var(--txt-d)">Electricity</span><span>$${cost.elecCost.toFixed(2)}</span></div>
-        ${cfg.labor>0?`<div class="cb-row"><span style="color:var(--txt-d)">Labor</span><span>$${cost.laborCost.toFixed(2)}</span></div>`:''}
-        <div class="cb-row"><span>Total Cost</span><span class="cb-total">$${cost.total.toFixed(2)}</span></div>
+        <div class="cb-row"><span style="color:var(--txt-d)">Filament</span><span style="color:var(--txt)">$${cost.filCost.toFixed(2)}</span></div>
+        <div class="cb-row"><span style="color:var(--txt-d)">Electricity</span><span style="color:var(--txt)">$${cost.elecCost.toFixed(2)}</span></div>
+        ${cfg.labor>0?`<div class="cb-row"><span style="color:var(--txt-d)">Labor</span><span style="color:var(--txt)">$${cost.laborCost.toFixed(2)}</span></div>`:''}
+        <div class="cb-row"><span style="color:var(--txt)">Total Cost</span><span class="cb-total">$${cost.total.toFixed(2)}</span></div>
         <div class="cb-row"><span style="color:var(--org)">Sell (${cfg.markup}% markup)</span><span class="cb-sell">$${cost.sell.toFixed(2)}</span></div>
       </div>
       ${p.notes?`<div class="notes-box">${esc(p.notes)}</div>`:''}
