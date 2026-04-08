@@ -14036,6 +14036,7 @@ function lbInit(){
   if(adm) adm.style.display='none';
   if(brw) brw.style.display='';
   if(cart) cart.style.display='none';
+  _catLoadCart();
   _catSyncCartBadge();
   lbBrowseLoad(1);
 }
@@ -14075,11 +14076,30 @@ function lbShowBrowseView(){
   if(cart) cart.style.display='none';
 }
 
+// ── Cart persistence ──
+function _catCartKey(){
+  var c=getEvt();
+  return 'cat_cart_v1_'+(c?(c.id||c.name):'__none');
+}
+function _catSaveCart(){
+  try{localStorage.setItem(_catCartKey(),JSON.stringify(_catCart));}catch(_){}
+}
+function _catLoadCart(){
+  try{
+    var raw=localStorage.getItem(_catCartKey());
+    if(raw){_catCart=JSON.parse(raw)||[];}
+  }catch(_){_catCart=[];}
+}
+function _catClearSavedCart(){
+  try{localStorage.removeItem(_catCartKey());}catch(_){}
+}
+
 // ── Cart ──
 function _catSyncCartBadge(){
   var count=_catCart.reduce(function(a,r){return a+r.qty;},0);
   var el=document.getElementById('lb-cart-count');
   if(el) el.textContent=count;
+  _catSaveCart();
 }
 
 function lbAddToCart(itemKey,e){
@@ -14292,6 +14312,7 @@ function _catPlaceOrder(payMethod,formOverride){
   }
   // Clear cart + reset form
   _catCart=[];
+  _catClearSavedCart();
   _catSyncCartBadge();
   ['lb-co-name','lb-co-email','lb-co-addr','lb-co-suburb','lb-co-state','lb-co-postcode','lb-co-notes'].forEach(function(id){
     var el=document.getElementById(id);if(el)el.value='';
