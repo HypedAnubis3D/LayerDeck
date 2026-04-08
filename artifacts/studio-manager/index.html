@@ -1968,6 +1968,7 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
       <button id="orf-etsy"       class="seg-btn seg-etsy"              onclick="setOrderFilter('etsy')">🟠 Etsy</button>
       <button id="orf-convention" class="seg-btn seg-convention"        onclick="setOrderFilter('convention')">🎪 Convention</button>
       <button id="orf-square"     class="seg-btn"                       onclick="setOrderFilter('square')" style="color:#3e9bd4;border-color:rgba(62,155,212,.3)">💳 Square</button>
+      <button id="orf-catalog"    class="seg-btn"                       onclick="setOrderFilter('catalog')" style="color:#bb86fc;border-color:rgba(155,89,182,.3)">📦 Catalog</button>
       <button id="orf-pending"    class="seg-btn"                       onclick="setOrderFilter('pending')" style="color:var(--amb);border-color:rgba(255,165,0,.3)">📦 Ship Later</button>
       <button id="orf-manual"     class="seg-btn seg-manual"            onclick="setOrderFilter('manual')">✏ Manual</button>
     </div>
@@ -5087,13 +5088,15 @@ function renderOrders(){
   const isEtsy=function(o){return o.fromEtsy||(o.platform||'').toLowerCase()==='etsy';};
   const isConvention=function(o){return (o.platform||'').toLowerCase()==='convention'||!!o.fromConvention;};
   const isSquare=function(o){return o.source==='square'||o.fromSquare||(o.platform||'').toLowerCase()==='square';};
+  const isCatalog=function(o){return o.fromCatalogOrder||(o.platform||'').toLowerCase()==='catalog';};
   const hasPendingShip=function(o){return !!(o.hasPendingShipments||(o.items||[]).some(function(it){return it.shipLater&&!it.shipped;}));};
   if(orderFilter==='shopify')    list=list.filter(isShopify);
   else if(orderFilter==='etsy')  list=list.filter(isEtsy);
   else if(orderFilter==='convention') list=list.filter(isConvention);
   else if(orderFilter==='square') list=list.filter(isSquare);
+  else if(orderFilter==='catalog') list=list.filter(isCatalog);
   else if(orderFilter==='pending') list=list.filter(hasPendingShip);
-  else if(orderFilter==='manual') list=list.filter(function(o){return !isShopify(o)&&!isEtsy(o)&&!isConvention(o)&&!isSquare(o);});
+  else if(orderFilter==='manual') list=list.filter(function(o){return !isShopify(o)&&!isEtsy(o)&&!isConvention(o)&&!isSquare(o)&&!isCatalog(o);});
   list.sort(function(a,b){return (b.timestamp||0)-(a.timestamp||0);});
   if(cnt)cnt.textContent=list.length+' order'+(list.length!==1?'s':'');
   if(!list.length){
@@ -5103,7 +5106,7 @@ function renderOrders(){
   const STATUS_COLOR={pending:'var(--amb)',printing:'var(--cyn)',shipped:'var(--grn)',cancelled:'var(--red)'};
   grid.innerHTML=list.map(function(o){
     var sq=isSquare(o);
-    var shopify=isShopify(o), etsy=isEtsy(o);
+    var shopify=isShopify(o), etsy=isEtsy(o), catalog=isCatalog(o);
     var pendingShip=hasPendingShip(o);
     var allShipped=sq&&(o.items||[]).filter(function(it){return it.shipLater;}).length>0&&(o.items||[]).filter(function(it){return it.shipLater;}).every(function(it){return it.shipped;});
     var total=(o.items||[]).reduce(function(s,i){return s+(parseFloat(i.price)||0)*(parseInt(i.qty)||1);},0)+(parseFloat(o.shipping)||0);
@@ -5130,13 +5133,15 @@ function renderOrders(){
         ?'<span class="uorder-platform up-shopify">🛍 Shopify</span>'
         :etsy
           ?'<span class="uorder-platform up-etsy">🟠 Etsy</span>'
-          :'<span class="uorder-platform" style="background:var(--bdr);color:var(--txt-d);border:1px solid var(--bdr2)">✏ Manual</span>';
+          :catalog
+            ?'<span class="uorder-platform" style="background:rgba(155,89,182,.15);color:#bb86fc;border:1px solid rgba(155,89,182,.4)">📦 Catalog</span>'
+            :'<span class="uorder-platform" style="background:var(--bdr);color:var(--txt-d);border:1px solid var(--bdr2)">✏ Manual</span>';
     var shipBadge=allShipped
       ?'<span style="font-size:6px;background:rgba(34,197,94,.12);color:var(--grn);border:1px solid rgba(34,197,94,.3);padding:1px 6px;border-radius:6px;white-space:nowrap">✅ Ready to Ship</span>'
       :pendingShip
         ?'<span style="font-size:6px;background:rgba(255,165,0,.12);color:var(--amb);border:1px solid rgba(255,165,0,.3);padding:1px 6px;border-radius:6px;white-space:nowrap">📦 Pending Shipment</span>'
         :'';
-    var borderAccent=sq?'#3e9bd4':shopify?'var(--shopify)':etsy?'#e07828':'var(--bdr)';
+    var borderAccent=sq?'#3e9bd4':shopify?'var(--shopify)':etsy?'#e07828':catalog?'#9b59b6':'var(--bdr)';
     return '<div class="order-card selectable'+(sel?' selected':'')+'" data-selid="'+o.id+'" style="border-top:2px solid '+borderAccent+'" onclick="if(selectMode===\'orders\')toggleSelect(\''+o.id+'\')">'
       +'<input type="checkbox" class="sel-checkbox"'+(sel?' checked':'')+' onclick="event.stopPropagation();toggleSelect(\''+o.id+'\')" />'
       +'<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">'
@@ -7328,7 +7333,8 @@ function renderCustomers(){
     const lastOrder=c.orders.sort((a,b)=>new Date(b.date||b.timestamp)-new Date(a.date||a.timestamp))[0];
     const shinyCount=shinyRolls.filter(r=>r.customer===c.name&&r.result==='shiny').length;
     const activeCount=c.orders.filter(o=>o.status!=='shipped'&&o.status!=='cancelled').length;
-    return `<div class="customer-card" data-cname="${esc(c.name)}">
+    const shipAddr=c.orders.map(o=>o.shippingAddress).filter(Boolean)[0]||'';
+    return `<div class="customer-card" data-cname="${esc(c.name)}" style="cursor:pointer" onclick="openCustomerDetail('${esc(c.name).replace(/'/g,'&#39;')}')">
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:9px">
         <div class="cust-avatar">${initial}</div>
         <div style="flex:1;min-width:0">
@@ -7336,8 +7342,9 @@ function renderCustomers(){
           <div class="cust-meta">Customer since ${lastOrder?new Date(lastOrder.timestamp||lastOrder.date).toLocaleDateString('en-US',{month:'short',year:'numeric'}):'—'}${c.platform?' · '+esc(c.platform):''}</div>
           ${c.email?`<div style="font-size:7px;color:var(--txt-d);margin-top:2px">📧 <a href="mailto:${esc(c.email)}" style="color:var(--teal);text-decoration:none" onclick="event.stopPropagation()">${esc(c.email)}</a></div>`:''}
           ${c.phone?`<div style="font-size:7px;color:var(--txt-d)">📞 ${esc(c.phone)}</div>`:''}
+          ${shipAddr?`<div style="font-size:7px;color:var(--txt-d);margin-top:2px">📍 ${esc(shipAddr)}</div>`:''}
         </div>
-        <button class="btn btn-red btn-sm" style="flex-shrink:0" onclick="deleteCustomer(this.closest('[data-cname]').dataset.cname)">🗑</button>
+        <button class="btn btn-red btn-sm" style="flex-shrink:0" onclick="event.stopPropagation();deleteCustomer(this.closest('[data-cname]').dataset.cname)">🗑</button>
       </div>
       <div class="cust-stats">
         <div class="cst"><div class="cst-n" style="color:var(--grn)">$${c.totalSpend.toFixed(0)}</div><div class="cst-l">Lifetime</div></div>
@@ -7345,13 +7352,87 @@ function renderCustomers(){
         <div class="cst"><div class="cst-n" style="color:gold">${shinyCount}</div><div class="cst-l">✨ Shinies</div></div>
       </div>
       <div class="cust-orders">
-        <div style="font-size:6px;color:var(--txt-d);letter-spacing:1px;margin-bottom:4px">ORDERS</div>
+        <div style="font-size:6px;color:var(--txt-d);letter-spacing:1px;margin-bottom:4px">ORDERS — tap card to view details</div>
         ${c.orders.map(o=>`<span class="cust-order-chip">${esc(o.orderId)} · $${(o.items||[]).reduce((a,i)=>a+parseFloat(i.price||0)*parseInt(i.qty||1),0).toFixed(0)}</span>`).join('')}
       </div>
       ${activeCount>0?`<div style="margin-top:7px;font-size:7px;color:var(--amb)">⟳ ${activeCount} active order(s)</div>`:''}
     </div>`;
   }).join('');
 }
+
+function openCustomerDetail(name){
+  var custOrders=orders.filter(function(o){return o.customer===name;}).sort(function(a,b){return (b.timestamp||0)-(a.timestamp||0);});
+  var totalSpend=custOrders.reduce(function(s,o){return s+(o.items||[]).reduce(function(a,i){return a+parseFloat(i.price||0)*parseInt(i.qty||1);},0)+(parseFloat(o.shipping)||0);},0);
+  var anyEmail=custOrders.map(function(o){return o.customerEmail;}).filter(Boolean)[0]||'';
+  var anyAddr=custOrders.map(function(o){return o.shippingAddress;}).filter(Boolean)[0]||'';
+  var orderChips=custOrders.map(function(o){
+    var oTotal=(o.items||[]).reduce(function(a,i){return a+parseFloat(i.price||0)*parseInt(i.qty||1);},0)+(parseFloat(o.shipping)||0);
+    var platformColor=o.fromCatalogOrder?'#9b59b6':o.fromEtsy?'#e07828':o.fromShopify?'#96bf48':o.source==='square'?'#3e9bd4':'var(--cyn)';
+    var platformLabel=o.fromCatalogOrder?'📦 Catalog':o.fromEtsy?'🟠 Etsy':o.fromShopify?'🛍 Shopify':o.source==='square'?'💳 Square':'✏ Manual';
+    var statusColors={pending:'var(--amb)',printing:'var(--cyn)',shipped:'var(--grn)',cancelled:'var(--red)'};
+    return '<div onclick="event.stopPropagation();_navToOrder(\''+o.id+'\')" style="cursor:pointer;background:var(--surf);border:1px solid var(--bdr);border-left:3px solid '+platformColor+';border-radius:8px;padding:10px 12px;margin-bottom:8px;transition:border-color .2s" onmouseover="this.style.borderColor=\''+platformColor+'\'" onmouseout="this.style.borderLeftColor=\''+platformColor+'\';this.style.borderTopColor=\'var(--bdr)\';this.style.borderRightColor=\'var(--bdr)\';this.style.borderBottomColor=\'var(--bdr)\'">'
+      +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">'
+        +'<span style="font-family:Orbitron,monospace;font-size:9px;color:var(--cyn)">'+esc(o.orderId||o.id)+'</span>'
+        +'<span style="font-size:9px;font-weight:700;color:var(--grn)">$'+oTotal.toFixed(2)+'</span>'
+      +'</div>'
+      +'<div style="display:flex;gap:6px;align-items:center">'
+        +'<span style="font-size:7px;background:rgba(0,0,0,.2);color:'+platformColor+';border:1px solid '+platformColor+'44;border-radius:4px;padding:1px 5px">'+platformLabel+'</span>'
+        +'<span style="font-size:7px;color:'+(statusColors[o.status]||'var(--txt-d)')+'">'+esc(o.status||'pending')+'</span>'
+        +'<span style="font-size:7px;color:var(--txt-d);margin-left:auto">'+esc(o.date||'')+'</span>'
+      +'</div>'
+      +'<div style="font-size:7px;color:var(--txt-d);margin-top:4px">'+((o.items||[]).map(function(i){return esc(i.name)+(i.qty>1?' ×'+i.qty:'');}).join(', ') )+'</div>'
+      +'<div style="font-size:7px;color:#64748b;margin-top:4px;font-style:italic">Tap to view in Orders →</div>'
+      +'</div>';
+  }).join('');
+  var html='<div style="padding:4px 0">'
+    +'<div style="display:flex;gap:10px;margin-bottom:16px">'
+      +'<div style="width:44px;height:44px;background:var(--bdr);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;color:var(--teal);flex-shrink:0">'+esc(name.charAt(0).toUpperCase())+'</div>'
+      +'<div style="flex:1">'
+        +(anyEmail?'<div style="font-size:10px;color:var(--txt-d);margin-top:2px">📧 '+esc(anyEmail)+'</div>':'')
+        +(anyAddr?'<div style="font-size:10px;color:var(--txt-d);margin-top:3px">📍 '+esc(anyAddr)+'</div>':'')
+        +'<div style="margin-top:6px;display:flex;gap:12px">'
+          +'<div style="text-align:center"><div style="font-size:14px;font-weight:700;color:var(--grn)">$'+totalSpend.toFixed(0)+'</div><div style="font-size:7px;color:var(--txt-d)">Lifetime</div></div>'
+          +'<div style="text-align:center"><div style="font-size:14px;font-weight:700;color:var(--teal)">'+custOrders.length+'</div><div style="font-size:7px;color:var(--txt-d)">Orders</div></div>'
+        +'</div>'
+      +'</div>'
+    +'</div>'
+    +'<div style="font-size:8px;color:var(--txt-d);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:8px">Order History</div>'
+    +orderChips
+    +'</div>';
+  // Show as a sliding drawer/overlay
+  var existing=document.getElementById('cust-detail-overlay');
+  if(existing)existing.remove();
+  var overlay=document.createElement('div');
+  overlay.id='cust-detail-overlay';
+  overlay.style.cssText='position:fixed;inset:0;z-index:9000;background:rgba(0,0,0,.6);display:flex;align-items:flex-end;justify-content:center;animation:fadeIn .15s';
+  overlay.onclick=function(e){if(e.target===overlay)overlay.remove();};
+  var drawer=document.createElement('div');
+  drawer.style.cssText='background:var(--bg-b);border-radius:16px 16px 0 0;padding:20px 18px 30px;width:100%;max-width:560px;max-height:80vh;overflow-y:auto;border:1px solid var(--bdr)';
+  drawer.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">'
+    +'<div style="font-size:13px;font-weight:700;color:var(--txt-b)">'+esc(name)+'</div>'
+    +'<button onclick="document.getElementById(\'cust-detail-overlay\').remove()" style="background:var(--bdr);border:none;color:var(--txt-b);border-radius:50%;width:26px;height:26px;cursor:pointer;font-size:12px">✕</button>'
+    +'</div>'+html;
+  overlay.appendChild(drawer);
+  document.body.appendChild(overlay);
+}
+function _navToOrder(orderId){
+  var overlay=document.getElementById('cust-detail-overlay');
+  if(overlay)overlay.remove();
+  navTo('orders',document.getElementById('nav-orders'));
+  setTimeout(function(){
+    var el=document.getElementById('or-s');
+    if(el){
+      var o=orders.find(function(x){return x.id===orderId;});
+      el.value=o?o.orderId||o.id:'';
+      renderOrders();
+      setTimeout(function(){
+        var card=document.querySelector('[data-selid="'+orderId+'"]');
+        if(card)card.scrollIntoView({behavior:'smooth',block:'center'});
+      },150);
+    }
+  },80);
+}
+
 function deleteCustomer(name){
   const orderCount=orders.filter(function(o){return o.customer===name;}).length;
   showConfirm(
@@ -11287,7 +11368,7 @@ document.addEventListener('click',function(e){
 let orderFilter='all';
 function setOrderFilter(f){
   orderFilter=f;
-  ['all','shopify','etsy','convention','square','pending','manual'].forEach(function(k){
+  ['all','shopify','etsy','convention','square','catalog','pending','manual'].forEach(function(k){
     const btn=document.getElementById('orf-'+k);
     if(!btn)return;
     btn.classList.remove('seg-active');
@@ -14495,20 +14576,41 @@ function _catPlaceOrder(payMethod,formOverride){
     queueItemIds,
   });
   saveEvt();
-  // Send order confirmation email
+  // Add to global orders so it shows in Orders tab + Customers tab
+  var catOrderEntry={
+    id:orderId,
+    orderId:'CAT-'+orderId.slice(-6).toUpperCase(),
+    orderNumber:'CAT-'+orderId.slice(-6).toUpperCase(),
+    customer:form.name,
+    customerEmail:form.email,
+    shippingAddress:shipAddr,
+    platform:'Catalog',
+    fromCatalogOrder:true,
+    conventionName:c.name||c.title||'',
+    date:new Date().toISOString().split('T')[0],
+    items:items.map(function(it){return{name:it.name,qty:it.qty,price:it.price};}),
+    total:total,
+    shipping:0,
+    status:'pending',
+    notes:form.notes||'',
+    timestamp:Date.now(),
+  };
+  orders.push(catOrderEntry);
+  saveOrders();
+  // Send catalog order confirmation email (different from POS receipt — shows address + 1-2 week estimate)
   if(form.email){
     var _convName=(c.name||c.title||'');
-    var _orderDate=new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
-    fetch('/api/email/receipt',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+    fetch('/api/email/catalog-order',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
       to:form.email,
       customerName:form.name,
       items:items.map(function(i){return{name:i.name,qty:i.qty,price:i.price};}),
       total:total.toFixed(2),
       method:payMethod,
       conventionName:_convName,
-      date:_orderDate
-    })}).then(function(r){if(!r.ok)r.json().then(function(d){console.warn('[email] receipt failed',d.error);});})
-      .catch(function(e){console.warn('[email] receipt error',e);});
+      shippingAddress:{address:form.addr,city:form.suburb,state:form.state,zip:form.postcode,country:form.country},
+      notes:form.notes||''
+    })}).then(function(r){if(!r.ok)r.json().then(function(d){console.warn('[email] catalog-order failed',d.error);});})
+      .catch(function(e){console.warn('[email] catalog-order error',e);});
   }
   // Clear cart + reset form
   _catCart=[];
