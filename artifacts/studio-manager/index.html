@@ -1540,6 +1540,12 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
   #tab-labels{display:block!important;}
   .labels-grid{grid-template-columns:var(--lbl-cols,repeat(4,1fr));}
   .lbl-card{break-inside:avoid;border:1px solid #ddd;}
+  /* Thermal 2×2: fixed 2in×2in labels, QR fills the card */
+  html[data-label-size="thermal-2x2"] .labels-grid{display:flex!important;flex-wrap:wrap;gap:4px;padding:4px;}
+  html[data-label-size="thermal-2x2"] .lbl-card{width:2in;height:2in;padding:2px!important;box-sizing:border-box;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden;}
+  html[data-label-size="thermal-2x2"] .lbl-card .lbl-qr-wrap{flex:1;display:flex;align-items:center;justify-content:center;width:100%;}
+  html[data-label-size="thermal-2x2"] .lbl-card .lbl-qr-wrap canvas,
+  html[data-label-size="thermal-2x2"] .lbl-card .lbl-qr-wrap img{width:1.8in!important;height:1.8in!important;}
 }
 
 @media (min-width: 768px) {
@@ -3002,7 +3008,7 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
               <div class="field"><div class="fl">Category</div><input type="text" id="lb-m-cat" placeholder="character, poke-ball…" style="font-size:8px"/></div>
             </div>
             <div class="fr2">
-              <div class="field"><div class="fl">Price (AUD) *</div><input type="number" id="lb-m-price" placeholder="25.00" min="0" step="0.01" style="font-size:8px"/></div>
+              <div class="field"><div class="fl">Price (USD) *</div><input type="number" id="lb-m-price" placeholder="25.00" min="0" step="0.01" style="font-size:8px"/></div>
               <div class="field"><div class="fl">Image URL</div><input type="text" id="lb-m-img" placeholder="https://…" style="font-size:8px"/></div>
             </div>
             <div style="display:flex;gap:6px;margin-top:6px">
@@ -3076,10 +3082,9 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
               <div class="field"><div class="fl">Country</div><input type="text" id="lb-co-country" value="Australia" style="font-size:8px"/></div>
             </div>
             <div class="field"><div class="fl">Notes / Colour Pref</div><textarea id="lb-co-notes" rows="2" placeholder="Colour preference, special requests…" style="font-size:8px;width:100%;box-sizing:border-box;resize:vertical"></textarea></div>
-            <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">
-              <button class="btn btn-grn" onclick="lbCheckout('card')" style="flex:1;font-size:8px;min-width:80px">💳 Card (Square)</button>
-              <button class="btn btn-gold" onclick="lbCheckout('cash')" style="flex:1;font-size:8px;min-width:80px">💵 Cash</button>
-              <button class="btn btn-ghost" onclick="lbCheckout('manual')" style="flex:1;font-size:8px;min-width:80px">📋 Manual/Other</button>
+            <div style="display:flex;gap:8px;margin-top:8px">
+              <button class="btn btn-grn" onclick="lbCheckout('card')" style="flex:1;font-size:9px;padding:7px 0">💳 Card</button>
+              <button class="btn btn-gold" onclick="lbCheckout('cash')" style="flex:1;font-size:9px;padding:7px 0">💵 Cash</button>
             </div>
           </div>
         </div>
@@ -5680,6 +5685,19 @@ function triggerLabelPrint(){
 function renderLabels(){
   const g=document.getElementById('labels-grid');
   if(!spools.length){g.innerHTML='<div class="empty">No spools</div>';return;}
+  const size=localStorage.getItem('ha3d_label_size')||'standard';
+  const is2x2=size==='thermal-2x2';
+  // For 2x2 thermal: large QR fills card with just the name as a caption
+  if(is2x2){
+    g.innerHTML=spools.map(s=>`<div class="lbl-card"><div class="lbl-qr-wrap" id="lbl-qr-${s.id}"></div><div style="font-size:6px;font-weight:bold;text-align:center;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%">${esc(s.name)}</div></div>`).join('');
+    setTimeout(()=>{
+      spools.forEach(s=>{
+        const el=document.getElementById('lbl-qr-'+s.id);
+        if(el&&!el.hasChildNodes()){try{new QRCode(el,{text:'HA3D_SPOOL:'+s.id,width:140,height:140,colorDark:'#000',colorLight:'#fff',correctLevel:QRCode.CorrectLevel.M});}catch(e){}}
+      });
+    },100);
+    return;
+  }
   g.innerHTML=spools.map(s=>`<div class="lbl-card"><div style="display:flex;align-items:center;justify-content:center;gap:3px;margin-bottom:3px"><span class="lc-col" style="background:${s.color}"></span><span class="lc-name">${esc(s.name)}</span></div><div class="lc-sub">${esc(s.material)}${s.brand?' · '+esc(s.brand):''}</div><div id="lbl-qr-${s.id}" style="display:flex;justify-content:center;margin-bottom:3px"></div><div style="font-size:5px;color:#888">${esc(s.printer)}${s.amsSlot?' · Slot '+s.amsSlot:''}</div></div>`).join('');
   setTimeout(()=>{
     spools.forEach(s=>{
@@ -14065,24 +14083,30 @@ function _catSyncCartBadge(){
   if(el) el.textContent=count;
 }
 
-function lbAddToCart(catItemId,e){
+function lbAddToCart(itemKey,e){
   if(e) e.stopPropagation();
   var c=getEvt();if(!c)return;
   var items=(c.catalogOrderItems||[]);
-  var item=items.find(function(i){return i.id===catItemId;});
+  // Support both id-based keys and src|srcId keys (for newly-priced API items)
+  var item=items.find(function(i){return i.id===itemKey;});
+  if(!item&&itemKey&&itemKey.includes('|')){
+    var parts=itemKey.split('|');
+    item=items.find(function(i){return i.src===parts[0]&&i.srcId===parts[1];});
+    if(item) itemKey=item.id;
+  }
   if(!item){toast('Item not found','','warning');return;}
-  if(!item.price){toast('Price not set','Set a price in Manage Catalog first','warning');return;}
-  var existing=_catCart.find(function(r){return r.catItemId===catItemId;});
+  if(!item.price){toast('Price not set','Enter a price and tap ✓ first','warning');return;}
+  var existing=_catCart.find(function(r){return r.catItemId===itemKey;});
   if(existing){
     existing.qty++;
     toast(item.name,'×'+existing.qty+' in cart','success',1800);
   } else {
-    _catCart.push({catItemId,name:item.name,img:item.img||'',cat:item.cat||'',qty:1,price:item.price});
+    _catCart.push({catItemId:itemKey,name:item.name,img:item.img||'',cat:item.cat||'',qty:1,price:item.price});
     toast(item.name,'Added to cart','success',1800);
   }
   _catSyncCartBadge();
-  var btn=document.getElementById('lb-atc-'+catItemId);
-  if(btn){btn.textContent='✓ In Cart';btn.style.background='var(--grn-d)';}
+  var btn=document.getElementById('lb-atc-'+itemKey);
+  if(btn){btn.textContent='✓ In Cart';btn.className=btn.className.replace('btn-pur','btn-grn');}
 }
 
 function lbRemoveFromCart(catItemId){
@@ -14127,7 +14151,7 @@ function _catRenderCart(){
     +'</div>';
   }).join('');
   var total=_catCart.reduce(function(a,r){return a+r.qty*r.price;},0);
-  if(tot) tot.innerHTML='Total: <span style="color:var(--gold)">$'+total.toFixed(2)+' AUD</span>';
+  if(tot) tot.innerHTML='Total: <span style="color:var(--gold)">$'+total.toFixed(2)+' USD</span>';
 }
 
 // ── Checkout ──
@@ -14163,7 +14187,7 @@ function _catDoSquarePayment(){
   var callbackUrl=location.href.split('?')[0]+'?sq_catalog=1';
   var params=new URLSearchParams({'data':JSON.stringify({
     action:'charge',
-    amount_money:{amount:totalCents,currency_code:'AUD'},
+    amount_money:{amount:totalCents,currency_code:'USD'},
     callback_url:callbackUrl,
     client_id:SQ_APP_ID,
     version:'1.3',
@@ -14299,33 +14323,28 @@ async function lbBrowseLoad(page){
   var search=(document.getElementById('lb-search')?.value||'').trim().toLowerCase();
   var catF=document.getElementById('lb-filter-cat')?.value||'';
 
-  // "My Items" or no items configured — show only local items
-  if(_catBrowseSrc==='myitems'||!catalogOrderItems.length){
+  // "My Items" — show only catalog + manual items
+  if(_catBrowseSrc==='myitems'){
     _catBrowseLoading=false;
     var myItems=catalogOrderItems.filter(function(i){
-      var m=!search||(i.name||'').toLowerCase().includes(search)||(i.cat||'').toLowerCase().includes(search);
-      var cf=!catF||(i.cat||'')===catF;
-      return m&&cf;
+      return (i.src==='catalog'||i.src==='manual')
+        &&(!search||(i.name||'').toLowerCase().includes(search)||(i.cat||'').toLowerCase().includes(search))
+        &&(!catF||(i.cat||'')===catF);
     });
     if(!myItems.length){
-      grid.innerHTML='<div style="text-align:center;color:var(--txt-d);font-size:8px;padding:24px;grid-column:1/-1">'
-        +(_catBrowseSrc==='myitems'?'No custom items — tap ⚙ Manage Catalog to add':'No catalog items configured yet — tap ⚙ Manage Catalog to add items')
-        +'</div>';
+      grid.innerHTML='<div style="text-align:center;color:var(--txt-d);font-size:8px;padding:24px;grid-column:1/-1">No custom items — tap ⚙ Manage Catalog to add</div>';
       return;
     }
     grid.innerHTML=myItems.map(function(item){return _catBrowseCardHtml(item);}).join('');
     return;
   }
 
-  // For 'all', 'n3d', 'cpl' — fetch from API then filter to only items in catalogOrderItems
-  var n3dIds=new Set(catalogOrderItems.filter(function(i){return i.src==='n3d';}).map(function(i){return i.srcId;}));
-  var cplIds=new Set(catalogOrderItems.filter(function(i){return i.src==='cpl';}).map(function(i){return i.srcId;}));
-  var localItems=catalogOrderItems.filter(function(i){return i.src==='catalog'||i.src==='manual';});
-
+  // For N3D / CPL / All — always fetch ALL items from the API (no pre-configuration required)
+  // Prices are stored per-item in catalogOrderItems; if unset, customer-facing cards show a price input (admin only)
   try{
     var fetchedItems=[];
-    var needN3d=(_catBrowseSrc==='all'||_catBrowseSrc==='n3d')&&n3dIds.size>0;
-    var needCpl=(_catBrowseSrc==='all'||_catBrowseSrc==='cpl')&&cplIds.size>0;
+    var needN3d=(_catBrowseSrc==='all'||_catBrowseSrc==='n3d');
+    var needCpl=(_catBrowseSrc==='all'||_catBrowseSrc==='cpl');
 
     if(needN3d){
       var qsN=new URLSearchParams({page:_catBrowsePage,limit:50});
@@ -14335,9 +14354,14 @@ async function lbBrowseLoad(page){
       if(rN.ok){
         var dN=await rN.json();
         var n3dAll=dN.data||[];
-        n3dAll.filter(function(i){return n3dIds.has(i.slug||i.id);}).forEach(function(i){
-          var cfg=catalogOrderItems.find(function(ci){return ci.srcId===(i.slug||i.id)&&ci.src==='n3d';});
-          fetchedItems.push({id:cfg?cfg.id:'n3d|'+(i.slug||i.id),name:i.title||i.name||'Unknown',img:i.image_url||'',cat:i.category||'',price:cfg?cfg.price:0,src:'n3d'});
+        n3dAll.forEach(function(i){
+          var srcId=i.slug||String(i.id);
+          var cfg=catalogOrderItems.find(function(ci){return ci.src==='n3d'&&ci.srcId===srcId;});
+          var nm=(i.title||i.name||'').toLowerCase();
+          var ct=(i.category||'').toLowerCase();
+          if(!search||nm.includes(search)||ct.includes(search)){
+            fetchedItems.push({id:cfg?cfg.id:null,srcId:srcId,src:'n3d',name:i.title||i.name||'Unknown',img:i.image_url||'',cat:i.category||'',price:cfg?cfg.price:0});
+          }
         });
         if(n3dAll.length){
           var ucats=[...new Set(n3dAll.map(function(i){return i.category;}).filter(Boolean))].sort();
@@ -14353,9 +14377,14 @@ async function lbBrowseLoad(page){
       if(rC.ok){
         var dC=await rC.json();
         var cplAll=dC.models||[];
-        cplAll.filter(function(i){return cplIds.has(i.slug||String(i.id));}).forEach(function(i){
-          var cfg=catalogOrderItems.find(function(ci){return ci.srcId===(i.slug||String(i.id))&&ci.src==='cpl';});
-          fetchedItems.push({id:cfg?cfg.id:'cpl|'+(i.slug||i.id),name:i.name||'Unknown',img:i.thumbnail||'',cat:i.type||'',price:cfg?cfg.price:0,src:'cpl'});
+        cplAll.forEach(function(i){
+          var srcId=i.slug||String(i.id);
+          var cfg=catalogOrderItems.find(function(ci){return ci.src==='cpl'&&ci.srcId===srcId;});
+          var nm=(i.name||'').toLowerCase();
+          var ct=(i.type||'').toLowerCase();
+          if(!search||nm.includes(search)||ct.includes(search)){
+            fetchedItems.push({id:cfg?cfg.id:null,srcId:srcId,src:'cpl',name:i.name||'Unknown',img:i.thumbnail||'',cat:i.type||'',price:cfg?cfg.price:0});
+          }
         });
         if(cplAll.length){
           var utypes=[...new Set(cplAll.map(function(i){return i.type;}).filter(Boolean))].sort();
@@ -14365,9 +14394,10 @@ async function lbBrowseLoad(page){
     }
     // Include catalog + manual items when showing 'all'
     if(_catBrowseSrc==='all'){
-      localItems.forEach(function(item){
-        var sq=!search||((item.name||'').toLowerCase().includes(search)||(item.cat||'').toLowerCase().includes(search));
-        if(sq) fetchedItems.push(item);
+      catalogOrderItems.filter(function(i){return i.src==='catalog'||i.src==='manual';}).forEach(function(item){
+        if(!search||((item.name||'').toLowerCase().includes(search)||(item.cat||'').toLowerCase().includes(search))){
+          fetchedItems.push(item);
+        }
       });
     }
     if(!fetchedItems.length){
@@ -14382,22 +14412,51 @@ async function lbBrowseLoad(page){
   _catBrowseLoading=false;
 }
 
+// Set or update price for an N3D/CPL item inline from the browse grid
+function lbSetItemPrice(src,srcId,name,img,cat,val){
+  var price=parseFloat(val)||0;
+  if(price<=0){toast('Enter a price','Type a price then tap ✓','warning');return;}
+  var c=getEvt();if(!c)return;
+  if(!c.catalogOrderItems)c.catalogOrderItems=[];
+  var existing=c.catalogOrderItems.find(function(i){return i.src===src&&i.srcId===srcId;});
+  if(existing){existing.price=price;}
+  else{c.catalogOrderItems.push({id:uid(),src:src,srcId:srcId,name:name,img:img,cat:cat,price:price,ts:Date.now()});}
+  saveConventions();
+  lbBrowseLoad(_catBrowsePage);
+}
+
 function _catBrowseCardHtml(item){
-  var inCart=_catCart.find(function(r){return r.catItemId===item.id;});
+  // itemKey: use the saved id if priced, otherwise use src|srcId as a temporary key
+  var itemKey=item.id||(item.src+'|'+item.srcId);
+  var inCart=_catCart.find(function(r){return r.catItemId===itemKey||(item.id&&r.catItemId===item.id);});
   var hasPrice=!!(item.price&&item.price>0);
+  var safeKey=itemKey.replace(/['"\\]/g,'');
+  var safeSrc=(item.src||'').replace(/['"\\]/g,'');
+  var safeSrcId=(item.srcId||'').replace(/['"\\]/g,'');
+  var safeName=(item.name||'').replace(/'/g,"\\'");
+  var safeImg=(item.img||'').replace(/'/g,"\\'");
+  var safeCat=(item.cat||'').replace(/'/g,"\\'");
   return '<div class="lb-card">'
     +(item.img?'<img src="'+esc(item.img)+'" alt="'+esc(item.name)+'" loading="lazy" onerror="this.style.display=\'none\'">'
       :'<div style="width:100%;aspect-ratio:1;background:#1a1a2e;display:flex;align-items:center;justify-content:center;font-size:22px">🎮</div>')
     +'<div class="lb-card-body">'
       +'<div class="lb-card-name">'+esc(item.name)+'</div>'
       +(item.cat?'<div class="lb-card-cat">'+esc(item.cat)+'</div>':'')
-      +(hasPrice?'<div style="font-size:9px;font-weight:bold;color:var(--grn-b);margin-top:3px">$'+parseFloat(item.price).toFixed(2)+'</div>'
-        :'<div style="font-size:7px;color:var(--red-b);margin-top:3px">Price not set</div>')
+      +(hasPrice?'<div style="font-size:9px;font-weight:bold;color:var(--grn-b);margin-top:3px">$'+parseFloat(item.price).toFixed(2)+' USD</div>':'')
     +'</div>'
     +'<div class="lb-card-actions">'
       +(hasPrice
-        ?'<button id="lb-atc-'+item.id+'" class="btn '+(inCart?'btn-grn':'btn-pur')+' btn-xs" onclick="lbAddToCart(\''+esc(item.id)+'\',event)" style="font-size:8px;width:100%;padding:3px 0">'+(inCart?'✓ In Cart':'🛒 Add to Cart')+'</button>'
-        :'<span style="font-size:7px;color:var(--txt-d)">Not available</span>'
+        ?'<button id="lb-atc-'+safeKey+'" class="btn '+(inCart?'btn-grn':'btn-pur')+' btn-xs" onclick="lbAddToCart(\''+safeKey+'\',event)" style="font-size:8px;width:100%;padding:3px 0">'+(inCart?'✓ In Cart':'🛒 Add to Cart')+'</button>'
+        :(item.src==='n3d'||item.src==='cpl'
+          ?'<div style="display:flex;gap:2px;align-items:center;width:100%">'
+            +'<span style="font-size:7px;color:var(--txt-d);flex-shrink:0">$</span>'
+            +'<input type="number" min="0" step="0.01" placeholder="Price…" id="lb-price-'+safeKey+'"'
+              +' style="flex:1;width:0;background:var(--bg);border:1px solid var(--bdr2);color:var(--txt);padding:2px 3px;font-size:8px;border-radius:3px;font-family:inherit"'
+              +' onkeydown="if(event.key===\'Enter\')lbSetItemPrice(\''+safeSrc+'\',\''+safeSrcId+'\',\''+safeName+'\',\''+safeImg+'\',\''+safeCat+'\',this.value)"/>'
+            +'<button class="btn btn-pur btn-xs" onclick="lbSetItemPrice(\''+safeSrc+'\',\''+safeSrcId+'\',\''+safeName+'\',\''+safeImg+'\',\''+safeCat+'\',document.getElementById(\'lb-price-'+safeKey+'\').value)" style="font-size:7px;padding:2px 5px;flex-shrink:0">✓</button>'
+          +'</div>'
+          :'<span style="font-size:7px;color:var(--txt-d)">No price</span>'
+        )
       )
     +'</div>'
   +'</div>';
@@ -14425,7 +14484,7 @@ function lbAdminRenderGrid(){
       +'</div>'
       +'<div class="lb-card-actions" style="flex-direction:column;gap:4px">'
         +'<div style="display:flex;align-items:center;gap:3px">'
-          +'<span style="font-size:7px;color:var(--txt-d)">$AUD</span>'
+          +'<span style="font-size:7px;color:var(--txt-d)">$USD</span>'
           +'<input type="number" value="'+parseFloat(item.price||0).toFixed(2)+'" min="0" step="0.01"'
             +' onchange="lbAdminSetPrice(\''+item.id+'\',this.value)"'
             +' style="flex:1;width:0;background:var(--bg);border:1px solid var(--bdr2);color:var(--txt);padding:2px 4px;font-size:8px;border-radius:3px;font-family:inherit"'
@@ -15816,9 +15875,12 @@ function applyLabelSize(size){
   };
   const cols=map[size]||'repeat(4,1fr)';
   document.documentElement.style.setProperty('--lbl-cols',cols);
+  document.documentElement.setAttribute('data-label-size',size);
   const grid=document.getElementById('labels-grid');
   if(grid)grid.style.gridTemplateColumns=cols;
   localStorage.setItem('ha3d_label_size',size);
+  // Re-render labels so QR sizes update for the new format
+  if(document.getElementById('labels-grid')&&spools.length) renderLabels();
 }
 (function(){
   const saved=localStorage.getItem('ha3d_label_size');
@@ -19538,7 +19600,7 @@ async function checkSocialApiStatus(){
 }
 
 // ── Scheduled post runner ──
-setInterval(async function(){
+async function _runDueSocialPosts(){
   if(!socialQueue.length)return;
   const now=Date.now();
   const due=socialQueue.filter(function(p){return p.status==='scheduled'&&p.scheduledFor&&p.scheduledFor<=now;});
@@ -19547,7 +19609,12 @@ setInterval(async function(){
     if(!media){p.status='failed';p.error='Missing media';saveSocial();continue;}
     await postToInstagram(p.id);
   }
-},60000);
+}
+setInterval(_runDueSocialPosts,60000);
+// Also run when tab regains focus so posts scheduled while app was closed get sent
+document.addEventListener('visibilitychange',function(){
+  if(!document.hidden) _runDueSocialPosts();
+});
 
 // ── Calendar helpers ──
 function socialCalNav(dir){
