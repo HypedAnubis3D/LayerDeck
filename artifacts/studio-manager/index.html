@@ -159,7 +159,7 @@ input.srch::placeholder{color:var(--txt-d);}
 
 /* PRINTS */
 .prints-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:10px;}
-.print-card{background:var(--surf);border:1px solid var(--bdr);border-radius:6px;padding:12px;border-left:3px solid var(--org);transition:border-color .2s,box-shadow .2s;}
+.print-card{background:var(--surf);border:1px solid var(--bdr);border-radius:6px;padding:12px;border-left:3px solid var(--org);transition:border-color .2s,box-shadow .2s;overflow:hidden;max-width:100%;}
 .print-card:hover{border-color:var(--bdr2);box-shadow:0 4px 16px rgba(0,0,0,.35);}
 .print-card.card-done{border-left-color:var(--grn);}
 .print-card.card-failed{border-left-color:var(--red);opacity:.82;}
@@ -4125,6 +4125,7 @@ function renderPrints(){
       (qi.notes?'<div class="notes-box">'+esc(qi.notes)+'</div>':'')+
       '<div class="card-acts" style="margin-top:4px">'+
       '<button class="btn btn-ghost btn-xs" style="flex:1" onclick="openEditInProgressPrint(\''+qi.id+'\')">✎ Edit / Add 3MF</button>'+
+      '<button class="btn btn-xs" style="background:#180808;border:1px solid #2a1010;color:#703030" onclick="delInProgressQItem(\''+qi.id+'\')">✕</button>'+
       '</div>'+
       '</div>';
   }).join('');
@@ -4160,8 +4161,8 @@ function renderPrints(){
     const finD=p.finishedAt?new Date(p.finishedAt):null;
     const finLabel=finD?` · ✓ ${finD.toLocaleDateString('en-US',{month:'short',day:'numeric'})} ${finD.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})}` :'';
     return `<div class="print-card ${cc}">
-      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:5px;margin-bottom:2px">
-        <div class="pname">${esc(displayName)}${p.qty>1?' ×'+p.qty:''}</div>${pill}
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:5px;margin-bottom:2px;min-width:0;overflow:hidden">
+        <div class="pname" style="flex:1;min-width:0">${esc(displayName)}${p.qty>1?' ×'+p.qty:''}</div>${pill}
       </div>
       <div class="pcat">${esc(displayCategory)} · ${esc(displayPrinter)} · <span class="print-time-display" style="display:inline-flex;font-size:8px;padding:2px 6px">${formatHms(_dispHrs||p.printTime)||'—'}</span> · ${d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}${jobNameNote}${(st==='done'||st==='failed')?`<span style="color:var(--txt-d)">${finLabel}</span>`:''}</div>
       ${chips?`<div class="pc-colors">${chips}</div>`:''}
@@ -8388,10 +8389,19 @@ function delPrint(id){
   if(!p)return;
   showConfirm('Delete "'+p.name+'"?','This cannot be undone.',()=>{
     prints=prints.filter(x=>x.id!==id);
-    // Also remove linked queue item
-    queueItems=queueItems.filter(q=>q.printId!==id);
+    // Remove linked queue item by printId OR matching auto-Pi item by name
+    queueItems=queueItems.filter(q=>q.printId!==id&&!(q.autoFromPi&&_normName(q.name)===_normName(p.name)));
     savePrints();saveQueue();render();
     toast('Print Deleted',p.name,'warning');
+  });
+}
+function delInProgressQItem(id){
+  const qi=queueItems.find(x=>x.id===id);
+  if(!qi)return;
+  showConfirm('Remove "'+((qi.name||'this item'))+'"?','This will remove it from in-progress.',()=>{
+    queueItems=queueItems.filter(x=>x.id!==id);
+    saveQueue();render();
+    toast('Removed',qi.name||'Item removed','warning');
   });
 }
 
@@ -16939,6 +16949,14 @@ async function onPiPrintStarted(name,data){
     var tFileBase=tFile.replace(/\s+plate\s+\d+$/i,'').trim();
     return tName===_jLow||tFile===_jLow||tName===_jLowBase||tFile===_jLowBase||tNameBase===_jLow||tFileBase===_jLow||tNameBase===_jLowBase||tFileBase===_jLowBase;
   }):null;
+
+  // Skip calibration and flow-rate test prints — don't pollute the prints list
+  var CALIB_RE=/^(flow_rate|flowrate|pa_tower|pa_calib|x1c_auto|bambu_calib|cht_calib|calib_|calibration|nozzle_calib|temp_tower|retraction_calib|tolerance_test|vibration_calib|abs_|pla_|pet_|tpu_)(calib|test|tower)/i;
+  var isCalibPrint=jobName&&(CALIB_RE.test(jobName)||/^flow_rate/i.test(jobName)||/calib/i.test(jobName));
+  if(isCalibPrint){
+    // Still update Pi Hub live state & AMS, just don't auto-add to queue
+    return;
+  }
 
   var changed=false;
   if(jobName){
