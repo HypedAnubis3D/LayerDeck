@@ -4787,7 +4787,7 @@ function renderColourView(){
     var livePr=_liveMap[pr.name]||{};
     var piAms=livePr.ams;
     var vtTray=livePr.vt_tray;
-    var activeTrayId=piAms?String(piAms.tray_now||''):'';
+    var activeTrayId=piAms&&piAms.tray_now!=null?String(piAms.tray_now):'';
     var trays=[];
     if(piAms&&piAms.ams&&piAms.ams.length){
       piAms.ams.forEach(function(unit,ui){
@@ -10497,7 +10497,7 @@ function renderAmsMap(printerName,compact=false){
   const livePrinterData=piLiveData[printerName]||{};
   const piAms=livePrinterData.ams;
   const vtTray=livePrinterData.vt_tray;
-  const activeTrayId=piAms?String(piAms.tray_now||''):'';
+  const activeTrayId=piAms&&piAms.tray_now!=null?String(piAms.tray_now):'';
   const hasPi=!!piHubConfig;
 
   // Build AMS unit groups from Pi Hub if available, otherwise fall back to flat slot count
@@ -10647,7 +10647,7 @@ function renderAmsMapDash(printerName){
   const livePr=_liveMap[printerName]||{};
   const piAms=livePr.ams;
   const vtTray=livePr.vt_tray;
-  const activeTrayId=piAms?String(piAms.tray_now||''):'';
+  const activeTrayId=piAms&&piAms.tray_now!=null?String(piAms.tray_now):'';
 
   // Build AMS unit groups: prefer Pi live structure, fall back to printerRecords slot count
   var units=[];
@@ -16885,7 +16885,7 @@ function renderAmsSwatches(amsData,vtTray,printerName){
   }
 
   // ── AMS ──────────────────────────────────────────────────────────────
-  const activeTrayId=String(amsData.tray_now||'');
+  const activeTrayId=amsData.tray_now!=null?String(amsData.tray_now):'';
   let html='<div style="display:flex;gap:3px;flex-wrap:wrap;align-items:center">';
   let anyFilled=false;
   amsData.ams.forEach((unit,ui)=>{
@@ -18479,6 +18479,7 @@ function renderPrinters(){
             (getCameraUrl(p.name)?'<button class="btn btn-ghost btn-xs" onclick="openCameraFeed(\''+esc(p.name)+'\')">📷 Camera</button>':'')+
             '<button class="btn btn-ghost btn-xs" style="color:var(--cyn-b)" onclick="piLightToggle(\''+esc(p.name)+'\')">💡 Light</button>'+
             '<button class="btn btn-ghost btn-xs" style="color:var(--gold-b)" onclick="piCalibrateMenu(\''+esc(p.name)+'\')">🔧 Calibrate</button>'+
+            '<button class="btn btn-ghost btn-xs" style="color:var(--cyn)" onclick="piVisionScan(\''+esc(p.name)+'\')">🔍 AI Scan</button>'+
           '</div>'+
           _renderPrinterTapoSection(p.name)+
         '</div>':'')+
