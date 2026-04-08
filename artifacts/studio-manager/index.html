@@ -1694,7 +1694,7 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
         <span class="sb-group-chevron">▾</span>
       </div>
       <div class="sb-group-body">
-        <button class="nav-item" id="nav-printers" onclick="navTo('printers',this)"><span class="nav-icon">🖨</span><span class="nav-label">Printers</span></button>
+        <button class="nav-item" id="nav-pihub" onclick="navTo('pihub',this)"><span class="nav-icon">🖨</span><span class="nav-label">Printers</span></button>
         <button class="nav-item" id="nav-spools" onclick="navTo('spools',this)"><span class="nav-icon">🧵</span><span class="nav-label">Spools & Dry Schedule</span></button>
         <button class="nav-item" id="nav-fildb" onclick="navTo('fildb',this)"><span class="nav-icon">🗄</span><span class="nav-label">Filament Database</span></button>
         <button class="nav-item" id="nav-maint" onclick="navTo('maint',this)"><span class="nav-icon">🔧</span><span class="nav-label">Maintenance & Nozzles</span></button>
@@ -1717,7 +1717,6 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
         <button class="nav-item" id="nav-etsy" onclick="navTo('etsy',this)"><span class="nav-icon">🟠</span><span class="nav-label">Etsy</span></button>
         <button class="nav-item" id="nav-square" onclick="navTo('square',this)"><span class="nav-icon">💳</span><span class="nav-label">Square</span></button>
         <button class="nav-item" id="nav-discord" onclick="navTo('discord',this)"><span class="nav-icon">💬</span><span class="nav-label">Discord</span></button>
-        <button class="nav-item" id="nav-pihub" onclick="navTo('pihub',this)"><span class="nav-icon">🍓</span><span class="nav-label">Pi Hub</span></button>
       </div>
     </div>
 
@@ -3170,7 +3169,7 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
     <div class="field"><div class="fl">Printer</div>
       <select id="es-printer" onchange="updateSpoolAmsSlots()"><option value="">Unloaded</option></select>
       <div id="es-printer-none" style="display:none;font-size:7px;color:var(--txt-d);margin-top:4px">
-        No printers added yet — <span style="color:var(--gold-b);cursor:pointer;text-decoration:underline" onclick="closeSpool();navTo('printers')">Add a printer first</span>
+        No printers added yet — <span style="color:var(--gold-b);cursor:pointer;text-decoration:underline" onclick="closeSpool();navTo('pihub')">Add a printer first</span>
       </div>
     </div>
   </div>
@@ -4819,7 +4818,7 @@ function renderColourView(){
       var p=sp?pct(sp):piTray?(piTray.remain||0):0;
       var rawLabel=sp?sp.name:(piTray?(piTray.tray_sub_brands||piTray.tray_type||'—'):'—');
       var filled=sp||piTray;
-      var isActive=piTray&&String(piTray.id)===activeTrayId;
+      var isActive=piTray&&activeTrayId!==''&&String(item.slotNum-1)===activeTrayId;
       return '<div class="cv-slot" onclick="openAmsModal(\''+esc(pr.name)+'\','+n+')" title="Slot '+n+': '+esc(rawLabel)+(p?' ('+p+'%)':'')+'">'
         +'<div class="cv-slot-dot" style="background:'+col+';'+(filled?'box-shadow:0 0 6px '+col+'44;border-color:'+col+'55':'opacity:.25')+(isActive?';outline:2px solid var(--grn);outline-offset:2px':'')+'">'+'</div>'
         +'<div class="cv-slot-label">'+esc(rawLabel.split(' ')[0])+'</div>'
@@ -8774,7 +8773,7 @@ function openAddPrint(prefillName){
 
 function onPrinterSelected(){
   const printerName=document.getElementById('ep-printer')?.value;
-  if(printerName==='_add'){navTo('printers');return;}
+  if(printerName==='_add'){navTo('pihub');return;}
   const pr=getPrinterByName(printerName);
   if(pr){
     const tapoW=_getTapoWattsForPrinter(printerName);
@@ -10478,13 +10477,16 @@ function getPiHubTray(printerName, slotNum){
 }
 
 // Build a synthetic spool-like object from a Pi Hub tray (for display only)
-function piTrayToDisplay(tray,activeTrayId){
+// globalId = the tray's global 0-indexed id across all AMS units (amsUnitIdx*4+trayIdx)
+// tray.id is only the local index within its AMS unit (0-3), so multi-AMS needs globalId
+function piTrayToDisplay(tray,activeTrayId,globalId){
   if(!tray)return null;
+  const gid=globalId!=null?globalId:tray.id;
   return {
     color:'#'+(tray.tray_color||'888888').slice(0,6),
     name:(tray.tray_sub_brands||tray.tray_type||'?')+' (Pi Hub)',
     remain:tray.remain||0,
-    isActive:String(tray.id)===String(activeTrayId)
+    isActive:activeTrayId!==''&&String(gid)===String(activeTrayId)
   };
 }
 
@@ -10583,7 +10585,7 @@ function renderAmsMap(printerName,compact=false){
         const n=slotNum;
         const sp=slots[n]?spools.find(s=>s.id===slots[n]):null;
         const piTray=sp?null:(tray&&tray.tray_type?tray:null);
-        const disp=sp||(piTray?piTrayToDisplay(piTray,activeTrayId):null);
+        const disp=sp||(piTray?piTrayToDisplay(piTray,activeTrayId,unitIdx*4+trayIdx):null);
         const fromPi=!sp&&!!piTray;
         const p=disp?(sp?pct(sp):(disp.remain||0)):0;
         const bc=disp?barcol(p):'var(--txt-d)';
@@ -10704,7 +10706,7 @@ function renderAmsMapDash(printerName){
       else{dashMain=piTray.tray_sub_brands||piTray.tray_type||'?';}
     }else{dashMain='—';}
     var filled=sp||piTray;
-    var isActive=piTray&&String(piTray.id)===activeTrayId;
+    var isActive=piTray&&activeTrayId!==''&&String(item.amsId*4+item.trayId)===activeTrayId;
     return '<div class="ams-dash-slot'+(filled?' filled':'')+'" onclick="openAmsModal(\''+esc(printerName)+'\','+n+')" style="'+(filled?'background:'+col+'14;border-color:'+col+'44;':'')+(isActive?'outline:2px solid var(--grn);':'')+'">'+
       '<div class="ams-dash-num">'+n+(isActive?' ▶':'')+'</div>'+
       '<div class="ams-dash-dot" style="background:'+col+';'+(filled?'box-shadow:0 0 6px '+col+'55':'')+'"></div>'+
@@ -12128,7 +12130,7 @@ function calcNozzleHours(printerName){
 function renderNozzle(){
   const printers=printerRecords.map(p=>p.name);
   const g=document.getElementById('nozzle-grid');
-  if(!printers.length){g.innerHTML=emptyState('🔩','No Printers','Add printers in the Printers tab first',`<button class="btn btn-org" onclick="navTo('printers')">Go to Printers</button>`);return;}
+  if(!printers.length){g.innerHTML=emptyState('🔩','No Printers','Add printers in the Printers tab first',`<button class="btn btn-org" onclick="navTo('pihub')">Go to Printers</button>`);return;}
   g.innerHTML=printers.map(pr=>{
     const lastChange=nozzleLog.filter(n=>n.printer===pr).sort((a,b)=>b.timestamp-a.timestamp)[0];
     const hrs=parseFloat(calcNozzleHours(pr).toFixed(1));
@@ -15256,7 +15258,7 @@ function renderPower(){
   else if(period==='3month'){since=now-90*86400000;}
   const relevantPrints=prints.filter(p=>p.timestamp>since);
   const el=document.getElementById('power-content');
-  if(!printerRecords.length){el.innerHTML=emptyState('⚡','No Printers Configured','Add printers with wattage settings first',`<button class="btn btn-org" onclick="navTo('printers')">Go to Printers</button>`);return;}
+  if(!printerRecords.length){el.innerHTML=emptyState('⚡','No Printers Configured','Add printers with wattage settings first',`<button class="btn btn-org" onclick="navTo('pihub')">Go to Printers</button>`);return;}
   // Calculate per-printer
   const printerStats=printerRecords.map(pr=>{
     const prPrints=relevantPrints.filter(p=>p.printer===pr.name);
