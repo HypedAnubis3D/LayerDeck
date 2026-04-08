@@ -4122,13 +4122,6 @@ function renderPrints(){
       '</div>'+
       '<div class="pcat">'+(qi.category||'Other')+' · '+(qi.printer||'—')+
       (function(){var lR=qi.printer&&piPrevStates[qi.printer]?Math.round(piPrevStates[qi.printer].mc_remaining_time||0):0;var ts=lR>0?(formatHms(lR/60)+' left'):(qi.hrs?formatHms(qi.hrs):'');return ts?' · <span class="print-time-display" style="display:inline-flex;font-size:8px;padding:2px 6px">'+ts+'</span>':'';})()+(startedLabel?'<span style="color:var(--txt-d)">'+startedLabel+'</span>':'')+'</div>'+
-      '<div class="cost-box">'+
-        '<div class="cb-title">Cost Breakdown</div>'+
-        '<div class="cb-row"><span style="color:var(--txt-d)">Filament</span><span style="color:var(--txt)">$'+qiCost.filCost.toFixed(2)+'</span></div>'+
-        '<div class="cb-row"><span style="color:var(--txt-d)">Electricity</span><span style="color:var(--txt)">$'+qiCost.elecCost.toFixed(2)+'</span></div>'+
-        '<div class="cb-row"><span style="color:var(--txt)">Total Cost</span><span class="cb-total">$'+qiCost.total.toFixed(2)+'</span></div>'+
-        '<div class="cb-row"><span style="color:var(--org)">Sell ('+cfg.markup+'% markup)</span><span class="cb-sell">$'+qiCost.sell.toFixed(2)+'</span></div>'+
-      '</div>'+
       (qi.notes?'<div class="notes-box">'+esc(qi.notes)+'</div>':'')+
       '<div class="card-acts" style="margin-top:4px">'+
       '<button class="btn btn-ghost btn-xs" style="flex:1" onclick="openEditInProgressPrint(\''+qi.id+'\')">✎ Edit / Add 3MF</button>'+
@@ -4173,14 +4166,14 @@ function renderPrints(){
       <div class="pcat">${esc(displayCategory)} · ${esc(displayPrinter)} · <span class="print-time-display" style="display:inline-flex;font-size:8px;padding:2px 6px">${formatHms(_dispHrs||p.printTime)||'—'}</span> · ${d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}${jobNameNote}${(st==='done'||st==='failed')?`<span style="color:var(--txt-d)">${finLabel}</span>`:''}</div>
       ${chips?`<div class="pc-colors">${chips}</div>`:''}
       ${(p.tmfId||p.tmfName)?`<div style="margin:3px 0 1px"><span style="display:inline-flex;align-items:center;gap:3px;background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.3);color:var(--grn-b);padding:1px 7px;border-radius:10px;font-size:7px;letter-spacing:.5px">🔗 ${esc(_tmfTitle||p.tmfName||'3MF')}</span></div>`:`<div style="margin:3px 0 1px"><span style="display:inline-flex;align-items:center;gap:3px;background:rgba(249,115,22,.08);border:1px solid rgba(249,115,22,.25);color:var(--org);padding:1px 7px;border-radius:10px;font-size:7px;letter-spacing:.5px">⚠ No 3MF linked</span></div>`}
-      <div class="cost-box">
+      ${(st==='done'||st==='failed')?`<div class="cost-box">
         <div class="cb-title">Cost Breakdown</div>
         <div class="cb-row"><span style="color:var(--txt-d)">Filament</span><span style="color:var(--txt)">$${cost.filCost.toFixed(2)}</span></div>
         <div class="cb-row"><span style="color:var(--txt-d)">Electricity</span><span style="color:var(--txt)">$${cost.elecCost.toFixed(2)}</span></div>
         ${cfg.labor>0?`<div class="cb-row"><span style="color:var(--txt-d)">Labor</span><span style="color:var(--txt)">$${cost.laborCost.toFixed(2)}</span></div>`:''}
         <div class="cb-row"><span style="color:var(--txt)">Total Cost</span><span class="cb-total">$${cost.total.toFixed(2)}</span></div>
         <div class="cb-row"><span style="color:var(--org)">Sell (${cfg.markup}% markup)</span><span class="cb-sell">$${cost.sell.toFixed(2)}</span></div>
-      </div>
+      </div>`:''}
       ${p.notes?`<div class="notes-box">${esc(p.notes)}</div>`:''}
       <div class="card-acts">
         ${st==='printing'?`<button class="finish-btn" onclick="openFinish('${p.id}')">⬡ Mark as Finished</button>`:''}
