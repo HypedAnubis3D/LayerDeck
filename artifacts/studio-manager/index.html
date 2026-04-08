@@ -214,6 +214,7 @@ input.srch::placeholder{color:var(--txt-d);}
 .kcard{background:var(--surf2);border:1px solid var(--bdr2);border-radius:8px;padding:11px;cursor:pointer;transition:border-color .15s,box-shadow .15s;position:relative;}
 .kcard:hover{border-color:var(--cyn-d);box-shadow:0 4px 16px rgba(0,0,0,.3);}
 .kcard.kc-shopify{border-left:2px solid var(--shopify);}
+.kcard.kc-etsy{border-left:2px solid #f09a3e;}
 .kcard.kc-warn{border-left:2px solid var(--amb);}
 .kcard.selected{outline:2px solid var(--gold);outline-offset:2px;background:rgba(201,162,39,.08);}
 .kcard-name{font-size:10px;color:var(--txt-b);font-weight:600;margin-bottom:3px;}
@@ -3873,7 +3874,11 @@ function load(){
   // cfg loaded from storage — applied when printer is selected in print form
   if(shopifyCfg.connected&&shopifyCfg.domain&&!shopifyCfg.domain.includes('DEMO')){
     startPolling();
+  } else {
+    startEtsyPolling();
   }
+  refreshEtsyStatus();
+  pollEtsyOrders(true);
 }
 
 function saveSpools(){ss(KEYS.spools,spools);}
@@ -4672,6 +4677,7 @@ function renderQueue(){
     }
     var cards=items.map(function(q){
       var isShopify=q.fromShopify;
+      var isEtsyQ=q.fromEtsy;
       var isMystery=q.fromMystery;
       var isWarn=q.noTmf;
       var isSel=selectedIds.includes(q.id);
@@ -4688,11 +4694,12 @@ function renderQueue(){
         if(doneByStr)doneByHtml='<div style="font-size:7px;color:var(--cyn);margin-top:3px">Done by '+doneByStr+'</div>';
       }
       var dragAttrs=isQueued?' draggable="true" ondragstart="qDragStart(event,\''+q.id+'\')" ondragover="event.preventDefault()" ondrop="qDrop(event)"':'';
-      return '<div class="kcard'+(isShopify?' kc-shopify':'')+(isSel?' selected':'')+'" data-selid="'+q.id+'" data-qid="'+q.id+'"'+dragAttrs+' onclick="if(selectMode===\'queue\'){event.stopPropagation();toggleSelect(\''+q.id+'\');}">'+
+      return '<div class="kcard'+(isShopify?' kc-shopify':'')+(isEtsyQ?' kc-etsy':'')+(isSel?' selected':'')+'" data-selid="'+q.id+'" data-qid="'+q.id+'"'+dragAttrs+' onclick="if(selectMode===\'queue\'){event.stopPropagation();toggleSelect(\''+q.id+'\');}">'+
         '<input type="checkbox" class="sel-checkbox"'+(isSel?' checked':'')+' onclick="event.stopPropagation();toggleSelect(\''+q.id+'\')"/>'+
         (prioIcon?'<div class="k-priority">'+prioIcon+'</div>':'')+
         (isMystery?'<div style="font-size:6px;color:var(--pur-b);letter-spacing:1px;margin-bottom:3px">🎁 MYSTERY GIFT</div>':'')+
         (isShopify&&!isMystery?'<div style="font-size:6px;color:var(--shopify);letter-spacing:1px;margin-bottom:3px">🛍 SHOPIFY ORDER</div>':'')+
+        (isEtsyQ&&!isMystery?'<div style="font-size:6px;color:#f09a3e;letter-spacing:1px;margin-bottom:3px">🟠 ETSY ORDER</div>':'')+
         '<div style="display:flex;align-items:center;gap:4px;margin-bottom:3px">'+
           printerBadge+
           (isQueued?'<span style="color:var(--txt-d);font-size:13px;line-height:1;cursor:grab;margin-left:auto;user-select:none">⠿</span>':'')+
@@ -5410,6 +5417,133 @@ function renderShopify(){
   }
 }
 
+var _etsyGmailStatus={configured:false,lastSyncAt:null,lastSyncError:null,isPolling:false};
+var _etsyPollInterval=null;
+
+async function pollEtsyOrders(silent){
+  if(silent===undefined)silent=true;
+  try{
+    var resp=await fetch('/api/etsy/orders/recent');
+    if(!resp.ok)throw new Error('HTTP '+resp.status);
+    var data=await resp.json();
+    var rawOrders=data.orders||[];
+    if(!rawOrders.length)return;
+    var newCount=0;
+    rawOrders.forEach(function(o){
+      var existing=orders.find(function(ex){
+        return ex.orderId===o.orderId||ex.etsyOrderId===o.orderNumber||ex.gmailMessageId===o.gmailMessageId;
+      });
+      if(!existing){
+        ingestEtsyOrder(o);
+        newCount++;
+      }
+    });
+    if(newCount>0){
+      saveOrders();saveQueue();
+      render();
+      toast('🟠 New Etsy Order'+(newCount>1?'s':''),newCount+' order'+(newCount!==1?'s':'')+' imported from Etsy','success',6000);
+    }
+  }catch(e){
+    if(!silent)console.warn('[Etsy] poll failed:',e.message);
+  }
+}
+
+function ingestEtsyOrder(o){
+  var orderId=o.orderId||o.orderNumber||('#'+Date.now());
+  var customer=o.customer||'Etsy Customer';
+  var items=(o.items||[]).map(function(it){
+    return{name:it.name||'Item',qty:it.qty||1,price:parseFloat(it.price||0),variantTitle:it.variantTitle||''};
+  });
+  var order={
+    id:uid(),
+    etsyOrderId:o.orderNumber,
+    orderId:orderId,
+    orderNumber:orderId,
+    customer:customer,
+    customerEmail:o.customerEmail||'',
+    shippingAddress:o.shippingAddress||'',
+    platform:'Etsy',
+    fromEtsy:true,
+    date:o.date||new Date().toISOString().split('T')[0],
+    items:items,
+    status:o.status||'pending',
+    shipping:parseFloat(o.shipping||0),
+    notes:o.notes||'',
+    gmailMessageId:o.gmailMessageId||'',
+    timestamp:o.timestamp||Date.now()
+  };
+  items.forEach(function(it){
+    var catalogItem=catalogItems.find(function(c){
+      return c.name&&(c.name.toLowerCase()===it.name.toLowerCase()||it.name.toLowerCase().includes(c.name.toLowerCase())||c.name.toLowerCase().includes(it.name.toLowerCase()));
+    });
+    var matchTmf=null;
+    if(catalogItem&&catalogItem.tmfId)matchTmf=tmfLib.find(function(t){return t.id===catalogItem.tmfId;});
+    if(!matchTmf){
+      matchTmf=tmfLib.find(function(t){return t.name.toLowerCase().includes(it.name.split(' ')[0].toLowerCase())||it.name.toLowerCase().includes(t.name.split(' ')[0].toLowerCase());});
+    }
+    var queueLabel=it.variantTitle?(it.name+' — '+it.variantTitle):it.name;
+    var alreadyQueued=queueItems.some(function(q){return q.fromEtsyOrder===orderId&&q.name===queueLabel;});
+    if(!alreadyQueued){
+      queueItems.push({
+        id:uid(),name:queueLabel,
+        category:catalogItem?catalogItem.category:'Other',
+        printer:printerRecords[0]?.name||'X1C',
+        hrs:matchTmf?matchTmf.hrs||0:0,
+        qty:it.qty,priority:'high',
+        orderId:orderId,stage:'queued',
+        fromEtsy:true,noTmf:!matchTmf,
+        tmfId:matchTmf?matchTmf.id:null,
+        fromEtsyOrder:orderId,
+        notes:matchTmf?'3MF: '+matchTmf.name:'⚠ No 3MF on file',
+        timestamp:Date.now()
+      });
+    }
+  });
+  orders.push(order);
+  var prevOrders=orders.filter(function(x){return x.customer&&x.customer===customer&&x.etsyOrderId!==o.orderNumber;});
+  if(prevOrders.length>0)toast('⭐ Returning Etsy Customer!',customer+' has ordered '+prevOrders.length+' time'+(prevOrders.length!==1?'s':'')+' before','shiny',7000);
+}
+
+async function refreshEtsyStatus(){
+  try{
+    var resp=await fetch('/api/etsy/status');
+    if(!resp.ok)return;
+    var data=await resp.json();
+    _etsyGmailStatus=data;
+    var el=document.getElementById('etsy-gmail-status');
+    if(!el)return;
+    if(!data.configured){
+      el.innerHTML='<span style="color:var(--txt-d)">○ Not configured — set ETSY_GMAIL_ADDRESS & ETSY_GMAIL_APP_PASSWORD</span>';
+      return;
+    }
+    var lastSync=data.lastSyncAt?'Last sync: '+new Date(data.lastSyncAt).toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}):'Not synced yet';
+    var errHtml=data.lastSyncError?'<div style="font-size:6px;color:var(--red);margin-top:3px">⚠ '+esc(data.lastSyncError)+'</div>':'';
+    var statusDot=data.lastSyncError?'<span style="color:var(--amb)">◑</span>':'<span style="color:var(--grn)">●</span>';
+    el.innerHTML=statusDot+' Gmail: '+esc(data.gmailAddress||'configured')+' · '+lastSync+' · Auto-polls every 5 min'+errHtml;
+  }catch(e){}
+}
+
+async function triggerEtsySync(){
+  var btn=document.getElementById('etsy-sync-btn');
+  if(btn){btn.disabled=true;btn.textContent='Syncing…';}
+  try{
+    var resp=await fetch('/api/etsy/sync',{method:'POST'});
+    var data=await resp.json();
+    await pollEtsyOrders(false);
+    await refreshEtsyStatus();
+    toast('Etsy Sync',data.imported>0?data.imported+' new order'+(data.imported!==1?'s':'')+' imported':'No new orders','success',3000);
+  }catch(e){
+    toast('Etsy Sync Failed',e.message,'error');
+  }finally{
+    if(btn){btn.disabled=false;btn.textContent='↻ Sync Now';}
+  }
+}
+
+function startEtsyPolling(){
+  if(_etsyPollInterval)clearInterval(_etsyPollInterval);
+  _etsyPollInterval=setInterval(function(){pollEtsyOrders(true);},5*60*1000);
+}
+
 function renderEtsy(){}
 function connectEtsyPage(){}
 function connectEtsy(){}
@@ -5418,7 +5552,6 @@ function previewEtsyDemo(){}
 async function checkEtsyConfig(){}
 function checkEtsyOAuthCallback(){}
 async function syncEtsyToCatalog(){}
-async function pollEtsyOrders(){}
 
 function previewShopifyDemo(){
   shopifyCfg.connected=true;
@@ -5490,6 +5623,7 @@ function shopifyStatusMap(o){
 function startPolling(){
   if(pollInterval)clearInterval(pollInterval);
   pollInterval=setInterval(pollShopifyOrders,5*60*1000);
+  startEtsyPolling();
 }
 
 async function syncShopifyToCatalog(silent=true){
@@ -7273,25 +7407,33 @@ function renderIntegrationPanel(type){
     </div>`;
   }
   if(type==='etsy'){
+    var eSt=_etsyGmailStatus||{};
+    var eCfg=eSt.configured;
+    var eLastSync=eSt.lastSyncAt?new Date(eSt.lastSyncAt).toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}):'-';
+    var eStatusDot=eCfg?(eSt.lastSyncError?'<span style="color:var(--amb)">◑</span>':'<span style="color:var(--grn)">●</span>'):'<span style="color:var(--txt-d)">○</span>';
+    var eStatusLabel=eCfg?(eSt.lastSyncError?'Error on last sync':'Connected — Gmail polling'):' Not configured';
     return `<div class="integration-panel">
       <div class="integration-hdr">
         <div>
           <div class="integration-logo" style="color:#F17022">ETSY</div>
-          <div class="integration-status" style="color:var(--txt-d)">○ Not connected</div>
+          <div class="integration-status">${eStatusDot} ${eStatusLabel}</div>
         </div>
       </div>
       <div class="integration-body">
         <div style="background:rgba(241,112,34,.07);border:1px solid rgba(241,112,34,.2);border-radius:4px;padding:8px 10px;margin-bottom:10px;font-size:7px;color:#F17022;line-height:1.7">
-          <b>Setup:</b> Go to <a href="https://www.etsy.com/developers/register" target="_blank" style="color:#F17022">etsy.com/developers</a> → Create App → copy your <b>Client ID (Keystring)</b> below. Scopes needed: <code>listings_r transactions_r</code>. Set your redirect URI to:<br>
-          <code style="font-size:6px;word-break:break-all">${window.location.origin}/api/etsy/oauth/callback</code>
+          Orders are imported automatically by polling <b>hypedbodega@gmail.com</b> via IMAP every 5 minutes.<br>
+          Only emails from <b>transaction@etsy.com</b> with subject <b>"New Etsy Order"</b> are processed.<br>
+          Each order is deduplicated by Gmail message ID — no email is ever imported twice.
         </div>
-        <div class="int-field">
-          <div class="int-field-lbl">Etsy Client ID (Keystring)</div>
-          <input type="text" id="etsy-client-id-input" placeholder="etsy_api_key_xxxxxxxxxxxx"/>
+        <div id="etsy-gmail-status" style="font-size:7px;color:var(--txt-d);margin-bottom:8px;line-height:1.6">
+          ${eCfg?`<span style="color:var(--grn)">●</span> Gmail: ${eSt.gmailAddress||'configured'} · Last sync: ${eLastSync} · Auto-polls every 5 min`:'<span style="color:var(--txt-d)">○</span> Awaiting status…'}
+          ${eSt.lastSyncError?`<div style="color:var(--red);margin-top:3px">⚠ ${eSt.lastSyncError}</div>`:''}
         </div>
-        <div id="etsy-connect-status" style="font-size:7px;color:var(--txt-d);min-height:14px;margin-top:4px"></div>
-        <button class="btn btn-amb" style="width:100%;padding:8px;margin-top:4px" onclick="connectEtsy()">🟠 Connect with Etsy OAuth</button>
-        <button class="btn btn-ghost btn-sm" style="width:100%;padding:6px;margin-top:4px" onclick="previewEtsyDemo()">👁 Preview Demo</button>
+        <div style="display:flex;gap:6px">
+          <button id="etsy-sync-btn" class="btn btn-amb btn-sm" style="flex:1;padding:6px" onclick="triggerEtsySync()">↻ Sync Now</button>
+          <button class="btn btn-ghost btn-sm" style="flex:1;padding:6px" onclick="refreshEtsyStatus()">⟳ Refresh Status</button>
+        </div>
+        <div style="font-size:6px;color:var(--txt-d);margin-top:6px">Orders since: first startup · Auto-polls every 5 min · Print queue auto-populated</div>
       </div>
     </div>`;
   }

@@ -14,6 +14,7 @@ import filamentDbRouter from "./filamentDb";
 import visionRouter from "./vision";
 import emailRouter from "./email";
 import catalogRouter from "./catalog";
+import etsyGmailRouter from "./etsy-gmail";
 
 const router: IRouter = Router();
 
@@ -32,5 +33,6 @@ router.use("/filament-db", filamentDbRouter);
 router.use("/vision", visionRouter);
 router.use("/email", emailRouter);
 router.use("/catalog", catalogRouter);
+router.use("/etsy", etsyGmailRouter);
 
 export default router;
