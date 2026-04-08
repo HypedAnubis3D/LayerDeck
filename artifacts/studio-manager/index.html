@@ -3450,6 +3450,7 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
     <div class="field"><div class="fl">Shipping ($)</div><input type="number" id="eo-ship" min="0" step="0.01" placeholder="5.99"/></div>
   </div>
   <div class="field"><div class="fl">Shipping Address</div><input type="text" id="eo-addr" placeholder="123 Main St, City, State ZIP, Country"/></div>
+  <div class="field"><div class="fl" style="display:flex;align-items:center;gap:6px">Tracking Number <span style="font-size:7px;color:var(--grn);font-weight:600;background:rgba(74,222,128,.1);border:1px solid rgba(74,222,128,.25);border-radius:4px;padding:1px 5px">Auto-marks shipped + sends email</span></div><input type="text" id="eo-tracking" placeholder="e.g. 9400111899223397658841" style="font-family:monospace"/></div>
   <div class="fr2">
     <div class="field"><div class="fl">Promo / Discount Code</div><input type="text" id="eo-code" placeholder="e.g. WELCOME20" style="text-transform:uppercase"/></div>
     <div class="field" style="display:flex;align-items:flex-end;padding-bottom:2px">
@@ -5158,6 +5159,7 @@ function renderOrders(){
           +(o.customerEmail?'<div style="font-size:7px;color:var(--txt-d)">📧 '+esc(o.customerEmail)+'</div>':'')
           +(o.conventionName?'<div style="font-size:7px;color:var(--txt-d)">📍 '+esc(o.conventionName)+'</div>':'')
           +(o.shippingAddress?'<div style="font-size:7px;color:var(--txt-d)">🚚 '+esc(typeof o.shippingAddress==='string'?o.shippingAddress:((o.shippingAddress.address_line_1||'')+(o.shippingAddress.locality?' '+o.shippingAddress.locality:'')))+'</div>':'')
+          +(o.trackingNumber?'<div style="font-size:7px;font-family:monospace;color:var(--grn);margin-top:1px">📦 '+esc(o.trackingNumber)+'</div>':'')
         +'</div>'
         +'<div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;margin-left:8px">'
           +'<span style="font-size:8px;color:'+statusColor+';font-weight:bold;text-transform:uppercase">'+esc(o.status||'pending')+'</span>'
@@ -6631,7 +6633,7 @@ document.addEventListener('click',function(e){
 
 function openAddOrder(){
   document.getElementById('order-modal-title').textContent='New Order';
-  ['eo-id','eo-oid','eo-cust','eo-notes','eo-code'].forEach(function(i){document.getElementById(i).value='';});
+  ['eo-id','eo-oid','eo-cust','eo-notes','eo-code','eo-tracking'].forEach(function(i){document.getElementById(i).value='';});
   document.getElementById('eo-platform').value='Etsy';
   document.getElementById('eo-status').value='pending';
   document.getElementById('eo-ship').value='';
@@ -6657,6 +6659,7 @@ function openEditOrder(id){
   document.getElementById('eo-notes').value=o.notes||'';
   document.getElementById('eo-code').value=o.discountCode||'';
   document.getElementById('eo-mystery').checked=!!(o.mystery||false);
+  document.getElementById('eo-tracking').value=o.trackingNumber||'';
   clearOrderItemRows();
   (o.items||[]).forEach(function(item){
     const cat=catalogItems.find(function(c){return c.name===item.name;});
@@ -6673,13 +6676,48 @@ function saveOrder(){
   const code=(document.getElementById('eo-code').value||'').trim().toUpperCase()||undefined;
   const items=getOrderItems();
   if(!items.length){toast('No Items','Add at least one item to the order','warning');return;}
-  const order={id:id||uid(),customer,orderId:document.getElementById('eo-oid').value.trim()||'ORD-'+Date.now().toString().slice(-4),platform:document.getElementById('eo-platform').value,date:document.getElementById('eo-date').value,customerEmail:(document.getElementById('eo-email').value||'').trim(),customerPhone:(document.getElementById('eo-phone').value||'').trim(),shippingAddress:(document.getElementById('eo-addr').value||'').trim(),items,status:document.getElementById('eo-status').value,shipping:parseFloat(document.getElementById('eo-ship').value)||0,notes:document.getElementById('eo-notes').value.trim(),discountCode:code,timestamp:id?(orders.find(function(o){return o.id===id;})||{}).timestamp||Date.now():Date.now()};
+  const trackingNumber=(document.getElementById('eo-tracking').value||'').trim();
+  const existingOrder=id?(orders.find(function(o){return o.id===id;})||{}):null;
+  const prevStatus=existingOrder?existingOrder.status:'';
+  // Auto-upgrade to shipped when tracking is entered
+  var newStatus=document.getElementById('eo-status').value;
+  if(trackingNumber&&newStatus!=='shipped'&&newStatus!=='cancelled')newStatus='shipped';
+  const order=Object.assign({},existingOrder||{},{
+    id:id||uid(),
+    customer,
+    orderId:document.getElementById('eo-oid').value.trim()||'ORD-'+Date.now().toString().slice(-4),
+    platform:document.getElementById('eo-platform').value,
+    date:document.getElementById('eo-date').value,
+    customerEmail:(document.getElementById('eo-email').value||'').trim(),
+    customerPhone:(document.getElementById('eo-phone').value||'').trim(),
+    shippingAddress:(document.getElementById('eo-addr').value||'').trim(),
+    items,status:newStatus,
+    shipping:parseFloat(document.getElementById('eo-ship').value)||0,
+    notes:document.getElementById('eo-notes').value.trim(),
+    discountCode:code,
+    trackingNumber:trackingNumber||existingOrder?.trackingNumber||'',
+    timestamp:id?(existingOrder.timestamp||Date.now()):Date.now(),
+  });
   if(id){orders=orders.map(function(o){return o.id===id?order:o;});}else{orders.push(order);}
   const flagMystery=document.getElementById('eo-mystery').checked;
   if((flagMystery||isMysteryOrder(order))&&typeof checkMysteryTrigger==='function'){
     checkMysteryTrigger(order);
   }
   saveOrders();
+  // Auto-send shipping email when newly marked shipped with tracking + email
+  if(trackingNumber&&order.customerEmail&&prevStatus!=='shipped'&&newStatus==='shipped'){
+    fetch('/api/email/shipping',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+      to:order.customerEmail,
+      customerName:order.customer,
+      items:order.items,
+      trackingNumber:trackingNumber,
+      shippingAddress:order.shippingAddress||'',
+      orderId:order.orderId,
+    })}).then(function(r){
+      if(r.ok){toast('Shipping Email Sent','Tracking notification sent to '+order.customerEmail,'success',5000);}
+      else{r.json().then(function(d){toast('Email Failed',d.error||'Could not send shipping notification','error');});}
+    }).catch(function(e){toast('Email Error','Network error sending shipping notification','error');});
+  }
   closeOrder();render();
   autoQueueOrderItems(order);
 }
