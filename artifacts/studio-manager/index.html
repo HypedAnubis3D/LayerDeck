@@ -16950,12 +16950,20 @@ async function onPiPrintStarted(name,data){
   var _cleanJN=jobName.replace(/_/g,' ').trim();
   var _jLow=_cleanJN.toLowerCase();
   var _jLowBase=_jLow.replace(/\s+plate\s+\d+$/i,'').trim();
+  var _jNorm=_normName(jobName);
+  var _jNormBase=_jNorm.replace(/\s+plate\s+\d+$/i,'').trim();
   var matchedTmf=(jobName&&typeof tmfLib!=='undefined')?tmfLib.find(function(t){
     var tName=(t.name||'').toLowerCase().trim();
     var tNameBase=tName.replace(/\s+plate\s+\d+$/i,'').trim();
     var tFile=(t.filename||'').replace(/\.gcode\.3mf$/i,'').replace(/\.3mf$/i,'').replace(/\.gcode$/i,'').replace(/_/g,' ').toLowerCase().trim();
     var tFileBase=tFile.replace(/\s+plate\s+\d+$/i,'').trim();
-    return tName===_jLow||tFile===_jLow||tName===_jLowBase||tFile===_jLowBase||tNameBase===_jLow||tFileBase===_jLow||tNameBase===_jLowBase||tFileBase===_jLowBase;
+    // Normalised fallback: strip underscores/dashes/spaces uniformly so
+    // "_0132_-_Ditto_Pokeball" matches a library entry named "0132 - Ditto Pokeball"
+    var tNorm=_normName(t.name);var tNormBase=tNorm.replace(/\s+plate\s+\d+$/i,'').trim();
+    var tFileNorm=_normName((t.filename||'').replace(/\.gcode\.3mf$/i,'').replace(/\.3mf$/i,'').replace(/\.gcode$/i,''));
+    var tFileNormBase=tFileNorm.replace(/\s+plate\s+\d+$/i,'').trim();
+    return tName===_jLow||tFile===_jLow||tName===_jLowBase||tFile===_jLowBase||tNameBase===_jLow||tFileBase===_jLow||tNameBase===_jLowBase||tFileBase===_jLowBase
+      ||tNorm===_jNorm||tFileNorm===_jNorm||tNorm===_jNormBase||tFileNorm===_jNormBase||tNormBase===_jNorm||tFileNormBase===_jNorm||tNormBase===_jNormBase||tFileNormBase===_jNormBase;
   }):null;
 
   // Skip calibration and flow-rate test prints — don't pollute the prints list
