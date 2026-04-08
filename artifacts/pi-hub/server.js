@@ -761,10 +761,18 @@ function _saveVisionLog() {
   try { fs.writeFileSync(_vLogPath, JSON.stringify(_vLog.slice(0,50)), 'utf8'); } catch(_) {}
 }
 
-// Keywords suggesting no print in progress (printer off, empty plate, dark image)
-const _V_OFFLINE_KEYWORDS = ['empty','no print','no filament','blank','dark','idle','powered off',
-  'no active','not printing','off','nothing','no object','printer is off','black image',
-  'no 3d print','cannot see','no visible'];
+// Keywords that indicate the printer camera shows no active print.
+// IMPORTANT: keep these specific — broad fragments like "no active" or "no visible"
+// match Claude's normal "all clear" phrasing (e.g. "no active tangling detected",
+// "no visible layer shifts") and would falsely block future auto-scans.
+const _V_OFFLINE_KEYWORDS = [
+  'no print', 'no filament', 'blank', 'dark', 'idle', 'powered off',
+  'no active print', 'not printing', 'printer is off', 'black image',
+  'no 3d print', 'cannot see', 'empty plate', 'empty bed', 'empty build plate',
+  'no object on', 'nothing on the plate', 'nothing on the bed',
+  'between prints', 'no print in progress', 'no print visible',
+  'no visible print', 'not currently printing'
+];
 
 function _isVisuallyOff(description = '', issues = []) {
   const text = (description + ' ' + issues.join(' ')).toLowerCase();
