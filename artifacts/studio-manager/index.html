@@ -1714,6 +1714,7 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
       </div>
       <div class="sb-group-body">
         <button class="nav-item" id="nav-shopify" onclick="navTo('shopify',this)"><span class="nav-icon">🛍</span><span class="nav-label">Shopify</span></button>
+        <button class="nav-item" id="nav-etsy" onclick="navTo('etsy',this)"><span class="nav-icon">🟠</span><span class="nav-label">Etsy</span></button>
         <button class="nav-item" id="nav-square" onclick="navTo('square',this)"><span class="nav-icon">💳</span><span class="nav-label">Square</span></button>
         <button class="nav-item" id="nav-discord" onclick="navTo('discord',this)"><span class="nav-icon">💬</span><span class="nav-label">Discord</span></button>
         <button class="nav-item" id="nav-pihub" onclick="navTo('pihub',this)"><span class="nav-icon">🍓</span><span class="nav-label">Pi Hub</span></button>
@@ -2028,6 +2029,11 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
 <!-- SHOPIFY -->
 <div id="tab-shopify" style="display:none">
   <div id="shopify-content"></div>
+</div>
+
+<!-- ETSY -->
+<div id="tab-etsy" style="display:none">
+  <div id="etsy-content"></div>
 </div>
 
 <!-- SQUARE -->
@@ -3942,6 +3948,7 @@ function render(){
   if(curTab==='maint')   renderMaint();
   if(curTab==='forecast')renderForecast();
   if(curTab==='shopify') renderShopify();
+  if(curTab==='etsy') renderEtsyTab();
   if(curTab==='shop')    renderShop();
   if(curTab==='history') renderHistory();
   if(curTab==='stats')   renderStats();
@@ -5415,6 +5422,53 @@ function renderShopify(){
       +'</div>'
     +'</div>';
   }
+}
+
+function renderEtsyTab(){
+  var el=document.getElementById('etsy-content');
+  if(!el)return;
+  var eSt=_etsyGmailStatus||{};
+  var eCfg=eSt.configured;
+  var eLastSync=eSt.lastSyncAt?new Date(eSt.lastSyncAt).toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}):'-';
+  var statusDot=eCfg?(eSt.lastSyncError?'<span style="color:var(--amb)">◑</span>':'<span style="color:var(--grn)">●</span>'):'<span style="color:var(--txt-d)">○</span>';
+  var statusLabel=eCfg?(eSt.lastSyncError?'Gmail connected — last sync had an error':'Gmail connected — auto-polling'):'Not yet configured';
+  var etsyOrders=orders.filter(function(o){return o.fromEtsy||(o.platform||'').toLowerCase()==='etsy';});
+  var etsyQueue=queueItems.filter(function(q){return q.fromEtsy;});
+  el.innerHTML=
+    '<div style="background:rgba(241,112,34,.07);border:1px solid rgba(241,112,34,.25);border-radius:6px;padding:12px 14px;margin-bottom:14px;display:flex;align-items:center;gap:10px">'
+      +'<div style="font-size:22px">🟠</div>'
+      +'<div style="flex:1">'
+        +'<div style="font-size:10px;color:#f09a3e;font-weight:bold">Etsy Gmail Import</div>'
+        +'<div style="font-size:7px;color:var(--txt-d);margin-top:2px">'+statusDot+' '+statusLabel+'</div>'
+      +'</div>'
+    +'</div>'
+    +'<div style="background:var(--surf);border:1px solid rgba(241,112,34,.2);border-radius:5px;padding:12px;margin-bottom:12px;font-size:7px;color:var(--txt-d);line-height:1.8">'
+      +'Polls <b style="color:#f09a3e">hypedbodega@gmail.com</b> every 5 minutes for emails from <b>transaction@etsy.com</b>.<br>'
+      +'Each order is deduplicated by Gmail message ID — no email is ever imported twice.<br>'
+      +'Orders automatically appear in the Orders tab and Queue with a <b>🟠 ETSY ORDER</b> badge.'
+    +'</div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">'
+      +'<div style="background:var(--surf);border:1px solid var(--bdr);border-radius:5px;padding:12px;text-align:center">'
+        +'<div style="font-size:22px;font-weight:bold;color:#f09a3e;font-family:Orbitron,monospace">'+etsyOrders.length+'</div>'
+        +'<div style="font-size:7px;color:var(--txt-d);letter-spacing:1px;margin-bottom:8px">ORDERS IMPORTED</div>'
+        +'<button id="etsy-sync-btn" class="btn btn-sm" style="width:100%;background:rgba(241,112,34,.15);border:1px solid rgba(241,112,34,.4);color:#f09a3e" onclick="triggerEtsySync()">↻ Sync Now</button>'
+        +'<div id="etsy-gmail-status" style="font-size:7px;color:var(--txt-d);min-height:14px;margin-top:4px">Last sync: '+eLastSync+'</div>'
+      +'</div>'
+      +'<div style="background:var(--surf);border:1px solid var(--bdr);border-radius:5px;padding:12px;text-align:center">'
+        +'<div style="font-size:22px;font-weight:bold;color:var(--cyn);font-family:Orbitron,monospace">'+etsyQueue.length+'</div>'
+        +'<div style="font-size:7px;color:var(--txt-d);letter-spacing:1px;margin-bottom:8px">QUEUE ITEMS</div>'
+        +'<button class="btn btn-ghost btn-sm" style="width:100%" onclick="refreshEtsyStatus().then(renderEtsyTab)">⟳ Refresh Status</button>'
+      +'</div>'
+    +'</div>'
+    +(eSt.lastSyncError?'<div style="background:rgba(220,38,38,.08);border:1px solid rgba(220,38,38,.25);border-radius:5px;padding:10px;margin-bottom:12px;font-size:7px;color:var(--red)">⚠ Last sync error: '+esc(eSt.lastSyncError)+'</div>':'')
+    +'<div style="display:flex;gap:8px;margin-bottom:10px">'
+      +'<button class="btn btn-ghost btn-sm" style="flex:1" onclick="navTo(\'orders\',document.getElementById(\'nav-orders\'))">📬 View Orders</button>'
+      +'<button class="btn btn-ghost btn-sm" style="flex:1" onclick="navTo(\'queue\',document.getElementById(\'nav-queue\'))">📋 View Queue</button>'
+    +'</div>'
+    +'<div style="font-size:6px;color:var(--txt-d);text-align:center;line-height:2">'
+      +'Auto-polls every 5 min · Scans back to midnight of first server start<br>'
+      +'Credentials: ETSY_GMAIL_ADDRESS + ETSY_GMAIL_APP_PASSWORD (server env)'
+    +'</div>';
 }
 
 var _etsyGmailStatus={configured:false,lastSyncAt:null,lastSyncError:null,isPolling:false};
@@ -7589,6 +7643,7 @@ async function checkShopifyConfig(){
         pollShopifyOrders();
         syncShopifyToCatalog();
         if(curTab==='shopify')renderShopify();
+        if(curTab==='etsy')renderEtsyTab();
         if(typeof renderObChecklist==='function')renderObChecklist();
       }
     }
@@ -7613,6 +7668,7 @@ function checkShopifyOAuthCallback(){
       toast('Shopify Connected!','Store '+shop+' connected. Syncing now.','success');
       startPolling();pollShopifyOrders();
       if(curTab==='shopify')renderShopify();
+      if(curTab==='etsy')renderEtsyTab();
       if(typeof renderObChecklist==='function')renderObChecklist();
     },500);
   }else if(params.get('shopify_error')==='true'){
@@ -9551,6 +9607,7 @@ function render(){
   if(curTab==='maint')      {renderMaint();renderNozzle();}
   if(curTab==='forecast')   renderForecast();
   if(curTab==='shopify')    renderShopify();
+  if(curTab==='etsy')       renderEtsyTab();
   if(curTab==='history')    renderHistory();
   if(curTab==='stats')      renderStats();
   if(curTab==='backup')     {renderBackup();checkBackupReminder();}
@@ -12291,6 +12348,7 @@ function openGroupForTab(tab){
     orders:'sbg-orders',customers:'sbg-orders',reviews:'sbg-orders',mystery:'sbg-orders',shiny:'sbg-orders',
     revenue:'sbg-business',catalog:'sbg-business',catalogItems:'sbg-business',tax:'sbg-business',convention:'sbg-business',priceengine:'sbg-business',labels:'sbg-business',failrate:'sbg-business',
     printers:'sbg-ops',spools:'sbg-ops',fildb:'sbg-ops',drying:'sbg-ops',power:'sbg-ops',maint:'sbg-ops',nozzle:'sbg-ops',waste:'sbg-ops',purchases:'sbg-ops',shipping:'sbg-ops',forecast:'sbg-ops',restock:'sbg-ops',shop:'sbg-ops',
+    shopify:'sbg-integrations',etsy:'sbg-integrations',square:'sbg-integrations',discord:'sbg-integrations',pihub:'sbg-integrations',social:'sbg-integrations',
     sync:'sbg-system',history:'sbg-system',stats:'sbg-system',backup:'sbg-system'
   };
   const target=tabGroups[tab];
