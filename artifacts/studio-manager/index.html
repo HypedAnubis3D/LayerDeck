@@ -18002,7 +18002,12 @@ function updatePrinterCardLive(name,data,state){
     allId('ams').forEach(el=>{el.innerHTML=amsHtml;});
     // Debug: show raw tray_now value
     const tnEl=document.getElementById('pi-'+id+'-traynow');
-    if(tnEl){const tn=data.tray_now;const tnAms=data.ams!=null?data.ams.tray_now:undefined;tnEl.textContent='top:'+JSON.stringify(tn)+'('+typeof tn+') ams:'+JSON.stringify(tnAms)+(data.ams&&data.ams.ams?' units='+data.ams.ams.length:'');}
+    if(tnEl){
+      const trayKeys=Object.keys(data).filter(k=>k.toLowerCase().includes('tray'));
+      const amsKeys=data.ams?Object.keys(data.ams).filter(k=>k.toLowerCase().includes('tray')):[];
+      const amsUnit0Keys=data.ams&&data.ams.ams&&data.ams.ams[0]?Object.keys(data.ams.ams[0]):[];
+      tnEl.textContent='top-tray:['+trayKeys.map(k=>k+'='+JSON.stringify(data[k])).join(',')+'] ams-tray:['+amsKeys.map(k=>k+'='+JSON.stringify(data.ams[k])).join(',')+'] u0keys:['+amsUnit0Keys.join(',')+']';
+    }
   }
   // Dashboard mini-AMS grid — update in-place so colors sync without full re-render
   const dashAmsEl=document.getElementById('dash-ams-'+id);
