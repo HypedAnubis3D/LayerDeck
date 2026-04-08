@@ -93,22 +93,25 @@ router.post(
     const sigKey = process.env.SQUARE_WEBHOOK_SIG_KEY;
     const signature = req.headers["x-square-hmacsha256-signature"] as string | undefined;
 
-    // Determine the exact URL Square called (must match what you registered in Square dashboard)
+    // The webhook URL MUST exactly match what is registered in the Square Developer Console.
+    // Set SQUARE_WEBHOOK_URL explicitly in production to avoid domain auto-detection mismatches.
     const webhookUrl =
       process.env.SQUARE_WEBHOOK_URL ??
       (process.env.REPLIT_APP_DOMAIN
         ? `https://${process.env.REPLIT_APP_DOMAIN}/api/square/webhook`
-        : process.env.REPLIT_DEV_DOMAIN
-        ? `https://${process.env.REPLIT_DEV_DOMAIN}/api/square/webhook`
         : `https://layerstack.replit.app/api/square/webhook`);
+
+    req.log.info({ webhookUrl, hasSignature: !!signature, hasSigKey: !!sigKey }, "Square webhook received");
 
     // Validate signature if sig key is configured
     if (sigKey && signature) {
+      // Must use the exact raw bytes Square sent — express.raw() captures these as a Buffer
       const rawBody = Buffer.isBuffer(req.body) ? req.body.toString("utf8") : JSON.stringify(req.body);
       const expected = buildSquareHmac(sigKey, webhookUrl, rawBody);
       let valid = false;
       try {
-        valid = timingSafeEqual(Buffer.from(expected), Buffer.from(signature));
+        // Compare decoded HMAC bytes (both are base64 of SHA-256, always 32 bytes)
+        valid = timingSafeEqual(Buffer.from(expected, "base64"), Buffer.from(signature, "base64"));
       } catch {
         valid = false;
       }

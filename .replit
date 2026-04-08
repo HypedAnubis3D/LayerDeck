@@ -45,3 +45,4 @@ PLUG_P1_CLOSET_IP = "192.168.1.172"
 
 [userenv.production]
 SHOPIFY_REDIRECT_URI = "https://layerdeck.replit.app/api/shopify/oauth/callback"
+SQUARE_WEBHOOK_URL = "https://layerstack.replit.app/api/square/webhook"
