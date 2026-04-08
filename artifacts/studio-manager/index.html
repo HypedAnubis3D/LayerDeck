@@ -4124,6 +4124,9 @@ function renderPrints(){
       (function(){var lR=qi.printer&&piPrevStates[qi.printer]?Math.round(piPrevStates[qi.printer].mc_remaining_time||0):0;var ts=lR>0?(formatHms(lR/60)+' left'):(qi.hrs?formatHms(qi.hrs):'');return ts?' · <span class="print-time-display" style="display:inline-flex;font-size:8px;padding:2px 6px">'+ts+'</span>':'';})()+(startedLabel?'<span style="color:var(--txt-d)">'+startedLabel+'</span>':'')+'</div>'+
       (qi.notes?'<div class="notes-box">'+esc(qi.notes)+'</div>':'')+
       '<div class="card-acts" style="margin-top:4px">'+
+      '<button class="finish-btn" style="flex:1" onclick="moveQueue(\''+qi.id+'\',\'done\')">⬡ Mark as Finished</button>'+
+      '</div>'+
+      '<div class="card-acts" style="margin-top:4px">'+
       '<button class="btn btn-ghost btn-xs" style="flex:1" onclick="openEditInProgressPrint(\''+qi.id+'\')">✎ Edit / Add 3MF</button>'+
       '<button class="btn btn-xs" style="background:#180808;border:1px solid #2a1010;color:#703030" onclick="delInProgressQItem(\''+qi.id+'\')">✕</button>'+
       '</div>'+
