@@ -8387,30 +8387,50 @@ function renderSpools(){
         '<div style="margin-top:10px;border-top:1px solid var(--bdr2);padding-top:10px" onclick="event.stopPropagation()">'
           +ss.map((s,i)=>{
             const sp=pct(s),sbc=barcol(sp);
-            return '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--bdr2)">'
-              // Donut
-              +'<div style="position:relative;flex-shrink:0;width:44px;height:44px">'
-                +spoolDonut(s.remaining,s.total,rep.color)
-                +'<span style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:var(--txt)">'+(i+1)+'</span>'
-              +'</div>'
-              // Info + log
-              +'<div style="flex:1;min-width:0">'
-                +'<div style="font-size:10px;font-weight:600;color:var(--txt)">Spool #'+(i+1)+'</div>'
-                +'<div style="font-size:13px;font-weight:700;color:'+sbc+'">'+s.remaining+'g <span style="font-size:8px;color:var(--txt-d);font-weight:400">/ '+s.total+'g · '+sp+'%</span></div>'
-                +(s.printer?'<div style="font-size:7px;color:var(--txt-d);margin-bottom:3px">'+esc(s.printer)+(s.amsSlot?' · AMS Slot '+s.amsSlot:'')+'</div>':'')
-                +'<div class="use-row" style="margin-top:4px">'
-                  +'<input class="use-inp" type="number" id="qi-'+s.id+'" placeholder="g used" min="1" onclick="event.stopPropagation()"/>'
-                  +'<button class="btn btn-ghost btn-xs" onclick="event.stopPropagation();quickUse(\''+s.id+'\')">Log</button>'
-                  +'<button class="btn btn-xs" style="background:var(--gold-d);border:1px solid var(--gold);color:var(--gold-b)" onclick="event.stopPropagation();openUse(\''+s.id+'\')">+ Job</button>'
+            return (function(){
+              const hist=(usageHist||[]).filter(function(h){return h.spoolId===s.id;}).sort(function(a,b){return b.timestamp-a.timestamp;}).slice(0,15);
+              const histRows=hist.length?hist.map(function(h){
+                const dt=new Date(h.timestamp||h.date).toLocaleDateString('en-US',{month:'short',day:'numeric'})+(h.timestamp?' '+new Date(h.timestamp).toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}):'');
+                const note=h.note||h.job||'Manual';
+                return '<div style="display:flex;gap:6px;align-items:baseline;padding:3px 0;border-bottom:1px solid var(--bdr2);font-size:7px">'
+                  +'<span style="color:var(--txt-d);white-space:nowrap;min-width:80px">'+dt+'</span>'
+                  +'<span style="color:var(--red-b);font-family:Orbitron,monospace;white-space:nowrap;font-size:7px">−'+Math.round(h.amount||0)+'g</span>'
+                  +'<span style="color:var(--txt-b);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(note)+'</span>'
+                +'</div>';
+              }).join(''):('<div style="font-size:7px;color:var(--txt-d);padding:6px;text-align:center">No usage history yet</div>');
+              const histPanel='<div id="spool-hist-'+s.id+'" style="display:none;margin-top:6px;border-top:1px solid var(--bdr2);padding-top:6px">'
+                +'<div style="font-size:7px;font-weight:bold;color:var(--txt-d);letter-spacing:1px;margin-bottom:4px">USAGE HISTORY (last 15)</div>'
+                +histRows
+              +'</div>';
+              return '<div style="padding:8px 0;border-bottom:1px solid var(--bdr2)">'
+                +'<div style="display:flex;align-items:center;gap:10px">'
+                  // Donut
+                  +'<div style="position:relative;flex-shrink:0;width:44px;height:44px">'
+                    +spoolDonut(s.remaining,s.total,rep.color)
+                    +'<span style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:var(--txt)">'+(i+1)+'</span>'
+                  +'</div>'
+                  // Info + log
+                  +'<div style="flex:1;min-width:0">'
+                    +'<div style="font-size:10px;font-weight:600;color:var(--txt)">Spool #'+(i+1)+'</div>'
+                    +'<div style="font-size:13px;font-weight:700;color:'+sbc+'">'+s.remaining+'g <span style="font-size:8px;color:var(--txt-d);font-weight:400">/ '+s.total+'g · '+sp+'%</span></div>'
+                    +(s.printer?'<div style="font-size:7px;color:var(--txt-d);margin-bottom:3px">'+esc(s.printer)+(s.amsSlot?' · AMS Slot '+s.amsSlot:'')+'</div>':'')
+                    +'<div class="use-row" style="margin-top:4px">'
+                      +'<input class="use-inp" type="number" id="qi-'+s.id+'" placeholder="g used" min="1" onclick="event.stopPropagation()"/>'
+                      +'<button class="btn btn-ghost btn-xs" onclick="event.stopPropagation();quickUse(\''+s.id+'\')">Log</button>'
+                      +'<button class="btn btn-xs" style="background:var(--gold-d);border:1px solid var(--gold);color:var(--gold-b)" onclick="event.stopPropagation();openUse(\''+s.id+'\')">+ Job</button>'
+                    +'</div>'
+                  +'</div>'
+                  // Action buttons
+                  +'<div style="display:flex;flex-direction:column;gap:4px;align-items:center;flex-shrink:0">'
+                    +'<button class="btn btn-ghost btn-xs" onclick="event.stopPropagation();showQR(\''+s.id+'\')" title="QR Code">⬡</button>'
+                    +'<button class="btn btn-ghost btn-xs" onclick="event.stopPropagation();openEditSpool(\''+s.id+'\')" title="Edit">✎</button>'
+                    +'<button class="btn btn-ghost btn-xs" onclick="event.stopPropagation();toggleSpoolHistPanel(\''+s.id+'\')" title="Usage history" style="color:var(--txt-d)">📋</button>'
+                    +'<button class="btn btn-xs" style="background:var(--red-d);border:1px solid var(--red-d);color:var(--red-b)" onclick="event.stopPropagation();delSpool(\''+s.id+'\')" title="Delete">✕</button>'
+                  +'</div>'
                 +'</div>'
-              +'</div>'
-              // Action buttons
-              +'<div style="display:flex;flex-direction:column;gap:4px;align-items:center;flex-shrink:0">'
-                +'<button class="btn btn-ghost btn-xs" onclick="event.stopPropagation();showQR(\''+s.id+'\')" title="QR Code">⬡</button>'
-                +'<button class="btn btn-ghost btn-xs" onclick="event.stopPropagation();openEditSpool(\''+s.id+'\')" title="Edit">✎</button>'
-                +'<button class="btn btn-xs" style="background:var(--red-d);border:1px solid var(--red-d);color:var(--red-b)" onclick="event.stopPropagation();delSpool(\''+s.id+'\')" title="Delete">✕</button>'
-              +'</div>'
-            +'</div>';
+                +histPanel
+              +'</div>';
+            })()
           }).join('')
           +'<button class="btn btn-cyn btn-sm" style="width:100%;margin-top:10px" onclick="event.stopPropagation();openAddSpoolToGroup(\''+safeKey+'\')">+ Add Another Spool to This Group</button>'
         +'</div>'
@@ -8421,6 +8441,11 @@ function renderSpools(){
 }
 
 // spool/print deletes with toast
+function toggleSpoolHistPanel(id){
+  const el=document.getElementById('spool-hist-'+id);
+  if(el)el.style.display=el.style.display==='none'?'block':'none';
+}
+
 function delSpool(id){
   const s=spools.find(x=>x.id===id);
   showConfirm('Delete "'+( s?.name||'spool')+'"?','This cannot be undone.',()=>{
@@ -17414,10 +17439,12 @@ async function onPiPrintFinished(name,data){
     const totalFallbackG=tmfGramsArr?tmfGramsArr.reduce(function(a,v){return a+(v||0);},0):gramsUsed;
     const extKey2=_amsSlotKey(name,255,254);
     const fallbackSpool=spools.find(s=>s.id===amsSlotMappings[extKey2])
+      ||spools.find(s=>s.printer===name&&s.material&&s.material.toLowerCase().includes(material.toLowerCase())&&(s.remaining||0)>0)
       ||spools.find(s=>s.material&&s.material.toLowerCase().includes(material.toLowerCase())&&(s.remaining||0)>0);
     if(fallbackSpool&&totalFallbackG>0){
       fallbackSpool.remaining=Math.max(0,(fallbackSpool.remaining||fallbackSpool.totalGrams||1000)-totalFallbackG);
       spoolsChanged=true;
+      toast('Filament Auto-Deducted','Pi Hub: −'+totalFallbackG+'g from "'+fallbackSpool.name+'" for "'+jobName+'" · Set AMS slot mappings to stop this','warning',8000);
       // Low spool alerts suppressed here — check spools manually or before conventions
     }
     if(tmfGramsArr){
