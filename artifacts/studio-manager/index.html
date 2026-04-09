@@ -17219,12 +17219,7 @@ async function onPiPrintStarted(name,data){
   }):null;
 
   // Skip calibration and flow-rate test prints — don't pollute the prints list
-  var CALIB_RE=/^(flow_rate|flowrate|pa_tower|pa_calib|x1c_auto|bambu_calib|cht_calib|calib_|calibration|nozzle_calib|temp_tower|retraction_calib|tolerance_test|vibration_calib|abs_|pla_|pet_|tpu_)(calib|test|tower)/i;
-  var isCalibPrint=jobName&&(CALIB_RE.test(jobName)||/^flow_rate/i.test(jobName)||/calib/i.test(jobName));
-  if(isCalibPrint){
-    // Still update Pi Hub live state & AMS, just don't auto-add to queue
-    return;
-  }
+  if(_isCalibJob(jobName)){return;}
 
   var changed=false;
   if(jobName){
@@ -17297,12 +17292,34 @@ async function onPiPrintStarted(name,data){
 }
 
 function _normName(s){return (s||'').toLowerCase().replace(/[\s_\-]+/g,' ').replace(/\.gcode\.3mf$/i,'').replace(/\.3mf$/i,'').replace(/\.gcode$/i,'').replace(/\.bgcode$/i,'').trim();}
+
+// Comprehensive Bambu calibration job filter — used in both start & finish handlers
+function _isCalibJob(n){
+  if(!n)return false;
+  const l=n.toLowerCase();
+  return /^auto_cali/.test(l)      // auto_cali_for_user_param, auto_cali_*
+    ||/^flow_rate/.test(l)          // flow_rate_coarse_calib_mode, flow_rate_fine_*
+    ||/calib/.test(l)               // any name containing 'calib'
+    ||/_cali[_.]/.test(l)           // _cali_ separator (auto_cali_for_user_param)
+    ||/^pa_tower/.test(l)           // pressure advance tower
+    ||/^pa_calib/.test(l)
+    ||/^temp_tower/.test(l)         // temperature calibration tower
+    ||/^vibration_comp/.test(l)     // vibration compensation
+    ||/^bambu_calib/.test(l)
+    ||/^cht_calib/.test(l)
+    ||/^nozzle_calib/.test(l)
+    ||/^retraction_calib/.test(l)
+    ||/^tolerance_test/.test(l)
+    ||/^x1c_auto/.test(l);
+}
+
 function reconcileMissingPiPrints(){
   const _todayStart=new Date();_todayStart.setHours(0,0,0,0);
   const _todayMs=_todayStart.getTime();
   let _added=0,_patched=0;
   (typeof queueItems!=='undefined'?queueItems:[]).forEach(function(q){
     if(q.stage!=='done'||!q.autoFromPi||!q.printer||!q.name)return;
+    if(_isCalibJob(q.name))return; // skip calibration queue items
     if(!(q.hrs>0))return; // nothing to contribute without a real duration
     const _qDone=q.completedAt||q.timestamp||0;
     if(_qDone<_todayMs)return; // only today's queue items
@@ -17344,6 +17361,8 @@ function reconcileMissingPiPrints(){
 
 async function onPiPrintFinished(name,data){
   const jobNameCheck=(data.subtask_name||'').replace(/\.gcode\.3mf$/i,'').replace(/\.3mf$/i,'').replace(/\.gcode$/i,'').replace(/\.bgcode$/i,'')||'Unknown';
+  // Skip calibration completions — never log them as user prints
+  if(_isCalibJob(jobNameCheck)){return;}
   // Dedup for the entire calendar day — prevents duplicate records when the app
   // reloads and re-receives the FINISH MQTT state (can be minutes or hours later)
   const _todayStart=new Date();_todayStart.setHours(0,0,0,0);
