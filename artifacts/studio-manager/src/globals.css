@@ -842,33 +842,6 @@ header{
 .rcb-title{font-size:10px;color:var(--gold-b);font-weight:bold;margin-bottom:2px;}
 .rcb-sub{font-size:8px;color:var(--txt-d);line-height:1.5;}
 
-/* ══════════════════════════════════════
-   LIGHT MODE
-══════════════════════════════════════ */
-body.light-mode{
-  --bg:#f5f0e8;--surf:#fff;--surf2:#faf6ef;--surf3:#f0ead8;
-  --bdr:#e0d4b8;--bdr2:#c8b890;
-  --txt:#3a2e1e;--txt-d:#9a8a6a;--txt-b:#1a1208;
-  --gold:#a07818;--gold-d:#f5e8c0;--gold-b:#7a5c10;--gold-dim:#b89030;
-  --grn:#047a55;--grn-d:#d4f0e4;--grn-b:#025a3e;
-  --red:#b91c1c;--red-d:#fde8e8;--red-b:#8b0000;
-  --pur:#6d28d9;--pur-d:#ede9fe;--pur-b:#4c1d95;
-  --org:#c2410c;--org-d:#ffedd5;--org-b:#7c2d12;
-  --teal:#0f766e;--teal-d:#ccfbf1;--teal-b:#134e4a;
-  --cyn:#1d6fa4;--cyn-d:#dbeafe;
-  --shopify:#3d6b12;--shopify-d:#dcfce7;
-}
-body.light-mode header{background:rgba(245,240,232,.97);}
-body.light-mode .sidebar{background:linear-gradient(180deg,#faf6ef,#f5f0e8);border-right-color:var(--bdr);}
-body.light-mode .sidebar-body::-webkit-scrollbar-thumb{background:var(--bdr2);}
-body.light-mode .nav-item:hover{background:rgba(160,120,24,.06);}
-body.light-mode .nav-item.active{background:rgba(160,120,24,.12);}
-body.light-mode .card,.light-mode .tmf-card,.light-mode .print-card,.light-mode .order-card,.light-mode .maint-card,.light-mode .forecast-card,.light-mode .customer-card,.light-mode .rev-card,.light-mode .pe-card,.light-mode .dash-widget,.light-mode .kanban-col,.light-mode .sc,.light-mode .batch-panel,.light-mode .export-panel{box-shadow:0 1px 4px rgba(0,0,0,.08);}
-body.light-mode .toast{background:#fff;border-color:var(--bdr);}
-body.light-mode .modal,.light-mode .finish-modal,.light-mode .qr-modal,.light-mode .scan-modal,.light-mode .use-modal,.light-mode .kb-modal,.light-mode .qr-alert-modal{background:#fff;border-color:var(--bdr2);}
-body.light-mode .field input,.light-mode .field select,.light-mode .field textarea{background:var(--surf2);border-color:var(--bdr);}
-body.light-mode ::-webkit-scrollbar-track{background:var(--bg);}
-body.light-mode ::-webkit-scrollbar-thumb{background:var(--bdr2);}
 
 /* ══════════════════════════════════════
    MOBILE RESPONSIVE
@@ -1005,9 +978,6 @@ body.light-mode ::-webkit-scrollbar-thumb{background:var(--bdr2);}
 .reset-confirm-input:focus{outline:none;border-color:var(--red);}
 .reset-confirm-input.ready{border-color:var(--red);color:var(--red-b);}
 
-/* Theme toggle button */
-.theme-toggle{background:none;border:1px solid var(--bdr2);color:var(--txt-d);width:30px;height:30px;border-radius:5px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:14px;transition:all .2s;flex-shrink:0;}
-.theme-toggle:hover{border-color:var(--gold);color:var(--gold);}
 
 /* ══════════════════════════════════════
    SYNC STATUS
@@ -1236,9 +1206,6 @@ body.light-mode ::-webkit-scrollbar-thumb{background:var(--bdr2);}
    COLOR-MATCHED DYNAMIC ACCENTS
 ══════════════════════════════════════ */
 .card-dynamic{transition:border-color .3s,box-shadow .3s;}
-
-/* Light mode bottom nav */
-body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:var(--bdr);}
 
 @media print{
 ══════════════════════════════════════ */
