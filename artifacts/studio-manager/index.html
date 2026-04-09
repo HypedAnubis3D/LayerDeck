@@ -15484,6 +15484,18 @@ function renderPower(){
   const totalCost=printerStats.reduce((a,p)=>a+p.cost,0);
   const totalHrs=printerStats.reduce((a,p)=>a+p.hours,0);
   const totalKwh=printerStats.reduce((a,p)=>a+p.kwh,0);
+  // Per-print electricity breakdown
+  const printRows=relevantPrints
+    .filter(p=>p.printer&&(p.hrs||0)>0)
+    .map(p=>{
+      const pr=printerRecords.find(r=>r.name===p.printer)||{};
+      const watts=p.tapoWatts||(pr.watts||350);
+      const kwhRate=pr.kwh||0.13;
+      const kwh=watts*(p.hrs||0)/1000;
+      const cost=kwh*kwhRate;
+      return{...p,_watts:watts,_kwh:kwh,_cost:cost,_fromTapo:!!p.tapoWatts};
+    })
+    .sort((a,b)=>b._cost-a._cost);
   el.innerHTML=`
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px">
       <div class="waste-summary"><div class="ws-n" style="color:var(--gold-b)">$${totalCost.toFixed(2)}</div><div class="ws-l">Total Power Cost</div></div>
@@ -15491,7 +15503,7 @@ function renderPower(){
       <div class="waste-summary"><div class="ws-n" style="color:var(--org-b)">${totalHrs.toFixed(1)}h</div><div class="ws-l">Print Hours</div></div>
     </div>
     <div style="font-size:7px;color:var(--txt-d);letter-spacing:2px;text-transform:uppercase;margin-bottom:8px">PER PRINTER BREAKDOWN</div>
-    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:9px">
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:9px;margin-bottom:16px">
       ${printerStats.map(pr=>`<div class="nozzle-card" style="border-left:3px solid var(--gold)">
         <div class="nozzle-printer">${esc(pr.name)}</div>
         <div class="nozzle-type">${pr.watts||350}W configured${pr.liveWatts?` · <span style="color:var(--grn)">⚡ ${pr.liveWatts}W live</span>`:''} · $${(pr.kwh||0.13).toFixed(2)}/kWh</div>
@@ -15502,7 +15514,30 @@ function renderPower(){
         </div>
         <div style="font-size:7px;color:var(--txt-d)">${pr.prints} print${pr.prints!==1?'s':''} in period · $${pr.prints?((pr.cost/pr.prints).toFixed(3)):0}/print</div>
       </div>`).join('')}
-    </div>`;
+    </div>
+    <div style="font-size:7px;color:var(--txt-d);letter-spacing:2px;text-transform:uppercase;margin-bottom:8px">PER PRINT ELECTRICITY</div>
+    ${printRows.length?`<div style="background:var(--surf);border:1px solid var(--bdr);border-radius:5px;overflow:hidden">
+      <div style="display:grid;grid-template-columns:1fr 80px 60px 52px 52px 52px;gap:0;border-bottom:1px solid var(--bdr);padding:5px 10px">
+        <div style="font-size:6px;color:var(--txt-d);letter-spacing:1px;text-transform:uppercase">Print</div>
+        <div style="font-size:6px;color:var(--txt-d);letter-spacing:1px;text-transform:uppercase">Printer</div>
+        <div style="font-size:6px;color:var(--txt-d);letter-spacing:1px;text-transform:uppercase;text-align:right">Watts</div>
+        <div style="font-size:6px;color:var(--txt-d);letter-spacing:1px;text-transform:uppercase;text-align:right">Hours</div>
+        <div style="font-size:6px;color:var(--txt-d);letter-spacing:1px;text-transform:uppercase;text-align:right">kWh</div>
+        <div style="font-size:6px;color:var(--txt-d);letter-spacing:1px;text-transform:uppercase;text-align:right">Cost</div>
+      </div>
+      ${printRows.map((p,i)=>`<div style="display:grid;grid-template-columns:1fr 80px 60px 52px 52px 52px;gap:0;padding:6px 10px;border-bottom:${i<printRows.length-1?'1px solid var(--bdr)':'none'};background:${i%2===0?'transparent':'rgba(255,255,255,0.02)'}">
+        <div style="font-size:8px;color:var(--txt-b);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding-right:8px">${esc(p.name||'—')}</div>
+        <div style="font-size:7px;color:var(--txt-d);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(p.printer||'—')}</div>
+        <div style="font-size:8px;text-align:right;${p._fromTapo?'color:var(--grn)':'color:var(--txt-d)'}">${p._watts}W${p._fromTapo?'<span style="font-size:5px;margin-left:2px;background:rgba(0,200,80,.15);border:1px solid rgba(0,200,80,.3);border-radius:2px;padding:0 2px;color:var(--grn)">⚡</span>':''}</div>
+        <div style="font-size:8px;color:var(--txt-d);text-align:right">${(p.hrs||0).toFixed(1)}h</div>
+        <div style="font-size:8px;color:var(--cyn);text-align:right">${p._kwh.toFixed(3)}</div>
+        <div style="font-size:8px;color:var(--gold-b);text-align:right;font-family:'Orbitron',monospace">$${p._cost.toFixed(3)}</div>
+      </div>`).join('')}
+    </div>
+    <div style="font-size:6px;color:var(--txt-d);margin-top:6px;line-height:1.6">
+      ⚡ <span style="color:var(--grn)">Green watts</span> = live Tapo P115 measured wattage snapshot captured at print finish · Grey = configured printer wattage
+    </div>`
+    :`<div style="font-size:8px;color:var(--txt-d);text-align:center;padding:20px">No print data for this period</div>`}`;
 }
 
 // ════════════════════════════════════════
@@ -19343,9 +19378,88 @@ function renderPiHub(){
         :'<div style="font-size:7.5px;color:var(--txt-d)">No scans yet — click "AI Scan" on a printer card above, or wait for the next auto-scan during a print.</div>')+
       '</div>';
     })()+
+    // ── Tapo Electricity Spend card ───────────────────────────────────────────
+    '<div class="printer-card" style="min-width:0">'+
+      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap">'+
+        '<div style="font-family:\'Orbitron\',monospace;font-size:9px;font-weight:700;color:var(--gold-b);letter-spacing:2px">⚡ ELECTRICITY SPEND</div>'+
+        '<div style="flex:1"></div>'+
+        '<select class="flt" id="tapo-spend-period" onchange="renderTapoSpend()" style="font-size:7px;padding:2px 6px">'+
+          '<option value="day">Today</option>'+
+          '<option value="week">This Week</option>'+
+          '<option value="month" selected>This Month</option>'+
+        '</select>'+
+      '</div>'+
+      '<div id="tapo-spend-content"></div>'+
+    '</div>'+
   '</div>';
   // Load plug list in background so the dropdowns are populated
   if(!_tapoDevices.length&&!_tapoFetching) fetchTapoDevices();
+  renderTapoSpend();
+}
+
+function renderTapoSpend(){
+  const el=document.getElementById('tapo-spend-content');
+  if(!el)return;
+  const period=(document.getElementById('tapo-spend-period')||{}).value||'month';
+  const now=Date.now();
+  let since=0;
+  if(period==='day'){const d=new Date();since=new Date(d.getFullYear(),d.getMonth(),d.getDate()).getTime();}
+  else if(period==='week'){const d=new Date();const dow=d.getDay();since=new Date(d.getFullYear(),d.getMonth(),d.getDate()-dow).getTime();}
+  else{const d=new Date();since=new Date(d.getFullYear(),d.getMonth(),1).getTime();}
+  const periodPrints=(typeof prints!=='undefined'?prints:[]).filter(p=>p.autoFromPi&&(p.timestamp||0)>=since&&(p.hrs||0)>0);
+  // Aggregate by printer
+  const byPrinter={};
+  let totalKwh=0,totalCost=0,totalHrs=0,measuredCount=0;
+  periodPrints.forEach(p=>{
+    const pr=(typeof printerRecords!=='undefined'?printerRecords:[]).find(r=>r.name===p.printer)||{};
+    const watts=p.tapoWatts||(pr.watts||350);
+    const rate=pr.kwh||0.13;
+    const kwh=watts*(p.hrs||0)/1000;
+    const cost=kwh*rate;
+    if(p.tapoWatts) measuredCount++;
+    totalKwh+=kwh; totalCost+=cost; totalHrs+=(p.hrs||0);
+    if(!byPrinter[p.printer]) byPrinter[p.printer]={kwh:0,cost:0,hrs:0,prints:0,measuredPrints:0,watts:pr.watts||350};
+    byPrinter[p.printer].kwh+=kwh;
+    byPrinter[p.printer].cost+=cost;
+    byPrinter[p.printer].hrs+=(p.hrs||0);
+    byPrinter[p.printer].prints++;
+    if(p.tapoWatts) byPrinter[p.printer].measuredPrints++;
+  });
+  const printerKeys=Object.keys(byPrinter);
+  if(!periodPrints.length){
+    el.innerHTML='<div style="font-size:8px;color:var(--txt-d);text-align:center;padding:16px">No Pi Hub prints logged for this period</div>';
+    return;
+  }
+  const periodLabel=period==='day'?'Today':period==='week'?'This Week':'This Month';
+  el.innerHTML=
+    '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px">'+
+      '<div class="waste-summary" style="padding:8px"><div class="ws-n" style="color:var(--gold-b);font-size:14px">$'+totalCost.toFixed(2)+'</div><div class="ws-l">'+periodLabel+'</div></div>'+
+      '<div class="waste-summary" style="padding:8px"><div class="ws-n" style="color:var(--cyn);font-size:14px">'+totalKwh.toFixed(2)+'</div><div class="ws-l">kWh Used</div></div>'+
+      '<div class="waste-summary" style="padding:8px"><div class="ws-n" style="color:var(--org-b);font-size:14px">'+totalHrs.toFixed(1)+'h</div><div class="ws-l">Print Hours</div></div>'+
+    '</div>'+
+    (measuredCount>0?'<div style="font-size:6px;color:var(--grn);margin-bottom:8px">⚡ '+measuredCount+' of '+periodPrints.length+' prints used live Tapo measured wattage</div>':
+     '<div style="font-size:6px;color:var(--txt-d);margin-bottom:8px">ℹ Using configured printer wattage — live Tapo readings captured at print finish when plug is assigned</div>')+
+    (printerKeys.length>1?
+      '<div style="display:grid;gap:6px">'+
+        printerKeys.map(name=>{
+          const s=byPrinter[name];
+          const tapoW=_getTapoWattsForPrinter(name);
+          return '<div style="background:var(--bg);border:1px solid var(--bdr);border-radius:4px;padding:8px;display:grid;grid-template-columns:1fr auto auto auto;gap:8px;align-items:center">'+
+            '<div>'+
+              '<div style="font-size:8px;color:var(--txt-b);font-weight:700">'+esc(name)+'</div>'+
+              '<div style="font-size:6px;color:var(--txt-d);margin-top:2px">'+s.prints+' print'+( s.prints!==1?'s':'')+
+                (s.measuredPrints?' · <span style="color:var(--grn)">'+s.measuredPrints+' measured</span>':'')+
+                (tapoW?' · <span style="color:var(--grn)">⚡ '+tapoW+'W now</span>':'')+
+              '</div>'+
+            '</div>'+
+            '<div style="text-align:right"><div style="font-size:9px;color:var(--cyn)">'+s.kwh.toFixed(2)+'</div><div style="font-size:6px;color:var(--txt-d)">kWh</div></div>'+
+            '<div style="text-align:right"><div style="font-size:9px;color:var(--org-b)">'+s.hrs.toFixed(1)+'h</div><div style="font-size:6px;color:var(--txt-d)">hrs</div></div>'+
+            '<div style="text-align:right"><div style="font-size:10px;color:var(--gold-b);font-family:\'Orbitron\',monospace">$'+s.cost.toFixed(2)+'</div><div style="font-size:6px;color:var(--txt-d)">cost</div></div>'+
+          '</div>';
+        }).join('')+
+      '</div>':
+      '')+
+    '<div style="font-size:6px;color:var(--txt-d);margin-top:8px;line-height:1.5">Based on '+periodPrints.length+' Pi Hub auto-logged print'+( periodPrints.length!==1?'s':'')+'. See full breakdown in Revenue → Electricity tab.</div>';
 }
 
 // ── Pi Hub Setup Modal ──
