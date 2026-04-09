@@ -1193,4 +1193,56 @@ app.delete('/tapo/schedule-off/:alias', (req, res) => {
   res.json({ ok: true, alias, cancelled: false });
 });
 
+// ── Bambu Restock Tracker ──
+let _bambuRestockCfg = { webhookUrl: '', products: [] };
+let _bambuRestockKnown = {}; // { handle: boolean } — last known in-stock state
+let _bambuRestockInterval = null;
+
+app.post('/bambu-restock/config', (req, res) => {
+  _bambuRestockCfg = req.body || {};
+  if (_bambuRestockInterval) { clearInterval(_bambuRestockInterval); _bambuRestockInterval = null; }
+  const products = _bambuRestockCfg.products || [];
+  const webhookUrl = _bambuRestockCfg.webhookUrl || '';
+  if (products.length && webhookUrl) {
+    _bambuRestockInterval = setInterval(_checkBambuRestock, 15 * 60 * 1000);
+    _checkBambuRestock();
+  }
+  console.log(`[BambuRestock] Config updated — watching ${products.length} product(s)`);
+  res.json({ ok: true, watching: products.length });
+});
+
+app.get('/bambu-restock/status', (req, res) => {
+  res.json({ ok: true, products: _bambuRestockCfg.products || [], known: _bambuRestockKnown });
+});
+
+async function _checkBambuRestock() {
+  const products = _bambuRestockCfg.products || [];
+  const webhookUrl = _bambuRestockCfg.webhookUrl || '';
+  if (!products.length || !webhookUrl) return;
+  for (const product of products) {
+    try {
+      const apiUrl = `https://us.store.bambulab.com/products/${product.handle}.json`;
+      const resp = await fetch(apiUrl, { headers: { 'User-Agent': 'LayerDeck/1.0' } });
+      if (!resp.ok) { console.warn(`[BambuRestock] HTTP ${resp.status} for ${product.handle}`); continue; }
+      const data = await resp.json();
+      const variants = (data && data.product && data.product.variants) || [];
+      const isAvailable = variants.some(v => v.available || (v.inventory_quantity != null && v.inventory_quantity > 0));
+      const prev = _bambuRestockKnown[product.handle];
+      if (prev === false && isAvailable) {
+        const msg = `🟢 **BACK IN STOCK** — ${product.name}\n${product.url}\n\nLayerDeck detected this restock automatically.`;
+        await fetch(webhookUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content: msg })
+        });
+        console.log(`[BambuRestock] RESTOCK detected: ${product.name} — notified Discord`);
+      }
+      _bambuRestockKnown[product.handle] = isAvailable;
+      console.log(`[BambuRestock] ${product.handle}: ${isAvailable ? 'in stock' : 'out of stock'}`);
+    } catch (e) {
+      console.error(`[BambuRestock] Error checking ${product.handle}:`, e.message);
+    }
+  }
+}
+
 app.listen(PI_PORT, () => console.log(`🚀 LayerDeck Hub on port ${PI_PORT}`));

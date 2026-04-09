@@ -1826,8 +1826,17 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
         <option>A1</option><option>A1 Mini</option><option>H2D</option><option>Unloaded</option>
       </select>
       <select class="flt" id="sp-a" onchange="render()">
-        <option value="">All Stock</option><option value="low">Low / Reorder</option>
+        <option value="">All Stock</option>
+        <option value="critical">🔴 Critical</option>
+        <option value="low">🟡 Low</option>
+        <option value="ok">🟢 OK</option>
+        <option value="full">🔵 Full</option>
       </select>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:8px;padding-top:8px;border-top:1px solid var(--bdr2)">
+      <label style="font-size:7px;color:var(--txt-d);display:flex;align-items:center;gap:3px">🔴 Critical &lt;<input type="number" min="1" max="49" id="sth-crit" oninput="updateSpoolThresh('crit',this.value)" style="width:34px;background:var(--bdr);border:1px solid var(--bdr2);border-radius:3px;color:var(--txt-b);padding:1px 3px;font-size:7px">%</label>
+      <label style="font-size:7px;color:var(--txt-d);display:flex;align-items:center;gap:3px">🟡 Low &lt;<input type="number" min="2" max="79" id="sth-low" oninput="updateSpoolThresh('low',this.value)" style="width:34px;background:var(--bdr);border:1px solid var(--bdr2);border-radius:3px;color:var(--txt-b);padding:1px 3px;font-size:7px">%</label>
+      <label style="font-size:7px;color:var(--txt-d);display:flex;align-items:center;gap:3px">🔵 Full ≥<input type="number" min="10" max="100" id="sth-ok" oninput="updateSpoolThresh('ok',this.value)" style="width:34px;background:var(--bdr);border:1px solid var(--bdr2);border-radius:3px;color:var(--txt-b);padding:1px 3px;font-size:7px">%</label>
     </div>
   </div>
   <div class="grid" id="spool-grid"></div>
@@ -2224,6 +2233,19 @@ body.light-mode .bottom-nav{background:rgba(245,240,232,.97);border-top-color:va
     <span class="cnt" id="shop-cnt"></span>
   </div>
   <div id="shop-list"></div>
+  <div class="merge-section">🏭 Bambu Restock Tracker</div>
+  <div class="ctrl">
+    <span style="font-size:7px;color:var(--txt-d);letter-spacing:1px">Pi Hub checks Bambu product pages every 15 min — pings #bambu-restock on Discord when items return to stock</span>
+    <span class="cnt" id="bambu-watch-cnt"></span>
+  </div>
+  <div style="background:var(--surf);border:1px solid var(--bdr);border-radius:6px;padding:10px;margin-bottom:10px">
+    <div style="display:flex;gap:6px;margin-bottom:8px">
+      <input class="srch" id="bambu-watch-url" placeholder="Paste Bambu product URL — e.g. https://us.store.bambulab.com/products/pla-basic-filament" style="flex:1;margin:0;font-size:7.5px"/>
+      <button class="btn btn-grn btn-sm" onclick="addBambuWatch()" style="white-space:nowrap">+ Watch</button>
+    </div>
+    <div id="bambu-watch-list"></div>
+    <div style="font-size:6.5px;color:var(--txt-d);margin-top:6px">Requires Pi Hub URL configured in Pi Hub settings · Bambu restock Discord webhook must be set in Discord settings</div>
+  </div>
 </div>
 
 <!-- FAIL RATE TRACKER -->
@@ -4001,6 +4023,7 @@ function renderStatBar(){
 
 // ─── SPOOLS ───
 function renderSpools(){
+  (function(){const c=document.getElementById('sth-crit');const l=document.getElementById('sth-low');const o=document.getElementById('sth-ok');if(c)c.value=_spoolThreshCrit;if(l)l.value=_spoolThreshLow;if(o)o.value=_spoolThreshOk;})();
   const q=(document.getElementById('sp-s').value||'').toLowerCase();
   const fm=document.getElementById('sp-m').value;
   const fp=document.getElementById('sp-p').value;
@@ -4008,7 +4031,10 @@ function renderSpools(){
   const f=spools.filter(s=>{
     if(fm&&s.material!==fm)return false;
     if(fp&&s.printer!==fp)return false;
-    if(fa==='low'&&pct(s)>=30)return false;
+    if(fa==='critical'&&pct(s)>=_spoolThreshCrit)return false;
+    if(fa==='low'&&(pct(s)>=_spoolThreshLow||pct(s)<_spoolThreshCrit))return false;
+    if(fa==='ok'&&(pct(s)<_spoolThreshLow||pct(s)>=_spoolThreshOk))return false;
+    if(fa==='full'&&pct(s)<_spoolThreshOk)return false;
     if(q&&!(s.name+s.material+s.color+(s.brand||'')+(s.tags||[]).join(' ')).toLowerCase().includes(q))return false;
     return true;
   });
@@ -8238,6 +8264,17 @@ function renderDashboard(){
 // SPOOL GROUP VIEW — helpers + renderSpools
 // ════════════════════════════════════════
 let spoolGroupOpen=new Set();
+var _spoolThreshCrit=parseInt(localStorage.getItem('spool_thresh_crit')||'10');
+var _spoolThreshLow=parseInt(localStorage.getItem('spool_thresh_low')||'30');
+var _spoolThreshOk=parseInt(localStorage.getItem('spool_thresh_ok')||'80');
+function saveSpoolThresh(){localStorage.setItem('spool_thresh_crit',_spoolThreshCrit);localStorage.setItem('spool_thresh_low',_spoolThreshLow);localStorage.setItem('spool_thresh_ok',_spoolThreshOk);}
+function updateSpoolThresh(field,val){
+  var v=parseInt(val)||0;
+  if(field==='crit')_spoolThreshCrit=Math.max(1,Math.min(v,_spoolThreshLow-1));
+  if(field==='low')_spoolThreshLow=Math.max(_spoolThreshCrit+1,Math.min(v,_spoolThreshOk-1));
+  if(field==='ok')_spoolThreshOk=Math.max(_spoolThreshLow+1,Math.min(v,100));
+  saveSpoolThresh();render();
+}
 
 function getGroupKey(s){return((s.name||'')+'|'+(s.material||'')).toLowerCase();}
 
@@ -8272,6 +8309,7 @@ function openAddSpoolToGroup(key){
 }
 
 function renderSpools(){
+  (function(){const c=document.getElementById('sth-crit');const l=document.getElementById('sth-low');const o=document.getElementById('sth-ok');if(c)c.value=_spoolThreshCrit;if(l)l.value=_spoolThreshLow;if(o)o.value=_spoolThreshOk;})();
   const q=(document.getElementById('sp-s').value||'').toLowerCase();
   const fm=document.getElementById('sp-m').value;
   const fp=document.getElementById('sp-p').value;
@@ -8279,7 +8317,10 @@ function renderSpools(){
   const f=spools.filter(s=>{
     if(fm&&s.material!==fm)return false;
     if(fp&&s.printer!==fp)return false;
-    if(fa==='low'&&pct(s)>=30)return false;
+    if(fa==='critical'&&pct(s)>=_spoolThreshCrit)return false;
+    if(fa==='low'&&(pct(s)>=_spoolThreshLow||pct(s)<_spoolThreshCrit))return false;
+    if(fa==='ok'&&(pct(s)<_spoolThreshLow||pct(s)>=_spoolThreshOk))return false;
+    if(fa==='full'&&pct(s)<_spoolThreshOk)return false;
     if(q&&!(s.name+s.material+s.color+(s.brand||'')+(s.tags||[]).join(' ')).toLowerCase().includes(q))return false;
     return true;
   });
@@ -8529,7 +8570,7 @@ function savePrintSettings(){localStorage.setItem(KEYS.printSettings,JSON.string
 function savePokemonMap(){localStorage.setItem(KEYS.pokemonMap,JSON.stringify(pokemonMap));}
 
 // Add new tab names
-Object.assign(TAB_NAMES,{printers:'Printers',restock:'Restock & Shop List',failrate:'Fail Rates & Waste'});
+Object.assign(TAB_NAMES,{printers:'Printers',restock:'Filament Shop',failrate:'Fail Rates & Waste'});
 
 // Extend ALL_TABS
 ALL_TABS.push('printers','restock','failrate','shopify');
@@ -9014,8 +9055,8 @@ function renderRestock(){
   }).sort((a,b)=>a.daysOfStock-b.daysOfStock);
   document.getElementById('restock-cnt').textContent=suggestions.length+' products';
   const g=document.getElementById('restock-grid');
-  if(!suggestions.length){g.innerHTML=emptyState('📦','No Sales Data Yet','Log some sales to get intelligent restock suggestions based on your velocity',`<button class="btn btn-grn" onclick="navTo('revenue')">Log Sales</button>`);return;}
-  g.innerHTML=suggestions.map(s=>{
+  if(!suggestions.length){g.innerHTML=emptyState('📦','No Sales Data Yet','Log some sales to get intelligent restock suggestions based on your velocity',`<button class="btn btn-grn" onclick="navTo('revenue')">Log Sales</button>`);}
+  else g.innerHTML=suggestions.map(s=>{
     const urgColor=s.urgency==='urgent'?'var(--red-b)':s.urgency==='soon'?'var(--gold-b)':'var(--grn-b)';
     const urgLabel=s.urgency==='urgent'?'🔴 RESTOCK NOW':s.urgency==='soon'?'⚡ RESTOCK SOON':'✓ Stock OK';
     return `<div class="restock-card ${s.urgency}">
@@ -9033,11 +9074,95 @@ function renderRestock(){
       ${s.urgency!=='ok'?`<button class="btn btn-pur btn-sm" style="width:100%;margin-top:8px;padding:6px" onclick="quickQueueFromRestock('${esc(s.name)}',${s.suggestQty})">+ Queue ${s.suggestQty} units</button>`:''}
     </div>`;
   }).join('');
+  renderBambuWatchList();
+  _fetchBambuWatchStatuses();
 }
 
 function quickQueueFromRestock(name,qty){
   queueItems.push({id:uid(),name,category:'Other',printer:printerRecords[0]?.name||'X1C',hrs:0,qty,priority:'normal',stage:'queued',timestamp:Date.now(),notes:'Auto-queued from restock suggestion'});
   saveQueue();toast('Added to Queue',`${qty}x ${name} queued for printing`,'success');render();
+}
+
+// ── Bambu Restock Watch List ──
+var _bambuWatchList=JSON.parse(localStorage.getItem('bambu_watch_list')||'[]');
+var _bambuWatchStatuses={};// {handle: true|false|null} — null=unknown
+
+function saveBambuWatchList(){localStorage.setItem('bambu_watch_list',JSON.stringify(_bambuWatchList));}
+
+function addBambuWatch(){
+  const inp=document.getElementById('bambu-watch-url');if(!inp)return;
+  const raw=(inp.value||'').trim();if(!raw)return;
+  let handle='';
+  try{
+    const u=new URL(raw);
+    const parts=u.pathname.split('/').filter(Boolean);
+    const pi=parts.indexOf('products');
+    if(pi>=0&&parts[pi+1])handle=parts[pi+1];
+  }catch(e){handle=raw.replace(/.*\//,'');}
+  if(!handle){toast('Invalid URL','Could not extract product handle from URL','error');return;}
+  if(_bambuWatchList.find(function(x){return x.handle===handle;})){toast('Already watching','This product is already in your watch list','warning');return;}
+  const name=handle.replace(/-/g,' ').replace(/\b\w/g,function(c){return c.toUpperCase();});
+  _bambuWatchList.push({handle,name,url:raw,addedAt:Date.now()});
+  saveBambuWatchList();
+  inp.value='';
+  _pushBambuRestockConfig();
+  renderBambuWatchList();
+  toast('Watching','Pi Hub will check this product every 15 min','success');
+}
+
+function removeBambuWatch(handle){
+  _bambuWatchList=_bambuWatchList.filter(function(x){return x.handle!==handle;});
+  saveBambuWatchList();
+  _pushBambuRestockConfig();
+  renderBambuWatchList();
+}
+
+function renderBambuWatchList(){
+  const cnt=document.getElementById('bambu-watch-cnt');
+  if(cnt)cnt.textContent=_bambuWatchList.length+' watched';
+  const el=document.getElementById('bambu-watch-list');if(!el)return;
+  if(!_bambuWatchList.length){
+    el.innerHTML='<div style="font-size:7.5px;color:var(--txt-d);text-align:center;padding:12px">No products being watched — paste a Bambu product URL above</div>';
+    return;
+  }
+  el.innerHTML=_bambuWatchList.map(function(p){
+    const status=_bambuWatchStatuses[p.handle];
+    const dot=status===true?'🟢':status===false?'🔴':'⚪';
+    const label=status===true?'In Stock':status===false?'Out of Stock':'Unknown';
+    return '<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--bdr2)">'+
+      '<span style="font-size:12px">'+dot+'</span>'+
+      '<div style="flex:1">'+
+        '<div style="font-size:8px;color:var(--txt-b)">'+esc(p.name)+'</div>'+
+        '<div style="font-size:6.5px;color:var(--txt-d)">'+esc(p.handle)+' · '+label+'</div>'+
+      '</div>'+
+      '<a href="'+esc(p.url)+'" target="_blank" class="btn btn-ghost btn-sm" style="font-size:7px;padding:2px 7px">🔗</a>'+
+      '<button class="btn btn-ghost btn-sm" style="font-size:7px;padding:2px 7px;color:var(--red-b)" onclick="removeBambuWatch(\''+esc(p.handle)+'\')">✕</button>'+
+    '</div>';
+  }).join('');
+}
+
+async function _pushBambuRestockConfig(){
+  const piUrl=getPiUrl();if(!piUrl)return;
+  const ch=discordCfg.channels.find(function(c){return c.key==='bambu-restock';});
+  const webhookUrl=(ch&&ch.enabled&&ch.url)||'';
+  try{
+    await fetch(piUrl+'/bambu-restock/config',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({webhookUrl,products:_bambuWatchList.map(function(p){return{handle:p.handle,name:p.name,url:p.url};})})
+    });
+  }catch(e){/* ignore — Pi Hub may be offline */}
+}
+
+async function _fetchBambuWatchStatuses(){
+  const piUrl=getPiUrl();if(!piUrl||!_bambuWatchList.length)return;
+  try{
+    const r=await fetch(piUrl+'/bambu-restock/status');
+    if(!r.ok)return;
+    const d=await r.json();
+    _bambuWatchStatuses=d.known||{};
+    renderBambuWatchList();
+  }catch(e){}
 }
 
 // ════════════════════════════════════════
@@ -10194,6 +10319,7 @@ async function pullFromCloud(silent=false,_lockRetry=false){
     if(!silent)toast('Data Pulled','Your data is up to date','success');
     render();
     if(typeof checkConventionDeadlines==='function')checkConventionDeadlines();
+    if(typeof checkConventionPrepReminders==='function')checkConventionPrepReminders();
     // Re-merge Shopify products after a cloud pull — cloud may have a stale catalog
     if(typeof syncShopifyToCatalog==='function'&&shopifyCfg&&shopifyCfg.connected&&!shopifyCfg.domain.includes('DEMO')){
       syncShopifyToCatalog();
@@ -13329,7 +13455,48 @@ function renderEvtOverview(){
         <button class="btn btn-grn btn-sm" onclick="setEvtSection('sales')">💰 Record Sale</button>
         <button class="btn btn-ghost btn-sm" onclick="setEvtSection('qr')">🏷 Price Tags</button>
       </div>
-    </div>`;
+    </div>
+    ${(function(){
+      const packItems=c.inPersonCatalog||[];
+      if(!packItems.length)return '';
+      const now2=Date.now();const ago30=now2-30*864e5;
+      const prodSales={};
+      (sales||[]).forEach(function(s){
+        if(!prodSales[s.name])prodSales[s.name]={sold30:0};
+        if(new Date(s.date||s.timestamp).getTime()>ago30)prodSales[s.name].sold30+=(s.qty||1);
+      });
+      const printedStock={};
+      (prints||[]).filter(function(p){return(p.status||'printing')==='done';}).forEach(function(p){
+        printedStock[p.name]=(printedStock[p.name]||0)+(p.qty||1);
+      });
+      const velocity=packItems.map(function(i){
+        const name=i.name||'';
+        const dailyRate=(prodSales[name]||{sold30:0}).sold30/30;
+        const stock=printedStock[name]||0;
+        const qtyBring=i.qtyBring||0;
+        const gap=Math.max(0,qtyBring-stock);
+        const daysOfStock=dailyRate>0?Math.floor(stock/dailyRate):999;
+        return{name,dailyRate,stock,qtyBring,gap,daysOfStock};
+      }).filter(function(v){return v.gap>0||v.dailyRate>0;}).sort(function(a,b){return b.gap-a.gap;});
+      if(!velocity.length)return '';
+      const rows=velocity.slice(0,6).map(function(v){
+        const urgColor=v.gap>0?'var(--red-b)':v.daysOfStock<14?'var(--gold-b)':'var(--grn-b)';
+        const label=v.gap>0?'Need '+v.gap+' more':v.daysOfStock<999?v.daysOfStock+'d stock':'OK';
+        return '<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--bdr2)">'+
+          '<div style="flex:1;font-size:7.5px;color:var(--txt-b)">'+esc(v.name)+'</div>'+
+          '<div style="font-size:7px;color:var(--txt-d)">'+v.stock+' printed / '+v.qtyBring+' needed</div>'+
+          '<span style="font-size:7px;color:'+urgColor+';font-weight:bold;white-space:nowrap">'+label+'</span>'+
+          (v.gap>0?'<button class="btn btn-pur btn-sm" style="font-size:7px;padding:2px 7px;white-space:nowrap" onclick="quickQueueFromRestock(\''+esc(v.name)+'\','+v.gap+')">Print '+v.gap+'</button>':'<span style="width:60px"></span>')+
+        '</div>';
+      }).join('');
+      return '<div style="background:var(--surf);border:1px solid var(--bdr);border-radius:6px;padding:12px;margin-top:8px">'+
+        '<div style="font-size:8px;font-weight:bold;color:var(--txt-b);margin-bottom:8px">📈 Sales Velocity — What to Print</div>'+
+        '<div style="font-size:7px;color:var(--txt-d);margin-bottom:8px">Based on your last 30 days of sales vs. what you\'re planning to bring</div>'+
+        rows+
+        (velocity.length>6?'<div style="font-size:6.5px;color:var(--txt-d);margin-top:6px;text-align:center">+' + (velocity.length-6)+' more items</div>':'')+
+      '</div>';
+    })()}
+    `;
 }
 
 // ── Pack List ──
@@ -16545,6 +16712,48 @@ function addEventFromSearch(idx){
   })();
 }
 
+function checkConventionPrepReminders(){
+  const now=Date.now();
+  const sentKey='conv_prep_sent_v1';
+  const sent=JSON.parse(localStorage.getItem(sentKey)||'{}');
+  const reminderDays=[7,3,1];
+  conventions.filter(function(c){return c.status!=='potential'&&c.start;}).forEach(function(c){
+    const startTs=new Date(c.start).getTime();
+    const daysUntil=Math.ceil((startTs-now)/864e5);
+    reminderDays.forEach(function(d){
+      if(daysUntil!==d)return;
+      const sentId=c.id+'_'+d;
+      if(sent[sentId])return;
+      const packItems=c.inPersonCatalog||[];
+      const lowItems=packItems.filter(function(i){
+        const ci=(catalogItems||[]).find(function(x){return x.id===i.catId||x.name===i.name;});
+        if(!ci)return false;
+        return(ci.qty||0)<=(ci.lowStockAt!=null?ci.lowStockAt:3);
+      });
+      const lines=[
+        '🎪 Convention Prep — '+c.name,
+        (d===1?'⚡ TOMORROW!':'📅 '+d+' days away')+' · '+(c.start||'TBD')+' · '+(c.loc||''),
+        '──────────────────',
+      ];
+      if(lowItems.length){
+        lines.push('⚠️ Low Stock — print before the event:');
+        lowItems.forEach(function(i){
+          const ci=(catalogItems||[]).find(function(x){return x.id===i.catId||x.name===i.name;});
+          const qty=ci?(ci.qty||0):'?';
+          lines.push('  • '+(i.name||'')+' — '+qty+' in stock (need '+(i.qtyBring||'?')+')');
+        });
+      }else{
+        lines.push('✅ All catalog items are well stocked!');
+      }
+      lines.push('');
+      lines.push('📦 Packing: '+packItems.length+' products · '+packItems.reduce(function(a,i){return a+(i.qtyBring||0);},0)+' units total');
+      postToDiscord('convention_prep',lines.join('\n'));
+      sent[sentId]=Date.now();
+      localStorage.setItem(sentKey,JSON.stringify(sent));
+    });
+  });
+}
+
 function checkConventionDeadlines(){
   const now=Date.now();
   conventions.filter(function(c){return c.status==='potential'&&c.vendorDeadline&&c.vendorDeadline!=='Unknown';}).forEach(function(c){
@@ -16633,6 +16842,10 @@ function _onReady(){
   setTimeout(function(){pollSquareOrders();setInterval(pollSquareOrders,30000);},3000);
   // Square POS callback — check if we returned from Square POS app with a payment result
   setTimeout(posCheckCallback,600);
+  // Convention prep reminders (7/3/1 day before events)
+  setTimeout(function(){if(typeof checkConventionPrepReminders==='function')checkConventionPrepReminders();},2000);
+  // Push Bambu watch list config to Pi Hub
+  setTimeout(function(){if(typeof _pushBambuRestockConfig==='function')_pushBambuRestockConfig();},3000);
   // Handle push notification action from URL
   const _sp=new URLSearchParams(window.location.search);
   if(_sp.get('push-action')==='confirm-print'){
@@ -19368,6 +19581,8 @@ function renderDiscord(){
     {type:'low_stock',         label:'Product low stock',         group:'Stock & Filament'},
     {type:'low_spool',         label:'Spool running low',         group:'Stock & Filament'},
     {type:'daily_report',      label:'Nightly report',            group:'Daily Summary'},
+    {type:'convention_prep',   label:'Convention prep reminder (7/3/1 day)',group:'Conventions'},
+    {type:'bambu_restock',     label:'Bambu filament back in stock',group:'Stock & Filament'},
   ];
 
   const routingRows=routingDefs.map(function(def){
@@ -19460,6 +19675,8 @@ const DISCORD_DEFAULT_ROUTING={
   low_stock:       {enabled:true,channel:'stock-alerts'},
   low_spool:       {enabled:true,channel:'stock-alerts'},
   daily_report:    {enabled:true,channel:'daily-report'},
+  convention_prep: {enabled:true,channel:'convention-prep'},
+  bambu_restock:   {enabled:true,channel:'bambu-restock'},
 };
 let discordCfg={channels:DISCORD_DEFAULT_CHANNELS.map(c=>({...c})),routing:{...DISCORD_DEFAULT_ROUTING},piHealthFreq:'5'};
 function _migrateDiscordChannels(channels){
