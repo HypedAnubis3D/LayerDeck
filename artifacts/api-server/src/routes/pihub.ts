@@ -245,9 +245,16 @@ router.post('/alert', async (req, res) => {
 // Safe update command (validates JS before replacing):
 //   curl -fsSL <appOrigin>/api/pihub/server-js -o /tmp/server-new.js && node --check /tmp/server-new.js && mv /tmp/server-new.js ~/bambu-hub/server.js && pm2 restart layerdeck-hub
 router.get('/server-js', (_req, res) => {
-  const filePath = path.resolve(process.cwd(), '../pi-hub/server.js');
-  if (!fs.existsSync(filePath)) {
-    return res.status(404).json({ error: 'server.js not found' });
+  // Try multiple candidate paths — location differs between dev and deployed envs
+  const candidates = [
+    path.resolve(process.cwd(), '../pi-hub/server.js'),
+    path.resolve(process.cwd(), '../studio-manager/public/pi-hub-server.js'),
+    path.resolve(process.cwd(), '../../artifacts/pi-hub/server.js'),
+    path.resolve(process.cwd(), '../../artifacts/studio-manager/public/pi-hub-server.js'),
+  ];
+  const filePath = candidates.find(p => fs.existsSync(p));
+  if (!filePath) {
+    return res.status(404).json({ error: 'server.js not found', tried: candidates });
   }
   const content = fs.readFileSync(filePath, 'utf8');
   // Safety guard: never serve HTML (e.g. if path resolution is wrong)

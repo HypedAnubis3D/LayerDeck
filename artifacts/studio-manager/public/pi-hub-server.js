@@ -77,12 +77,16 @@ let DISCORD_ALERTS_URL = process.env.DISCORD_WEBHOOK_PRINT_ALERTS || '';
 // Pi Health channel — printer online/offline status, MQTT errors.
 // Falls back to DISCORD_ALERTS_URL when not set.
 let DISCORD_PI_HEALTH_URL = process.env.DISCORD_WEBHOOK_PI_HEALTH || '';
+// LayerDeck API server URL for server-side push notifications.
+// Alerts are POSTed here so they fire even when no browser tab is open.
+let LAYERDECK_API_URL = process.env.LAYERDECK_API_URL || 'https://app.hypedanubis3d.com/api';
 const configPath = path.join(__dirname, 'config.json');
 if (fs.existsSync(configPath)) {
   try {
     const cfg = JSON.parse(fs.readFileSync(configPath, 'utf8'));
     if (cfg.discordWebhookPrintAlerts) DISCORD_ALERTS_URL   = cfg.discordWebhookPrintAlerts;
     if (cfg.discordWebhookPiHealth)    DISCORD_PI_HEALTH_URL = cfg.discordWebhookPiHealth;
+    if (cfg.layerdeckApiUrl)           LAYERDECK_API_URL     = cfg.layerdeckApiUrl;
   } catch (e) { /* ignore */ }
 }
 
@@ -115,6 +119,30 @@ function sendDiscordStatus(content) {
 function sendDiscordWatch(content) {
   // AI vision alerts — consolidated into Print Alerts channel
   _postDiscord(DISCORD_ALERTS_URL, content);
+}
+
+// ── Push notification via LayerDeck API server ────────────────────────────────
+// Fires even when no browser tab is open — the API server holds push subscriptions.
+function _sendPushAlert(type, title, body) {
+  const base = (LAYERDECK_API_URL || '').replace(/\/$/, '');
+  if (!base) return;
+  try {
+    const payload = JSON.stringify({ type, title, body: body || '' });
+    const url = new URL(base + '/pihub/alert');
+    const mod = url.protocol === 'https:' ? https : require('http');
+    const req = mod.request({
+      hostname: url.hostname,
+      path:     url.pathname,
+      method:   'POST',
+      headers:  { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) }
+    }, (res) => {
+      res.resume(); // drain response so socket is released
+      if (res.statusCode >= 300) console.warn(`[Push] alert HTTP ${res.statusCode} for ${type}`);
+    });
+    req.on('error', (e) => console.warn('[Push] alert error:', e.message));
+    req.write(payload);
+    req.end();
+  } catch (e) { console.warn('[Push] alert exception:', e.message); }
 }
 
 // Send Discord alert with a JPEG image attached (multipart/form-data)
@@ -332,11 +360,31 @@ PRINTERS.forEach(printer => {
             mqttAlert(printer.name,
               `✅ **Print Complete — ${printer.name}**\nJob: ${jobName}\nDuration: ${_durStr}`,
               false);
+            _sendPushAlert('print-complete', `✅ ${printer.name} Done`, `${jobName} — ${_durStr}`);
           } else if (gcodeState === 'FAILED' && prevState) {
             const pct = mqttPayload.print.mc_percent || printerStates[printer.name].mc_percent || 0;
             mqttAlert(printer.name,
               `❌ **${printer.name}** print **FAILED** at ${pct}%\n📄 ${jobName}`,
               false);
+            _sendPushAlert('print-failed', `❌ ${printer.name} Failed`, `${jobName} at ${pct}%`);
+          }
+
+          // ── PAUSE detection (filament tangle, runout, HMS, manual pause) ──
+          // Fires server-side so you're notified even with the app closed.
+          const _prevPaused = prevState === 'PAUSE' || prevState === 'PAUSED';
+          const _curPaused  = gcodeState === 'PAUSE' || gcodeState === 'PAUSED';
+          if (_curPaused && !_prevPaused) {
+            const hmsEntries = printerStates[printer.name].hms || [];
+            let reason = 'Needs attention';
+            if (hmsEntries.length > 0) {
+              const last = hmsEntries[hmsEntries.length - 1];
+              const attrHex = ((last.attr || 0) >>> 0).toString(16).padStart(4, '0');
+              const codeHex = ((last.code || 0) >>> 0).toString(16).padStart(4, '0');
+              reason = `Error 0x${attrHex}_0x${codeHex}`;
+            }
+            const pauseMsg = `⏸ **${printer.name}** paused — ${reason}\n📄 ${jobName}`;
+            sendDiscordAlert(pauseMsg);
+            _sendPushAlert('print-paused', `⏸ ${printer.name} Paused`, `${jobName} — ${reason}`);
           }
 
           _printerPrevGcodeState[printer.name] = gcodeState;
@@ -352,6 +400,37 @@ PRINTERS.forEach(printer => {
             failedAt:    new Date().toISOString(),
             startTime:   printerStates[printer.name].printStartTime || null
           };
+        }
+
+        // ── HMS (Hardware Message System) — alert on new error codes ──────────
+        // Bambu sends hms[] in MQTT messages when hardware errors are detected.
+        // Track seen codes per printer so we only alert on genuinely new entries.
+        const newHmsArr = mqttPayload.print.hms;
+        if (Array.isArray(newHmsArr) && newHmsArr.length > 0) {
+          if (!printerStates[printer.name]._seenHmsCodes) {
+            printerStates[printer.name]._seenHmsCodes = new Set();
+          }
+          const seenCodes = printerStates[printer.name]._seenHmsCodes;
+          const freshHms = newHmsArr.filter(h => {
+            const key = `${h.attr}_${h.code}`;
+            if (seenCodes.has(key)) return false;
+            seenCodes.add(key);
+            return true;
+          });
+          if (freshHms.length > 0) {
+            const codes = freshHms.map(h => {
+              const a = ((h.attr || 0) >>> 0).toString(16).padStart(4, '0');
+              const c = ((h.code || 0) >>> 0).toString(16).padStart(4, '0');
+              return `0x${a}_0x${c}`;
+            }).join(', ');
+            const curJob = printerStates[printer.name].subtask_name || 'Unknown job';
+            sendDiscordAlert(`⚠️ **${printer.name}** HMS error: ${codes}\n📄 ${curJob}`);
+            _sendPushAlert('hms-error', `⚠️ ${printer.name} Hardware Error`, `${curJob} — ${codes}`);
+          }
+        }
+        // Clear HMS seen-codes when a print ends so the next print starts fresh
+        if (gcodeState && ['FINISH', 'IDLE'].includes(gcodeState)) {
+          printerStates[printer.name]._seenHmsCodes = null;
         }
 
         // Track print start time for duration calculations
