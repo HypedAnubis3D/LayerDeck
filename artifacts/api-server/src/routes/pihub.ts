@@ -224,16 +224,23 @@ router.all('/proxy', async (req, res) => {
   }
 });
 
-// Serve the latest Pi Hub server.js so the Pi can self-update with one curl command:
-//   curl -fsSL https://layerstack.replit.app/api/pihub/server-js -o ~/bambu-hub/server.js && pm2 restart layerdeck-hub
+// Serve the latest Pi Hub server.js so the Pi can self-update.
+// Safe update command (validates JS before replacing):
+//   curl -fsSL <appOrigin>/api/pihub/server-js -o /tmp/server-new.js && node --check /tmp/server-new.js && mv /tmp/server-new.js ~/bambu-hub/server.js && pm2 restart layerdeck-hub
 router.get('/server-js', (_req, res) => {
   const filePath = path.resolve(process.cwd(), '../pi-hub/server.js');
   if (!fs.existsSync(filePath)) {
     return res.status(404).json({ error: 'server.js not found' });
   }
+  const content = fs.readFileSync(filePath, 'utf8');
+  // Safety guard: never serve HTML (e.g. if path resolution is wrong)
+  if (content.trimStart().startsWith('<')) {
+    return res.status(500).json({ error: 'server.js content appears invalid' });
+  }
   res.setHeader('Content-Type', 'text/javascript; charset=utf-8');
   res.setHeader('Content-Disposition', 'attachment; filename="server.js"');
-  res.sendFile(filePath);
+  res.setHeader('X-LayerDeck-File', 'pi-hub-server-js');
+  res.send(content);
 });
 
 export default router;
