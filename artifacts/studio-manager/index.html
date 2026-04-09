@@ -10173,7 +10173,15 @@ async function pullFromCloud(silent=false,_lockRetry=false){
           else if(c==='wasteLog')wasteLog=parsed;
           else if(c==='printerRecords')printerRecords=parsed;
           else if(c==='tmfLib')tmfLib=parsed;
-          else if(c==='catalogItems'||c==='catalog')catalogItems=parsed;
+          else if(c==='catalogItems'||c==='catalog'){
+            // Apply $3 default cost to any items that have none (including Shopify imports)
+            let _ccFixed=false;
+            catalogItems=parsed.map(function(item){
+              if(!item.cost||item.cost===0){_ccFixed=true;return Object.assign({},item,{cost:3});}
+              return item;
+            });
+            if(_ccFixed)queueSync('catalog',catalogItems);
+          }
           else if(c==='conventions')conventions=parsed;
           const storageKey=c==='catalog'?KEYS.catalog:c==='conventions'?KEYS.conventions:(KEYS[c]||('ha3d_'+c+'_v1'));
           ss(storageKey,parsed);
