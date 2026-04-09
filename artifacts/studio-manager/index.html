@@ -11446,6 +11446,13 @@ function setCatalogFilter(f){
 
 function loadV14(){
   catalogItems=gs(KEYS.catalog);
+  // One-time migration: fill $3 default cost for any catalog items that have none
+  let _catCostFixed=false;
+  catalogItems=catalogItems.map(function(item){
+    if(!item.cost||item.cost===0){_catCostFixed=true;return Object.assign({},item,{cost:3});}
+    return item;
+  });
+  if(_catCostFixed){ss(KEYS.catalog,catalogItems);}
   nozzleLog=gs(KEYS.nozzles);
   purchases=gs(KEYS.purchases);
   shippingLog=gs(KEYS.shipping);
@@ -11912,7 +11919,7 @@ function openAddCatalogItem(){
   updateModalPhotoPreview();
   document.getElementById('ec-cat').value='Figurines';
   document.getElementById('ec-price').value='';
-  document.getElementById('ec-cost').value='';
+  document.getElementById('ec-cost').value='3';
   document.getElementById('ec-stock').value='';
   document.getElementById('ec-lowstock').value='3';
   // 3MF autocomplete
@@ -15269,8 +15276,8 @@ function renderPower(){
     const prPrints=relevantPrints.filter(p=>p.printer===pr.name);
     const totalHrs=prPrints.reduce((a,p)=>a+(p.hrs||0),0);
     const liveW=_getTapoWattsForPrinter(pr.name);
-    const watts=pr.watts||350;
-    const wh=watts*totalHrs;
+    // Use measured Tapo watts per print where available; fall back to configured watts
+    const wh=prPrints.reduce((a,p)=>a+(p.tapoWatts||pr.watts||350)*(p.hrs||0),0);
     const cost=wh/1000*(pr.kwh||0.13);
     return{...pr,prints:prPrints.length,hours:totalHrs,kwh:wh/1000,cost,liveWatts:liveW};
   });
