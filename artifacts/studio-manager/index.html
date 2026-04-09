@@ -21,13 +21,13 @@
 <script src="https://web.squarecdn.com/v1/square.js"></script>
 <style>
 :root{
-  /* Backgrounds — near-black with dark navy undertone */
-  --bg:#0A0A0F;--surf:#111118;--surf2:#16161F;--surf3:#1C1C28;
-  --bdr:#2A2A35;--bdr2:#3A3A4A;
+  /* Backgrounds — dark navy with depth */
+  --bg:#0F0F1A;--surf:#1A1A2E;--surf2:#20203C;--surf3:#26264A;
+  --bdr:#2A2840;--bdr2:#383658;
   /* Refined gold */
   --gold:#C9A84C;--gold-d:#1A1408;--gold-b:#D4AF37;--gold-dim:#6B5A28;
   --gold-glow:rgba(201,168,76,0.15);
-  /* Accent colors — functional, unchanged */
+  /* Accent colors */
   --pur:#8b5cf6;--pur-d:#1e1040;--pur-b:#a78bfa;
   --org:#f97316;--org-d:#1e0d00;--org-b:#fb923c;
   --grn:#10b981;--grn-d:#022318;--grn-b:#34d399;
@@ -35,12 +35,12 @@
   --teal:#14b8a6;--teal-d:#021c18;--teal-b:#5eead4;
   --cyn:#38bdf8;--cyn-d:#062030;
   --shopify:#96bf48;--shopify-d:#142008;
-  /* Text — warm neutral hierarchy */
-  --txt:#B0B8C8;--txt-d:#484858;--txt-b:#E8EAF2;
+  /* Text — brighter, higher contrast hierarchy */
+  --txt:#E8E8F0;--txt-d:#9090A8;--txt-b:#FFFFFF;
   --amb:#C9A84C;--amb-d:#1A1408;
   --pink:#ec4899;--pink-d:#2d0520;
   /* Nav sidebar */
-  --nav-bg:#0F0F18;
+  --nav-bg:#0C0C18;
 }
 *{box-sizing:border-box;margin:0;padding:0;}
 html{height:100%;overflow:hidden;}
@@ -463,8 +463,8 @@ input.srch::placeholder{color:var(--txt-d);}
 .prog-inp:focus{outline:none;border-color:var(--amb);}
 .prog-inp-wrap{position:relative;}
 .prog-unit{position:absolute;right:7px;top:50%;transform:translateY(-50%);font-size:9px;color:var(--txt-d);}
-.prog-bar-wrap{background:var(--bg);border-radius:4px;height:6px;overflow:hidden;margin-bottom:10px;border:1px solid var(--bdr);}
-.prog-bar-fill{height:100%;background:linear-gradient(90deg,var(--amb),var(--red));border-radius:4px;transition:width .3s;}
+.prog-bar-wrap{background:rgba(255,255,255,0.06);border-radius:4px;height:8px;overflow:hidden;margin-bottom:10px;}
+.prog-bar-fill{height:100%;background:linear-gradient(90deg,var(--gold),var(--gold-b));border-radius:4px;transition:width .3s;}
 
 /* QR */
 .qr-modal{background:var(--surf);border:1px solid var(--bdr2);border-radius:7px;padding:20px;width:280px;max-width:93vw;text-align:center;}
@@ -830,14 +830,15 @@ header{
 
 /* ── PRINTERS TAB ── */
 .printers-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:9px;}
-.printer-card{background:var(--surf);border:1px solid var(--bdr);border-radius:6px;padding:13px;border-left:3px solid var(--org);transition:transform .2s,box-shadow .2s;}
-.printer-card:hover{transform:translateY(-2px);box-shadow:0 6px 20px rgba(0,0,0,.4),0 0 10px rgba(232,93,4,.08);}
-.printer-card-name{font-family:'Orbitron',monospace;font-size:12px;color:var(--txt-b);font-weight:700;margin-bottom:2px;}
-.printer-card-model{font-size:8px;color:var(--txt-d);margin-bottom:10px;}
-.printer-specs{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;margin-bottom:9px;}
-.pspec{background:var(--bg);border:1px solid var(--bdr);padding:5px 6px;border-radius:3px;text-align:center;}
+.printer-card{background:linear-gradient(160deg,#22223C 0%,#1A1A2E 100%);border:1px solid var(--bdr);border-radius:16px;padding:24px;border-left:4px solid var(--org);transition:transform .2s,box-shadow .2s;}
+.printer-card.printer-active{border-left-color:var(--gold);box-shadow:0 0 0 1px rgba(201,168,76,0.14),0 8px 40px rgba(0,0,0,.55),0 0 24px rgba(201,168,76,0.1);}
+.printer-card:hover{transform:translateY(-3px);box-shadow:0 12px 48px rgba(0,0,0,.5),0 0 0 1px rgba(201,168,76,0.07);}
+.printer-card-name{font-family:'Orbitron',monospace;font-size:14px;color:var(--txt-b);font-weight:700;margin-bottom:4px;}
+.printer-card-model{font-size:9px;color:var(--txt-d);margin-bottom:14px;}
+.printer-specs{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:12px;}
+.pspec{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);padding:8px 10px;border-radius:8px;text-align:center;}
 .pspec-l{font-size:6px;color:var(--txt-d);letter-spacing:1px;}
-.pspec-v{font-size:10px;color:var(--txt-b);margin-top:1px;font-family:'Orbitron',monospace;font-weight:700;}
+.pspec-v{font-size:12px;color:var(--txt-b);margin-top:2px;font-family:'Orbitron',monospace;font-weight:700;}
 
 
 /* ── RESTOCK SUGGESTIONS ── */
@@ -18230,10 +18231,22 @@ function updatePrinterCardLive(name,data,state){
   const id=piId(name);
   // Use querySelectorAll so both Pi Hub tab and Printers tab cards update in parallel
   const allId=s=>Array.from(document.querySelectorAll('[id="pi-'+id+'-'+s+'"]'));
-  const setState=el=>{if(el){el.textContent=STATE_LABELS[state]||state;el.style.color=STATE_COLORS[state]||STATE_COLORS.OFFLINE;}};
+  const setState=el=>{
+    if(!el)return;
+    el.textContent=STATE_LABELS[state]||state;
+    if(el.classList.contains('pi-status-pill')){
+      el.classList.remove('psp-printing','psp-paused','psp-failed','psp-finished','psp-offline','psp-idle');
+      el.classList.add(state==='RUNNING'?'psp-printing':state==='PAUSE'||state==='PAUSED'?'psp-paused':state==='FAILED'?'psp-failed':state==='FINISH'?'psp-finished':state==='OFFLINE'?'psp-offline':'psp-idle');
+    }else{
+      el.style.color=STATE_COLORS[state]||STATE_COLORS.OFFLINE;
+    }
+  };
   const setTxt=(suffix,val)=>{allId(suffix).forEach(el=>{el.textContent=val;});};
 
   allId('state').forEach(setState);
+
+  // Toggle printer-active gold-glow class on the card
+  {const _pRec=printerRecords.find(r=>r.name===name);if(_pRec){const _cardEl=document.getElementById('pcard-'+_pRec.id);if(_cardEl)_cardEl.classList.toggle('printer-active',state==='RUNNING'||state==='PAUSE'||state==='PAUSED');}}
 
   if(!data||state==='OFFLINE'){
     setTxt('progress','—');setTxt('layer','—');setTxt('remaining','—');
@@ -18264,7 +18277,11 @@ function updatePrinterCardLive(name,data,state){
   setTxt('bed',fmtTemp(data.bed_temper));
   setTxt('file',(data.subtask_name||'—').replace('.gcode.3mf','').replace('.3mf',''));
 
-  allId('bar').forEach(bar=>{bar.style.width=pct+'%';});
+  allId('bar').forEach(bar=>{
+    bar.style.width=pct+'%';
+    bar.classList.remove('pbar-printing','pbar-paused','pbar-done','pbar-idle');
+    bar.classList.add(state==='RUNNING'?'pbar-printing':state==='PAUSE'||state==='PAUSED'?'pbar-paused':state==='FINISH'?'pbar-done':'pbar-idle');
+  });
 
   // AMS swatches — update all matching containers (Pi Hub tab + Printers tab)
   // Also handles external spool (vt_tray) for printers with no AMS
@@ -18706,13 +18723,14 @@ function renderPrinters(){
     })():'';
 
     // Live badge in header
+    const _pillClass=state==='RUNNING'?'psp-printing':state==='PAUSE'||state==='PAUSED'?'psp-paused':state==='FAILED'?'psp-failed':state==='FINISH'?'psp-finished':state==='OFFLINE'?'psp-offline':'psp-idle';
     const liveBadge=piHubConfig&&liveData!=null?
-      '<span style="font-size:8px;color:'+stateColor+';font-family:\'Orbitron\',monospace;font-weight:700;letter-spacing:1px" id="pi-'+id+'-state">'+stateLabel+'</span>':
+      '<span class="pi-status-pill '+_pillClass+'" id="pi-'+id+'-state">'+stateLabel+'</span>':
       '';
 
     const _acc=getPrinterAccuracy(p.name);
     const _accChip=_accuracyChipHtml(_acc);
-    return '<div class="printer-card" id="pcard-'+p.id+'" style="">'+
+    return '<div class="printer-card'+(isActive?' printer-active':'')+'" id="pcard-'+p.id+'">'+
       // Card header — always visible
       '<div style="display:flex;align-items:center;gap:10px;cursor:pointer" onclick="togglePrinterCard(\''+p.id+'\')">'+
         '<div style="flex:1">'+
@@ -18733,13 +18751,13 @@ function renderPrinters(){
             '<div style="min-width:0"><div style="font-size:6px;color:var(--txt-d);letter-spacing:1px">PROGRESS</div><div style="font-size:9px;color:var(--grn);font-family:\'Orbitron\',monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" id="pi-'+id+'-progress">—</div></div>'+
             '<div style="min-width:0"><div style="font-size:6px;color:var(--txt-d);letter-spacing:1px">ETA</div><div style="font-size:7px;color:var(--txt-b);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" id="pi-'+id+'-remaining">—</div></div>'+
           '</div>'+
-          '<div style="height:3px;background:rgba(255,255,255,0.06);border-radius:2px;margin-bottom:6px;overflow:hidden">'+
-            '<div id="pi-'+id+'-bar" style="height:100%;background:var(--grn);border-radius:2px;width:0%;transition:width 0.5s"></div>'+
+          '<div class="pi-prog-bar-track">'+
+            '<div id="pi-'+id+'-bar" class="pi-prog-bar-fill '+(state==='RUNNING'?'pbar-printing':state==='PAUSE'||state==='PAUSED'?'pbar-paused':state==='FINISH'?'pbar-done':'pbar-idle')+'" style="width:0%"></div>'+
           '</div>'+
-          '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:6px">'+
-            '<div style="min-width:0"><div style="font-size:6px;color:var(--txt-d);letter-spacing:1px">NOZZLE</div><div style="font-size:9px;color:var(--org);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" id="pi-'+id+'-nozzle">—</div></div>'+
-            '<div style="min-width:0"><div style="font-size:6px;color:var(--txt-d);letter-spacing:1px">BED</div><div style="font-size:9px;color:var(--cyn);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" id="pi-'+id+'-bed">—</div></div>'+
-            '<div style="min-width:0"><div style="font-size:6px;color:var(--txt-d);letter-spacing:1px">LAYERS</div><div style="font-size:8px;color:var(--txt-b);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" id="pi-'+id+'-layer">—</div></div>'+
+          '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:10px">'+
+            '<div class="pi-stat-chip"><div class="pi-stat-chip-label">Nozzle</div><div class="pi-stat-chip-value" style="color:var(--org)" id="pi-'+id+'-nozzle">—</div></div>'+
+            '<div class="pi-stat-chip"><div class="pi-stat-chip-label">Bed</div><div class="pi-stat-chip-value" style="color:var(--cyn)" id="pi-'+id+'-bed">—</div></div>'+
+            '<div class="pi-stat-chip"><div class="pi-stat-chip-label">Layers</div><div class="pi-stat-chip-value" id="pi-'+id+'-layer">—</div></div>'+
           '</div>'+
           '<div style="margin-bottom:6px" id="pi-'+id+'-ams"></div>'+
           filPlanHtml+
