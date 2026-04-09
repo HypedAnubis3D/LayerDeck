@@ -4,7 +4,9 @@ export const PI_HUB_URL_KEY  = 'layerdeck_companion_pihub_url';
 export const DEFAULT_HUB_URL = 'https://layerdeck-hub.tail5636e6.ts.net';
 
 function getHubApiUrl(piBaseUrl: string) {
-  return `${piBaseUrl.replace(/\/$/, '')}/hub`;
+  // The Pi Hub server runs at the root of the Tailscale Funnel URL.
+  // API proxy calls /status and /control on this base — no /hub suffix needed.
+  return piBaseUrl.replace(/\/$/, '');
 }
 
 export function useStoredPiHubUrl() {

@@ -12,10 +12,32 @@ import {
 import { Button } from '@/components/ui/button';
 
 const PRINTER_CONFIG: Array<{ key: string; label: string; cameraStream: string }> = [
-  { key: 'A1',         label: 'A1',           cameraStream: 'camera_a1'        },
-  { key: 'P1S Room',   label: 'P1S (Room)',   cameraStream: 'camera_p1_room'   },
-  { key: 'P1S Closet', label: 'P1S (Closet)', cameraStream: 'camera_p1_closet' },
+  { key: 'A1',        label: 'A1',           cameraStream: 'camera_a1'        },
+  { key: 'P1 Room',   label: 'P1S (Room)',   cameraStream: 'camera_p1_room'   },
+  { key: 'P1 Closet', label: 'P1S (Closet)', cameraStream: 'camera_p1_closet' },
 ];
+
+// Normalize a printer name for fuzzy matching:
+// strips non-alphanumeric, lowercases, and unifies P1S → P1 so both model
+// variants ("P1 Room" / "P1S (Room)" / "P1S Room") all match each other.
+function normPrinterKey(s: string) {
+  return s.toLowerCase().replace(/[^a-z0-9]/g, '').replace(/p1s/g, 'p1');
+}
+
+function matchPrinterState(
+  liveData: Record<string, any>,
+  cfgKey: string,
+): any | null {
+  // 1. Exact key match
+  if (liveData[cfgKey] !== undefined) return liveData[cfgKey];
+  // 2. Normalized match (handles parens, spaces, P1 vs P1S)
+  const cn = normPrinterKey(cfgKey);
+  for (const [k, v] of Object.entries(liveData)) {
+    const kn = normPrinterKey(k);
+    if (kn === cn || kn.includes(cn) || cn.includes(kn)) return v;
+  }
+  return null;
+}
 
 type StateKey = 'RUNNING' | 'IDLE' | 'PAUSE' | 'PAUSED' | 'FAILED' | 'FINISH' | 'OFFLINE';
 
@@ -376,13 +398,7 @@ export function PrintersTab() {
         {/* 3 printer cards side by side */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           {PRINTER_CONFIG.map(cfg => {
-            // Try exact match first, then case-insensitive partial
-            const state = liveData
-              ? (liveData[cfg.key] ?? Object.entries(liveData).find(([k]) =>
-                  k.toLowerCase().includes(cfg.key.toLowerCase()) ||
-                  cfg.key.toLowerCase().includes(k.toLowerCase())
-                )?.[1] ?? null)
-              : null;
+            const state = liveData ? matchPrinterState(liveData, cfg.key) : null;
             return (
               <PrinterCard
                 key={cfg.key}
