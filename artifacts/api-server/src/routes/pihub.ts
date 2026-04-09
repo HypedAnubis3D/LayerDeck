@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { logger } from '../lib/logger';
+import { sendPushToAll } from '../lib/pushNotifications';
 import path from 'path';
 import fs from 'fs';
 
@@ -221,6 +222,22 @@ router.all('/proxy', async (req, res) => {
     const { hint, code } = classifyError(e);
     logger.warn({ err: e?.message, path: piPath, code }, '[PiHub] Proxy failed');
     return res.status(502).json({ error: 'Pi Hub unreachable', code, hint });
+  }
+});
+
+// ── Print alert inbound from Pi Hub — fires push notification to all subscribers ──
+// Called directly by the Pi Hub server when a printer pauses, fails, or gets an HMS error.
+// This runs server-side so alerts fire even when no browser tab is open.
+router.post('/alert', async (req, res) => {
+  const { type = 'print-alert', title, body } = req.body ?? {};
+  if (!title) return res.status(400).json({ error: 'Missing title' });
+  logger.info({ type, title, body }, '[PiHub] Alert received from Pi');
+  try {
+    const results = await sendPushToAll({ type, title, body: body ?? '' });
+    return res.json({ ok: true, sent: results.length });
+  } catch (err: any) {
+    logger.error({ err: err.message }, '[PiHub] Alert push failed');
+    return res.status(500).json({ error: err.message });
   }
 });
 
