@@ -19266,9 +19266,7 @@ function renderSquare(){
 
     '<div style="font-size:7px;color:var(--txt-d);letter-spacing:1px;margin-bottom:6px;font-family:Inter,sans-serif;font-weight:600">WEBHOOK URL</div>'+
     '<div style="font-size:8px;color:var(--txt-b);background:var(--bdr);border-radius:6px;padding:8px;font-family:monospace;word-break:break-all;margin-bottom:14px">'+
-      (window.location.hostname.includes('replit')
-        ?'https://'+window.location.host+'/api/square/webhook'
-        :'https://layerstack.replit.app/api/square/webhook')+
+      'https://'+window.location.host+'/api/square/webhook'+
     '</div>'+
 
     '<div style="font-size:7px;color:var(--txt-d);line-height:1.8;margin-bottom:12px">'+
