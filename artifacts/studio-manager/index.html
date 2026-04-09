@@ -3889,6 +3889,40 @@ function saveQueue(){ss(KEYS.queue,queueItems);}
 function saveOrders(){ss(KEYS.orders,orders);}
 function saveSales(){ss(KEYS.sales,sales);}
 function saveMaintLog(){ss(KEYS.maint,maintLog);}
+// ── Order revenue helpers ──
+// Extract total revenue from an order regardless of platform/structure
+function orderRevenue(o){
+  if(o.total&&parseFloat(o.total)>0)return parseFloat(o.total);
+  if(o.totalPrice&&parseFloat(o.totalPrice)>0)return parseFloat(o.totalPrice);
+  if(o.items&&o.items.length)return o.items.reduce(function(a,i){return a+parseFloat(i.price||0)*parseInt(i.qty||1);},0);
+  if(o.line_items&&o.line_items.length)return o.line_items.reduce(function(a,li){return a+parseFloat(li.price||0)*parseInt(li.quantity||1);},0);
+  if(o.lineItems&&o.lineItems.length)return o.lineItems.reduce(function(a,li){return a+parseFloat(li.totalPrice||li.price||0)*parseInt(li.quantity||1);},0);
+  return 0;
+}
+// Get a comparable date string from an order
+function orderDate(o){
+  if(o.date)return o.date;
+  if(o.timestamp)return new Date(o.timestamp).toISOString().split('T')[0];
+  return new Date().toISOString().split('T')[0];
+}
+// Get display platform label from an order
+function orderPlatform(o){
+  if(o.platform)return o.platform.charAt(0).toUpperCase()+o.platform.slice(1);
+  if(o.fromCatalogOrder&&o.conventionName)return 'Convention';
+  if(o.fromCatalogOrder)return 'Catalog';
+  if(o.fromConvention)return 'Convention';
+  if(o.fromEtsy)return 'Etsy';
+  if(o.fromShopify)return 'Shopify';
+  if(o.source==='square'||o.fromSquare)return 'Square';
+  return 'Order';
+}
+// Get all order line items as [{name,qty,price}] for best-sellers
+function orderLineItems(o){
+  if(o.items&&o.items.length)return o.items.map(function(i){return{name:i.name||'Item',qty:parseInt(i.qty||1),price:parseFloat(i.price||0)};});
+  if(o.line_items&&o.line_items.length)return o.line_items.map(function(li){return{name:li.title||'Item',qty:parseInt(li.quantity||1),price:parseFloat(li.price||0)};});
+  if(o.lineItems&&o.lineItems.length)return o.lineItems.map(function(li){return{name:li.name||'Item',qty:parseInt(li.quantity||1),price:parseFloat(li.totalPrice||li.price||0)/Math.max(parseInt(li.quantity||1),1)};});
+  return[];
+}
 function saveShopify(){ss(KEYS.shopify,shopifyCfg);}
 function saveSettings(){
   // Cost settings now come from the selected printer record — this is a no-op kept for compatibility
@@ -3980,7 +4014,7 @@ function renderStatBar(){
   const low=spools.filter(s=>pct(s)<30&&pct(s)>=10).length;
   const ro=spools.filter(s=>pct(s)<10).length;
   const qActive=queueItems.filter(q=>q.stage!=='done').length;
-  const totalRev=sales.reduce((a,s)=>a+(s.price||0)*(s.qty||1),0);
+  const totalRev=sales.reduce((a,s)=>a+(s.price||0)*(s.qty||1),0)+orders.reduce(function(a,o){return a+orderRevenue(o);},0);
   const ordActive=orders.filter(o=>o.status!=='shipped'&&o.status!=='cancelled').length;
   document.getElementById('sb-spools').textContent=spools.length;
   document.getElementById('sb-stock').textContent=tg>=1000?(tg/1000).toFixed(1)+'kg':tg+'g';
@@ -5177,43 +5211,141 @@ function updateOrderStatus(id,s){orders=orders.map(o=>o.id===id?{...o,status:s}:
 
 // ─── REVENUE ───
 function renderRevenue(){
-  const totalRev=sales.reduce((a,s)=>a+(s.price||0)*(s.qty||1),0);
+  // ── Combine manual sales + order revenue ──
+  const salesRev=sales.reduce((a,s)=>a+(s.price||0)*(s.qty||1),0);
+  const ordersRev=orders.reduce(function(a,o){return a+orderRevenue(o);},0);
+  const totalRev=salesRev+ordersRev;
+  const totalSalesRev=salesRev;
   const totalCost=sales.reduce((a,s)=>a+(s.cost||0)*(s.qty||1),0);
-  const totalProfit=totalRev-totalCost;
-  const margin=totalRev>0?((totalProfit/totalRev)*100).toFixed(1):0;
+  const totalProfit=totalSalesRev-totalCost;
+  const margin=totalSalesRev>0?((totalProfit/totalSalesRev)*100).toFixed(1):0;
+  const totalCount=sales.length+orders.length;
+
+  // ── Monthly breakdown: sales + orders ──
   const monthMap={};
+  function mkKey(dateStr){const d=new Date(dateStr);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');}
   sales.forEach(s=>{
-    const d=new Date(s.date||s.timestamp);
-    const mk=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
-    if(!monthMap[mk])monthMap[mk]={rev:0,profit:0};
+    const mk=mkKey(s.date||s.timestamp);
+    if(!monthMap[mk])monthMap[mk]={rev:0,orderRev:0,profit:0,count:0};
     monthMap[mk].rev+=(s.price||0)*(s.qty||1);
     monthMap[mk].profit+=((s.price||0)-(s.cost||0))*(s.qty||1);
+    monthMap[mk].count++;
   });
-  const months=Object.entries(monthMap).sort((a,b)=>a[0].localeCompare(b[0])).slice(-6);
+  orders.forEach(function(o){
+    const mk=mkKey(orderDate(o));
+    if(!monthMap[mk])monthMap[mk]={rev:0,orderRev:0,profit:0,count:0};
+    const rev=orderRevenue(o);
+    monthMap[mk].rev+=rev;
+    monthMap[mk].orderRev+=rev;
+    monthMap[mk].count++;
+  });
+  const months=Object.entries(monthMap).sort((a,b)=>a[0].localeCompare(b[0]));
   const maxRev=Math.max(...months.map(([,v])=>v.rev),1);
+
+  // ── Best sellers: from manual sales + order line items ──
   const prodMap={};
   sales.forEach(s=>{
-    if(!prodMap[s.name])prodMap[s.name]={rev:0,units:0,profit:0};
-    prodMap[s.name].rev+=(s.price||0)*(s.qty||1);
-    prodMap[s.name].units+=(s.qty||1);
-    prodMap[s.name].profit+=((s.price||0)-(s.cost||0))*(s.qty||1);
+    const k=s.name||'Unknown';
+    if(!prodMap[k])prodMap[k]={rev:0,units:0,profit:0};
+    prodMap[k].rev+=(s.price||0)*(s.qty||1);
+    prodMap[k].units+=(s.qty||1);
+    prodMap[k].profit+=((s.price||0)-(s.cost||0))*(s.qty||1);
   });
-  const best=Object.entries(prodMap).sort((a,b)=>b[1].rev-a[1].rev).slice(0,8);
+  orders.forEach(function(o){
+    const items=orderLineItems(o);
+    if(items.length){
+      items.forEach(function(li){
+        const k=li.name||'Item';
+        if(!prodMap[k])prodMap[k]={rev:0,units:0,profit:0};
+        prodMap[k].rev+=li.price*li.qty;
+        prodMap[k].units+=li.qty;
+      });
+    } else {
+      // No items — use order as a whole entry
+      const k=o.productName||o.customer||orderPlatform(o)+' Order';
+      if(!prodMap[k])prodMap[k]={rev:0,units:0,profit:0};
+      prodMap[k].rev+=orderRevenue(o);
+      prodMap[k].units+=1;
+    }
+  });
+  const best=Object.entries(prodMap).sort((a,b)=>b[1].rev-a[1].rev).slice(0,10);
+
+  // ── Combined transaction list ──
+  const allTxns=[
+    ...sales.map(s=>({
+      label:esc(s.name)+(s.qty>1?' ×'+s.qty:''),
+      sub:(s.platform||'Manual')+' · '+(s.date||'—'),
+      rev:(s.price||0)*(s.qty||1),
+      profit:((s.price||0)-(s.cost||0))*(s.qty||1),
+      ts:new Date(s.date||s.timestamp).getTime()||0,
+      hasCost:true
+    })),
+    ...orders.map(function(o){
+      const rev=orderRevenue(o);
+      const items=orderLineItems(o);
+      const itemLabel=items.length?items.map(function(i){return esc(i.name)+(i.qty>1?' ×'+i.qty:'');}).join(', '):(o.productName||o.customer||'Order');
+      return{
+        label:itemLabel,
+        sub:orderPlatform(o)+' · '+orderDate(o)+(o.orderId?' · '+o.orderId:''),
+        rev:rev,
+        profit:null,
+        ts:new Date(orderDate(o)).getTime()||0,
+        hasCost:false
+      };
+    })
+  ].sort(function(a,b){return b.ts-a.ts;});
+
+  // ── Month labels ──
+  const monthNames=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  function fmtMk(mk){const parts=mk.split('-');return monthNames[parseInt(parts[1]||'1')-1]+' '+parts[0];}
+
   document.getElementById('revenue-content').innerHTML=`
     <div class="rev-grid">
-      <div class="rev-card"><div class="rev-title">Total Revenue</div><div class="big-num" style="color:var(--grn)">$${totalRev.toFixed(2)}</div><div class="rev-sub">${sales.length} sales · $${(totalRev/Math.max(sales.length,1)).toFixed(2)} avg</div></div>
-      <div class="rev-card"><div class="rev-title">Total Profit</div><div class="big-num" style="color:${totalProfit>=0?'var(--grn)':'var(--red)'}">$${totalProfit.toFixed(2)}</div><div class="rev-sub">${margin}% margin · $${totalCost.toFixed(2)} cost</div></div>
+      <div class="rev-card">
+        <div class="rev-title">Total Revenue</div>
+        <div class="big-num" style="color:var(--grn)">$${totalRev.toFixed(2)}</div>
+        <div class="rev-sub">${totalCount} transactions · $${(totalRev/Math.max(totalCount,1)).toFixed(2)} avg</div>
+        ${ordersRev>0&&salesRev>0?`<div style="display:flex;gap:8px;margin-top:8px"><span style="font-size:7px;color:var(--txt-d)">Orders <span style="color:var(--grn-b)">$${ordersRev.toFixed(2)}</span></span><span style="font-size:7px;color:var(--txt-d)">Sales <span style="color:var(--teal)">$${salesRev.toFixed(2)}</span></span></div>`:''}
+      </div>
+      <div class="rev-card">
+        <div class="rev-title">Profit (from sales)</div>
+        <div class="big-num" style="color:${totalProfit>=0?'var(--grn)':'var(--red)'}">$${totalProfit.toFixed(2)}</div>
+        <div class="rev-sub">${margin}% margin · $${totalCost.toFixed(2)} cost</div>
+        ${ordersRev>0?'<div style="font-size:7px;color:var(--txt-d);margin-top:6px">Order profit requires cost data via + Log Sale</div>':''}
+      </div>
     </div>
     <div class="rev-grid">
-      <div class="rev-card"><div class="rev-title">Monthly (last 6)</div>
-        ${months.length?months.map(([mk,v])=>`<div class="month-bar-row"><div class="month-bar-lbl"><span>${mk}</span><span style="color:var(--grn)">$${v.rev.toFixed(2)}</span><span style="color:${v.profit>=0?'var(--teal)':'var(--red)'};margin-left:7px">${v.profit>=0?'+':''}$${v.profit.toFixed(2)}</span></div><div class="month-bar-track"><div class="month-bar-rev" style="width:${(v.rev/maxRev*100).toFixed(1)}%"></div></div></div>`).join(''):'<div class="empty" style="padding:16px">No sales yet</div>'}
+      <div class="rev-card">
+        <div class="rev-title">Monthly Breakdown</div>
+        ${months.length?months.slice(-12).map(([mk,v])=>`
+          <div class="month-bar-row">
+            <div class="month-bar-lbl">
+              <span style="font-weight:600">${fmtMk(mk)}</span>
+              <span style="color:var(--grn)">$${v.rev.toFixed(2)}</span>
+              ${v.profit!==0?`<span style="color:${v.profit>=0?'var(--teal)':'var(--red)'};margin-left:7px">${v.profit>=0?'+':''}$${v.profit.toFixed(2)} profit</span>`:''}
+            </div>
+            <div class="month-bar-track"><div class="month-bar-rev" style="width:${(v.rev/maxRev*100).toFixed(1)}%"></div></div>
+            <div style="font-size:6px;color:var(--txt-d);margin-top:1px">${v.count} transaction${v.count!==1?'s':''}</div>
+          </div>`).join(''):'<div class="empty" style="padding:16px">No revenue yet</div>'}
       </div>
-      <div class="rev-card"><div class="rev-title">Best Sellers</div>
-        ${best.length?best.map(([name,v])=>`<div class="sale-row"><div><div style="font-size:9px;color:var(--txt-b)">${esc(name)}</div><div style="font-size:6px;color:var(--txt-d)">${v.units} sold</div></div><div style="text-align:right"><div style="font-size:9px;color:var(--grn)">$${v.rev.toFixed(2)}</div><div style="font-size:8px;color:${v.profit>=0?'var(--teal)':'var(--red)'}">${v.profit>=0?'+':''}$${v.profit.toFixed(2)}</div></div></div>`).join(''):'<div class="empty" style="padding:16px">No data</div>'}
+      <div class="rev-card">
+        <div class="rev-title">Best Sellers</div>
+        ${best.length?best.map(([name,v])=>`<div class="sale-row">
+          <div><div style="font-size:9px;color:var(--txt-b)">${name}</div><div style="font-size:6px;color:var(--txt-d)">${v.units} sold</div></div>
+          <div style="text-align:right">
+            <div style="font-size:9px;color:var(--grn)">$${v.rev.toFixed(2)}</div>
+            ${v.profit?`<div style="font-size:8px;color:${v.profit>=0?'var(--teal)':'var(--red)'}">${v.profit>=0?'+':''}$${v.profit.toFixed(2)}</div>`:''}
+          </div></div>`).join(''):'<div class="empty" style="padding:16px">No data</div>'}
       </div>
     </div>
-    <div class="rev-card"><div class="rev-title" style="margin-bottom:10px">All Sales</div>
-      ${[...sales].reverse().map(s=>`<div class="sale-row"><div><div style="font-size:9px;color:var(--txt-b)">${esc(s.name)}${s.qty>1?' ×'+s.qty:''}</div><div style="font-size:6px;color:var(--txt-d)">${s.platform||'—'} · ${s.date||'—'}</div></div><div style="text-align:right"><div style="color:var(--grn);font-size:9px">$${((s.price||0)*(s.qty||1)).toFixed(2)}</div><div style="font-size:7px;color:${((s.price||0)-(s.cost||0))>=0?'var(--teal)':'var(--red)'}">profit $${(((s.price||0)-(s.cost||0))*(s.qty||1)).toFixed(2)}</div></div></div>`).join('')||'<div class="empty" style="padding:16px">No sales — click + Log Sale</div>'}
+    <div class="rev-card">
+      <div class="rev-title" style="margin-bottom:10px">All Transactions (${allTxns.length})</div>
+      ${allTxns.length?allTxns.map(t=>`<div class="sale-row">
+        <div><div style="font-size:9px;color:var(--txt-b)">${t.label}</div><div style="font-size:6px;color:var(--txt-d)">${t.sub}</div></div>
+        <div style="text-align:right">
+          <div style="color:var(--grn);font-size:9px">$${t.rev.toFixed(2)}</div>
+          ${t.hasCost?`<div style="font-size:7px;color:${t.profit>=0?'var(--teal)':'var(--red)'}">profit $${t.profit.toFixed(2)}</div>`:'<div style="font-size:6px;color:var(--txt-d)">no cost data</div>'}
+        </div></div>`).join(''):'<div class="empty" style="padding:16px">No transactions yet</div>'}
     </div>`;
 }
 
@@ -7043,7 +7175,7 @@ const _origStatBar=renderStatBar;
 function renderStatBar(){
   const tg=spools.reduce((a,s)=>a+(s.remaining||0),0);
   const qActive=queueItems.filter(q=>q.stage!=='done').length;
-  const totalRev=sales.reduce((a,s)=>a+(s.price||0)*(s.qty||1),0);
+  const totalRev=sales.reduce((a,s)=>a+(s.price||0)*(s.qty||1),0)+orders.reduce(function(a,o){return a+orderRevenue(o);},0);
   const ordActive=orders.filter(o=>o.status!=='shipped'&&o.status!=='cancelled').length;
   const shinyCount=shinyRolls.filter(r=>r.result==='shiny').length;
   document.getElementById('sb-spools').textContent=spools.length;
@@ -7085,7 +7217,11 @@ function renderDashboard(){
   const now=new Date();
   const monthStart=new Date(now.getFullYear(),now.getMonth(),1).getTime();
   const monthSales=sales.filter(s=>new Date(s.date||s.timestamp).getTime()>=monthStart);
-  const monthRev=monthSales.reduce((a,s)=>a+(s.price||0)*(s.qty||1),0);
+  const monthOrders=orders.filter(function(o){try{return new Date(orderDate(o)).getTime()>=monthStart;}catch(e){return false;}});
+  const monthSalesRev=monthSales.reduce((a,s)=>a+(s.price||0)*(s.qty||1),0);
+  const monthOrdersRev=monthOrders.reduce(function(a,o){return a+orderRevenue(o);},0);
+  const monthRev=monthSalesRev+monthOrdersRev;
+  const monthCount=monthSales.length+monthOrders.length;
   const monthProfit=monthSales.reduce((a,s)=>a+((s.price||0)-(s.cost||0))*(s.qty||1),0);
   const activePrints=prints.filter(p=>(p.status||(p.success===true?'done':'printing'))==='printing');
   const pendingOrds=orders.filter(o=>o.status==='pending'||o.status==='printing');
@@ -7110,12 +7246,12 @@ function renderDashboard(){
       <div class="dash-widget">
         <div class="dw-title">This Month Revenue</div>
         <div class="dw-big" style="color:var(--grn)">$${monthRev.toFixed(2)}</div>
-        <div class="dw-sub">${monthSales.length} sales this month</div>
+        <div class="dw-sub">${monthCount} transaction${monthCount!==1?'s':''} this month</div>
       </div>
       <div class="dash-widget">
         <div class="dw-title">This Month Profit</div>
         <div class="dw-big" style="color:${monthProfit>=0?'var(--grn)':'var(--red)'}">$${monthProfit.toFixed(2)}</div>
-        <div class="dw-sub">${monthRev>0?((monthProfit/monthRev)*100).toFixed(1):'0'}% margin</div>
+        <div class="dw-sub">${monthSalesRev>0?((monthProfit/monthSalesRev)*100).toFixed(1):'0'}% margin · sales only</div>
       </div>
       <div class="dash-widget">
         <div class="dw-title">Active Prints</div>
@@ -8126,7 +8262,11 @@ function renderDashboard(){
   const now=new Date();
   const monthStart=new Date(now.getFullYear(),now.getMonth(),1).getTime();
   const monthSales=sales.filter(s=>new Date(s.date||s.timestamp).getTime()>=monthStart);
-  const monthRev=monthSales.reduce((a,s)=>a+(s.price||0)*(s.qty||1),0);
+  const monthOrders=orders.filter(function(o){try{return new Date(orderDate(o)).getTime()>=monthStart;}catch(e){return false;}});
+  const monthSalesRev=monthSales.reduce((a,s)=>a+(s.price||0)*(s.qty||1),0);
+  const monthOrdersRev=monthOrders.reduce(function(a,o){return a+orderRevenue(o);},0);
+  const monthRev=monthSalesRev+monthOrdersRev;
+  const monthCount=monthSales.length+monthOrders.length;
   const monthProfit=monthSales.reduce((a,s)=>a+((s.price||0)-(s.cost||0))*(s.qty||1),0);
   const activePrints=prints.filter(p=>(p.status||(p.success===true?'done':'printing'))==='printing');
   const pendingOrds=orders.filter(o=>o.status==='pending'||o.status==='printing');
@@ -8147,13 +8287,13 @@ function renderDashboard(){
       <div class="dash-widget">
         <div class="dw-title">This Month Revenue</div>
         <div class="dw-big" style="color:var(--grn-b)">$${monthRev.toFixed(2)}</div>
-        <div class="dw-sub">${monthSales.length} sales this month</div>
+        <div class="dw-sub">${monthCount} transaction${monthCount!==1?'s':''} this month</div>
         <canvas id="spark-rev" class="sparkline" style="margin-top:8px"></canvas>
       </div>
       <div class="dash-widget">
         <div class="dw-title">This Month Profit</div>
         <div class="dw-big" style="color:${monthProfit>=0?'var(--grn-b)':'var(--red-b)'}">$${monthProfit.toFixed(2)}</div>
-        <div class="dw-sub">${monthRev>0?((monthProfit/monthRev)*100).toFixed(1):'0'}% margin</div>
+        <div class="dw-sub">${monthSalesRev>0?((monthProfit/monthSalesRev)*100).toFixed(1):'0'}% margin · sales only</div>
       </div>
       <div class="dash-widget">
         <div class="dw-title">Active Prints</div>
@@ -9560,7 +9700,9 @@ function updateGoalWidget(){
   if(!goalWidget)return;
   const now=new Date();
   const monthStart=new Date(now.getFullYear(),now.getMonth(),1).getTime();
-  const monthRev=sales.filter(s=>new Date(s.date||s.timestamp).getTime()>=monthStart).reduce((a,s)=>a+(s.price||0)*(s.qty||1),0);
+  const monthSalesRevG=sales.filter(s=>new Date(s.date||s.timestamp).getTime()>=monthStart).reduce((a,s)=>a+(s.price||0)*(s.qty||1),0);
+  const monthOrdersRevG=orders.filter(function(o){try{return new Date(orderDate(o)).getTime()>=monthStart;}catch(e){return false;}}).reduce(function(a,o){return a+orderRevenue(o);},0);
+  const monthRev=monthSalesRevG+monthOrdersRevG;
   const pct2=monthlyGoal>0?Math.min(100,(monthRev/monthlyGoal)*100):0;
   const remaining=Math.max(0,monthlyGoal-monthRev);
   if(monthlyGoal>0){
@@ -9698,7 +9840,11 @@ function renderDashboard(){
   const now=new Date();
   const monthStart=new Date(now.getFullYear(),now.getMonth(),1).getTime();
   const monthSales=sales.filter(s=>new Date(s.date||s.timestamp).getTime()>=monthStart);
-  const monthRev=monthSales.reduce((a,s)=>a+(s.price||0)*(s.qty||1),0);
+  const monthOrders=orders.filter(function(o){try{return new Date(orderDate(o)).getTime()>=monthStart;}catch(e){return false;}});
+  const monthSalesRev=monthSales.reduce((a,s)=>a+(s.price||0)*(s.qty||1),0);
+  const monthOrdersRev=monthOrders.reduce(function(a,o){return a+orderRevenue(o);},0);
+  const monthRev=monthSalesRev+monthOrdersRev;
+  const monthCount=monthSales.length+monthOrders.length;
   const monthProfit=monthSales.reduce((a,s)=>a+((s.price||0)-(s.cost||0))*(s.qty||1),0);
   const activePrints=prints.filter(p=>(p.status||(p.success===true?'done':'printing'))==='printing');
   const pendingOrds=orders.filter(o=>o.status==='pending'||o.status==='printing');
@@ -9737,13 +9883,13 @@ function renderDashboard(){
       +'<div class="dash-widget">'
         +'<div class="dw-title">This Month Revenue '+pin('dw-stats')+'</div>'
         +'<div class="dw-big" style="color:var(--grn-b)">$'+monthRev.toFixed(2)+'</div>'
-        +'<div class="dw-sub">'+monthSales.length+' sales &middot; $'+(monthRev/Math.max(monthSales.length,1)).toFixed(2)+' avg</div>'
+        +'<div class="dw-sub">'+monthCount+' transaction'+(monthCount!==1?'s':'')+' &middot; $'+(monthRev/Math.max(monthCount,1)).toFixed(2)+' avg</div>'
         +'<canvas id="spark-rev" class="sparkline" style="margin-top:8px;height:36px;display:block;width:100%"></canvas>'
       +'</div>'
       +'<div class="dash-widget">'
         +'<div class="dw-title">This Month Profit</div>'
         +'<div class="dw-big" style="color:'+(monthProfit>=0?'var(--grn-b)':'var(--red-b)')+'">$'+monthProfit.toFixed(2)+'</div>'
-        +'<div class="dw-sub">'+(monthRev>0?((monthProfit/monthRev)*100).toFixed(1):'0')+'% margin</div>'
+        +'<div class="dw-sub">'+(monthSalesRev>0?((monthProfit/monthSalesRev)*100).toFixed(1):'0')+'% margin &middot; sales only</div>'
       +'</div>'
       +'<div class="dash-widget">'
         +'<div class="dw-title">Active Prints</div>'
@@ -11349,7 +11495,7 @@ function animateStatTo(elId,newVal,prefix='',suffix=''){
 function renderStatBar(){
   const tg=spools.reduce((a,s)=>a+(s.remaining||0),0);
   const qActive=queueItems.filter(q=>q.stage!=='done').length;
-  const totalRev=sales.reduce((a,s)=>a+(s.price||0)*(s.qty||1),0);
+  const totalRev=sales.reduce((a,s)=>a+(s.price||0)*(s.qty||1),0)+orders.reduce(function(a,o){return a+orderRevenue(o);},0);
   const ordActive=orders.filter(o=>o.status!=='shipped'&&o.status!=='cancelled').length;
   const shinyCount=shinyRolls.filter(r=>r.result==='shiny').length;
   animateStatTo('sb-spools',spools.length);
