@@ -1153,4 +1153,44 @@ app.post('/vision/config', (req, res) => {
   res.json({ ok: true });
 });
 
+// ── Server-side Tapo auto-off scheduler ─────────────────────────────────────
+// Stores { timeout } keyed by alias so timers survive even if the browser tab closes.
+const _scheduledAutoOff = {};
+
+// POST /tapo/schedule-off  { alias, delayMs }
+app.post('/tapo/schedule-off', (req, res) => {
+  const { alias, delayMs = 600000 } = req.body;
+  if (!alias) return res.status(400).json({ ok: false, error: 'alias required' });
+  // Cancel any existing timer for this alias
+  if (_scheduledAutoOff[alias]) {
+    clearTimeout(_scheduledAutoOff[alias].timeout);
+    delete _scheduledAutoOff[alias];
+  }
+  const timeout = setTimeout(async () => {
+    delete _scheduledAutoOff[alias];
+    try {
+      const device = await _tapoLocalDevice(alias);
+      await device.turnOff();
+      console.log(`[Tapo] Auto-OFF: "${alias}" powered off after print (server-side timer)`);
+    } catch (e) {
+      console.error(`[Tapo] Auto-OFF failed for "${alias}":`, e.message);
+    }
+  }, delayMs);
+  _scheduledAutoOff[alias] = { timeout, scheduledAt: Date.now(), delayMs };
+  console.log(`[Tapo] Scheduled server-side auto-off for "${alias}" in ${Math.round(delayMs/60000)} min`);
+  res.json({ ok: true, alias, delayMs });
+});
+
+// DELETE /tapo/schedule-off/:alias — cancel a pending auto-off
+app.delete('/tapo/schedule-off/:alias', (req, res) => {
+  const alias = req.params.alias;
+  if (_scheduledAutoOff[alias]) {
+    clearTimeout(_scheduledAutoOff[alias].timeout);
+    delete _scheduledAutoOff[alias];
+    console.log(`[Tapo] Server-side auto-off cancelled for "${alias}"`);
+    return res.json({ ok: true, alias, cancelled: true });
+  }
+  res.json({ ok: true, alias, cancelled: false });
+});
+
 app.listen(PI_PORT, () => console.log(`🚀 LayerDeck Hub on port ${PI_PORT}`));

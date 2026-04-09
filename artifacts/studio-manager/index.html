@@ -18807,6 +18807,13 @@ function _cancelTapoAutoOff(printerName){
   clearInterval(t.countInterval);
   const banner=document.getElementById(t.bannerId);
   if(banner)banner.remove();
+  // Cancel server-side timer on Pi Hub so plug stays on
+  if(t.alias){
+    const hubUrl=getPiUrl();
+    if(hubUrl){
+      fetch('/api/pihub/proxy?hub='+encodeURIComponent(hubUrl)+'&path=/tapo/schedule-off/'+encodeURIComponent(t.alias),{method:'DELETE'}).catch(()=>{});
+    }
+  }
   delete _tapoAutoOffTimers[printerName];
   if(curTab==='pihub') renderPiHub();
 }
@@ -18814,6 +18821,14 @@ function _cancelTapoAutoOff(printerName){
 function _startTapoAutoOffCountdown(printerName,deviceId,alias){
   _cancelTapoAutoOff(printerName);
   const DELAY_MS=10*60*1000;
+  // Schedule server-side auto-off on Pi Hub — fires even if app is closed
+  const hubUrl=getPiUrl();
+  if(hubUrl&&alias){
+    fetch('/api/pihub/proxy?hub='+encodeURIComponent(hubUrl)+'&path=/tapo/schedule-off',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({alias,delayMs:DELAY_MS})
+    }).catch(()=>{});
+  }
   const bannerId='tapo-banner-'+printerName.replace(/\W+/g,'-');
   let secsLeft=DELAY_MS/1000;
 
@@ -18868,7 +18883,7 @@ function _startTapoAutoOffCountdown(printerName,deviceId,alias){
     }catch(e2){toast('⚠ Auto power-off failed',e2.message||'','error');}
   },DELAY_MS);
 
-  _tapoAutoOffTimers[printerName]={outerTimeout,countInterval,bannerId};
+  _tapoAutoOffTimers[printerName]={outerTimeout,countInterval,bannerId,alias};
 }
 
 function _renderPrinterTapoSection(printerName){
