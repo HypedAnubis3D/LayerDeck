@@ -8032,6 +8032,7 @@ function navTo(tab, el){
   if(typeof openGroupForTab==='function')openGroupForTab(tab);
   // Switch tab
   curTab=tab;
+  try{localStorage.setItem('layerdeck_nav_tab',tab);}catch(e){}
   ALL_TABS.forEach(x=>{const el2=document.getElementById('tab-'+x);if(el2)el2.style.display=x===tab?'':'none';});
   // Animate in
   const mainEl=document.querySelector('main');
@@ -10158,6 +10159,8 @@ function initSupabase(){
         if(event==='SIGNED_IN'||event==='INITIAL_SESSION'){
           addSyncLog('Signed in as '+currentUser.email,'ok');
           render();
+          // Restore the section the user was on before any reload/background eviction
+          try{const _rt=localStorage.getItem('layerdeck_nav_tab');if(_rt)navTo(_rt);}catch(e){}
           checkShopifyConfig();
           syncDiscordFromCloud();
           pullFromCloud(true).then(()=>{reconcileMissingPiPrints();}).catch(()=>{});

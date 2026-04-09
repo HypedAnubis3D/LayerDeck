@@ -33,10 +33,11 @@ export default defineConfig(({ mode }) => {
       host: "0.0.0.0",
       allowedHosts: true,
       fs: { strict: false },
-      headers: {
-        "Cache-Control": "no-store, no-cache, must-revalidate",
-        "Pragma": "no-cache",
-        "Expires": "0",
+      // no-store headers block bfcache — the browser can't save the page in memory
+      // when the tab is backgrounded, causing a full reload on return.
+      // Vite's own ETag-based caching is sufficient to prevent stale assets.
+      hmr: {
+        overlay: false,
       },
     },
     preview: {

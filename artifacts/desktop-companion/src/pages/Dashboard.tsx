@@ -52,7 +52,18 @@ export default function Dashboard() {
   const { data: libraryItems = [] } = useLibrary();
   const { toast } = useToast();
 
-  const [tab, setTab] = useState<TabId>('home');
+  const [tab, setTab] = useState<TabId>(() => {
+    try {
+      const saved = localStorage.getItem('layerdeck_companion_tab') as TabId | null;
+      if (saved && TABS.some(t => t.id === saved)) return saved;
+    } catch { }
+    return 'home';
+  });
+
+  useEffect(() => {
+    try { localStorage.setItem('layerdeck_companion_tab', tab); } catch { }
+  }, [tab]);
+
   const [parsedFiles, setParsedFiles] = useState<Parsed3MF[]>(() => loadParsedFromStorage());
 
   const isFirstRender = useRef(true);
