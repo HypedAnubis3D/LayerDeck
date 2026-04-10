@@ -3456,15 +3456,17 @@ header{
   <!-- COST & PROFIT SECTION -->
   <div style="background:rgba(74,222,128,0.05);border:1px solid rgba(74,222,128,0.18);border-radius:10px;padding:12px 14px;margin-top:6px">
     <div style="font-size:7px;font-weight:700;letter-spacing:1.5px;color:var(--txt-d);text-transform:uppercase;margin-bottom:10px">⚡ Cost &amp; Profit</div>
-    <div class="field" style="margin-bottom:8px">
-      <div class="fl" style="display:flex;align-items:center;gap:6px;margin-bottom:5px">
-        <span>Link to Print Job</span>
-        <span style="font-size:7px;color:var(--txt-d);font-weight:400">— auto-fills filament &amp; energy cost</span>
-      </div>
-      <select id="eo-linked-print" onchange="updateOrderCostFields()" style="background:var(--surf);border:1px solid var(--bdr2);color:var(--txt);padding:7px 9px;font-family:'Share Tech Mono',monospace;font-size:9px;border-radius:6px;width:100%;outline:none">
-        <option value="">— No linked print —</option>
+    <!-- Linked prints list (chips) -->
+    <div style="font-size:7px;color:var(--txt-d);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:5px">Linked Print Jobs <span style="color:var(--txt-d);font-weight:400;text-transform:none;letter-spacing:0">(one per plate)</span></div>
+    <div id="eo-linked-prints-list" style="display:flex;flex-direction:column;gap:4px;margin-bottom:7px"></div>
+    <!-- Add print row -->
+    <div style="display:flex;gap:5px;align-items:center;margin-bottom:10px">
+      <select id="eo-add-print-select" style="flex:1;background:var(--surf);border:1px solid var(--bdr2);color:var(--txt);padding:6px 8px;font-family:'Share Tech Mono',monospace;font-size:9px;border-radius:6px;outline:none;min-width:0">
+        <option value="">— Select a print to add —</option>
       </select>
+      <button type="button" onclick="addLinkedPrint()" style="flex-shrink:0;background:var(--surf);border:1px solid var(--gold);color:var(--gold);padding:6px 10px;font-size:9px;font-weight:700;border-radius:6px;cursor:pointer;white-space:nowrap">+ Add</button>
     </div>
+    <!-- Totals row -->
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px">
       <div>
         <div style="font-size:7px;color:var(--txt-d);margin-bottom:3px;text-transform:uppercase;letter-spacing:0.5px">Filament</div>
@@ -3971,35 +3973,82 @@ function calcPrintEnergyCost(p){
   const kwh=(pr&&pr.kwh)||cfg.kwh||0.13;
   return(watts/1000)*(p.hrs||0)*kwh;
 }
-// Compute total cost for an order (filament + energy + misc)
+// Compute total cost for an order (filament + energy + misc) — supports linkedPrintIds[] array
+// Falls back to old single linkedPrintId for backward compat
 function calcOrderCost(o){
   if(!o)return 0;
-  const p=o.linkedPrintId?prints.find(function(x){return x.id===o.linkedPrintId;}):null;
-  const filament=calcPrintFilamentCost(p);
-  const energy=calcPrintEnergyCost(p);
-  const misc=parseFloat(o.miscCost)||0;
-  return filament+energy+misc;
+  const ids=o.linkedPrintIds&&o.linkedPrintIds.length?o.linkedPrintIds:(o.linkedPrintId?[o.linkedPrintId]:[]);
+  const printsCost=ids.reduce(function(a,id){
+    const p=prints.find(function(x){return x.id===id;});
+    return a+calcPrintFilamentCost(p)+calcPrintEnergyCost(p);
+  },0);
+  return printsCost+(parseFloat(o.miscCost)||0);
 }
-// Populate the print dropdown in the order modal
-function populateOrderPrintDropdown(linkedPrintId){
-  const sel=document.getElementById('eo-linked-print');
+// ── Working state for the order modal's linked prints list ──
+let _linkedPrintIds=[];
+// Populate the "Add Print" dropdown with all prints (most recent first)
+function populateOrderPrintDropdown(){
+  const sel=document.getElementById('eo-add-print-select');
   if(!sel)return;
-  sel.innerHTML='<option value="">— No linked print —</option>';
+  sel.innerHTML='<option value="">— Select a print to add —</option>';
   [...prints].sort(function(a,b){return(b.timestamp||0)-(a.timestamp||0);}).forEach(function(p){
     const label=p.name+(p.printer?' · '+p.printer:'')+(p.hrs?' · '+p.hrs+'h':'');
     const opt=document.createElement('option');
     opt.value=p.id;
     opt.textContent=label;
-    if(p.id===linkedPrintId)opt.selected=true;
     sel.appendChild(opt);
   });
 }
-// Recompute and display cost breakdown in the order modal
+// Render the linked-prints chip list inside the modal
+function renderLinkedPrintsList(){
+  const el=document.getElementById('eo-linked-prints-list');
+  if(!el)return;
+  if(!_linkedPrintIds.length){
+    el.innerHTML='<div style="font-size:8px;color:var(--txt-d);padding:6px 0;font-style:italic">No prints linked yet — add one below</div>';
+    return;
+  }
+  el.innerHTML=_linkedPrintIds.map(function(id){
+    const p=prints.find(function(x){return x.id===id;});
+    if(!p)return'';
+    const f=calcPrintFilamentCost(p);
+    const e=calcPrintEnergyCost(p);
+    return'<div style="display:flex;align-items:center;gap:6px;background:rgba(255,255,255,0.04);border:1px solid var(--bdr2);border-radius:7px;padding:6px 8px">'
+      +'<div style="flex:1;min-width:0">'
+        +'<div style="font-size:9px;color:var(--txt-b);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(p.name)+'</div>'
+        +'<div style="font-size:7px;color:var(--txt-d);margin-top:1px">'+(p.printer||'')+(p.hrs?' · '+p.hrs+'h':'')+' &nbsp;·&nbsp; '
+          +'<span style="color:var(--teal)">🧵 $'+f.toFixed(2)+'</span>'
+          +' <span style="color:var(--cyn)">⚡ $'+e.toFixed(2)+'</span>'
+        +'</div>'
+      +'</div>'
+      +'<button type="button" onclick="removeLinkedPrint(\''+id+'\')" style="background:transparent;border:none;color:var(--txt-d);font-size:14px;cursor:pointer;padding:0 2px;line-height:1;flex-shrink:0">&times;</button>'
+    +'</div>';
+  }).join('');
+}
+// Add the currently selected print to the linked list
+function addLinkedPrint(){
+  const sel=document.getElementById('eo-add-print-select');
+  if(!sel||!sel.value)return;
+  const pid=sel.value;
+  if(_linkedPrintIds.includes(pid)){toast('Already Added','This print is already linked to this order','info');return;}
+  _linkedPrintIds.push(pid);
+  sel.value='';
+  renderLinkedPrintsList();
+  updateOrderCostFields();
+}
+// Remove a print from the linked list
+function removeLinkedPrint(pid){
+  _linkedPrintIds=_linkedPrintIds.filter(function(id){return id!==pid;});
+  renderLinkedPrintsList();
+  updateOrderCostFields();
+}
+// Recompute and display totals in the order modal cost section
 function updateOrderCostFields(){
-  const pid=document.getElementById('eo-linked-print')?.value||'';
-  const p=pid?prints.find(function(x){return x.id===pid;}):null;
-  const filament=calcPrintFilamentCost(p);
-  const energy=calcPrintEnergyCost(p);
+  const filament=_linkedPrintIds.reduce(function(a,id){
+    const p=prints.find(function(x){return x.id===id;});return a+calcPrintFilamentCost(p);
+  },0);
+  const energy=_linkedPrintIds.reduce(function(a,id){
+    const p=prints.find(function(x){return x.id===id;});return a+calcPrintEnergyCost(p);
+  },0);
   const misc=parseFloat(document.getElementById('eo-misc-cost')?.value)||0;
   const totalCost=filament+energy+misc;
   const filEl=document.getElementById('eo-filament-cost-display');
@@ -4010,13 +4059,12 @@ function updateOrderCostFields(){
   if(filEl)filEl.textContent='$'+filament.toFixed(2);
   if(engEl)engEl.textContent='$'+energy.toFixed(2);
   if(totEl)totEl.textContent='$'+totalCost.toFixed(2);
-  // Estimate profit from current order items total
   const items=typeof getOrderItems==='function'?getOrderItems():[];
   const orderRev=items.reduce(function(a,i){return a+parseFloat(i.price||0)*parseInt(i.qty||1);},0);
   const ship=parseFloat(document.getElementById('eo-ship')?.value)||0;
   const profit=(orderRev+ship)-totalCost;
   if(profEl){profEl.textContent=(profit>=0?'+':'')+'$'+profit.toFixed(2);profEl.style.color=profit>=0?'var(--grn)':'var(--red)';}
-  if(sumEl)sumEl.style.display=totalCost>0||pid?'block':'none';
+  if(sumEl)sumEl.style.display=(_linkedPrintIds.length>0||misc>0)?'block':'none';
 }
 // Get all order line items as [{name,qty,price}] for best-sellers
 function orderLineItems(o){
@@ -5320,7 +5368,7 @@ function renderRevenue(){
   const totalSalesRev=salesRev;
   const totalSalesCost=sales.reduce((a,s)=>a+(s.cost||0)*(s.qty||1),0);
   // Order costs: only for orders that have a linked print or misc cost
-  const ordersWithCost=orders.filter(function(o){return o.linkedPrintId||o.miscCost;});
+  const ordersWithCost=orders.filter(function(o){return(o.linkedPrintIds&&o.linkedPrintIds.length)||o.linkedPrintId||o.miscCost;});
   const totalOrdersCost=ordersWithCost.reduce(function(a,o){return a+calcOrderCost(o);},0);
   const totalOrdersWithCostRev=ordersWithCost.reduce(function(a,o){return a+orderRevenue(o);},0);
   const totalCost=totalSalesCost+totalOrdersCost;
@@ -5343,10 +5391,11 @@ function renderRevenue(){
     const mk=mkKey(orderDate(o));
     if(!monthMap[mk])monthMap[mk]={rev:0,orderRev:0,profit:0,count:0};
     const rev=orderRevenue(o);
-    const cost=(o.linkedPrintId||o.miscCost)?calcOrderCost(o):0;
+    const hasCost=!!(o.linkedPrintIds&&o.linkedPrintIds.length||o.linkedPrintId||o.miscCost);
+    const cost=hasCost?calcOrderCost(o):0;
     monthMap[mk].rev+=rev;
     monthMap[mk].orderRev+=rev;
-    if(o.linkedPrintId||o.miscCost){monthMap[mk].profit+=(rev-cost);}
+    if(hasCost){monthMap[mk].profit+=(rev-cost);}
     monthMap[mk].count++;
   });
   const months=Object.entries(monthMap).sort((a,b)=>a[0].localeCompare(b[0]));
@@ -5392,12 +5441,13 @@ function renderRevenue(){
     })),
     ...orders.map(function(o){
       const rev=orderRevenue(o);
-      const hasCostData=!!(o.linkedPrintId||o.miscCost);
+      const hasCostData=!!(o.linkedPrintIds&&o.linkedPrintIds.length||o.linkedPrintId||o.miscCost);
       const cost=hasCostData?calcOrderCost(o):null;
       const items=orderLineItems(o);
       const itemLabel=items.length?items.map(function(i){return esc(i.name)+(i.qty>1?' ×'+i.qty:'');}).join(', '):(o.productName||o.customer||'Order');
-      const filamentCost=hasCostData?calcPrintFilamentCost(o.linkedPrintId?prints.find(function(x){return x.id===o.linkedPrintId;}):null):0;
-      const energyCost=hasCostData?calcPrintEnergyCost(o.linkedPrintId?prints.find(function(x){return x.id===o.linkedPrintId;}):null):0;
+      const _pids=o.linkedPrintIds&&o.linkedPrintIds.length?o.linkedPrintIds:(o.linkedPrintId?[o.linkedPrintId]:[]);
+      const filamentCost=hasCostData?_pids.reduce(function(a,id){const p=prints.find(function(x){return x.id===id;});return a+calcPrintFilamentCost(p);},0):0;
+      const energyCost=hasCostData?_pids.reduce(function(a,id){const p=prints.find(function(x){return x.id===id;});return a+calcPrintEnergyCost(p);},0):0;
       return{
         label:itemLabel,
         sub:orderPlatform(o)+' · '+orderDate(o)+(o.orderId?' · '+o.orderId:''),
@@ -6884,9 +6934,11 @@ function openAddOrder(){
   document.getElementById('eo-mystery').checked=false;
   document.getElementById('eo-date').value=new Date().toISOString().split('T')[0];
   document.getElementById('eo-misc-cost').value='';
+  _linkedPrintIds=[];
   clearOrderItemRows();
   addOrderItemRow('manual');
-  populateOrderPrintDropdown('');
+  populateOrderPrintDropdown();
+  renderLinkedPrintsList();
   updateOrderCostFields();
   document.getElementById('mod-order').style.display='flex';
 }
@@ -6915,7 +6967,10 @@ function openEditOrder(id){
   });
   if(!(o.items||[]).length)addOrderItemRow('manual');
   document.getElementById('eo-misc-cost').value=o.miscCost||'';
-  populateOrderPrintDropdown(o.linkedPrintId||'');
+  // Support both new array (linkedPrintIds) and old single (linkedPrintId)
+  _linkedPrintIds=o.linkedPrintIds&&o.linkedPrintIds.length?[...o.linkedPrintIds]:(o.linkedPrintId?[o.linkedPrintId]:[]);
+  populateOrderPrintDropdown();
+  renderLinkedPrintsList();
   updateOrderCostFields();
   document.getElementById('mod-order').style.display='flex';
 }
@@ -6947,7 +7002,7 @@ function saveOrder(){
     discountCode:code,
     trackingNumber:trackingNumber||existingOrder?.trackingNumber||'',
     timestamp:id?(existingOrder.timestamp||Date.now()):Date.now(),
-    linkedPrintId:document.getElementById('eo-linked-print')?.value||existingOrder?.linkedPrintId||'',
+    linkedPrintIds:[..._linkedPrintIds],
     miscCost:parseFloat(document.getElementById('eo-misc-cost')?.value)||existingOrder?.miscCost||0,
   });
   if(id){orders=orders.map(function(o){return o.id===id?order:o;});}else{orders.push(order);}
@@ -7354,7 +7409,7 @@ function renderDashboard(){
   const monthRev=monthSalesRev+monthOrdersRev;
   const monthCount=monthSales.length+monthOrders.length;
   const monthSalesProfit=monthSales.reduce((a,s)=>a+((s.price||0)-(s.cost||0))*(s.qty||1),0);
-  const monthOrdersProfit=monthOrders.filter(function(o){return o.linkedPrintId||o.miscCost;}).reduce(function(a,o){return a+(orderRevenue(o)-calcOrderCost(o));},0);
+  const monthOrdersProfit=monthOrders.filter(function(o){return(o.linkedPrintIds&&o.linkedPrintIds.length)||o.linkedPrintId||o.miscCost;}).reduce(function(a,o){return a+(orderRevenue(o)-calcOrderCost(o));},0);
   const monthProfit=monthSalesProfit+monthOrdersProfit;
   const activePrints=prints.filter(p=>(p.status||(p.success===true?'done':'printing'))==='printing');
   const pendingOrds=orders.filter(o=>o.status==='pending'||o.status==='printing');
@@ -8401,7 +8456,7 @@ function renderDashboard(){
   const monthRev=monthSalesRev+monthOrdersRev;
   const monthCount=monthSales.length+monthOrders.length;
   const monthSalesProfit=monthSales.reduce((a,s)=>a+((s.price||0)-(s.cost||0))*(s.qty||1),0);
-  const monthOrdersProfit=monthOrders.filter(function(o){return o.linkedPrintId||o.miscCost;}).reduce(function(a,o){return a+(orderRevenue(o)-calcOrderCost(o));},0);
+  const monthOrdersProfit=monthOrders.filter(function(o){return(o.linkedPrintIds&&o.linkedPrintIds.length)||o.linkedPrintId||o.miscCost;}).reduce(function(a,o){return a+(orderRevenue(o)-calcOrderCost(o));},0);
   const monthProfit=monthSalesProfit+monthOrdersProfit;
   const activePrints=prints.filter(p=>(p.status||(p.success===true?'done':'printing'))==='printing');
   const pendingOrds=orders.filter(o=>o.status==='pending'||o.status==='printing');
@@ -9981,7 +10036,7 @@ function renderDashboard(){
   const monthRev=monthSalesRev+monthOrdersRev;
   const monthCount=monthSales.length+monthOrders.length;
   const monthSalesProfit=monthSales.reduce((a,s)=>a+((s.price||0)-(s.cost||0))*(s.qty||1),0);
-  const monthOrdersProfit=monthOrders.filter(function(o){return o.linkedPrintId||o.miscCost;}).reduce(function(a,o){return a+(orderRevenue(o)-calcOrderCost(o));},0);
+  const monthOrdersProfit=monthOrders.filter(function(o){return(o.linkedPrintIds&&o.linkedPrintIds.length)||o.linkedPrintId||o.miscCost;}).reduce(function(a,o){return a+(orderRevenue(o)-calcOrderCost(o));},0);
   const monthProfit=monthSalesProfit+monthOrdersProfit;
   const activePrints=prints.filter(p=>(p.status||(p.success===true?'done':'printing'))==='printing');
   const pendingOrds=orders.filter(o=>o.status==='pending'||o.status==='printing');
