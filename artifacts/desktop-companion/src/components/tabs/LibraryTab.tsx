@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import {
   Library, RefreshCw, UploadCloud, DownloadCloud, Box, Clock,
-  Trash2, CheckSquare, Square, X, Search,
+  Trash2, CheckSquare, Square, X, Search, FolderOpen,
 } from 'lucide-react';
 
 export function LibraryTab() {
@@ -213,11 +213,19 @@ export function LibraryTab() {
                     <div className="flex-1 min-w-0">
                       <p className="font-medium text-sm text-foreground truncate">{item.name || item.filename}</p>
                       <p className="text-xs text-muted-foreground font-mono truncate mt-0.5">{item.filename}</p>
-                      {item.printer && (
-                        <span className="inline-block mt-1 text-[10px] px-1.5 py-0.5 rounded bg-white/5 text-muted-foreground/60">
-                          {item.printer}
-                        </span>
-                      )}
+                      <div className="flex items-center gap-1.5 flex-wrap mt-1">
+                        {item.printer && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/5 text-muted-foreground/60">
+                            {item.printer}
+                          </span>
+                        )}
+                        {item.folderName && (
+                          <span className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary/70 border border-primary/15">
+                            <FolderOpen className="h-2.5 w-2.5" />
+                            {item.folderName}
+                          </span>
+                        )}
+                      </div>
                       <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground/60">
                         {Array.isArray(item.objects) && item.objects.length > 0 && (
                           <span className="flex items-center gap-1"><Box className="h-3 w-3" />{item.objects.length} obj</span>

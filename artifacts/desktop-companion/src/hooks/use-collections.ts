@@ -132,6 +132,7 @@ export function useAddToLibrary() {
         layerHeight: file.layerHeight ?? null,
         nozzleDiam: file.nozzleDiam ?? '',
         printer: file.printer ?? '',
+        folderName: file.folderName || null,
         uploadedAt: Date.now(),
       };
 
@@ -179,6 +180,7 @@ export function useAddAllToLibrary() {
             layerHeight: f.layerHeight ?? null,
             nozzleDiam: f.nozzleDiam ?? '',
             printer: f.printer ?? '',
+            folderName: f.folderName || null,
             uploadedAt: Date.now(),
           };
         });

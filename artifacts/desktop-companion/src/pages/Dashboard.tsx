@@ -84,13 +84,14 @@ export default function Dashboard() {
     );
   }, [libraryItems]);
 
-  const handleFilesAccepted = useCallback(async (newFiles: File[]) => {
+  const handleFilesAccepted = useCallback(async (newFiles: File[], folderName?: string) => {
     // Remove existing parsed entries with the same filename so re-uploads always re-parse
     const incomingNames = new Set(newFiles.map(f => f.name));
     setParsedFiles(prev => prev.filter(p => !incomingNames.has(p.filename)));
 
     const initialEntries: Parsed3MF[] = newFiles.map(file => ({
       id: crypto.randomUUID(), filename: file.name, file,
+      folderName: folderName || undefined,
       modelName: file.name.replace(/\.3mf$/i, ''), objectsCount: 0, objects: [],
       filamentColors: [], filamentTypes: [], filamentGramsPerColor: [], status: 'parsing',
     }));
@@ -98,9 +99,14 @@ export default function Dashboard() {
     for (const entry of initialEntries) {
       const parsed = await parse3MFFile(entry.file!);
       parsed.id = entry.id;
+      if (folderName) parsed.folderName = folderName;
       setParsedFiles(prev => prev.map(p => p.id === entry.id ? parsed : p));
     }
-  }, [toast]);
+  }, []);
+
+  const handleFolderPicked = useCallback((files: File[], folderName: string) => {
+    handleFilesAccepted(files, folderName);
+  }, [handleFilesAccepted]);
 
   const handleFileUpdated = useCallback((id: string, updates: Partial<Parsed3MF>) => {
     setParsedFiles(prev => prev.map(p => p.id === id ? { ...p, ...updates } : p));
@@ -172,7 +178,7 @@ export default function Dashboard() {
                     </Button>
                   )}
                 </div>
-                <DropZone onFilesAccepted={handleFilesAccepted} />
+                <DropZone onFilesAccepted={handleFilesAccepted} onFolderPicked={handleFolderPicked} />
                 <PreviewList files={parsedFiles} onFileUpdated={handleFileUpdated} onRemoveCard={handleRemoveCard} />
               </div>
             </div>

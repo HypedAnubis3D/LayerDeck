@@ -3954,6 +3954,7 @@ function load(){
   sales=gs(KEYS.sales);maintLog=gs(KEYS.maint);
   inPersonInventory=gs(KEYS.inperson);
   printGroups=gs(KEYS.groups);tmfFolders=gs(KEYS.tmfFolders);
+  _reconcileFolderNames();
   dashHidden=gs(KEYS.dashHidden);
   shopifyCfg={...shopifyCfg,...go(KEYS.shopify)};
   try{const c=JSON.parse(localStorage.getItem(KEYS.cfg));if(c)cfg=c;}catch(e){}
@@ -3989,6 +3990,21 @@ function saveSales(){ss(KEYS.sales,sales);}
 function saveMaintLog(){ss(KEYS.maint,maintLog);}
 function savePrintGroups(){ss(KEYS.groups,printGroups);}
 function saveTmfFolders(){ss(KEYS.tmfFolders,tmfFolders);}
+// Auto-create tmfFolders entries for any tmfLib items that carry a folderName
+// but have no valid folderId. Called after any pull from cloud.
+function _reconcileFolderNames(){
+  let changed=false;
+  tmfLib.forEach(function(t){
+    if(!t.folderName)return;
+    // Check if already properly assigned
+    if(t.folderId&&tmfFolders.find(function(f){return f.id===t.folderId;}))return;
+    // Find or create the folder
+    let folder=tmfFolders.find(function(f){return f.name===t.folderName;});
+    if(!folder){folder={id:uid(),name:t.folderName};tmfFolders.push(folder);changed=true;}
+    if(t.folderId!==folder.id){t.folderId=folder.id;changed=true;}
+  });
+  if(changed){saveTmfs();saveTmfFolders();}
+}
 // ── Order revenue helpers ──
 // Extract total revenue from an order regardless of platform/structure
 function orderRevenue(o){
@@ -11128,7 +11144,7 @@ async function pullFromCloud(silent=false,_lockRetry=false){
           else if(c==='maintLog')maintLog=parsed;
           else if(c==='wasteLog')wasteLog=parsed;
           else if(c==='printerRecords')printerRecords=parsed;
-          else if(c==='tmfLib')tmfLib=parsed;
+          else if(c==='tmfLib'){tmfLib=parsed;_reconcileFolderNames();}
           else if(c==='catalogItems'||c==='catalog'){
             // Apply $3 default cost to any items that have none (including Shopify imports)
             let _ccFixed=false;

@@ -9,6 +9,7 @@ export interface Parsed3MF {
   id: string;
   filename: string;
   file?: File | null;
+  folderName?: string;
   modelName: string;
   metaTitle?: string;
   objectsCount: number;
