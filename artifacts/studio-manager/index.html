@@ -10873,6 +10873,17 @@ let countdownInterval=null;
 function loadV12(){
   try{amsMap=JSON.parse(localStorage.getItem(KEYS.amsMap)||'{}');}catch(e){amsMap={};}
   try{amsSlotMappings=JSON.parse(localStorage.getItem(KEYS.amsSlotMappings)||'{}');}catch(e){amsSlotMappings={};}
+  // Migrate: old format stored spool ID strings in amsSlotMappings[printerName|255|254]
+  // New format stores spool ID in amsMap[printerName]['ext'] (same pattern as regular AMS slots)
+  Object.keys(amsSlotMappings).forEach(function(k){
+    if(typeof amsSlotMappings[k]==='string'&&k.endsWith('|255|254')){
+      const printerName=k.replace('|255|254','');
+      if(!amsMap[printerName])amsMap[printerName]={};
+      if(!amsMap[printerName]['ext'])amsMap[printerName]['ext']=amsSlotMappings[k];
+      delete amsSlotMappings[k];
+    }
+  });
+  saveAmsMap();saveAmsSlotMappings();
 }
 function saveAmsMap(){localStorage.setItem(KEYS.amsMap,JSON.stringify(amsMap));}
 function saveAmsSlotMappings(){localStorage.setItem(KEYS.amsSlotMappings,JSON.stringify(amsSlotMappings));}
@@ -10987,8 +10998,9 @@ function renderAmsMap(printerName,compact=false){
     const extRemain=vtTray.remain||0;
     const bc=extRemain>0?barcol(extRemain):'var(--txt-d)';
     const extKey=_amsSlotKey(printerName,255,254);
-    const isSet=!!(amsSlotMappings[extKey]);
-    const assignedExtId=(typeof amsSlotMappings[extKey]==='string')?amsSlotMappings[extKey]:'';
+    const assignedExtId=(amsMap[printerName]||{})['ext']||'';
+    const filMeta=(amsSlotMappings[extKey]&&typeof amsSlotMappings[extKey]==='object')?amsSlotMappings[extKey]:null;
+    const isSet=!!(assignedExtId||filMeta);
     const assignedExtSpool=assignedExtId?spools.find(function(s){return s.id===assignedExtId;}):null;
     if(compact){
       return '<div class="ams-map-compact">'
@@ -11187,9 +11199,7 @@ function renderAmsMapDash(printerName){
 }
 
 function openExtSpoolModal(printerName){
-  const extKey=_amsSlotKey(printerName,255,254);
-  const rawVal=amsSlotMappings[extKey];
-  const currentId=(typeof rawVal==='string')?rawVal:'';
+  const currentId=(amsMap[printerName]||{})['ext']||'';
   const cur=currentId?spools.find(function(s){return s.id===currentId;}):null;
   document.getElementById('ams-modal-title').textContent=printerName+' — External Spool';
   document.getElementById('ams-printer-name').value=printerName;
@@ -11295,18 +11305,18 @@ function saveAmsAssignment(){
   const spoolId=document.getElementById('ams-spool-select').value;
   // External spool sentinel (9998)
   if(slotNum===9998){
-    const extKey=_amsSlotKey(printerName,255,254);
+    if(!amsMap[printerName])amsMap[printerName]={};
     if(spoolId){
-      amsSlotMappings[extKey]=spoolId;
+      amsMap[printerName]['ext']=spoolId;
       spools=spools.map(s=>s.id===spoolId?{...s,printer:printerName,amsSlot:'ext'}:s);
       saveSpools();
       const sp=spools.find(s=>s.id===spoolId);
       toast('Ext Spool Assigned',(sp?sp.name:'Spool')+' \u2192 '+printerName+' External','success');
     }else{
-      delete amsSlotMappings[extKey];
+      delete amsMap[printerName]['ext'];
       toast('Ext Spool Cleared',printerName+' External Spool unassigned','info');
     }
-    saveAmsSlotMappings();closeAmsModal();render();
+    saveAmsMap();closeAmsModal();render();
     return;
   }
   if(!amsMap[printerName])amsMap[printerName]={};
@@ -17457,8 +17467,7 @@ function renderAmsSwatches(amsData,vtTray,printerName,trayNow){
     const col='#'+(rawCol&&rawCol!=='00000000'?rawCol.slice(0,6):'888888');
     const mat=vtTray.tray_sub_brands||vtTray.tray_type||'?';
     const rem=vtTray.remain>0?vtTray.remain+'% left':'';
-    const extKey=printerName?_amsSlotKey(printerName,255,254):null;
-    const mappedSpool=extKey&&amsSlotMappings[extKey]?spools.find(s=>s.id===amsSlotMappings[extKey]):null;
+    const mappedSpool=printerName?(spools.find(s=>s.id===((amsMap[printerName]||{})['ext']||''))||null):null;
     return'<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">'
       +'<div style="width:13px;height:13px;border-radius:50%;background:'+col+';border:2px solid rgba(255,255,255,0.3);flex-shrink:0"></div>'
       +'<span style="font-size:7px;color:var(--txt)">Ext: '+esc(mat)+(rem?' ('+rem+')':'')+'</span>'
@@ -17762,8 +17771,7 @@ async function onPiPrintFinished(name,data){
   if(data.vt_tray&&data.vt_tray.tray_type&&startSnap.ext!=null&&data.vt_tray.remain!=null){
     const extDelta=startSnap.ext-data.vt_tray.remain;
     if(extDelta>=1){
-      const extKey=_amsSlotKey(name,255,254);
-      const extSpoolId=amsSlotMappings[extKey];
+      const extSpoolId=(amsMap[name]||{})['ext']||'';
       const extSpool=spools.find(s=>s.id===extSpoolId);
       const totalG=extSpool?(extSpool.totalGrams||1000):1000;
       const grams=Math.max(1,Math.round(extDelta/100*totalG));
@@ -17782,8 +17790,7 @@ async function onPiPrintFinished(name,data){
   if(!filamentSlots.length){
     const tmfGramsArr=_earlyTmf&&_earlyTmf.filamentGramsPerColor&&_earlyTmf.filamentGramsPerColor.length?_earlyTmf.filamentGramsPerColor:null;
     const totalFallbackG=tmfGramsArr?tmfGramsArr.reduce(function(a,v){return a+(v||0);},0):gramsUsed;
-    const extKey2=_amsSlotKey(name,255,254);
-    const fallbackSpool=spools.find(s=>s.id===amsSlotMappings[extKey2])
+    const fallbackSpool=spools.find(s=>s.id===((amsMap[name]||{})['ext']||''))
       ||spools.find(s=>s.printer===name&&s.material&&s.material.toLowerCase().includes(material.toLowerCase())&&(s.remaining||0)>0)
       ||spools.find(s=>s.material&&s.material.toLowerCase().includes(material.toLowerCase())&&(s.remaining||0)>0);
     if(fallbackSpool&&totalFallbackG>0){
