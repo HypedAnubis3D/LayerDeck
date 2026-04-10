@@ -418,10 +418,30 @@ input.srch::placeholder{color:var(--txt-d);}
 .picker-item .pi-sub{font-size:7px;color:var(--txt-d);margin-top:1px;}
 .picker-item .pi-meta{font-size:7px;color:var(--gold-b);flex-shrink:0;text-align:right;white-space:nowrap;}
 .picker-dot{width:14px;height:14px;border-radius:50%;flex-shrink:0;border:1.5px solid rgba(255,255,255,.2);}
+/* Picker grid mode (2-col cards) */
+#picker-list.picker-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:2px;}
+.picker-card{background:var(--surf);border:1px solid var(--bdr);border-radius:8px;cursor:pointer;overflow:hidden;transition:border-color .15s;-webkit-tap-highlight-color:transparent;}
+.picker-card:hover,.picker-card:active{border-color:var(--pur);}
+.picker-card.selected{border-color:var(--gold-dim);background:rgba(201,168,76,.07);}
+.picker-card-vis{width:100%;aspect-ratio:4/3;object-fit:cover;display:block;}
+.picker-card-ph{width:100%;aspect-ratio:4/3;display:flex;align-items:center;justify-content:center;background:var(--bg-d,#0c0c14);font-size:28px;}
+.picker-card-body{padding:6px 8px 8px;}
+.picker-card-lbl{font-size:8px;font-weight:600;color:var(--txt-b);line-height:1.3;margin-bottom:2px;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;}
+.picker-card-meta{font-size:7px;color:var(--grn-b);margin-top:2px;}
+.picker-card-sub{font-size:6.5px;color:var(--txt-d);margin-top:1px;}
+.picker-card-sel-badge{font-size:6px;text-align:center;color:var(--gold-b);padding:0 8px 5px;letter-spacing:.5px;}
+/* "None" item spans both cols */
+.picker-card-none{grid-column:1/-1;display:flex;align-items:center;gap:10px;padding:9px 12px;background:var(--surf);border:1px solid var(--bdr);border-radius:6px;cursor:pointer;transition:border-color .15s;font-size:9px;color:var(--txt-d);}
+.picker-card-none:hover{border-color:var(--pur);}
+.picker-card-none.selected{border-color:var(--gold-dim);color:var(--gold-b);}
 /* Fil-row spool button */
 .fil-spool-btn{flex:1;min-width:0;background:var(--bg);border:1px solid var(--bdr2);color:var(--txt-d);padding:0 8px;font-family:'Share Tech Mono',monospace;font-size:8px;border-radius:3px;cursor:pointer;text-align:left;height:26px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;transition:border-color .12s;}
 .fil-spool-btn:hover{border-color:var(--pur);}
 .fil-spool-btn.chosen{color:var(--txt);}
+/* TMF product link button */
+.tmf-prod-btn{width:100%;background:var(--bg);border:1px solid var(--bdr2);color:var(--txt-d);padding:5px 9px;font-family:'Share Tech Mono',monospace;font-size:8px;border-radius:3px;cursor:pointer;text-align:left;transition:border-color .12s;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.tmf-prod-btn:hover{border-color:var(--pur);}
+.tmf-prod-btn.linked{color:var(--grn-b);border-color:var(--grn-d,#1a3a1a);}
 
 .cost-preview{background:var(--bg);border:1px solid var(--bdr);border-radius:4px;padding:9px;margin-bottom:9px;}
 
@@ -4744,16 +4764,10 @@ function renderTmf(){
             '<span style="font-size:6px;color:var(--grn-b);flex:1">✓ Auto-matched: <b>'+esc(_tmfSuggestProd.name)+'</b></span>'+
             '<button class="btn btn-xs" style="font-size:5px;padding:2px 7px;background:var(--grn-d);border-color:var(--grn-dim);color:var(--grn-b);white-space:nowrap" onclick="event.stopPropagation();linkTmfToProduct(\''+t.id+'\',\''+_tmfSuggestProd.id+'\')">Confirm</button>'+
           '</div>':'')+
-        '<div style="position:relative" onclick="event.stopPropagation()">'+
-          '<input type="text" id="tmf-ps-'+t.id+'"'+
-            ' value="'+(_tmfLinkedId?(catalogItems.find(function(p){return p.id===_tmfLinkedId;})||{}).name||'':'')+'"'+
-            ' placeholder="🔍 Search products…"'+
-            ' class="tmf-prod-search"'+
-            ' style="width:100%;background:var(--bg);border:1px solid var(--bdr2);color:var(--txt);padding:4px 8px;font-family:\'Share Tech Mono\',monospace;font-size:8px;border-radius:3px;box-sizing:border-box"'+
-            ' oninput="filterTmfProdSearch(\''+t.id+'\',this.value)"'+
-            ' onfocus="filterTmfProdSearch(\''+t.id+'\',this.value)"'+
-            ' autocomplete="off" />'+
-          '<div id="tmf-pd-'+t.id+'" class="sale-search-dd tmf-prod-dd" style="display:none"></div>'+
+        '<div onclick="event.stopPropagation()">'+
+          '<button id="tmf-ps-'+t.id+'" class="tmf-prod-btn'+(_tmfLinkedId?' linked':'')+'" onclick="openTmfProductPicker(\''+t.id+'\')">'+
+            (_tmfLinkedId?(catalogItems.find(function(p){return p.id===_tmfLinkedId;})||{}).name||'🔍 Link to product…':'🔍 Link to product…')+
+          '</button>'+
         '</div>'+
         '<input type="hidden" id="tmf-psel-'+t.id+'" value="'+_tmfLinkedId+'" />'+
       '</div>'+
@@ -4805,12 +4819,10 @@ function filterTmfProdSearch(tmfId, q){
   dd.style.display='block';
 }
 function selectTmfProduct(tmfId,productId,name){
-  const inp=document.getElementById('tmf-ps-'+tmfId);
+  const btn=document.getElementById('tmf-ps-'+tmfId);
   const hid=document.getElementById('tmf-psel-'+tmfId);
-  const dd=document.getElementById('tmf-pd-'+tmfId);
-  if(inp)inp.value=name;
+  if(btn){btn.textContent=name&&productId?name:'🔍 Link to product…';btn.classList.toggle('linked',!!productId);}
   if(hid)hid.value=productId;
-  if(dd)dd.style.display='none';
   linkTmfToProduct(tmfId,productId);
 }
 
@@ -6234,36 +6246,72 @@ function renderLabels(){
 // ════════════════════════════════════════
 // GENERIC PICKER MODAL
 // ════════════════════════════════════════
-let _pickerItems=[],_pickerCallback=null,_pickerSelectedId='';
+let _pickerItems=[],_pickerCallback=null,_pickerSelectedId='',_pickerMode='list';
 function openPicker(opts){
   _pickerItems=opts.items||[];
   _pickerCallback=opts.onSelect||null;
   _pickerSelectedId=opts.selectedId||'';
+  _pickerMode=opts.mode||'list';
   const t=document.getElementById('picker-title');
   const s=document.getElementById('picker-search');
   if(t)t.textContent=opts.title||'Select';
   if(s)s.value='';
   _renderPickerList('');
   document.getElementById('mod-picker').style.display='flex';
-  setTimeout(function(){const si=document.getElementById('picker-search');if(si)si.focus();},80);
+  setTimeout(function(){const si=document.getElementById('picker-search');if(si&&_pickerMode!=='grid')si.focus();},80);
 }
 function closePicker(){document.getElementById('mod-picker').style.display='none';}
+function _safePickerId(id){return(id||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'");}
 function _renderPickerList(q){
   const query=(q||'').toLowerCase().trim();
   const filtered=query?_pickerItems.filter(function(i){return(i.label||'').toLowerCase().includes(query)||(i.sublabel||'').toLowerCase().includes(query)||(i.meta||'').toLowerCase().includes(query);}):_pickerItems;
   const list=document.getElementById('picker-list');if(!list)return;
-  if(!filtered.length){list.innerHTML='<div style="font-size:9px;color:var(--txt-d);padding:20px;text-align:center">No results</div>';return;}
-  list.innerHTML=filtered.map(function(item){
-    const isSel=item.id===_pickerSelectedId;
-    const dot=item.color?'<div class="picker-dot" style="background:'+item.color+';box-shadow:0 0 5px '+item.color+'55"></div>':'';
-    return '<div class="picker-item'+(isSel?' selected':'')+'" onclick="_selectPickerItem(\''+item.id.replace(/\\/g,'\\\\').replace(/'/g,'\\\'')+'\')">'
-      +dot
-      +'<div style="flex:1;min-width:0"><div class="pi-label">'+esc(item.label)+'</div>'
-      +(item.sublabel?'<div class="pi-sub">'+esc(item.sublabel)+'</div>':'')
-      +'</div>'
-      +(item.meta?'<div class="pi-meta">'+esc(item.meta)+'</div>':'')
-      +'</div>';
-  }).join('');
+  if(!filtered.length){list.className='';list.innerHTML='<div style="font-size:9px;color:var(--txt-d);padding:20px;text-align:center">No results</div>';return;}
+  if(_pickerMode==='grid'){
+    list.className='picker-grid';
+    list.innerHTML=filtered.map(function(item){
+      const isSel=item.id===_pickerSelectedId;
+      const sid=_safePickerId(item.id);
+      // "None" option — full-width row
+      if(!item.id){
+        return '<div class="picker-card-none'+(isSel?' selected':'')+'" onclick="_selectPickerItem(\'\')">'
+          +(isSel?'✓ ':'')
+          +'<span>'+esc(item.label)+'</span>'
+          +'</div>';
+      }
+      // Visual: imageContent (raw HTML) > image URL > color swatch > icon placeholder
+      var vis;
+      if(item.imageContent){
+        vis=item.imageContent;
+      }else if(item.image){
+        vis='<img class="picker-card-vis" src="'+esc(item.image)+'" onerror="this.outerHTML=\'<div class=picker-card-ph>'+(item.imageIcon||'📦')+'</div>\'">';
+      }else{
+        vis='<div class="picker-card-ph">'+(item.imageIcon||'📦')+'</div>';
+      }
+      return '<div class="picker-card'+(isSel?' selected':'')+'" onclick="_selectPickerItem(\''+sid+'\')">'
+        +vis
+        +'<div class="picker-card-body">'
+          +'<div class="picker-card-lbl">'+esc(item.label)+'</div>'
+          +(item.sublabel?'<div class="picker-card-sub">'+esc(item.sublabel)+'</div>':'')
+          +(item.meta?'<div class="picker-card-meta">'+esc(item.meta)+'</div>':'')
+        +'</div>'
+        +(isSel?'<div class="picker-card-sel-badge">✓ Selected</div>':'')
+        +'</div>';
+    }).join('');
+  }else{
+    list.className='';
+    list.innerHTML=filtered.map(function(item){
+      const isSel=item.id===_pickerSelectedId;
+      const dot=item.color?'<div class="picker-dot" style="background:'+item.color+';box-shadow:0 0 5px '+item.color+'55"></div>':'';
+      return '<div class="picker-item'+(isSel?' selected':'')+'" onclick="_selectPickerItem(\''+_safePickerId(item.id)+'\')">'
+        +dot
+        +'<div style="flex:1;min-width:0"><div class="pi-label">'+esc(item.label)+'</div>'
+        +(item.sublabel?'<div class="pi-sub">'+esc(item.sublabel)+'</div>':'')
+        +'</div>'
+        +(item.meta?'<div class="pi-meta">'+esc(item.meta)+'</div>':'')
+        +'</div>';
+    }).join('');
+  }
 }
 function _selectPickerItem(id){
   const item=_pickerItems.find(function(i){return i.id===id;});
@@ -6271,14 +6319,23 @@ function _selectPickerItem(id){
   if(_pickerCallback)_pickerCallback(id,item);
   closePicker();
 }
+// Helper: build spool imageContent (color fill with translucent reel circle)
+function _spoolVisHtml(color){
+  const c=color||'#555';
+  return '<div class="picker-card-vis" style="background:'+c+';display:flex;align-items:center;justify-content:center">'
+    +'<div style="width:44px;height:44px;border-radius:50%;border:6px solid rgba(255,255,255,.22);background:rgba(0,0,0,.25);box-shadow:0 0 0 2px rgba(255,255,255,.08)">'
+    +'<div style="width:100%;height:100%;border-radius:50%;display:flex;align-items:center;justify-content:center">'
+    +'<div style="width:10px;height:10px;border-radius:50%;background:rgba(255,255,255,.35)"></div>'
+    +'</div></div></div>';
+}
 // 3MF picker — for ep (print modal) and ec (catalog edit modal)
 function openTmfPicker(ctx){
   const hidId=ctx==='ep'?'ep-tmf-select':'ec-tmf';
   const searchId=ctx==='ep'?'ep-tmf-search':'ec-tmf-search';
   const currentId=document.getElementById(hidId)?.value||'';
-  const items=[{id:'',label:'— Manual Entry (no 3MF) —',sublabel:'',meta:''}].concat(
-    tmfLib.map(function(t){return{id:t.id,label:t.name,sublabel:t.printer||'',meta:t.hrs?formatHms(t.hrs):''};}));
-  openPicker({title:'3MF Library',items:items,selectedId:currentId,onSelect:function(id,item){
+  const items=[{id:'',label:'— Manual Entry (no 3MF) —',sublabel:'',meta:'',imageIcon:'📝'}].concat(
+    tmfLib.map(function(t){return{id:t.id,label:t.name,sublabel:t.printer||'',meta:t.hrs?formatHms(t.hrs):'',imageIcon:'📦'};}));
+  openPicker({title:'3MF Library',mode:'grid',items:items,selectedId:currentId,onSelect:function(id,item){
     const inp=document.getElementById(searchId);
     if(inp)inp.value=id&&item?item.label:'';
     if(ctx==='ep')selectEpTmf(id,id&&item?item.label:'');
@@ -6290,12 +6347,12 @@ function openSpoolPickerForRow(rowId){
   const row=document.getElementById(rowId);if(!row)return;
   const currentId=row.dataset.spoolId||'';
   const items=[{id:'',label:'— No Spool —',sublabel:'',meta:''}].concat(
-    spools.map(function(s){return{id:s.id,label:s.name,sublabel:s.material+(s.brand?' · '+s.brand:''),meta:Math.round(s.remaining||0)+'g ('+pct(s)+'%)',color:s.color};}));
-  openPicker({title:'Select Spool',items:items,selectedId:currentId,onSelect:function(id,item){
+    spools.map(function(s){return{id:s.id,label:s.name,sublabel:s.material+(s.brand?' · '+s.brand:''),meta:Math.round(s.remaining||0)+'g ('+pct(s)+'%)',imageContent:_spoolVisHtml(s.color)};}));
+  openPicker({title:'Select Spool',mode:'grid',items:items,selectedId:currentId,onSelect:function(id,item){
     row.dataset.spoolId=id;
     const btn=document.getElementById(rowId+'-spoolbtn');
     if(btn){btn.textContent=id&&item?item.label:'Tap to select spool…';btn.classList.toggle('chosen',!!id);}
-    if(id&&item&&item.color){const dot=row.querySelector('.fil-row-dot');if(dot){dot.style.background=item.color;dot.style.boxShadow='0 0 4px '+item.color+'66';}}
+    if(id){const sp=spools.find(function(s){return s.id===id;});if(sp){const dot=row.querySelector('.fil-row-dot');if(dot){dot.style.background=sp.color;dot.style.boxShadow='0 0 4px '+sp.color+'66';}}}
     updateCostPreview();
   }});
 }
@@ -6304,12 +6361,21 @@ function openAmsSpoolPicker(){
   const sel=document.getElementById('ams-spool-select');
   const currentId=sel?sel.value:'';
   const items=[{id:'',label:'— Empty Slot —',sublabel:'',meta:''}].concat(
-    spools.map(function(s){return{id:s.id,label:s.name,sublabel:s.material+(s.brand?' · '+s.brand:''),meta:Math.round(s.remaining||0)+'g ('+pct(s)+'%)',color:s.color};}));
-  openPicker({title:'Select Spool',items:items,selectedId:currentId,onSelect:function(id,item){
+    spools.map(function(s){return{id:s.id,label:s.name,sublabel:s.material+(s.brand?' · '+s.brand:''),meta:Math.round(s.remaining||0)+'g ('+pct(s)+'%)',imageContent:_spoolVisHtml(s.color)};}));
+  openPicker({title:'Select Spool',mode:'grid',items:items,selectedId:currentId,onSelect:function(id,item){
     if(sel){sel.value=id;}
     const btn=document.getElementById('ams-spool-btn');
     if(btn)btn.textContent=id&&item?item.label+' ('+item.meta+')':'🔍 Tap to select spool…';
     updateAmsPreview();
+  }});
+}
+// Product picker for linking a product to a 3MF entry
+function openTmfProductPicker(tmfId){
+  const currentId=(catalogItems.find(function(p){return p.tmfId===tmfId;})||{}).id||'';
+  const items=[{id:'',label:'— Not linked to any product —',sublabel:'',meta:''}].concat(
+    catalogItems.map(function(p){return{id:p.id,label:p.name,sublabel:p.category||'',meta:'$'+parseFloat(p.price||0).toFixed(2),image:p.photo||'',imageIcon:'🏷'};}));
+  openPicker({title:'Link Product',mode:'grid',items:items,selectedId:currentId,onSelect:function(id,item){
+    selectTmfProduct(tmfId,id,id&&item?item.label:'');
   }});
 }
 
@@ -9957,8 +10023,8 @@ function openWasteSpoolPicker(){
   const sel=document.getElementById('wl-spool');
   const currentId=sel?sel.value:'';
   const items=[{id:'',label:'— Select Spool —',sublabel:'',meta:''}].concat(
-    spools.map(function(s){return{id:s.id,label:s.name,sublabel:s.material+(s.brand?' · '+s.brand:''),meta:Math.round(s.remaining||0)+'g ('+pct(s)+'%)',color:s.color};}));
-  openPicker({title:'Select Spool',items:items,selectedId:currentId,onSelect:function(id,item){
+    spools.map(function(s){return{id:s.id,label:s.name,sublabel:s.material+(s.brand?' · '+s.brand:''),meta:Math.round(s.remaining||0)+'g ('+pct(s)+'%)',imageContent:_spoolVisHtml(s.color)};}));
+  openPicker({title:'Select Spool',mode:'grid',items:items,selectedId:currentId,onSelect:function(id,item){
     if(sel)sel.value=id;
     const btn=document.getElementById('wl-spool-btn');
     if(btn)btn.textContent=id&&item?item.label+' — '+item.meta:'🔍 Tap to select spool…';
@@ -12031,15 +12097,7 @@ document.addEventListener('click',function(e){
   if(!e.target.closest('#em-sale-search')&&!e.target.closest('#em-sale-dropdown')){
     hideSaleDropdown();
   }
-  if(!e.target.closest('#ep-tmf-search')&&!e.target.closest('#ep-tmf-dd')){
-    const d=document.getElementById('ep-tmf-dd');if(d)d.style.display='none';
-  }
-  if(!e.target.closest('#ec-tmf-search')&&!e.target.closest('#ec-tmf-dd')){
-    const d=document.getElementById('ec-tmf-dd');if(d)d.style.display='none';
-  }
-  if(!e.target.closest('.tmf-prod-search')&&!e.target.closest('.tmf-prod-dd')){
-    document.querySelectorAll('.tmf-prod-dd').forEach(function(d){d.style.display='none';});
-  }
+  // tmf-dd handlers removed — pickers now use modal
 });
 
 let orderFilter='all';
