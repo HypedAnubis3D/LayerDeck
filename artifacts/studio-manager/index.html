@@ -3934,7 +3934,7 @@ const WEAR_FACTOR={'PLA-CF':3.0,'PA-CF':3.0,'PA-GF':3.0,'PC-CF':3.0,'PPS-CF':3.0
 function matWear(m){return WEAR_FACTOR[m]||1.0;}
 
 let spools=[],usageHist=[],prints=[],tmfLib=[],queueItems=[],orders=[],sales=[],maintLog=[],inPersonInventory=[];
-let printGroups=[],tmfFolders=[];
+let printGroups=[],tmfFolders=[],_tmfCollapsed=new Set();
 let dashHidden=[];
 let notifIds=new Set();
 let shopifyCfg={domain:'',connected:false,lastOrderId:null,lastPoll:null};
@@ -3990,6 +3990,7 @@ function saveSales(){ss(KEYS.sales,sales);}
 function saveMaintLog(){ss(KEYS.maint,maintLog);}
 function savePrintGroups(){ss(KEYS.groups,printGroups);}
 function saveTmfFolders(){ss(KEYS.tmfFolders,tmfFolders);}
+function toggleTmfFolder(id){_tmfCollapsed.has(id)?_tmfCollapsed.delete(id):_tmfCollapsed.add(id);renderTmf();}
 // Auto-create tmfFolders entries for any tmfLib items that carry a folderName
 // but have no valid folderId. Called after any pull from cloud.
 function _reconcileFolderNames(){
@@ -4814,22 +4815,26 @@ function renderTmf(){
   tmfFolders.forEach(function(f){
     const files=sortedTmf.filter(function(t){return t.folderId===f.id;});
     if(!files.length)return;
-    html+='<div style="grid-column:1/-1;display:flex;align-items:center;gap:8px;padding:7px 10px;background:rgba(255,255,255,.04);border:1px solid var(--bdr);border-radius:8px;margin-top:4px">'+
+    const collapsed=_tmfCollapsed.has(f.id);
+    html+='<div style="grid-column:1/-1;display:flex;align-items:center;gap:8px;padding:7px 10px;background:rgba(255,255,255,.04);border:1px solid var(--bdr);border-radius:8px;margin-top:4px;cursor:pointer" onclick="toggleTmfFolder(\''+f.id+'\')">'+
+      '<span style="font-size:9px;color:var(--txt-d);transition:transform .15s;display:inline-block;transform:rotate('+(collapsed?'-90deg':'0deg')+')">'+(collapsed?'▶':'▼')+'</span>'+
       '<span>📁</span><span style="font-size:10px;font-weight:700;color:var(--txt-b)">'+esc(f.name)+'</span>'+
-      '<span style="font-size:7px;color:var(--txt-d)">'+files.length+' file'+(files.length!==1?'s':'')+'</span>'+
-      '<div style="margin-left:auto;display:flex;gap:4px">'+
-        '<button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();renameTmfFolder(\''+f.id+'\')">✏</button>'+
-        '<button class="btn btn-ghost btn-sm" style="color:var(--red)" onclick="event.stopPropagation();deleteTmfFolder(\''+f.id+'\')">✕</button>'+
+      '<span style="font-size:7px;color:var(--txt-d)">'+files.length+' file'+(files.length!==1?'s':'')+(collapsed?' · collapsed':'')+'</span>'+
+      '<div style="margin-left:auto;display:flex;gap:4px" onclick="event.stopPropagation()">'+
+        '<button class="btn btn-ghost btn-sm" onclick="renameTmfFolder(\''+f.id+'\')">✏</button>'+
+        '<button class="btn btn-ghost btn-sm" style="color:var(--red)" onclick="deleteTmfFolder(\''+f.id+'\')">✕</button>'+
       '</div></div>';
-    html+=files.map(_tmfCardHtml).join('');
+    if(!collapsed)html+=files.map(_tmfCardHtml).join('');
   });
   const ungrouped=sortedTmf.filter(function(t){return !t.folderId||!tmfFolders.find(function(f){return f.id===t.folderId;});});
   if(ungrouped.length){
-    html+='<div style="grid-column:1/-1;display:flex;align-items:center;gap:8px;padding:7px 10px;background:rgba(255,255,255,.02);border:1px dashed var(--bdr);border-radius:8px;margin-top:4px">'+
+    const uCollapsed=_tmfCollapsed.has('__ungrouped__');
+    html+='<div style="grid-column:1/-1;display:flex;align-items:center;gap:8px;padding:7px 10px;background:rgba(255,255,255,.02);border:1px dashed var(--bdr);border-radius:8px;margin-top:4px;cursor:pointer" onclick="toggleTmfFolder(\'__ungrouped__\')">'+
+      '<span style="font-size:9px;color:var(--txt-d)">'+(uCollapsed?'▶':'▼')+'</span>'+
       '<span>📂</span><span style="font-size:10px;font-weight:700;color:var(--txt-d)">Ungrouped</span>'+
-      '<span style="font-size:7px;color:var(--txt-d)">'+ungrouped.length+' file'+(ungrouped.length!==1?'s':'')+'</span>'+
+      '<span style="font-size:7px;color:var(--txt-d)">'+ungrouped.length+' file'+(ungrouped.length!==1?'s':'')+(uCollapsed?' · collapsed':'')+'</span>'+
     '</div>';
-    html+=ungrouped.map(_tmfCardHtml).join('');
+    if(!uCollapsed)html+=ungrouped.map(_tmfCardHtml).join('');
   }
   g.innerHTML=html;
 }
