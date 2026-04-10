@@ -5325,7 +5325,7 @@ function moveQueue(id,stage){
   if(stage==='inprogress'){
     const qi=queueItems.find(q=>q.id===id);
     if(qi){
-      const existing=qi.printId&&prints.find(p=>p.id===qi.printId);
+      const existing=(qi.printId&&prints.find(p=>p.id===qi.printId))||(qi.linkedPrintId&&prints.find(p=>p.id===qi.linkedPrintId));
       if(!existing){
         const profile=printSettingsMap[qi.name];
         const newPrint={
@@ -5337,20 +5337,29 @@ function moveQueue(id,stage){
           tmfName:profile?.tmfName||null,timestamp:Date.now(),status:'printing'
         };
         prints.push(newPrint);savePrints();
-        queueItems=queueItems.map(q=>q.id===id?{...q,printId:newPrint.id}:q);
+        // Set BOTH link fields to the same record so openEditInProgressPrint never creates a second one
+        queueItems=queueItems.map(q=>q.id===id?{...q,printId:newPrint.id,linkedPrintId:newPrint.id}:q);
         saveQueue();
         toast('Print Started',qi.name+' → Prints tab','success');
         if(profile?.filaments?.length)setTimeout(()=>checkMultiSpoolAlert(newPrint.id),300);
+      } else if(!qi.linkedPrintId||!qi.printId){
+        // Both fields should always point to the same record — sync them now
+        const existingId=existing.id;
+        queueItems=queueItems.map(q=>q.id===id?{...q,printId:existingId,linkedPrintId:existingId}:q);
+        saveQueue();
       }
     }
   }
 
-  // In Progress → Done: mark linked print done
+  // In Progress → Done: mark linked print done (check both link fields)
   if(stage==='done'){
     const qi=queueItems.find(q=>q.id===id);
-    if(qi?.printId){
-      prints=prints.map(p=>p.id===qi.printId?{...p,status:'done'}:p);
-      savePrints();
+    if(qi){
+      const linkedIds=new Set([qi.printId,qi.linkedPrintId].filter(Boolean));
+      if(linkedIds.size){
+        prints=prints.map(p=>linkedIds.has(p.id)?{...p,status:'done'}:p);
+        savePrints();
+      }
     }
   }
   render();
@@ -7301,8 +7310,11 @@ function openEditInProgressPrint(queueItemId){
   // the first time so the full editor has a prints[] item to work with.
   var qi=queueItems.find(function(x){return x.id===queueItemId;});
   if(!qi)return;
-  // Find or create a linked 'printing' print record
-  var linked=qi.linkedPrintId?prints.find(function(p){return p.id===qi.linkedPrintId;}):null;
+  // Check BOTH linkedPrintId AND printId — the stage-transition handler sets qi.printId
+  // and we don't want to create a second record if one already exists under either field.
+  var linked=(qi.linkedPrintId&&prints.find(function(p){return p.id===qi.linkedPrintId;}))
+    ||(qi.printId&&prints.find(function(p){return p.id===qi.printId;}))
+    ||null;
   if(!linked){
     linked={
       id:uid(),name:qi.name,category:qi.category||'Other',
@@ -7314,9 +7326,11 @@ function openEditInProgressPrint(queueItemId){
     };
     prints.push(linked);
     savePrints();
-    // Link back from queue item
+  }
+  // Always keep both link fields pointing at the same record
+  if(qi.linkedPrintId!==linked.id||qi.printId!==linked.id){
     queueItems=queueItems.map(function(q){
-      return q.id===queueItemId?Object.assign({},q,{linkedPrintId:linked.id}):q;
+      return q.id===queueItemId?Object.assign({},q,{linkedPrintId:linked.id,printId:linked.id}):q;
     });
     saveQueue();
   }
@@ -18457,6 +18471,10 @@ async function onPiPrintFinished(name,data){
     });
     printRecord=_promotePlaceholder;
     prints=prints.map(function(p){return p.id===printRecord.id?printRecord:p;});
+    // Remove any other 'printing' orphan records for this same printer+job.
+    // These can exist from the old bug where two link fields (printId vs linkedPrintId)
+    // each created their own print record. Only the promoted one should survive.
+    prints=prints.filter(function(p){return p.id===printRecord.id||!(p.status==='printing'&&p.printer===name&&_piMatchesJob(p));});
   } else {
     const _tapoWSnap2=_getTapoWattsForPrinter(name);
     printRecord={
