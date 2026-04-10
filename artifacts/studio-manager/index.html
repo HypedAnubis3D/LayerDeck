@@ -3453,6 +3453,43 @@ header{
     </div>
   </div>
   <div class="field"><div class="fl">Notes</div><textarea id="eo-notes" rows="2"></textarea></div>
+  <!-- COST & PROFIT SECTION -->
+  <div style="background:rgba(74,222,128,0.05);border:1px solid rgba(74,222,128,0.18);border-radius:10px;padding:12px 14px;margin-top:6px">
+    <div style="font-size:7px;font-weight:700;letter-spacing:1.5px;color:var(--txt-d);text-transform:uppercase;margin-bottom:10px">⚡ Cost &amp; Profit</div>
+    <div class="field" style="margin-bottom:8px">
+      <div class="fl" style="display:flex;align-items:center;gap:6px;margin-bottom:5px">
+        <span>Link to Print Job</span>
+        <span style="font-size:7px;color:var(--txt-d);font-weight:400">— auto-fills filament &amp; energy cost</span>
+      </div>
+      <select id="eo-linked-print" onchange="updateOrderCostFields()" style="background:var(--surf);border:1px solid var(--bdr2);color:var(--txt);padding:7px 9px;font-family:'Share Tech Mono',monospace;font-size:9px;border-radius:6px;width:100%;outline:none">
+        <option value="">— No linked print —</option>
+      </select>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px">
+      <div>
+        <div style="font-size:7px;color:var(--txt-d);margin-bottom:3px;text-transform:uppercase;letter-spacing:0.5px">Filament</div>
+        <div id="eo-filament-cost-display" style="font-family:'Orbitron',monospace;font-size:11px;font-weight:700;color:var(--teal)">$0.00</div>
+      </div>
+      <div>
+        <div style="font-size:7px;color:var(--txt-d);margin-bottom:3px;text-transform:uppercase;letter-spacing:0.5px">Energy</div>
+        <div id="eo-energy-cost-display" style="font-family:'Orbitron',monospace;font-size:11px;font-weight:700;color:var(--cyn)">$0.00</div>
+      </div>
+      <div>
+        <div style="font-size:7px;color:var(--txt-d);margin-bottom:3px;text-transform:uppercase;letter-spacing:0.5px">Misc ($)</div>
+        <input type="number" id="eo-misc-cost" min="0" step="0.01" placeholder="0.00" oninput="updateOrderCostFields()" style="background:var(--bg);border:1px solid var(--bdr2);color:var(--txt);padding:5px 7px;font-family:'Share Tech Mono',monospace;font-size:9px;border-radius:5px;width:100%;box-sizing:border-box;outline:none"/>
+      </div>
+    </div>
+    <div id="eo-cost-summary" style="display:none;background:rgba(0,0,0,0.3);border-radius:7px;padding:8px 10px">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <span style="font-size:7px;color:var(--txt-d);letter-spacing:1px;text-transform:uppercase">Total Cost</span>
+        <span id="eo-total-cost-val" style="font-family:'Orbitron',monospace;font-size:11px;font-weight:700;color:var(--red)">$0.00</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:5px">
+        <span style="font-size:7px;color:var(--txt-d);letter-spacing:1px;text-transform:uppercase">Est. Profit</span>
+        <span id="eo-profit-val" style="font-family:'Orbitron',monospace;font-size:11px;font-weight:700;color:var(--grn)">$0.00</span>
+      </div>
+    </div>
+  </div>
   <div class="macts">
     <button class="btn btn-teal" onclick="saveOrder()">Save Order</button>
     <button class="btn btn-ghost" onclick="closeOrder()">Cancel</button>
@@ -3915,6 +3952,71 @@ function orderPlatform(o){
   if(o.fromShopify)return 'Shopify';
   if(o.source==='square'||o.fromSquare)return 'Square';
   return 'Order';
+}
+// ── Print cost helpers (for order profit calculation) ──
+// Compute filament cost from a print record using spool cost/gram ratios
+function calcPrintFilamentCost(p){
+  if(!p||!p.filaments||!p.filaments.length)return 0;
+  return p.filaments.reduce(function(a,f){
+    const sp=spools.find(function(s){return s.id===f.spoolId;});
+    if(!sp||!sp.total||!sp.cost)return a;
+    return a+(sp.cost/sp.total)*(f.grams||0);
+  },0);
+}
+// Compute energy cost from a print record using printer wattage × kWh rate × hours
+function calcPrintEnergyCost(p){
+  if(!p)return 0;
+  const pr=printerRecords.find(function(r){return r.name===p.printer;});
+  const watts=(pr&&pr.watts)||cfg.watts||350;
+  const kwh=(pr&&pr.kwh)||cfg.kwh||0.13;
+  return(watts/1000)*(p.hrs||0)*kwh;
+}
+// Compute total cost for an order (filament + energy + misc)
+function calcOrderCost(o){
+  if(!o)return 0;
+  const p=o.linkedPrintId?prints.find(function(x){return x.id===o.linkedPrintId;}):null;
+  const filament=calcPrintFilamentCost(p);
+  const energy=calcPrintEnergyCost(p);
+  const misc=parseFloat(o.miscCost)||0;
+  return filament+energy+misc;
+}
+// Populate the print dropdown in the order modal
+function populateOrderPrintDropdown(linkedPrintId){
+  const sel=document.getElementById('eo-linked-print');
+  if(!sel)return;
+  sel.innerHTML='<option value="">— No linked print —</option>';
+  [...prints].sort(function(a,b){return(b.timestamp||0)-(a.timestamp||0);}).forEach(function(p){
+    const label=p.name+(p.printer?' · '+p.printer:'')+(p.hrs?' · '+p.hrs+'h':'');
+    const opt=document.createElement('option');
+    opt.value=p.id;
+    opt.textContent=label;
+    if(p.id===linkedPrintId)opt.selected=true;
+    sel.appendChild(opt);
+  });
+}
+// Recompute and display cost breakdown in the order modal
+function updateOrderCostFields(){
+  const pid=document.getElementById('eo-linked-print')?.value||'';
+  const p=pid?prints.find(function(x){return x.id===pid;}):null;
+  const filament=calcPrintFilamentCost(p);
+  const energy=calcPrintEnergyCost(p);
+  const misc=parseFloat(document.getElementById('eo-misc-cost')?.value)||0;
+  const totalCost=filament+energy+misc;
+  const filEl=document.getElementById('eo-filament-cost-display');
+  const engEl=document.getElementById('eo-energy-cost-display');
+  const totEl=document.getElementById('eo-total-cost-val');
+  const profEl=document.getElementById('eo-profit-val');
+  const sumEl=document.getElementById('eo-cost-summary');
+  if(filEl)filEl.textContent='$'+filament.toFixed(2);
+  if(engEl)engEl.textContent='$'+energy.toFixed(2);
+  if(totEl)totEl.textContent='$'+totalCost.toFixed(2);
+  // Estimate profit from current order items total
+  const items=typeof getOrderItems==='function'?getOrderItems():[];
+  const orderRev=items.reduce(function(a,i){return a+parseFloat(i.price||0)*parseInt(i.qty||1);},0);
+  const ship=parseFloat(document.getElementById('eo-ship')?.value)||0;
+  const profit=(orderRev+ship)-totalCost;
+  if(profEl){profEl.textContent=(profit>=0?'+':'')+'$'+profit.toFixed(2);profEl.style.color=profit>=0?'var(--grn)':'var(--red)';}
+  if(sumEl)sumEl.style.display=totalCost>0||pid?'block':'none';
 }
 // Get all order line items as [{name,qty,price}] for best-sellers
 function orderLineItems(o){
@@ -5216,9 +5318,15 @@ function renderRevenue(){
   const ordersRev=orders.reduce(function(a,o){return a+orderRevenue(o);},0);
   const totalRev=salesRev+ordersRev;
   const totalSalesRev=salesRev;
-  const totalCost=sales.reduce((a,s)=>a+(s.cost||0)*(s.qty||1),0);
-  const totalProfit=totalSalesRev-totalCost;
-  const margin=totalSalesRev>0?((totalProfit/totalSalesRev)*100).toFixed(1):0;
+  const totalSalesCost=sales.reduce((a,s)=>a+(s.cost||0)*(s.qty||1),0);
+  // Order costs: only for orders that have a linked print or misc cost
+  const ordersWithCost=orders.filter(function(o){return o.linkedPrintId||o.miscCost;});
+  const totalOrdersCost=ordersWithCost.reduce(function(a,o){return a+calcOrderCost(o);},0);
+  const totalOrdersWithCostRev=ordersWithCost.reduce(function(a,o){return a+orderRevenue(o);},0);
+  const totalCost=totalSalesCost+totalOrdersCost;
+  const totalRev4Profit=totalSalesRev+totalOrdersWithCostRev;
+  const totalProfit=totalRev4Profit-totalCost;
+  const margin=totalRev4Profit>0?((totalProfit/totalRev4Profit)*100).toFixed(1):0;
   const totalCount=sales.length+orders.length;
 
   // ── Monthly breakdown: sales + orders ──
@@ -5235,8 +5343,10 @@ function renderRevenue(){
     const mk=mkKey(orderDate(o));
     if(!monthMap[mk])monthMap[mk]={rev:0,orderRev:0,profit:0,count:0};
     const rev=orderRevenue(o);
+    const cost=(o.linkedPrintId||o.miscCost)?calcOrderCost(o):0;
     monthMap[mk].rev+=rev;
     monthMap[mk].orderRev+=rev;
+    if(o.linkedPrintId||o.miscCost){monthMap[mk].profit+=(rev-cost);}
     monthMap[mk].count++;
   });
   const months=Object.entries(monthMap).sort((a,b)=>a[0].localeCompare(b[0]));
@@ -5282,15 +5392,23 @@ function renderRevenue(){
     })),
     ...orders.map(function(o){
       const rev=orderRevenue(o);
+      const hasCostData=!!(o.linkedPrintId||o.miscCost);
+      const cost=hasCostData?calcOrderCost(o):null;
       const items=orderLineItems(o);
       const itemLabel=items.length?items.map(function(i){return esc(i.name)+(i.qty>1?' ×'+i.qty:'');}).join(', '):(o.productName||o.customer||'Order');
+      const filamentCost=hasCostData?calcPrintFilamentCost(o.linkedPrintId?prints.find(function(x){return x.id===o.linkedPrintId;}):null):0;
+      const energyCost=hasCostData?calcPrintEnergyCost(o.linkedPrintId?prints.find(function(x){return x.id===o.linkedPrintId;}):null):0;
       return{
         label:itemLabel,
         sub:orderPlatform(o)+' · '+orderDate(o)+(o.orderId?' · '+o.orderId:''),
         rev:rev,
-        profit:null,
+        profit:hasCostData?rev-cost:null,
+        cost:cost,
+        filamentCost,
+        energyCost,
+        miscCost:parseFloat(o.miscCost)||0,
         ts:new Date(orderDate(o)).getTime()||0,
-        hasCost:false
+        hasCost:hasCostData
       };
     })
   ].sort(function(a,b){return b.ts-a.ts;});
@@ -5308,10 +5426,11 @@ function renderRevenue(){
         ${ordersRev>0&&salesRev>0?`<div style="display:flex;gap:8px;margin-top:8px"><span style="font-size:7px;color:var(--txt-d)">Orders <span style="color:var(--grn-b)">$${ordersRev.toFixed(2)}</span></span><span style="font-size:7px;color:var(--txt-d)">Sales <span style="color:var(--teal)">$${salesRev.toFixed(2)}</span></span></div>`:''}
       </div>
       <div class="rev-card">
-        <div class="rev-title">Profit (from sales)</div>
+        <div class="rev-title">Profit</div>
         <div class="big-num" style="color:${totalProfit>=0?'var(--grn)':'var(--red)'}">$${totalProfit.toFixed(2)}</div>
-        <div class="rev-sub">${margin}% margin · $${totalCost.toFixed(2)} cost</div>
-        ${ordersRev>0?'<div style="font-size:7px;color:var(--txt-d);margin-top:6px">Order profit requires cost data via + Log Sale</div>':''}
+        <div class="rev-sub">${margin}% margin · $${totalCost.toFixed(2)} total cost</div>
+        ${ordersWithCost.length?`<div style="font-size:7px;color:var(--teal);margin-top:5px">${ordersWithCost.length} order${ordersWithCost.length!==1?'s':''} with cost data · $${totalOrdersCost.toFixed(2)} order costs</div>`:''}
+        ${orders.length-ordersWithCost.length>0?`<div style="font-size:7px;color:var(--txt-d);margin-top:4px">${orders.length-ordersWithCost.length} order${orders.length-ordersWithCost.length!==1?'s':''} without cost — link a print in Orders to track</div>`:''}
       </div>
     </div>
     <div class="rev-grid">
@@ -5341,10 +5460,14 @@ function renderRevenue(){
     <div class="rev-card">
       <div class="rev-title" style="margin-bottom:10px">All Transactions (${allTxns.length})</div>
       ${allTxns.length?allTxns.map(t=>`<div class="sale-row">
-        <div><div style="font-size:9px;color:var(--txt-b)">${t.label}</div><div style="font-size:6px;color:var(--txt-d)">${t.sub}</div></div>
-        <div style="text-align:right">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:9px;color:var(--txt-b)">${t.label}</div>
+          <div style="font-size:6px;color:var(--txt-d)">${t.sub}</div>
+          ${t.hasCost&&t.cost!==null?`<div style="font-size:6px;color:var(--txt-d);margin-top:2px">🧵 $${(t.filamentCost||0).toFixed(2)} filament · ⚡ $${(t.energyCost||0).toFixed(2)} energy${t.miscCost?` · 🔧 $${t.miscCost.toFixed(2)} misc`:''}</div>`:''}
+        </div>
+        <div style="text-align:right;flex-shrink:0">
           <div style="color:var(--grn);font-size:9px">$${t.rev.toFixed(2)}</div>
-          ${t.hasCost?`<div style="font-size:7px;color:${t.profit>=0?'var(--teal)':'var(--red)'}">profit $${t.profit.toFixed(2)}</div>`:'<div style="font-size:6px;color:var(--txt-d)">no cost data</div>'}
+          ${t.hasCost&&t.profit!==null?`<div style="font-size:7px;color:${t.profit>=0?'var(--teal)':'var(--red)'}">profit ${t.profit>=0?'+':''}$${t.profit.toFixed(2)}</div>`:'<div style="font-size:6px;color:var(--txt-d)">no cost</div>'}
         </div></div>`).join(''):'<div class="empty" style="padding:16px">No transactions yet</div>'}
     </div>`;
 }
@@ -6760,8 +6883,11 @@ function openAddOrder(){
   document.getElementById('eo-ship').value='';
   document.getElementById('eo-mystery').checked=false;
   document.getElementById('eo-date').value=new Date().toISOString().split('T')[0];
+  document.getElementById('eo-misc-cost').value='';
   clearOrderItemRows();
   addOrderItemRow('manual');
+  populateOrderPrintDropdown('');
+  updateOrderCostFields();
   document.getElementById('mod-order').style.display='flex';
 }
 function openEditOrder(id){
@@ -6788,6 +6914,9 @@ function openEditOrder(id){
     else{addOrderItemRow('manual',item);}
   });
   if(!(o.items||[]).length)addOrderItemRow('manual');
+  document.getElementById('eo-misc-cost').value=o.miscCost||'';
+  populateOrderPrintDropdown(o.linkedPrintId||'');
+  updateOrderCostFields();
   document.getElementById('mod-order').style.display='flex';
 }
 function saveOrder(){
@@ -6818,6 +6947,8 @@ function saveOrder(){
     discountCode:code,
     trackingNumber:trackingNumber||existingOrder?.trackingNumber||'',
     timestamp:id?(existingOrder.timestamp||Date.now()):Date.now(),
+    linkedPrintId:document.getElementById('eo-linked-print')?.value||existingOrder?.linkedPrintId||'',
+    miscCost:parseFloat(document.getElementById('eo-misc-cost')?.value)||existingOrder?.miscCost||0,
   });
   if(id){orders=orders.map(function(o){return o.id===id?order:o;});}else{orders.push(order);}
   const flagMystery=document.getElementById('eo-mystery').checked;
@@ -7222,7 +7353,9 @@ function renderDashboard(){
   const monthOrdersRev=monthOrders.reduce(function(a,o){return a+orderRevenue(o);},0);
   const monthRev=monthSalesRev+monthOrdersRev;
   const monthCount=monthSales.length+monthOrders.length;
-  const monthProfit=monthSales.reduce((a,s)=>a+((s.price||0)-(s.cost||0))*(s.qty||1),0);
+  const monthSalesProfit=monthSales.reduce((a,s)=>a+((s.price||0)-(s.cost||0))*(s.qty||1),0);
+  const monthOrdersProfit=monthOrders.filter(function(o){return o.linkedPrintId||o.miscCost;}).reduce(function(a,o){return a+(orderRevenue(o)-calcOrderCost(o));},0);
+  const monthProfit=monthSalesProfit+monthOrdersProfit;
   const activePrints=prints.filter(p=>(p.status||(p.success===true?'done':'printing'))==='printing');
   const pendingOrds=orders.filter(o=>o.status==='pending'||o.status==='printing');
   const lowSpools=spools.filter(s=>pct(s)<30);
@@ -7251,7 +7384,7 @@ function renderDashboard(){
       <div class="dash-widget">
         <div class="dw-title">This Month Profit</div>
         <div class="dw-big" style="color:${monthProfit>=0?'var(--grn)':'var(--red)'}">$${monthProfit.toFixed(2)}</div>
-        <div class="dw-sub">${monthSalesRev>0?((monthProfit/monthSalesRev)*100).toFixed(1):'0'}% margin · sales only</div>
+        <div class="dw-sub">${monthRev>0?((monthProfit/monthRev)*100).toFixed(1):'0'}% margin${monthOrdersProfit>0?' · incl. orders':monthSalesRev===0?' · add cost data':''}</div>
       </div>
       <div class="dash-widget">
         <div class="dw-title">Active Prints</div>
@@ -8267,7 +8400,9 @@ function renderDashboard(){
   const monthOrdersRev=monthOrders.reduce(function(a,o){return a+orderRevenue(o);},0);
   const monthRev=monthSalesRev+monthOrdersRev;
   const monthCount=monthSales.length+monthOrders.length;
-  const monthProfit=monthSales.reduce((a,s)=>a+((s.price||0)-(s.cost||0))*(s.qty||1),0);
+  const monthSalesProfit=monthSales.reduce((a,s)=>a+((s.price||0)-(s.cost||0))*(s.qty||1),0);
+  const monthOrdersProfit=monthOrders.filter(function(o){return o.linkedPrintId||o.miscCost;}).reduce(function(a,o){return a+(orderRevenue(o)-calcOrderCost(o));},0);
+  const monthProfit=monthSalesProfit+monthOrdersProfit;
   const activePrints=prints.filter(p=>(p.status||(p.success===true?'done':'printing'))==='printing');
   const pendingOrds=orders.filter(o=>o.status==='pending'||o.status==='printing');
   const lowSpools=spools.filter(s=>pct(s)<30);
@@ -8293,7 +8428,7 @@ function renderDashboard(){
       <div class="dash-widget">
         <div class="dw-title">This Month Profit</div>
         <div class="dw-big" style="color:${monthProfit>=0?'var(--grn-b)':'var(--red-b)'}">$${monthProfit.toFixed(2)}</div>
-        <div class="dw-sub">${monthSalesRev>0?((monthProfit/monthSalesRev)*100).toFixed(1):'0'}% margin · sales only</div>
+        <div class="dw-sub">${monthRev>0?((monthProfit/monthRev)*100).toFixed(1):'0'}% margin${monthOrdersProfit>0?' · incl. orders':monthSalesRev===0?' · add cost data':''}</div>
       </div>
       <div class="dash-widget">
         <div class="dw-title">Active Prints</div>
@@ -9845,7 +9980,9 @@ function renderDashboard(){
   const monthOrdersRev=monthOrders.reduce(function(a,o){return a+orderRevenue(o);},0);
   const monthRev=monthSalesRev+monthOrdersRev;
   const monthCount=monthSales.length+monthOrders.length;
-  const monthProfit=monthSales.reduce((a,s)=>a+((s.price||0)-(s.cost||0))*(s.qty||1),0);
+  const monthSalesProfit=monthSales.reduce((a,s)=>a+((s.price||0)-(s.cost||0))*(s.qty||1),0);
+  const monthOrdersProfit=monthOrders.filter(function(o){return o.linkedPrintId||o.miscCost;}).reduce(function(a,o){return a+(orderRevenue(o)-calcOrderCost(o));},0);
+  const monthProfit=monthSalesProfit+monthOrdersProfit;
   const activePrints=prints.filter(p=>(p.status||(p.success===true?'done':'printing'))==='printing');
   const pendingOrds=orders.filter(o=>o.status==='pending'||o.status==='printing');
   const lowSpools=spools.filter(s=>pct(s)<30);
@@ -9889,7 +10026,7 @@ function renderDashboard(){
       +'<div class="dash-widget">'
         +'<div class="dw-title">This Month Profit</div>'
         +'<div class="dw-big" style="color:'+(monthProfit>=0?'var(--grn-b)':'var(--red-b)')+'">$'+monthProfit.toFixed(2)+'</div>'
-        +'<div class="dw-sub">'+(monthSalesRev>0?((monthProfit/monthSalesRev)*100).toFixed(1):'0')+'% margin &middot; sales only</div>'
+        +'<div class="dw-sub">'+(monthRev>0?((monthProfit/monthRev)*100).toFixed(1):'0')+'% margin'+(monthOrdersProfit>0?' · incl. orders':monthSalesRev===0?' · add cost data':'')+'</div>'
       +'</div>'
       +'<div class="dash-widget">'
         +'<div class="dw-title">Active Prints</div>'
