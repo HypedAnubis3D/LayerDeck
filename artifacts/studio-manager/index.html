@@ -4754,9 +4754,11 @@ function _tmfCardHtml(t){
         return cN===jN||cN===jB||jB.includes(cN)||(cN.length>4&&jB.includes(cN))||(jFirst.length>3&&cN.includes(jFirst))||(cFirst.length>3&&jB.includes(cFirst));
       })||null;
     })():null;
+    const _tmfFolder=t.folderId?tmfFolders.find(function(f){return f.id===t.folderId;}):null;
     return '<div class="tmf-card'+(isSel?' selected':'')+'" data-selid="'+t.id+'" onclick="if(selectMode===\'tmf\'){event.stopPropagation();toggleSelect(\''+t.id+'\');}">'+
       '<div class="tmf-name">'+esc(_tmfDisplayName)+(t.autoAdded?'<span style="font-size:6px;background:rgba(0,200,255,.12);color:var(--cyn-b);padding:1px 5px;border-radius:6px;margin-left:5px;vertical-align:middle" title="Auto-added when print started — no 3MF file parsed">auto</span>':'')+'</div>'+
       '<div class="tmf-sub">'+(_tmfMeta?'<span style="color:var(--txt-d);font-style:italic">'+esc(_tmfMeta)+'</span> · ':'')+new Date(t.uploadedAt).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})+'</div>'+
+      (_tmfFolder?'<div style="margin:3px 0 5px"><span style="display:inline-flex;align-items:center;gap:3px;background:rgba(100,60,255,.1);border:1px solid rgba(130,80,255,.3);color:var(--pur);padding:1px 7px;border-radius:10px;font-size:7px;letter-spacing:.5px">📁 '+esc(_tmfFolder.name)+'</span></div>':'')+
       // Printer badge + all filament swatches with grams
       (t.printer||colors.length?
         '<div style="margin-bottom:8px">'+
