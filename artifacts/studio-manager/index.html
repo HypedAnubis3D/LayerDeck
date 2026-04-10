@@ -4743,7 +4743,7 @@ function _tmfCardHtml(t){
     const _tmfDisplayName=_tmfFileClean||t.name||'Unknown';
     const _tmfMeta=(t.name&&t.name!==_tmfDisplayName&&!t.autoAdded)?t.name:null;
     // Auto-suggest: if unlinked, fuzzy-match a catalog product by name
-    const _tmfLinkedId=(catalogItems.find(p=>p.tmfId===t.id)||{}).id||'';
+    const _tmfLinkedId=(catalogItems.find(function(p){return(p.tmfIds||(p.tmfId?[p.tmfId]:[])).includes(t.id);})||{}).id||'';
     const _tmfSuggestProd=!_tmfLinkedId?(function(){
       const jN=_tmfDisplayName.toLowerCase().replace(/_/g,' ').trim();
       const jB=jN.replace(/\s+plate\s+\d+$/i,'').replace(/\s+v\d+$/i,'').trim();
@@ -4844,29 +4844,40 @@ function renderTmf(){
 }
 
 function linkTmfToProduct(tmfId, productId){
-  // Clear any existing link from other products pointing to this tmf
-  catalogItems=catalogItems.map(p=>{
-    if(p.tmfId===tmfId&&p.id!==productId)return {...p,tmfId:null};
-    if(p.id===productId)return {...p,tmfId:productId&&tmfId?tmfId:null};
-    return p;
+  catalogItems=catalogItems.map(function(p){
+    const curIds=(p.tmfIds||(p.tmfId?[p.tmfId]:[]));
+    if(p.id===productId){
+      if(tmfId){
+        // Add to this product's array (if not already in it)
+        const newIds=curIds.includes(tmfId)?curIds:curIds.concat([tmfId]);
+        // Set as primary only if product has no primary yet
+        return Object.assign({},p,{tmfIds:newIds,tmfId:p.tmfId||tmfId});
+      } else {
+        // Unlinking — clear all (called from "— Not linked —" option)
+        return Object.assign({},p,{tmfIds:[],tmfId:null});
+      }
+    }
+    // Other products — remove this tmfId from their list (3MF is exclusive to one product)
+    const filtered=curIds.filter(function(x){return x!==tmfId;});
+    return Object.assign({},p,{
+      tmfIds:filtered,
+      tmfId:(p.tmfId===tmfId)?(filtered[0]||null):p.tmfId
+    });
   });
-  // Set the new link
-  if(productId){
-    const prod=catalogItems.find(p=>p.id===productId);
+  if(productId&&tmfId){
+    const prod=catalogItems.find(function(p){return p.id===productId;});
     if(prod){
-      prod.tmfId=tmfId;
-      const tmf=tmfLib.find(t=>t.id===tmfId);
+      const tmf=tmfLib.find(function(t){return t.id===tmfId;});
       toast('3MF Linked',esc(prod.name)+' → '+(tmf?esc(tmf.name):'file'),'success',2000);
     }
   }
   saveCatalog();
-  // Re-render both tabs if visible
   if(curTab==='tmf'||curTab==='catalog')render();
 }
 function filterTmfProdSearch(tmfId, q){
   const dd=document.getElementById('tmf-pd-'+tmfId);if(!dd)return;
   const query=(q||'').toLowerCase().trim();
-  const linkedId=(catalogItems.find(function(p){return p.tmfId===tmfId;})||{}).id||'';
+  const linkedId=(catalogItems.find(function(p){return(p.tmfIds||(p.tmfId?[p.tmfId]:[])).includes(tmfId);})||{}).id||'';
   const filtered=query?catalogItems.filter(function(p){
     const tagMatch=(p.tags||[]).some(function(t){return t.toLowerCase().includes(query);});
     return p.name.toLowerCase().includes(query)||(p.category||'').toLowerCase().includes(query)||tagMatch;
@@ -6707,7 +6718,7 @@ function openAmsSpoolPicker(){
 }
 // Product picker for linking a product to a 3MF entry
 function openTmfProductPicker(tmfId){
-  const currentId=(catalogItems.find(function(p){return p.tmfId===tmfId;})||{}).id||'';
+  const currentId=(catalogItems.find(function(p){return(p.tmfIds||(p.tmfId?[p.tmfId]:[])).includes(tmfId);})||{}).id||'';
   const items=[{id:'',label:'— Not linked to any product —',sublabel:'',meta:''}].concat(
     catalogItems.map(function(p){return{id:p.id,label:p.name,sublabel:p.category||'',meta:'$'+parseFloat(p.price||0).toFixed(2),image:p.photo||'',imageIcon:'🏷',tags:(p.tags||[]).join(' ')};}));
   openPicker({title:'Link Product',mode:'grid',items:items,selectedId:currentId,onSelect:function(id,item){
@@ -12470,8 +12481,12 @@ function loadV14(){
   // One-time migration: fill $3 default cost for any catalog items that have none
   let _catCostFixed=false;
   catalogItems=catalogItems.map(function(item){
-    if(!item.cost||item.cost===0){_catCostFixed=true;return Object.assign({},item,{cost:3});}
-    return item;
+    var fix={};
+    if(!item.cost||item.cost===0){_catCostFixed=true;fix.cost=3;}
+    // Migrate single tmfId → tmfIds array (one-time)
+    if(item.tmfId&&!item.tmfIds){fix.tmfIds=[item.tmfId];_catCostFixed=true;}
+    else if(!item.tmfIds){fix.tmfIds=[];}
+    return Object.keys(fix).length?Object.assign({},item,fix):item;
   });
   if(_catCostFixed){ss(KEYS.catalog,catalogItems);}
   nozzleLog=gs(KEYS.nozzles);
@@ -12838,7 +12853,9 @@ function renderCatalog(){
     const totalSold=itemSales.reduce((a,s)=>a+(s.qty||1),0);
     const totalRev=itemSales.reduce((a,s)=>a+(s.price||0)*(s.qty||1),0);
     const profit=totalRev-(item.cost||0)*totalSold;
-    const tmf=tmfLib.find(x=>x.id===item.tmfId);
+    const _itemTmfIds=(item.tmfIds&&item.tmfIds.length)?item.tmfIds:(item.tmfId?[item.tmfId]:[]);
+    const _linkedTmfs=_itemTmfIds.map(function(id){return tmfLib.find(function(x){return x.id===id;});}).filter(Boolean);
+    const tmf=_linkedTmfs[0]||null;
     const isSelected=selectedIds.includes(item.id);
     return '<div class="catalogItems-card selectable'+(isSelected?' selected':'')+'" data-selid="'+item.id+'">'+ 
       '<input type="checkbox" class="sel-checkbox"'+(isSelected?' checked':'')+' onclick="toggleSelect(\''+item.id+'\')"/>'+
@@ -12877,12 +12894,12 @@ function renderCatalog(){
             '<button class="stock-adj" onclick="event.stopPropagation();updateStockQty(\''+item.id+'\',1)">+</button>'+
           '</div>';
         })()+
-        // 3MF badge
-        (tmf
-          ?'<div style="font-size:6px;background:var(--org-d);color:var(--org-b);border:1px solid rgba(230,140,40,.2);border-radius:3px;padding:3px 7px;margin-bottom:6px;display:flex;align-items:center;gap:5px">'+
-              '<span>📦</span><span>'+esc(tmf.name)+'</span>'+
-              (tmf.hrs?'<span style="margin-left:auto;font-family:Orbitron,monospace">'+formatHms(tmf.hrs)+'</span>':'')+
-            '</div>'
+        // 3MF badge(s)
+        (_linkedTmfs.length
+          ?_linkedTmfs.map(function(t){return '<div style="font-size:6px;background:var(--org-d);color:var(--org-b);border:1px solid rgba(230,140,40,.2);border-radius:3px;padding:3px 7px;margin-bottom:4px;display:flex;align-items:center;gap:5px">'+
+              '<span>📦</span><span>'+esc(t.name)+'</span>'+
+              (t.hrs?'<span style="margin-left:auto;font-family:Orbitron,monospace">'+formatHms(t.hrs)+'</span>':'')+
+            '</div>';}).join('')
           :'<div style="font-size:6px;color:var(--bdr2);padding:2px 0 6px">No 3MF linked — edit to attach</div>')+
         // Variants — collapsed by default, toggle button then panel
         (item.variants&&item.variants.length?
@@ -12908,7 +12925,7 @@ function renderCatalog(){
           '</div>':'')+ 
         '<div class="card-acts" style="flex-wrap:wrap;gap:3px">'+ 
           '<button class="btn btn-pur btn-xs" style="flex:1" onclick="quickQueueFromCatalog(this.closest(\'[data-selid]\').dataset.selid)">+ Queue</button>'+ 
-          (item.tmfId?'<button class="btn btn-cyn btn-xs" onclick="addToPrintsFromCatalog(this.closest(\'[data-selid]\').dataset.selid)">→ Print</button>':'')+
+          (_itemTmfIds.length?'<button class="btn btn-cyn btn-xs" onclick="addToPrintsFromCatalog(this.closest(\'[data-selid]\').dataset.selid)">→ Print</button>':'')+
           '<button class="btn btn-teal btn-xs" onclick="addToOrderFromCatalog(this.closest(\'[data-selid]\').dataset.selid)">→ Order</button>'+ 
           '<button class="btn btn-ghost btn-xs" onclick="openEditCatalogItem(this.closest(\'[data-selid]\').dataset.selid)">Edit</button>'+ 
           '<button class="btn btn-xs" style="background:var(--red-d);border:1px solid var(--red-d);color:var(--red-b)" onclick="delCatalogItem(this.closest(\'[data-selid]\').dataset.selid)">&#x2715;</button>'+ 
@@ -13076,6 +13093,14 @@ function saveCatalogItem(){
     variants:updatedVariants.length?updatedVariants:(existing.variants||[]),
     createdAt:id?existing.createdAt||Date.now():Date.now()
   };
+  // Keep tmfIds array in sync: primary tmfId must be in the array; preserve extra linked ids
+  const _prevIds=existing.tmfIds||[];
+  const _newPrimary=item.tmfId;
+  if(_newPrimary){
+    item.tmfIds=_prevIds.includes(_newPrimary)?_prevIds:[_newPrimary].concat(_prevIds.filter(function(x){return x!==_newPrimary;}));
+  } else {
+    item.tmfIds=_prevIds; // clearing primary from edit form doesn't remove other links
+  }
   if(id){catalogItems=catalogItems.map(x=>x.id===id?item:x);}else{catalogItems.push(item);}
   saveCatalog();closeCatalog();render();
   toast('Product Saved',name,'success');
