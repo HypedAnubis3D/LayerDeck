@@ -18308,6 +18308,10 @@ async function onPiPrintFinished(name,data){
     return r.status==='printing'&&r.printer===name&&_normName(r.name)===_normName(jobNameCheck);
   });
   const _promotePlaceholder=_anyPrintingPlaceholder||(recentDup&&recentDup.status==='printing'?recentDup:null);
+  // If a placeholder already has user-assigned filaments, DON'T deplete spools again
+  // here — the user's savePrint() call already deducted them. Only deplete when the
+  // print was auto-detected with no prior manual filament assignment.
+  const _skipSpoolDepletion=!!(_promotePlaceholder&&_promotePlaceholder.filaments&&_promotePlaceholder.filaments.length&&_promotePlaceholder.filaments.some(function(f){return f.spoolId;}));
   const jobName=(data.subtask_name||'').replace(/\.gcode\.3mf$/i,'').replace(/\.3mf$/i,'').replace(/\.gcode$/i,'').replace(/\.bgcode$/i,'')||'Unknown';
   const material=getPiAMSMaterial(data);
   // Early 3MF lookup — used as fallback for duration & filament when app loads post-print
@@ -18354,7 +18358,7 @@ async function onPiPrintFinished(name,data){
         const rawCol=tray.tray_color||'888888';
         const col='#'+rawCol.slice(0,6);
         filamentSlots.push({spoolId:mappedId||'',grams,mat,col,spool});
-        if(spool){
+        if(spool&&!_skipSpoolDepletion){
           spool.remaining=Math.max(0,(spool.remaining||totalG)-grams);
           spoolsChanged=true;
           usageHist.push({id:uid(),spoolId:spool.id,spoolName:spool.name||spool.material,amount:grams,date:new Date().toISOString().split('T')[0],timestamp:Date.now(),note:'Pi Hub — '+jobName+' (AMS slot '+(ui*4+ti+1)+')'});
@@ -18373,7 +18377,7 @@ async function onPiPrintFinished(name,data){
       const grams=Math.max(1,Math.round(extDelta/100*totalG));
       const mat=data.vt_tray.tray_sub_brands||data.vt_tray.tray_type||material;
       filamentSlots.push({spoolId:extSpoolId||'',grams,mat,col:'#888888',spool:extSpool});
-      if(extSpool){
+      if(extSpool&&!_skipSpoolDepletion){
         extSpool.remaining=Math.max(0,(extSpool.remaining||totalG)-grams);
         spoolsChanged=true;
         usageHist.push({id:uid(),spoolId:extSpool.id,spoolName:extSpool.name||extSpool.material,amount:grams,date:new Date().toISOString().split('T')[0],timestamp:Date.now(),note:'Pi Hub — '+jobName+' (Ext spool)'});
@@ -18389,7 +18393,7 @@ async function onPiPrintFinished(name,data){
     const fallbackSpool=spools.find(s=>s.id===((amsMap[name]||{})['ext']||''))
       ||spools.find(s=>s.printer===name&&s.material&&s.material.toLowerCase().includes(material.toLowerCase())&&(s.remaining||0)>0)
       ||spools.find(s=>s.material&&s.material.toLowerCase().includes(material.toLowerCase())&&(s.remaining||0)>0);
-    if(fallbackSpool&&totalFallbackG>0){
+    if(fallbackSpool&&totalFallbackG>0&&!_skipSpoolDepletion){
       fallbackSpool.remaining=Math.max(0,(fallbackSpool.remaining||fallbackSpool.totalGrams||1000)-totalFallbackG);
       spoolsChanged=true;
       toast('Filament Auto-Deducted','Pi Hub: −'+totalFallbackG+'g from "'+fallbackSpool.name+'" for "'+jobName+'" · Set AMS slot mappings to stop this','warning',8000);
