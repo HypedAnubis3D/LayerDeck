@@ -18018,17 +18018,42 @@ async function onPiPrintFailed(name,data){
     return'HMS_'+module+'-'+submod+'-'+sev+'-'+err+' — search wiki.bambulab.com for details';
   }
 
+// ── HMS helper: return the 4-group code string for a raw MQTT HMS entry ──────
+function hmsEntryToCodeStr(entry){
+  if(!entry)return null;
+  var attr=(entry.attr||0)>>>0;
+  var cod=(entry.code||0)>>>0;
+  var module=((attr>>>16)&0xFFFF).toString(16).toUpperCase().padStart(4,'0');
+  var submod=(attr&0xFFFF).toString(16).toUpperCase().padStart(4,'0');
+  var sev=((cod>>>16)&0xFFFF).toString(16).toUpperCase().padStart(4,'0');
+  var err=(cod&0xFFFF).toString(16).toUpperCase().padStart(4,'0');
+  return module+'-'+submod+'-'+sev+'-'+err;
+}
+
+// ── Append a clickable wiki link to an existing toast element ─────────────────
+function addHmsWikiLink(toastEl,hmsCodeStr){
+  if(!toastEl||!hmsCodeStr)return;
+  var textDiv=toastEl.querySelector('.toast-text')||toastEl.querySelector('.toast-body');
+  if(!textDiv)return;
+  var link=document.createElement('a');
+  link.href='https://wiki.bambulab.com/en/x1/troubleshooting/hmscode/'+hmsCodeStr.replace(/-/g,'_');
+  link.target='_blank';
+  link.rel='noopener noreferrer';
+  link.textContent='HMS_'+hmsCodeStr;
+  link.style.cssText='display:block;font-size:10px;color:var(--teal);margin-top:5px;text-decoration:underline;word-break:break-all;opacity:0.85;';
+  textDiv.appendChild(link);
+}
+
 // ── Pause alert (RUNNING → PAUSE transition) ──────────────────────────────────
 async function onPiPrintPaused(name,data){
   var jobName=(data.subtask_name||'').replace('.gcode.3mf','').replace('.3mf','')||'Unknown';
   var pct=data.mc_percent||0;
   var hmsDesc='';
-  // Surface most recent HMS if present
-  if(data.hms&&data.hms.length>0){
-    hmsDesc=hmsCodeToString(data.hms[data.hms.length-1]);
-  }
+  var lastHms=data.hms&&data.hms.length>0?data.hms[data.hms.length-1]:null;
+  if(lastHms)hmsDesc=hmsCodeToString(lastHms);
   var toastBody=jobName+(hmsDesc?' — '+hmsDesc:' — needs attention');
-  toast('⏸ '+name+' PAUSED',toastBody,'warning',10000);
+  var el=toast('⏸ '+name+' PAUSED',toastBody,'warning',12000);
+  if(lastHms)addHmsWikiLink(el,hmsEntryToCodeStr(lastHms));
   postToDiscord('print_failed',
     '⏸ Print Paused — '+name+
     '\nJob: '+jobName+
@@ -18056,7 +18081,8 @@ async function onPiHmsAlert(name,data,newEntries){
   descriptions.forEach(function(d){lines.push('• '+d);});
   lines.push('Printer paused — check for filament or hardware issue');
 
-  toast('⚠️ '+name,descriptions[0],'warning',8000);
+  var hmsEl=toast('⚠️ '+name,descriptions[0],'warning',12000);
+  addHmsWikiLink(hmsEl,hmsEntryToCodeStr(newEntries[0]));
   postToDiscord('print_failed',lines.join('\n'));
 }
 
