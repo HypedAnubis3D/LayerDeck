@@ -11172,7 +11172,7 @@ async function pullFromCloud(silent=false,_lockRetry=false){
     const{data,error}=result;
     if(error)throw new Error(error.message);
     let pulled=0;
-    const knownCollections={spools:1,prints:1,queueItems:1,orders:1,sales:1,usageHist:1,shinyRolls:1,maintLog:1,wasteLog:1,printerRecords:1,tmfLib:1,catalogItems:1,catalog:1,conventions:1};
+    const knownCollections={spools:1,prints:1,queueItems:1,orders:1,sales:1,usageHist:1,shinyRolls:1,maintLog:1,wasteLog:1,printerRecords:1,tmfLib:1,catalogItems:1,catalog:1,conventions:1,socialQueue:1};
     for(const row of(data||[])){
       if(!knownCollections[row.collection])continue;
       try{
@@ -11200,6 +11200,16 @@ async function pullFromCloud(silent=false,_lockRetry=false){
             if(_ccFixed)queueSync('catalog',catalogItems);
           }
           else if(c==='conventions')conventions=parsed;
+          else if(c==='socialQueue'){
+            // Merge: keep any local posts that are newer than what came from cloud
+            // so in-flight posts during a pull don't get clobbered
+            const cloudIds=new Set(parsed.map(function(p){return p.id;}));
+            const localOnly=socialQueue.filter(function(p){return !cloudIds.has(p.id);});
+            socialQueue=parsed.concat(localOnly);
+            ss(KEYS.socialQueue,socialQueue);
+            pulled++;
+            continue;
+          }
           const storageKey=c==='catalog'?KEYS.catalog:c==='conventions'?KEYS.conventions:(KEYS[c]||('ha3d_'+c+'_v1'));
           ss(storageKey,parsed);
           pulled++;
@@ -21068,7 +21078,7 @@ function loadSocial(){
   });
   if(dirty)ss(KEYS.socialQueue,socialQueue);
 }
-function saveSocial(){ss(KEYS.socialQueue,socialQueue);}
+function saveSocial(){ss(KEYS.socialQueue,socialQueue);queueSync('socialQueue',socialQueue);}
 loadSocial();
 
 // ── Social composer state ──
