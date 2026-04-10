@@ -402,6 +402,10 @@ input.srch::placeholder{color:var(--txt-d);}
 .fil-row-del{background:none;border:none;color:var(--txt-d);cursor:pointer;font-size:12px;padding:0 2px;}
 .fil-row-del:hover{color:var(--red);}
 .fil-qr-btn{background:none;border:1px solid var(--bdr2);color:var(--txt-d);width:22px;height:100%;border-radius:3px;cursor:pointer;font-size:10px;display:flex;align-items:center;justify-content:center;transition:all .15s;padding:0;}
+.fil-row-warn{display:none;font-size:7px;color:var(--amb);background:rgba(255,160,0,.07);border:1px solid rgba(255,160,0,.25);border-radius:3px;padding:4px 8px;margin-top:-2px;margin-bottom:4px;align-items:center;gap:6px;line-height:1.4;}
+.fil-row-warn.visible{display:flex;}
+.fil-row-warn button{background:rgba(255,160,0,.15);border:1px solid rgba(255,160,0,.4);color:var(--amb);font-size:6px;padding:2px 7px;border-radius:3px;cursor:pointer;font-family:'Share Tech Mono',monospace;white-space:nowrap;flex-shrink:0;}
+.fil-row-warn button:hover{background:rgba(255,160,0,.28);}
 .fil-qr-btn:hover{border-color:var(--pur);color:var(--pur);}
 .add-fil-btn{background:none;border:1px dashed var(--bdr2);color:var(--txt-d);padding:4px;width:100%;border-radius:3px;cursor:pointer;font-family:'Share Tech Mono',monospace;font-size:7px;letter-spacing:1px;transition:all .15s;}
 .add-fil-btn:hover{border-color:var(--org);color:var(--org);}
@@ -6278,10 +6282,18 @@ function addFilRow(spoolId='',grams='',colorHex=''){
   const div=document.createElement('div');
   div.className='fil-row';div.id=id;
   div.innerHTML=`<div class="fil-row-dot" style="${dotStyle}" title="${dotTitle}"></div><select onchange="updateCostPreview()">${buildSpoolOpts(spoolId)}</select><input type="number" min="1" placeholder="grams" value="${grams}" oninput="updateCostPreview()"/><button class="fil-qr-btn" onclick="openRowScanner('${id}')" title="Scan spool QR">⬡</button><button class="fil-row-del" onclick="removeFilRow('${id}')">✕</button>`;
+  const warn=document.createElement('div');
+  warn.className='fil-row-warn';warn.id=id+'-warn';
   document.getElementById('fil-rows').appendChild(div);
+  document.getElementById('fil-rows').appendChild(warn);
   updateCostPreview();
 }
-function removeFilRow(id){document.getElementById(id)?.remove();filRows=filRows.filter(r=>r!==id);updateCostPreview();}
+function removeFilRow(id){
+  document.getElementById(id)?.remove();
+  document.getElementById(id+'-warn')?.remove();
+  filRows=filRows.filter(r=>r!==id);
+  updateCostPreview();
+}
 function getFilRows(){
   return[...document.getElementById('fil-rows').querySelectorAll('.fil-row')].map(row=>({spoolId:row.querySelector('select')?.value||'',grams:parseFloat(row.querySelector('input')?.value)||0})).filter(f=>f.spoolId&&f.grams>0);
 }
@@ -6302,6 +6314,31 @@ function updateCostPreview(){
       <div class="cost-preview-cell"><div class="cpv-n" style="color:var(--grn-b)">$${c.total.toFixed(2)}</div><div class="cpv-l">Total Cost</div></div>
       <div class="cost-preview-cell"><div class="cpv-n" style="color:var(--gold-b)">$${c.sell.toFixed(2)}</div><div class="cpv-l">Sell Price</div></div>
     </div>`;
+  // Spool overflow warnings — check each fil-row
+  filRows.forEach(function(rowId){
+    const row=document.getElementById(rowId);
+    const warn=document.getElementById(rowId+'-warn');
+    if(!row||!warn)return;
+    const spoolId=row.querySelector('select')?.value||'';
+    const gramsNeeded=parseFloat(row.querySelector('input')?.value)||0;
+    const sp=spoolId?spools.find(function(s){return s.id===spoolId;}):null;
+    if(sp&&gramsNeeded>0&&(sp.remaining||0)<gramsNeeded){
+      const has=Math.round(sp.remaining||0);
+      const deficit=Math.round(gramsNeeded-has);
+      warn.className='fil-row-warn visible';
+      warn.innerHTML='⚠️ <span style="flex:1">Only <b>'+has+'g</b> remaining on this spool — needs <b>'+deficit+'g</b> more to complete the print.</span>'
+        +'<button onclick="addContinuationSpool('+deficit+')">+ Add continuation spool ('+deficit+'g) →</button>';
+    }else{
+      warn.className='fil-row-warn';
+      warn.innerHTML='';
+    }
+  });
+}
+function addContinuationSpool(deficit){
+  addFilRow('',deficit,'');
+  // Scroll the new row into view
+  const container=document.getElementById('fil-rows');
+  if(container)container.lastElementChild?.scrollIntoView({behavior:'smooth',block:'nearest'});
 }
 
 // ════════════════════════════════════════
