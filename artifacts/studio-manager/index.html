@@ -4433,11 +4433,13 @@ function renderPrints(){
         <span style="color:var(--txt-d)">Sell <span style="color:var(--org);font-weight:700">$${cost.sell.toFixed(2)}</span></span>
       </div>`:''}
       ${p.notes?`<div class="notes-box">${esc(p.notes)}</div>`:''}
+      ${(()=>{const _pg=printGroups.find(function(g){return(g.printIds||[]).includes(p.id);});return _pg?`<div style="margin:3px 0 1px"><span style="display:inline-flex;align-items:center;gap:3px;background:rgba(100,60,255,.1);border:1px solid rgba(130,80,255,.3);color:var(--pur);padding:1px 7px;border-radius:10px;font-size:7px;letter-spacing:.5px">📁 ${esc(_pg.name)}</span></div>`:'';})()}
       <div class="card-acts">
         ${st==='printing'?`<button class="finish-btn" onclick="openFinish('${p.id}')">⬡ Mark as Finished</button>`:''}
       </div>
       <div class="card-acts" style="margin-top:${st==='printing'?'4px':'0'}">
         <button class="btn btn-ghost btn-xs" style="flex:1" onclick="openEditPrint('${p.id}')">Edit</button>
+        <button class="btn btn-ghost btn-xs" title="Assign to group" onclick="event.stopPropagation();assignPrintGroup('${p.id}')">📁</button>
         <button class="btn btn-xs" style="background:#180808;border:1px solid #2a1010;color:#703030" onclick="delPrint('${p.id}')">✕</button>
       </div>
     </div>`;
@@ -6601,6 +6603,31 @@ function renameTmfFolder(folderId){
     if(curTab==='tmf')renderTmf();
   });
 }
+// Called from each print card's 📁 button — quick group assignment
+function assignPrintGroup(printId){
+  if(!printGroups.length){toast('No Groups','Create print groups first using the 📁 Groups button','info',3000);return;}
+  const currentGroup=printGroups.find(function(g){return g.printIds&&g.printIds.includes(printId);});
+  const items=[{id:'',label:'— No Group —',sublabel:'Remove from all groups',meta:'',imageIcon:'📂'}]
+    .concat(printGroups.map(function(g){
+      const cnt=(g.printIds||[]).length;
+      return{id:g.id,label:g.name,sublabel:cnt+' print'+(cnt!==1?'s':''),meta:'',imageIcon:'📁'};
+    }));
+  openPicker({title:'Assign to Group',mode:'list',items:items,selectedId:currentGroup?currentGroup.id:'',onSelect:function(id){
+    // Remove from all groups first
+    printGroups.forEach(function(g){g.printIds=(g.printIds||[]).filter(function(pid){return pid!==printId;});});
+    // Add to selected group
+    if(id){
+      const g=printGroups.find(function(g){return g.id===id;});
+      if(g){if(!g.printIds)g.printIds=[];if(!g.printIds.includes(printId))g.printIds.push(printId);}
+    }
+    savePrintGroups();
+    const gname=id?(printGroups.find(function(g){return g.id===id;})||{}).name||'group':'(no group)';
+    const p=prints.find(function(x){return x.id===printId;});
+    toast('Group Assigned',(p?esc(p.name||'Print'):'')+' → '+esc(gname),'success',2000);
+    if(curTab==='prints')renderPrints();
+  }});
+}
+
 // Called from each TMF card's 📁 button
 function assignTmfFolder(tmfId){
   const t=tmfLib.find(function(x){return x.id===tmfId;});
