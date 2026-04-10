@@ -17902,80 +17902,121 @@ async function onPiPrintFailed(name,data){
 }
 
 // ── HMS code → human readable description ────────────────────────────────────
-// Keys are attrHex(4)+codeHex(4) — both zero-padded to 4 chars, uppercase.
-// e.g. attr=0x0002, code=0x0001 → key '00020001'
-var HMS_CODES={
-  // ── Z-axis / bed leveling (attr 0x0002) ─────────────────────────────────────
-  '00020001':'Z-axis motor stalled — check for debris or obstructions under the bed',
-  '00020002':'Z-axis limit switch fault — check wiring and switch position',
-  '00020003':'Z-axis position error — homing failed',
-  '00020004':'Heatbed position out of range — Z offset may need calibration',
-  '00020006':'First-layer compensation error — run auto-leveling',
-  // ── X / Y axes (attr 0x0004) ─────────────────────────────────────────────────
-  '00040001':'X-axis motor stalled — check for obstruction or belt tension',
-  '00040002':'Y-axis motor stalled — check for obstruction or belt tension',
-  '00040003':'X/Y axes homing failed',
-  // ── Heatbed (attr 0x0001) ────────────────────────────────────────────────────
-  '00010001':'Heatbed temperature out of range — check thermistor and heater',
-  '00010003':'Heatbed thermistor failure — may need replacement',
-  '00010004':'Heatbed heating timeout — check power and wiring',
-  // ── Hotend / nozzle (attr 0x0500) ───────────────────────────────────────────
-  '05000001':'Hotend temperature too high — check heater and thermistor',
-  '05000003':'Nozzle clog detected — try cold pull or nozzle replacement',
-  '05000004':'Nozzle temperature out of range — check thermistor',
-  '05000005':'Hotend heating timeout — check heater cartridge',
-  '05000006':'Hotend thermistor failure — likely needs replacement',
-  '0500000E':'Hotend cooling fan failure — check fan and wiring',
-  '0500000F':'Hotend temperature dropped unexpectedly',
-  // ── Extruder / filament path (attr 0x0700) ──────────────────────────────────
-  '07000006':'Filament runout (external spool)',
-  '07000009':'First-layer inspection failed — possible spaghetti or adhesion issue',
-  '0700000A':'Filament entangled or resistance too high',
-  '0700000C':'Print head collision detected — check for bed debris',
-  '0700000F':'Extruder motor stalled — check for clog or jam',
-  '07000017':'Cutter jammed — clear filament from cutter path',
-  '07008001':'External spool out of filament',
-  '07010001':'Purge failed — check nozzle and filament path',
-  // ── Door / enclosure (attr 0x0300) ──────────────────────────────────────────
-  '03000001':'Front door opened during print — close door to resume',
-  '03000002':'Upper door opened during print — close door to resume',
-  '03000004':'Enclosure cover removed or open during print',
-  // ── AMS (attr 0x0C00) ───────────────────────────────────────────────────────
-  '0C000001':'AMS out of filament — check spool in active slot',
-  '0C000009':'AMS spool holder failure — reseat the spool',
-  '0C00000A':'AMS filament tangled — motor stalled, check spool',
-  '0C00000B':'AMS filament jammed — clear the feed path',
-  '0C00000F':'AMS filament feed failure — check filament path',
-  '0C000016':'AMS cannot detect filament — check slot sensor',
-  '0C000019':'AMS slot out of sync — reload filament',
-  '0C00001E':'AMS filament runout — load new spool',
-  '0C000020':'AMS hub communication error',
-  '0C000024':'AMS filament color mismatch detected',
-  // ── Vibration / accelerometer (attr 0x0006) ──────────────────────────────────
-  '00060001':'Vibration too high — check for loose parts or unlevel surface',
-  '00060002':'Resonance compensation calibration failed',
-  // ── Enclosure / temperature sensor (attr 0x0008) ─────────────────────────────
-  '00080001':'Enclosure temperature too high — check ventilation',
-  '00080002':'Enclosure temperature sensor failure',
-  // ── Lidar / first-layer scan (attr 0x000A) ───────────────────────────────────
-  '000A0001':'Lidar abnormality — clean the lens',
-  '000A0002':'First-layer scan failed — check bed surface',
-  // ── Filament buffer / AMS Lite (attr 0x0B00) ─────────────────────────────────
-  '0B000001':'Filament buffer signal lost',
-  '0B000002':'Filament buffer position error',
-};
+// Bambu HMS code format: XXXX-XXXX-XXXX-XXXX
+  //   attr (32-bit): upper 16 = Module, lower 16 = SubModule
+  //   code (32-bit): upper 16 = Severity/Instance, lower 16 = Error
+  // Key = all 4 groups concatenated (16 uppercase hex chars, no dashes)
+  // e.g. HMS_0700-2000-0002-0001 → key '0700200000020001'
+  // Source: wiki.bambulab.com/en/hms/home
+  var HMS_CODES={
+    // ── Nozzle / hotend temperature (module 0300, submodule 0200) ─────────────
+    '0300020000010001':'Nozzle temp abnormal — heater may have a short circuit',
+    '0300020000010002':'Nozzle temp abnormal — heater may have an open circuit',
+    '0300020000010003':'Nozzle temp abnormal — heater is overtemperature',
+    '0300020000010006':'Nozzle temp abnormal — temperature sensor may have a short circuit',
+    '0300020000010007':'Nozzle temp abnormal — temperature sensor may have an open circuit',
+    '0300020000010009':'Hot end may not be installed — check nozzle installation',
+    '0300AB0000020002':'Hotend heatbreak temperature high — open top cover/front door to reduce chamber temp',
+    // ── Fans (module 0300, submodules 0300/0400) ──────────────────────────────
+    '0300030000010001':'Hotend cooling fan too slow or stopped — check fan and connector',
+    '0300030000020002':'Hotend cooling fan speed is slow',
+    '0300040000020001':'Part cooling fan too slow or stopped — check fan and connector',
+    // ── Heatbed temperature (module 0300, submodule 0100) ────────────────────
+    '0300010000010006':'Heatbed temperature abnormal — sensor may have a short circuit',
+    '0300010000010007':'Heatbed temperature abnormal — sensor may have an open circuit',
+    '0300010000010008':'Heatbed heating abnormal — heater modules may be broken',
+    '0300010000030008':'Heatbed temperature exceeded limit — auto-adjusted',
+    // ── Heatbed / Z-axis (module 0300, submodule 0D00) ───────────────────────
+    '03000D0000010003':'Build plate not placed properly — reseat the plate and retry',
+    '03000D000001000B':'Z-axis motor stuck — check Z sliders and timing belt for obstructions',
+    '03000D000001000C':'Heatbed leveling data abnormal — remove foreign objects and retry',
+    '03000D0000020001':'Heatbed homing abnormal — check for bed bulge or dirty nozzle tip',
+    // ── Heatbed force sensors (module 0300, submodule 0A00) ──────────────────
+    '03000A0000010001':'Heatbed force sensor sensitivity too high',
+    '03000A0000010002':'Heatbed force sensor sensitivity low',
+    '03000A0000010003':'Heatbed force sensor sensitivity too low',
+    '03000A0000010004':'External disturbance on heatbed force sensor — check around the bed',
+    '03000A0000010005':'Unexpected continuous force on heatbed — may be stuck or sensor failed',
+    // ── Motor-A / XY motors (module 0300, submodule 0600) ────────────────────
+    '0300060000010001':'Motor-A open-circuit — check connector and motor',
+    '0300060000010002':'Motor-A short-circuit — motor may have failed',
+    '0300060000010003':'Motor-A resistance abnormal — motor may have failed',
+    // ── Y-axis homing (module 0300, submodule 2000) ───────────────────────────
+    '0300200000010002':'Y-axis homing abnormal — check toolhead for obstruction',
+    // ── Accelerometer (module 0300, submodule 0F00) ───────────────────────────
+    '03000F0000010001':'Accelerometer data abnormal — try restarting the printer',
+    // ── X/Y-axis resonance (module 0300, submodule 1000/1100) ────────────────
+    '0300100000020001':'X-axis resonance frequency low — timing belt may be loose',
+    '0300100000020002':'X-axis resonance differs from last calibration — clean carbon rod, recalibrate',
+    '0300110000020002':'Y-axis resonance differs from last calibration — recalibrate',
+    // ── MC/toolhead/AMS module errors (module 0500, submodule 0300) ──────────
+    '0500030000010001':'MC module malfunction — restart the printer',
+    '0500030000010002':'Toolhead malfunction — restart the printer',
+    '0500030000010003':'AMS module malfunction — restart the printer',
+    // ── Network (module 0500, submodule 0200) ─────────────────────────────────
+    '0500020000020001':'Failed to connect to internet — check network connection',
+    '0500020000020002':'Failed to log in to device — check account and network',
+    // ── SD card (module 0500, submodule 0100) ─────────────────────────────────
+    '0500010000030004':'SD card is almost full — free up space',
+    '0500010000030005':'SD card error — try reformatting as FAT32',
+    '0500010000030006':'SD card not formatted — format as FAT32',
+    // ── AMS filament runout — AMS1 slots 1-4 (module 0700, submodule 2x00) ──
+    '0700200000020001':'AMS1 Slot1 filament has run out — load new filament and retry',
+    '0700210000020001':'AMS1 Slot2 filament has run out — load new filament and retry',
+    '0700220000020001':'AMS1 Slot3 filament has run out — load new filament and retry',
+    '0700230000020001':'AMS1 Slot4 filament has run out — load new filament and retry',
+    // ── AMS filament runout — AMS2 slots 1-4 (module 0701) ───────────────────
+    '0701200000020001':'AMS2 Slot1 filament has run out — load new filament and retry',
+    '0701210000020001':'AMS2 Slot2 filament has run out — load new filament and retry',
+    '0701220000020001':'AMS2 Slot3 filament has run out — load new filament and retry',
+    '0701230000020001':'AMS2 Slot4 filament has run out — load new filament and retry',
+    // ── AMS filament broken in AMS (0002-0003) ────────────────────────────────
+    '0700200000020003':'AMS1 Slot1 filament may be broken inside AMS — check filament path',
+    '0700210000020003':'AMS1 Slot2 filament may be broken inside AMS — check filament path',
+    '0700220000020003':'AMS1 Slot3 filament may be broken inside AMS — check filament path',
+    '0700230000020003':'AMS1 Slot4 filament may be broken inside AMS — check filament path',
+    '0701200000020003':'AMS2 Slot1 filament may be broken inside AMS — check filament path',
+    '0701210000020003':'AMS2 Slot2 filament may be broken inside AMS — check filament path',
+    '0701220000020003':'AMS2 Slot3 filament may be broken inside AMS — check filament path',
+    '0701230000020003':'AMS2 Slot4 filament may be broken inside AMS — check filament path',
+    // ── Filament buffer (module 0700, submodule 4000) ─────────────────────────
+    '0700400000020001':'Filament buffer signal lost — check cable and sensor',
+    '0700400000020002':'Filament buffer position signal error — sensor may be malfunctioning',
+    '0700400000020003':'AMS hub communication abnormal — check cable connection',
+    '0700400000020004':'Filament buffer signal abnormal — spring may be stuck',
+    // ── Filament cutter (module 0700, submodule 4500) ─────────────────────────
+    '0700450000020001':'Filament cutter sensor malfunction — check connection',
+    '0700450000020002':'Filament cutter cutting distance too large — XY motors may have lost steps',
+    '0700450000020003':'Filament cutter handle not released — blade may be stuck',
+    // ── AMS disabled / filament pull-back (module 0700) ──────────────────────
+    '0700510000030001':'AMS disabled — load filament from external spool holder',
+    '0700600000020001':'AMS1 Slot1 overloaded — filament tangled or spool stuck',
+    '0700700000020004':'Failed to pull back filament from toolhead — filament or spool stuck',
+    '0700700000020005':'Failed to feed filament from AMS — clip filament flat, check spool',
+    // ── External spool (module 07FF) ──────────────────────────────────────────
+    '07FF200000020001':'External filament has run out — load new filament',
+    // ── Vision / AI detection (module 0C00) ───────────────────────────────────
+    '0C00030000020018':'Low memory — foreign object detection disabled; restart or update firmware',
+    '0C00030000030006':'Purged filament may have piled up in waste chute — check and clean',
+    '0C00030000030008':'Possible spaghetti defects detected — check print quality',
+    '0C00030000030010':'Printer may be printing without extruding — check nozzle and filament',
+  };
 
-function hmsCodeToString(entry){
-  if(!entry)return'Unknown error';
-  // Combine attr (upper 16-bit) + code (lower 16-bit) into an 8-char hex key
-  var attrHex=((entry.attr||0)>>>0).toString(16).toUpperCase().padStart(4,'0');
-  var codeHex=((entry.code||0)>>>0).toString(16).toUpperCase().padStart(4,'0');
-  var combined=attrHex+codeHex;
-  var desc=HMS_CODES[combined];
-  if(desc)return desc;
-  // Fallback: show the raw code in a readable format with the hex pair
-  return'Hardware error 0x'+attrHex+'_0x'+codeHex+' — check printer screen for details';
-}
+  function hmsCodeToString(entry){
+    if(!entry)return'Unknown error';
+    // attr (32-bit): upper 16 = Module, lower 16 = SubModule
+    // code (32-bit): upper 16 = Severity, lower 16 = Error
+    var attr=(entry.attr||0)>>>0;
+    var cod=(entry.code||0)>>>0;
+    var module=((attr>>>16)&0xFFFF).toString(16).toUpperCase().padStart(4,'0');
+    var submod=(attr&0xFFFF).toString(16).toUpperCase().padStart(4,'0');
+    var sev=((cod>>>16)&0xFFFF).toString(16).toUpperCase().padStart(4,'0');
+    var err=(cod&0xFFFF).toString(16).toUpperCase().padStart(4,'0');
+    var key=module+submod+sev+err;
+    if(HMS_CODES[key])return HMS_CODES[key];
+    // Unknown: show the official HMS format so user can search wiki.bambulab.com
+    return'HMS_'+module+'-'+submod+'-'+sev+'-'+err+' — search wiki.bambulab.com for details';
+  }
 
 // ── Pause alert (RUNNING → PAUSE transition) ──────────────────────────────────
 async function onPiPrintPaused(name,data){
