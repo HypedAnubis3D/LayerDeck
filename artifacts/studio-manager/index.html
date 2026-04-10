@@ -17902,67 +17902,97 @@ async function onPiPrintFailed(name,data){
 }
 
 // ── HMS code → human readable description ────────────────────────────────────
+// Keys are attrHex(4)+codeHex(4) — both zero-padded to 4 chars, uppercase.
+// e.g. attr=0x0002, code=0x0001 → key '00020001'
 var HMS_CODES={
-  // Filament / AMS
-  '0C000001':'AMS out of filament — slot empty',
-  '0C00001E':'AMS filament runout',
-  '0C00000F':'AMS filament feed failure',
-  '0C000016':'AMS cannot detect filament at slot',
-  '0C00000A':'AMS filament tangled — motor stalled',
-  '0C00000B':'AMS filament jammed',
-  '0C000009':'AMS spool holder failure',
-  '0C000019':'AMS slot out of sync',
+  // ── Z-axis / bed leveling (attr 0x0002) ─────────────────────────────────────
+  '00020001':'Z-axis motor stalled — check for debris or obstructions under the bed',
+  '00020002':'Z-axis limit switch fault — check wiring and switch position',
+  '00020003':'Z-axis position error — homing failed',
+  '00020004':'Heatbed position out of range — Z offset may need calibration',
+  '00020006':'First-layer compensation error — run auto-leveling',
+  // ── X / Y axes (attr 0x0004) ─────────────────────────────────────────────────
+  '00040001':'X-axis motor stalled — check for obstruction or belt tension',
+  '00040002':'Y-axis motor stalled — check for obstruction or belt tension',
+  '00040003':'X/Y axes homing failed',
+  // ── Heatbed (attr 0x0001) ────────────────────────────────────────────────────
+  '00010001':'Heatbed temperature out of range — check thermistor and heater',
+  '00010003':'Heatbed thermistor failure — may need replacement',
+  '00010004':'Heatbed heating timeout — check power and wiring',
+  // ── Hotend / nozzle (attr 0x0500) ───────────────────────────────────────────
+  '05000001':'Hotend temperature too high — check heater and thermistor',
+  '05000003':'Nozzle clog detected — try cold pull or nozzle replacement',
+  '05000004':'Nozzle temperature out of range — check thermistor',
+  '05000005':'Hotend heating timeout — check heater cartridge',
+  '05000006':'Hotend thermistor failure — likely needs replacement',
+  '0500000E':'Hotend cooling fan failure — check fan and wiring',
+  '0500000F':'Hotend temperature dropped unexpectedly',
+  // ── Extruder / filament path (attr 0x0700) ──────────────────────────────────
+  '07000006':'Filament runout (external spool)',
+  '07000009':'First-layer inspection failed — possible spaghetti or adhesion issue',
+  '0700000A':'Filament entangled or resistance too high',
+  '0700000C':'Print head collision detected — check for bed debris',
+  '0700000F':'Extruder motor stalled — check for clog or jam',
+  '07000017':'Cutter jammed — clear filament from cutter path',
   '07008001':'External spool out of filament',
-  '07000006':'Filament runout (external)',
-  // Hotend / extruder / nozzle
-  '05000003':'Nozzle clog detected',
-  '05000004':'Nozzle temperature out of range',
-  '05000006':'Nozzle thermistor failure',
-  '05000001':'Hotend temperature too high',
-  '0500000E':'Hotend fan failure',
-  '0700000F':'Extruder motor stalled',
-  '07000009':'First layer inspection failed (spaghetti detected)',
-  '0700000C':'Print head collision detected',
-  '07000017':'Cutter jammed',
-  // Door / enclosure
-  '03000001':'Front door opened during print',
-  '03000002':'Upper door opened during print',
-  '03000004':'Cover knocked off / enclosure open',
-  // Bed / axes
-  '01000001':'Heatbed temperature out of range',
-  '01000003':'Heatbed thermistor failure',
-  '02000001':'Z-axis motor stalled',
-  '02000003':'Z-axis limit switch fault',
-  '04000001':'X-axis motor stalled',
-  '04000002':'Y-axis motor stalled',
-  // Generic
-  '00000001':'Vibration too high',
-  '00000002':'Enclosure temperature too high',
+  '07010001':'Purge failed — check nozzle and filament path',
+  // ── Door / enclosure (attr 0x0300) ──────────────────────────────────────────
+  '03000001':'Front door opened during print — close door to resume',
+  '03000002':'Upper door opened during print — close door to resume',
+  '03000004':'Enclosure cover removed or open during print',
+  // ── AMS (attr 0x0C00) ───────────────────────────────────────────────────────
+  '0C000001':'AMS out of filament — check spool in active slot',
+  '0C000009':'AMS spool holder failure — reseat the spool',
+  '0C00000A':'AMS filament tangled — motor stalled, check spool',
+  '0C00000B':'AMS filament jammed — clear the feed path',
+  '0C00000F':'AMS filament feed failure — check filament path',
+  '0C000016':'AMS cannot detect filament — check slot sensor',
+  '0C000019':'AMS slot out of sync — reload filament',
+  '0C00001E':'AMS filament runout — load new spool',
+  '0C000020':'AMS hub communication error',
+  '0C000024':'AMS filament color mismatch detected',
+  // ── Vibration / accelerometer (attr 0x0006) ──────────────────────────────────
+  '00060001':'Vibration too high — check for loose parts or unlevel surface',
+  '00060002':'Resonance compensation calibration failed',
+  // ── Enclosure / temperature sensor (attr 0x0008) ─────────────────────────────
+  '00080001':'Enclosure temperature too high — check ventilation',
+  '00080002':'Enclosure temperature sensor failure',
+  // ── Lidar / first-layer scan (attr 0x000A) ───────────────────────────────────
+  '000A0001':'Lidar abnormality — clean the lens',
+  '000A0002':'First-layer scan failed — check bed surface',
+  // ── Filament buffer / AMS Lite (attr 0x0B00) ─────────────────────────────────
+  '0B000001':'Filament buffer signal lost',
+  '0B000002':'Filament buffer position error',
 };
 
 function hmsCodeToString(entry){
-  if(!entry)return 'Unknown error';
-  var code=entry.code||entry.attr||0;
-  var hex=code.toString(16).toUpperCase().padStart(8,'0');
-  var key=hex.slice(0,8);
-  return HMS_CODES[key]||HMS_CODES[hex]||('Error code 0x'+hex);
+  if(!entry)return'Unknown error';
+  // Combine attr (upper 16-bit) + code (lower 16-bit) into an 8-char hex key
+  var attrHex=((entry.attr||0)>>>0).toString(16).toUpperCase().padStart(4,'0');
+  var codeHex=((entry.code||0)>>>0).toString(16).toUpperCase().padStart(4,'0');
+  var combined=attrHex+codeHex;
+  var desc=HMS_CODES[combined];
+  if(desc)return desc;
+  // Fallback: show the raw code in a readable format with the hex pair
+  return'Hardware error 0x'+attrHex+'_0x'+codeHex+' — check printer screen for details';
 }
 
 // ── Pause alert (RUNNING → PAUSE transition) ──────────────────────────────────
 async function onPiPrintPaused(name,data){
   var jobName=(data.subtask_name||'').replace('.gcode.3mf','').replace('.3mf','')||'Unknown';
   var pct=data.mc_percent||0;
-  var reason='';
+  var hmsDesc='';
   // Surface most recent HMS if present
   if(data.hms&&data.hms.length>0){
-    reason='\nReason: '+hmsCodeToString(data.hms[data.hms.length-1]);
+    hmsDesc=hmsCodeToString(data.hms[data.hms.length-1]);
   }
-  toast('⏸ '+name+' PAUSED',jobName+' — needs attention','warning',8000);
+  var toastBody=jobName+(hmsDesc?' — '+hmsDesc:' — needs attention');
+  toast('⏸ '+name+' PAUSED',toastBody,'warning',10000);
   postToDiscord('print_failed',
     '⏸ Print Paused — '+name+
     '\nJob: '+jobName+
     '\nProgress: '+pct+'%'+
-    reason+
+    (hmsDesc?'\nReason: '+hmsDesc:'')+
     '\nCheck printer — manual intervention required');
 }
 
