@@ -2,6 +2,7 @@ import app from "./app";
 import { logger } from "./lib/logger";
 import { startNotificationScheduler } from "./lib/notificationScheduler";
 import { startEtsyGmailPoller } from "./lib/etsyGmailPoller";
+import { startSocialScheduler } from "./lib/socialScheduler";
 
 const rawPort = process.env["PORT"];
 
@@ -28,4 +29,5 @@ app.listen(port, (err) => {
   startEtsyGmailPoller().catch((err) => {
     logger.warn({ err }, "Etsy Gmail poller failed to start");
   });
+  startSocialScheduler();
 });

@@ -21070,7 +21070,9 @@ function loadSocial(){
   // died mid-flight. Reset it so the user can retry instead of it being frozen.
   let dirty=false;
   socialQueue.forEach(function(p){
-    if(p.status==='posting'){
+    // Only reset browser-initiated posting — server-side scheduler sets serverPosting:true
+    // and will update the status itself (posted/failed). Don't clobber it.
+    if(p.status==='posting' && !p.serverPosting){
       p.status='failed';
       p.error='Post was interrupted (page reloaded mid-upload). Check Instagram and retry if it didn\'t go through.';
       dirty=true;
