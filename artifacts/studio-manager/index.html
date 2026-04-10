@@ -409,6 +409,20 @@ input.srch::placeholder{color:var(--txt-d);}
 .fil-qr-btn:hover{border-color:var(--pur);color:var(--pur);}
 .add-fil-btn{background:none;border:1px dashed var(--bdr2);color:var(--txt-d);padding:4px;width:100%;border-radius:3px;cursor:pointer;font-family:'Share Tech Mono',monospace;font-size:7px;letter-spacing:1px;transition:all .15s;}
 .add-fil-btn:hover{border-color:var(--org);color:var(--org);}
+
+/* GENERIC PICKER MODAL */
+.picker-item{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:6px;cursor:pointer;border:1px solid transparent;transition:background .12s,border-color .12s;-webkit-tap-highlight-color:transparent;}
+.picker-item:hover,.picker-item:active{background:var(--surf2);border-color:var(--bdr2);}
+.picker-item.selected{background:rgba(201,168,76,.12);border-color:var(--gold-dim);}
+.picker-item .pi-label{font-size:9px;font-weight:600;color:var(--txt-b);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.picker-item .pi-sub{font-size:7px;color:var(--txt-d);margin-top:1px;}
+.picker-item .pi-meta{font-size:7px;color:var(--gold-b);flex-shrink:0;text-align:right;white-space:nowrap;}
+.picker-dot{width:14px;height:14px;border-radius:50%;flex-shrink:0;border:1.5px solid rgba(255,255,255,.2);}
+/* Fil-row spool button */
+.fil-spool-btn{flex:1;min-width:0;background:var(--bg);border:1px solid var(--bdr2);color:var(--txt-d);padding:0 8px;font-family:'Share Tech Mono',monospace;font-size:8px;border-radius:3px;cursor:pointer;text-align:left;height:26px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;transition:border-color .12s;}
+.fil-spool-btn:hover{border-color:var(--pur);}
+.fil-spool-btn.chosen{color:var(--txt);}
+
 .cost-preview{background:var(--bg);border:1px solid var(--bdr);border-radius:4px;padding:9px;margin-bottom:9px;}
 
 /* 3MF SELECTOR IN PRINT FORM */
@@ -2542,7 +2556,8 @@ header{
 <div class="modal narrow">
   <div class="mtitle">Log Waste Filament</div>
   <div class="field"><div class="fl">Spool</div>
-    <select id="wl-spool" style="width:100%;background:var(--bg);border:1px solid var(--bdr2);color:var(--txt);padding:7px 9px;font-family:'Share Tech Mono',monospace;font-size:9px;border-radius:3px;"></select>
+    <button id="wl-spool-btn" onclick="openWasteSpoolPicker()" style="width:100%;background:var(--bg);border:1px solid var(--bdr2);color:var(--txt-d);padding:9px 12px;font-family:'Share Tech Mono',monospace;font-size:9px;border-radius:6px;cursor:pointer;text-align:left;transition:border-color .12s" onmouseover="this.style.borderColor='var(--pur)'" onmouseout="this.style.borderColor='var(--bdr2)'">🔍 Tap to select spool…</button>
+    <select id="wl-spool" style="display:none"></select>
   </div>
   <div class="fr2">
     <div class="field"><div class="fl">Amount (g)</div><input type="number" id="wl-amount" min="1" placeholder="10"/></div>
@@ -2598,8 +2613,7 @@ header{
   </div>
   <div class="field"><div class="fl">Linked 3MF File (product default)</div>
     <div style="position:relative">
-      <input type="text" id="ec-tmf-search" placeholder="🔍 Search 3MF files…" oninput="filterEcTmfSearch(this.value)" onfocus="filterEcTmfSearch(this.value)" autocomplete="off" style="width:100%;background:var(--bg);border:1px solid var(--bdr2);color:var(--txt);padding:4px 9px;font-family:'Share Tech Mono',monospace;font-size:9px;border-radius:3px;box-sizing:border-box"/>
-      <div id="ec-tmf-dd" class="sale-search-dd" style="display:none"></div>
+      <input type="text" id="ec-tmf-search" placeholder="🔍 Tap to search 3MF library…" readonly onclick="openTmfPicker('ec')" onfocus="this.blur();openTmfPicker('ec')" autocomplete="off" style="width:100%;background:var(--bg);border:1px solid var(--bdr2);color:var(--txt);padding:4px 9px;font-family:'Share Tech Mono',monospace;font-size:9px;border-radius:3px;box-sizing:border-box;cursor:pointer"/>
     </div>
     <input type="hidden" id="ec-tmf" value=""/>
     <div id="ec-tmf-info" style="font-size:7px;color:var(--txt-d);margin-top:4px"></div>
@@ -3221,8 +3235,7 @@ header{
   <div class="tmf-selector">
     <div class="tmf-sel-title">📦 Auto-fill from 3MF Library</div>
     <div style="position:relative">
-      <input type="text" id="ep-tmf-search" placeholder="🔍 Search 3MF files…" oninput="filterEpTmfSearch(this.value)" onfocus="filterEpTmfSearch(this.value)" autocomplete="off" style="width:100%;background:var(--bg);border:1px solid var(--bdr2);color:var(--txt);padding:4px 8px;font-family:'Share Tech Mono',monospace;font-size:9px;border-radius:3px;box-sizing:border-box"/>
-      <div id="ep-tmf-dd" class="sale-search-dd" style="display:none"></div>
+      <input type="text" id="ep-tmf-search" placeholder="🔍 Tap to search 3MF library…" readonly onclick="openTmfPicker('ep')" onfocus="this.blur();openTmfPicker('ep')" autocomplete="off" style="width:100%;background:var(--bg);border:1px solid var(--bdr2);color:var(--txt);padding:4px 8px;font-family:'Share Tech Mono',monospace;font-size:9px;border-radius:3px;box-sizing:border-box;cursor:pointer"/>
     </div>
     <input type="hidden" id="ep-tmf-select" value=""/>
     <div class="tmf-prefill-badge" id="tmf-prefill-badge" style="display:none">✓ Fields pre-filled from 3MF — review and confirm</div>
@@ -3592,6 +3605,19 @@ header{
 </div>
 </div>
 
+<!-- GENERIC PICKER MODAL -->
+<div class="overlay" id="mod-picker" style="display:none" onclick="if(event.target.id==='mod-picker')closePicker()">
+<div class="modal" style="width:520px;max-width:96vw;max-height:90vh;display:flex;flex-direction:column">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+    <div id="picker-title" style="font-family:Orbitron,sans-serif;font-size:12px;color:var(--txt-b);font-weight:700;letter-spacing:.5px"></div>
+    <button onclick="closePicker()" style="background:none;border:none;color:var(--txt-d);font-size:16px;cursor:pointer;line-height:1;padding:2px 6px">&times;</button>
+  </div>
+  <input type="text" id="picker-search" placeholder="🔍 Search…" oninput="_renderPickerList(this.value)"
+    style="width:100%;background:var(--bg);border:1px solid var(--bdr2);color:var(--txt);padding:9px 12px;font-family:'Share Tech Mono',monospace;font-size:10px;border-radius:6px;box-sizing:border-box;margin-bottom:10px"/>
+  <div id="picker-list" style="overflow-y:auto;flex:1;max-height:58vh;display:flex;flex-direction:column;gap:2px;overscroll-behavior:contain"></div>
+</div>
+</div>
+
 <!-- DRY CONFIRM — shown after QR scan in dry mode -->
 <div class="overlay" id="mod-dry-confirm" style="display:none" onclick="if(event.target.id==='mod-dry-confirm')closeDryConfirm()">
 <div class="modal narrow">
@@ -3765,7 +3791,8 @@ header{
   </div>
 
   <div class="field" style="margin-bottom:10px"><div class="fl">Spool</div>
-    <select id="ams-spool-select" onchange="updateAmsPreview()" style="width:100%;background:var(--bg);border:1px solid var(--bdr2);color:var(--txt);padding:7px 9px;font-family:'Plus Jakarta Sans',sans-serif;font-size:10px;border-radius:6px;">
+    <button id="ams-spool-btn" onclick="openAmsSpoolPicker()" style="width:100%;background:var(--bg);border:1px solid var(--bdr2);color:var(--txt-d);padding:9px 12px;font-family:'Share Tech Mono',monospace;font-size:9px;border-radius:6px;cursor:pointer;text-align:left;transition:border-color .12s" onmouseover="this.style.borderColor='var(--pur)'" onmouseout="this.style.borderColor='var(--bdr2)'">🔍 Tap to select spool…</button>
+    <select id="ams-spool-select" onchange="updateAmsPreview()" style="display:none">
       <option value="">— Empty Slot —</option>
     </select>
   </div>
@@ -6205,6 +6232,88 @@ function renderLabels(){
 }
 
 // ════════════════════════════════════════
+// GENERIC PICKER MODAL
+// ════════════════════════════════════════
+let _pickerItems=[],_pickerCallback=null,_pickerSelectedId='';
+function openPicker(opts){
+  _pickerItems=opts.items||[];
+  _pickerCallback=opts.onSelect||null;
+  _pickerSelectedId=opts.selectedId||'';
+  const t=document.getElementById('picker-title');
+  const s=document.getElementById('picker-search');
+  if(t)t.textContent=opts.title||'Select';
+  if(s)s.value='';
+  _renderPickerList('');
+  document.getElementById('mod-picker').style.display='flex';
+  setTimeout(function(){const si=document.getElementById('picker-search');if(si)si.focus();},80);
+}
+function closePicker(){document.getElementById('mod-picker').style.display='none';}
+function _renderPickerList(q){
+  const query=(q||'').toLowerCase().trim();
+  const filtered=query?_pickerItems.filter(function(i){return(i.label||'').toLowerCase().includes(query)||(i.sublabel||'').toLowerCase().includes(query)||(i.meta||'').toLowerCase().includes(query);}):_pickerItems;
+  const list=document.getElementById('picker-list');if(!list)return;
+  if(!filtered.length){list.innerHTML='<div style="font-size:9px;color:var(--txt-d);padding:20px;text-align:center">No results</div>';return;}
+  list.innerHTML=filtered.map(function(item){
+    const isSel=item.id===_pickerSelectedId;
+    const dot=item.color?'<div class="picker-dot" style="background:'+item.color+';box-shadow:0 0 5px '+item.color+'55"></div>':'';
+    return '<div class="picker-item'+(isSel?' selected':'')+'" onclick="_selectPickerItem(\''+item.id.replace(/\\/g,'\\\\').replace(/'/g,'\\\'')+'\')">'
+      +dot
+      +'<div style="flex:1;min-width:0"><div class="pi-label">'+esc(item.label)+'</div>'
+      +(item.sublabel?'<div class="pi-sub">'+esc(item.sublabel)+'</div>':'')
+      +'</div>'
+      +(item.meta?'<div class="pi-meta">'+esc(item.meta)+'</div>':'')
+      +'</div>';
+  }).join('');
+}
+function _selectPickerItem(id){
+  const item=_pickerItems.find(function(i){return i.id===id;});
+  _pickerSelectedId=id;
+  if(_pickerCallback)_pickerCallback(id,item);
+  closePicker();
+}
+// 3MF picker — for ep (print modal) and ec (catalog edit modal)
+function openTmfPicker(ctx){
+  const hidId=ctx==='ep'?'ep-tmf-select':'ec-tmf';
+  const searchId=ctx==='ep'?'ep-tmf-search':'ec-tmf-search';
+  const currentId=document.getElementById(hidId)?.value||'';
+  const items=[{id:'',label:'— Manual Entry (no 3MF) —',sublabel:'',meta:''}].concat(
+    tmfLib.map(function(t){return{id:t.id,label:t.name,sublabel:t.printer||'',meta:t.hrs?formatHms(t.hrs):''};}));
+  openPicker({title:'3MF Library',items:items,selectedId:currentId,onSelect:function(id,item){
+    const inp=document.getElementById(searchId);
+    if(inp)inp.value=id&&item?item.label:'';
+    if(ctx==='ep')selectEpTmf(id,id&&item?item.label:'');
+    else selectEcTmf(id,id&&item?item.label:'');
+  }});
+}
+// Spool picker for fil-rows
+function openSpoolPickerForRow(rowId){
+  const row=document.getElementById(rowId);if(!row)return;
+  const currentId=row.dataset.spoolId||'';
+  const items=[{id:'',label:'— No Spool —',sublabel:'',meta:''}].concat(
+    spools.map(function(s){return{id:s.id,label:s.name,sublabel:s.material+(s.brand?' · '+s.brand:''),meta:Math.round(s.remaining||0)+'g ('+pct(s)+'%)',color:s.color};}));
+  openPicker({title:'Select Spool',items:items,selectedId:currentId,onSelect:function(id,item){
+    row.dataset.spoolId=id;
+    const btn=document.getElementById(rowId+'-spoolbtn');
+    if(btn){btn.textContent=id&&item?item.label:'Tap to select spool…';btn.classList.toggle('chosen',!!id);}
+    if(id&&item&&item.color){const dot=row.querySelector('.fil-row-dot');if(dot){dot.style.background=item.color;dot.style.boxShadow='0 0 4px '+item.color+'66';}}
+    updateCostPreview();
+  }});
+}
+// Spool picker for AMS modal
+function openAmsSpoolPicker(){
+  const sel=document.getElementById('ams-spool-select');
+  const currentId=sel?sel.value:'';
+  const items=[{id:'',label:'— Empty Slot —',sublabel:'',meta:''}].concat(
+    spools.map(function(s){return{id:s.id,label:s.name,sublabel:s.material+(s.brand?' · '+s.brand:''),meta:Math.round(s.remaining||0)+'g ('+pct(s)+'%)',color:s.color};}));
+  openPicker({title:'Select Spool',items:items,selectedId:currentId,onSelect:function(id,item){
+    if(sel){sel.value=id;}
+    const btn=document.getElementById('ams-spool-btn');
+    if(btn)btn.textContent=id&&item?item.label+' ('+item.meta+')':'🔍 Tap to select spool…';
+    updateAmsPreview();
+  }});
+}
+
+// ════════════════════════════════════════
 // PRINT FORM
 // ════════════════════════════════════════
 let filRows=[];
@@ -6280,8 +6389,11 @@ function addFilRow(spoolId='',grams='',colorHex=''){
     :'background:var(--bdr2)';
   const dotTitle=cleanHex?`3MF color: ${cleanHex}`:'No color from 3MF';
   const div=document.createElement('div');
-  div.className='fil-row';div.id=id;
-  div.innerHTML=`<div class="fil-row-dot" style="${dotStyle}" title="${dotTitle}"></div><select onchange="updateCostPreview()">${buildSpoolOpts(spoolId)}</select><input type="number" min="1" placeholder="grams" value="${grams}" oninput="updateCostPreview()"/><button class="fil-qr-btn" onclick="openRowScanner('${id}')" title="Scan spool QR">⬡</button><button class="fil-row-del" onclick="removeFilRow('${id}')">✕</button>`;
+  div.className='fil-row';div.id=id;div.dataset.spoolId=spoolId||'';
+  const selSpool=spoolId?spools.find(function(s){return s.id===spoolId;}):null;
+  const btnLabel=selSpool?selSpool.name:'Tap to select spool…';
+  const btnChosen=selSpool?'chosen':'';
+  div.innerHTML=`<div class="fil-row-dot" style="${dotStyle}" title="${dotTitle}"></div><button class="fil-spool-btn ${btnChosen}" id="${id}-spoolbtn" onclick="openSpoolPickerForRow('${id}')">${esc(btnLabel)}</button><input type="number" min="1" placeholder="grams" value="${grams}" oninput="updateCostPreview()"/><button class="fil-qr-btn" onclick="openRowScanner('${id}')" title="Scan spool QR">⬡</button><button class="fil-row-del" onclick="removeFilRow('${id}')">✕</button>`;
   const warn=document.createElement('div');
   warn.className='fil-row-warn';warn.id=id+'-warn';
   document.getElementById('fil-rows').appendChild(div);
@@ -6295,7 +6407,7 @@ function removeFilRow(id){
   updateCostPreview();
 }
 function getFilRows(){
-  return[...document.getElementById('fil-rows').querySelectorAll('.fil-row')].map(row=>({spoolId:row.querySelector('select')?.value||'',grams:parseFloat(row.querySelector('input')?.value)||0})).filter(f=>f.spoolId&&f.grams>0);
+  return[...document.getElementById('fil-rows').querySelectorAll('.fil-row')].map(row=>({spoolId:row.dataset.spoolId||'',grams:parseFloat(row.querySelector('input[type="number"]')?.value)||0})).filter(f=>f.spoolId&&f.grams>0);
 }
 function updateCostPreview(){
   const f=getFilRows(),hrs=getHrsFromForm(),qty=parseInt(document.getElementById('ep-qty').value)||1;
@@ -6319,8 +6431,8 @@ function updateCostPreview(){
     const row=document.getElementById(rowId);
     const warn=document.getElementById(rowId+'-warn');
     if(!row||!warn)return;
-    const spoolId=row.querySelector('select')?.value||'';
-    const gramsNeeded=parseFloat(row.querySelector('input')?.value)||0;
+    const spoolId=row.dataset.spoolId||'';
+    const gramsNeeded=parseFloat(row.querySelector('input[type="number"]')?.value)||0;
     const sp=spoolId?spools.find(function(s){return s.id===spoolId;}):null;
     if(sp&&gramsNeeded>0&&(sp.remaining||0)<gramsNeeded){
       const has=Math.round(sp.remaining||0);
@@ -7238,7 +7350,7 @@ function openRowScanner(rowId){
   try{
     rowScanner=new Html5Qrcode('row-qr-reader');
     rowScanner.start({facingMode:'environment'},{fps:10,qrbox:{width:180,height:180}},
-      txt=>{if(!txt.startsWith('HA3D_SPOOL:'))return;const spoolId=txt.replace('HA3D_SPOOL:','');closeRowScanner();const row=document.getElementById(targetRowId);if(row){const sel=row.querySelector('select');if(sel){const opt=[...sel.options].find(o=>o.value===spoolId);if(opt){sel.value=spoolId;updateCostPreview();}else alert('Spool not found in list.');}}targetRowId=null;},()=>{}
+      txt=>{if(!txt.startsWith('HA3D_SPOOL:'))return;const spoolId=txt.replace('HA3D_SPOOL:','');closeRowScanner();const row=document.getElementById(targetRowId);if(row){const sp=spools.find(function(s){return s.id===spoolId;});if(sp){row.dataset.spoolId=spoolId;const btn=document.getElementById(targetRowId+'-spoolbtn');if(btn){btn.textContent=sp.name;btn.classList.add('chosen');}updateCostPreview();}else toast('Spool not found','That spool QR was not found in your spool library.','warn');}targetRowId=null;},()=>{}
     ).then(()=>{document.getElementById('row-scan-status').textContent='Point camera at spool QR…';}).catch(e=>{document.getElementById('row-scan-status').textContent='Camera error: '+e;});
   }catch(e){document.getElementById('row-scan-status').textContent='Scanner unavailable: '+e;}
 }
@@ -9841,9 +9953,23 @@ function renderWaste(){
     </div>`;
   }).join('');
 }
+function openWasteSpoolPicker(){
+  const sel=document.getElementById('wl-spool');
+  const currentId=sel?sel.value:'';
+  const items=[{id:'',label:'— Select Spool —',sublabel:'',meta:''}].concat(
+    spools.map(function(s){return{id:s.id,label:s.name,sublabel:s.material+(s.brand?' · '+s.brand:''),meta:Math.round(s.remaining||0)+'g ('+pct(s)+'%)',color:s.color};}));
+  openPicker({title:'Select Spool',items:items,selectedId:currentId,onSelect:function(id,item){
+    if(sel)sel.value=id;
+    const btn=document.getElementById('wl-spool-btn');
+    if(btn)btn.textContent=id&&item?item.label+' — '+item.meta:'🔍 Tap to select spool…';
+  }});
+}
 function openLogWaste(){
   const sel=document.getElementById('wl-spool');
   sel.innerHTML=spools.map(s=>`<option value="${s.id}">${esc(s.name)} — ${s.remaining}g</option>`).join('');
+  const btn=document.getElementById('wl-spool-btn');
+  if(btn)btn.textContent='🔍 Tap to select spool…';
+  if(sel)sel.value='';
   document.getElementById('wl-amount').value='';
   document.getElementById('wl-notes').value='';
   document.getElementById('wl-type').value='Purge';
@@ -11244,6 +11370,8 @@ function openExtSpoolModal(printerName){
   document.getElementById('ams-slot-label').textContent=cur?'Currently: '+cur.name+' ('+pct(cur)+'% remaining)':'No spool assigned — select from your inventory';
   const sel=document.getElementById('ams-spool-select');
   sel.innerHTML='<option value="">— Unassigned —</option>'+spools.map(function(s){return '<option value="'+s.id+'"'+(s.id===currentId?' selected':'')+'>'+esc(s.name)+' — '+s.material+' ('+pct(s)+'%)</option>';}).join('');
+  const amsSpoolBtn2=document.getElementById('ams-spool-btn');
+  if(amsSpoolBtn2)amsSpoolBtn2.textContent=cur?cur.name+' ('+pct(cur)+'% remaining)':'🔍 Tap to select spool…';
   const piSec=document.getElementById('ams-pi-section');
   if(piSec){
     if(piHubConfig){piSec.style.display='';piSec.dataset.printer=printerName;piSec.dataset.slot='9998';}
@@ -11261,6 +11389,8 @@ function openAmsModal(printerName,slotNum){
   document.getElementById('ams-slot-label').textContent=cur?'Currently: '+cur.name+' ('+pct(cur)+'% remaining)':'Empty slot — scan or select a spool to assign';
   const sel=document.getElementById('ams-spool-select');
   sel.innerHTML='<option value="">— Empty Slot —</option>'+spools.map(function(s){return '<option value="'+s.id+'"'+(s.id===currentId?' selected':'')+'>'+esc(s.name)+' — '+s.material+' ('+pct(s)+'%)</option>';}).join('');
+  const amsSpoolBtn=document.getElementById('ams-spool-btn');
+  if(amsSpoolBtn)amsSpoolBtn.textContent=cur?cur.name+' ('+pct(cur)+'% remaining)':'🔍 Tap to select spool…';
   // Show Pi section if Pi is connected
   const piSec=document.getElementById('ams-pi-section');
   if(piSec){
