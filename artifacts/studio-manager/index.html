@@ -1875,6 +1875,7 @@ header{
       <option value="done">Done</option>
       <option value="failed">Failed</option>
     </select>
+    <button class="btn btn-ghost btn-sm" onclick="openGroupsModal()">📁 Groups</button>
     <span class="cnt" id="pr-cnt"></span>
   </div>
   <div class="prints-grid" id="prints-grid"></div>
@@ -1884,10 +1885,11 @@ header{
 <div id="tab-tmf" style="display:none">
   <div class="ctrl">
     <span style="font-size:8px;color:var(--txt-d);letter-spacing:1px">Sync 3MF files from the Desktop Companion — select them when logging a print to auto-fill all fields</span>
+    <button class="btn btn-ghost btn-sm" onclick="openTmfFoldersModal()">📁 Folders</button>
     <button class="btn btn-ghost btn-sm" onclick="enterSelectMode('tmf')">☑ Select</button>
     <span class="cnt" id="tmf-cnt"></span>
   </div>
-  <div class="tmf-grid" id="tmf-grid"></div>
+  <div id="tmf-grid"></div>
 </div>
 
 <!-- QUEUE KANBAN -->
@@ -3497,11 +3499,14 @@ header{
     <div style="font-size:7px;color:var(--txt-d);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:5px">Linked Print Jobs <span style="color:var(--txt-d);font-weight:400;text-transform:none;letter-spacing:0">(one per plate)</span></div>
     <div id="eo-linked-prints-list" style="display:flex;flex-direction:column;gap:4px;margin-bottom:7px"></div>
     <!-- Add print row -->
-    <div style="display:flex;gap:5px;align-items:center;margin-bottom:10px">
+    <div style="display:flex;gap:5px;align-items:center;margin-bottom:5px">
       <select id="eo-add-print-select" style="flex:1;background:var(--surf);border:1px solid var(--bdr2);color:var(--txt);padding:6px 8px;font-family:'Share Tech Mono',monospace;font-size:9px;border-radius:6px;outline:none;min-width:0">
         <option value="">— Select a print to add —</option>
       </select>
       <button type="button" onclick="addLinkedPrint()" style="flex-shrink:0;background:var(--surf);border:1px solid var(--gold);color:var(--gold);padding:6px 10px;font-size:9px;font-weight:700;border-radius:6px;cursor:pointer;white-space:nowrap">+ Add</button>
+    </div>
+    <div style="margin-bottom:10px">
+      <button type="button" onclick="openOrderGroupPicker()" style="width:100%;background:rgba(100,100,200,0.08);border:1px dashed rgba(130,80,255,0.4);color:var(--pur);padding:6px 10px;font-size:8px;font-weight:600;border-radius:6px;cursor:pointer;text-align:left">📁 Attach Print Group — bulk-add all prints from a group</button>
     </div>
     <!-- Totals row -->
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px">
@@ -3920,7 +3925,8 @@ const KEYS={spools:'ha3d_fil_v2',hist:'ha3d_hist_v2',prints:'ha3d_prints_v1',
   tmfs:'ha3d_tmfs_v1',queue:'ha3d_queue_v1',orders:'ha3d_orders_v1',
   sales:'ha3d_sales_v1',maint:'ha3d_maint_v1',cfg:'ha3d_cfg_v1',
   shopify:'ha3d_shopify_v1',inv:'hypedanubis_v2',inperson:'ha3d_inperson_v1',
-  dashHidden:'ha3d_dash_hidden_v1',barcodeDb:'ha3d_barcode_db_v1',notifIds:'ha3d_notif_ids_v1'};
+  dashHidden:'ha3d_dash_hidden_v1',barcodeDb:'ha3d_barcode_db_v1',notifIds:'ha3d_notif_ids_v1',
+  groups:'ha3d_groups_v1',tmfFolders:'ha3d_tmf_folders_v1'};
 
 const MAT_C={'PLA Basic':'#3a80e0','PLA Matte':'#8858c0','PLA Silk':'#c09828','PLA Silk Multi Color':'#d8901a','PLA Gradient':'#5B6EB5','PLA Galaxy':'#495758','PLA Sparkle':'#B8962E','PLA+':'#28a858','PLA Tough':'#4a9070','PLA Glow':'#88ee44','PLA Metal':'#b0b0c0','PLA Marble':'#d0ccc8','PLA Translucent':'#80e0f8','PLA High Speed':'#f08040','PLA Aero':'#60b0d8','PLA Lite':'#70a8e0','PLA-CF':'#786860','PLA-GF':'#606870','PETG Basic':'#22aacc','PETG HF':'#20d0c0','PETG Translucent':'#80d8e0','PETG-CF':'#1a5050','ABS':'#c04828','ABS-CF':'#484040','ABS-GF':'#584840','ASA':'#a07828','ASA-CF':'#487048','ASA Aero':'#80c088','ASA Glow':'#6DBE45','PA':'#507080','PA-CF':'#383838','PA-GF':'#485058','PC':'#3a6090','PC-CF':'#304050','PPS':'#504858','PPS-CF':'#282828','TPU 95A':'#9050b0','TPU 90A':'#b060c8','TPU 68D':'#7840a0','TPU 85A':'#c080d8','Support W':'#a0c8e0','Support G':'#888888','Support':'#404850','HIPS':'#d8c898','BVOH':'#90d090','PVA':'#e8e090'};
 // Nozzle wear multiplier per material (1.0 = baseline brass nozzle wear)
@@ -3928,6 +3934,7 @@ const WEAR_FACTOR={'PLA-CF':3.0,'PA-CF':3.0,'PA-GF':3.0,'PC-CF':3.0,'PPS-CF':3.0
 function matWear(m){return WEAR_FACTOR[m]||1.0;}
 
 let spools=[],usageHist=[],prints=[],tmfLib=[],queueItems=[],orders=[],sales=[],maintLog=[],inPersonInventory=[];
+let printGroups=[],tmfFolders=[];
 let dashHidden=[];
 let notifIds=new Set();
 let shopifyCfg={domain:'',connected:false,lastOrderId:null,lastPoll:null};
@@ -3946,6 +3953,7 @@ function load(){
   tmfLib=gs(KEYS.tmfs);queueItems=gs(KEYS.queue);orders=gs(KEYS.orders);
   sales=gs(KEYS.sales);maintLog=gs(KEYS.maint);
   inPersonInventory=gs(KEYS.inperson);
+  printGroups=gs(KEYS.groups);tmfFolders=gs(KEYS.tmfFolders);
   dashHidden=gs(KEYS.dashHidden);
   shopifyCfg={...shopifyCfg,...go(KEYS.shopify)};
   try{const c=JSON.parse(localStorage.getItem(KEYS.cfg));if(c)cfg=c;}catch(e){}
@@ -3979,6 +3987,8 @@ function saveQueue(){ss(KEYS.queue,queueItems);}
 function saveOrders(){ss(KEYS.orders,orders);}
 function saveSales(){ss(KEYS.sales,sales);}
 function saveMaintLog(){ss(KEYS.maint,maintLog);}
+function savePrintGroups(){ss(KEYS.groups,printGroups);}
+function saveTmfFolders(){ss(KEYS.tmfFolders,tmfFolders);}
 // ── Order revenue helpers ──
 // Extract total revenue from an order regardless of platform/structure
 function orderRevenue(o){
@@ -4683,12 +4693,7 @@ async function parse3mfFile(file){
 }
 
 
-function renderTmf(){
-  document.getElementById('tmf-cnt').textContent=tmfLib.length+' files';
-  const g=document.getElementById('tmf-grid');
-  if(selectMode==='tmf')g.classList.add('multi-select-mode');
-  if(!tmfLib.length){g.innerHTML='<div class="empty">No 3MF files yet — sync from the Desktop Companion</div>';return;}
-  g.innerHTML=[...tmfLib].reverse().map(t=>{
+function _tmfCardHtml(t){
     const isSel=selectedIds.includes(t.id);
     // Build all color swatches with per-color grams
     const colors=t.filamentColors&&t.filamentColors.length?t.filamentColors:(t.filamentColor?[t.filamentColor]:[]);
@@ -4773,10 +4778,44 @@ function renderTmf(){
       '</div>'+
       '<div class="card-acts">'+
         '<button class="btn btn-org btn-xs" style="flex:1" onclick="useTmfForPrint(\''+t.id+'\')">Use for Print</button>'+
+        '<button class="btn btn-ghost btn-xs" onclick="event.stopPropagation();assignTmfFolder(\''+t.id+'\')" title="Assign to folder">📁</button>'+
         '<button class="btn btn-xs" style="background:#180808;border:1px solid #2a1010;color:#703030" onclick="delTmf(\''+t.id+'\')">✕</button>'+
       '</div>'+
     '</div>';
-  }).join('');
+}
+function renderTmf(){
+  document.getElementById('tmf-cnt').textContent=tmfLib.length+' files';
+  const g=document.getElementById('tmf-grid');
+  g.className='tmf-grid';
+  if(selectMode==='tmf')g.classList.add('multi-select-mode');
+  if(!tmfLib.length){g.innerHTML='<div class="empty">No 3MF files yet — sync from the Desktop Companion</div>';return;}
+  const sortedTmf=[...tmfLib].reverse();
+  if(!tmfFolders.length){
+    g.innerHTML=sortedTmf.map(_tmfCardHtml).join('');
+    return;
+  }
+  let html='';
+  tmfFolders.forEach(function(f){
+    const files=sortedTmf.filter(function(t){return t.folderId===f.id;});
+    if(!files.length)return;
+    html+='<div style="grid-column:1/-1;display:flex;align-items:center;gap:8px;padding:7px 10px;background:rgba(255,255,255,.04);border:1px solid var(--bdr);border-radius:8px;margin-top:4px">'+
+      '<span>📁</span><span style="font-size:10px;font-weight:700;color:var(--txt-b)">'+esc(f.name)+'</span>'+
+      '<span style="font-size:7px;color:var(--txt-d)">'+files.length+' file'+(files.length!==1?'s':'')+'</span>'+
+      '<div style="margin-left:auto;display:flex;gap:4px">'+
+        '<button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();renameTmfFolder(\''+f.id+'\')">✏</button>'+
+        '<button class="btn btn-ghost btn-sm" style="color:var(--red)" onclick="event.stopPropagation();deleteTmfFolder(\''+f.id+'\')">✕</button>'+
+      '</div></div>';
+    html+=files.map(_tmfCardHtml).join('');
+  });
+  const ungrouped=sortedTmf.filter(function(t){return !t.folderId||!tmfFolders.find(function(f){return f.id===t.folderId;});});
+  if(ungrouped.length){
+    html+='<div style="grid-column:1/-1;display:flex;align-items:center;gap:8px;padding:7px 10px;background:rgba(255,255,255,.02);border:1px dashed var(--bdr);border-radius:8px;margin-top:4px">'+
+      '<span>📂</span><span style="font-size:10px;font-weight:700;color:var(--txt-d)">Ungrouped</span>'+
+      '<span style="font-size:7px;color:var(--txt-d)">'+ungrouped.length+' file'+(ungrouped.length!==1?'s':'')+'</span>'+
+    '</div>';
+    html+=ungrouped.map(_tmfCardHtml).join('');
+  }
+  g.innerHTML=html;
 }
 
 function linkTmfToProduct(tmfId, productId){
@@ -6319,8 +6358,9 @@ function _renderPickerList(q){
 function _selectPickerItem(id){
   const item=_pickerItems.find(function(i){return i.id===id;});
   _pickerSelectedId=id;
-  if(_pickerCallback)_pickerCallback(id,item);
-  closePicker();
+  var result=null;
+  if(_pickerCallback)result=_pickerCallback(id,item);
+  if(result!==false)closePicker();
 }
 // Helper: build spool imageContent (color fill with translucent reel circle)
 function _spoolVisHtml(color){
@@ -6332,19 +6372,262 @@ function _spoolVisHtml(color){
     +'</div></div></div>';
 }
 // 3MF picker — for ep (print modal) and ec (catalog edit modal)
+// Supports two-level folder navigation: top level shows folders + ungrouped files,
+// clicking a folder drills in to show only that folder's files.
+let _tmfPickerCtx='',_tmfPickerFolder=null;
 function openTmfPicker(ctx){
+  _tmfPickerCtx=ctx;
+  _tmfPickerFolder=null;
+  _rebuildTmfPicker(true);
+}
+function _rebuildTmfPicker(doOpen){
+  const ctx=_tmfPickerCtx;
   const hidId=ctx==='ep'?'ep-tmf-select':'ec-tmf';
   const searchId=ctx==='ep'?'ep-tmf-search':'ec-tmf-search';
   const currentId=document.getElementById(hidId)?.value||'';
-  const items=[{id:'',label:'— Manual Entry (no 3MF) —',sublabel:'',meta:'',imageIcon:'📝'}].concat(
-    tmfLib.map(function(t){return{id:t.id,label:t.name,sublabel:t.printer||'',meta:t.hrs?formatHms(t.hrs):'',imageIcon:'📦'};}));
-  openPicker({title:'3MF Library',mode:'grid',items:items,selectedId:currentId,onSelect:function(id,item){
+  let items,title;
+  if(_tmfPickerFolder){
+    const folder=tmfFolders.find(function(f){return f.id===_tmfPickerFolder;});
+    title=(folder?folder.name:'Folder')+' — 3MF Files';
+    const folderFiles=tmfLib.filter(function(t){return t.folderId===_tmfPickerFolder;});
+    items=[{id:'\x00back',label:'← Back to All Folders',sublabel:'',meta:'',imageIcon:'↩'}]
+      .concat([{id:'',label:'— Manual Entry (no 3MF) —',sublabel:'',meta:'',imageIcon:'📝'}])
+      .concat(folderFiles.map(function(t){return{id:t.id,label:(t.name||'').replace(/\.gcode\.3mf$/i,'').replace(/\.3mf$/i,'').replace(/_/g,' ').trim()||t.name,sublabel:t.printer||'',meta:t.hrs?formatHms(t.hrs):'',imageIcon:'📦'};}));
+  }else{
+    title='3MF Library';
+    const folderItems=tmfFolders.map(function(f){
+      const cnt=tmfLib.filter(function(t){return t.folderId===f.id;}).length;
+      return{id:'\x00folder:'+f.id,label:f.name,sublabel:cnt+' file'+(cnt!==1?'s':''),meta:'',imageIcon:'📁'};
+    });
+    const ungrouped=tmfLib.filter(function(t){return!t.folderId||!tmfFolders.find(function(f){return f.id===t.folderId;});});
+    items=[{id:'',label:'— Manual Entry (no 3MF) —',sublabel:'',meta:'',imageIcon:'📝'}]
+      .concat(folderItems)
+      .concat(ungrouped.map(function(t){return{id:t.id,label:(t.name||'').replace(/\.gcode\.3mf$/i,'').replace(/\.3mf$/i,'').replace(/_/g,' ').trim()||t.name,sublabel:t.printer||'',meta:t.hrs?formatHms(t.hrs):'',imageIcon:'📦'};}));
+  }
+  const onSelect=function(id,item){
+    if(id==='\x00back'){_tmfPickerFolder=null;_rebuildTmfPickerInPlace();return false;}
+    if(id&&id.startsWith('\x00folder:')){_tmfPickerFolder=id.slice(8);_rebuildTmfPickerInPlace();return false;}
     const inp=document.getElementById(searchId);
     if(inp)inp.value=id&&item?item.label:'';
     if(ctx==='ep')selectEpTmf(id,id&&item?item.label:'');
     else selectEcTmf(id,id&&item?item.label:'');
+  };
+  if(doOpen){
+    openPicker({title:title,mode:'grid',items:items,selectedId:currentId,onSelect:onSelect});
+  }else{
+    _pickerItems=items;
+    _pickerCallback=onSelect;
+    const titleEl=document.getElementById('picker-title');
+    if(titleEl)titleEl.textContent=title;
+    const searchEl=document.getElementById('picker-search');
+    if(searchEl)searchEl.value='';
+    _renderPickerList('');
+  }
+}
+function _rebuildTmfPickerInPlace(){_rebuildTmfPicker(false);}
+
+// ════════════════════════════════════════
+// PRINT GROUPS
+// ════════════════════════════════════════
+function openGroupsModal(){
+  renderGroupsList();
+  document.getElementById('mod-groups').style.display='flex';
+}
+function closeGroupsModal(){
+  document.getElementById('mod-groups').style.display='none';
+}
+function renderGroupsList(){
+  const el=document.getElementById('groups-list');
+  if(!el)return;
+  if(!printGroups.length){
+    el.innerHTML='<div style="font-size:9px;color:var(--txt-d);padding:16px;text-align:center;border:1px dashed var(--bdr);border-radius:8px">No groups yet — create one below</div>';
+    return;
+  }
+  el.innerHTML=printGroups.map(function(g){
+    const gPrints=g.printIds.map(function(id){return prints.find(function(p){return p.id===id;});}).filter(Boolean);
+    return '<div style="background:var(--surf);border:1px solid var(--bdr);border-radius:8px;padding:10px 12px">'
+      +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">'
+        +'<span style="font-size:15px">📁</span>'
+        +'<span style="flex:1;font-size:10px;font-weight:700;color:var(--txt-b)">'+esc(g.name)+'</span>'
+        +'<span style="font-size:7px;color:var(--txt-d)">'+gPrints.length+' print'+(gPrints.length!==1?'s':'')+'</span>'
+        +'<button onclick="openAddPrintsToGroup(\''+g.id+'\')" class="btn btn-ghost btn-xs">+ Add Prints</button>'
+        +'<button onclick="deletePrintGroup(\''+g.id+'\')" class="btn btn-xs" style="background:transparent;border:1px solid rgba(239,68,68,.3);color:var(--red)">✕</button>'
+      +'</div>'
+      +(gPrints.length
+        ? gPrints.map(function(p){
+            return '<div style="display:flex;align-items:center;gap:6px;padding:4px 8px;background:rgba(255,255,255,.03);border-radius:4px;margin-bottom:2px">'
+              +'<div style="flex:1;min-width:0">'
+                +'<div style="font-size:8px;color:var(--txt);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(p.name)+'</div>'
+                +'<div style="font-size:6px;color:var(--txt-d)">'+esc(p.printer||'')+(p.hrs?' · '+p.hrs+'h':'')+'</div>'
+              +'</div>'
+              +'<button onclick="removePrintFromGroup(\''+g.id+'\',\''+p.id+'\')" style="background:none;border:none;color:var(--txt-d);font-size:12px;cursor:pointer;padding:0 2px;flex-shrink:0">&times;</button>'
+            +'</div>';
+          }).join('')
+        : '<div style="font-size:7px;color:var(--txt-d);padding:4px 8px;font-style:italic">Empty — tap "+ Add Prints" to add prints to this group</div>')
+    +'</div>';
+  }).join('');
+}
+function createPrintGroup(){
+  const inp=document.getElementById('new-group-name');
+  const name=(inp?inp.value:'').trim();
+  if(!name){toast('Name Required','Enter a group name','warning');return;}
+  printGroups.push({id:uid(),name:name,printIds:[]});
+  savePrintGroups();
+  if(inp)inp.value='';
+  renderGroupsList();
+}
+function deletePrintGroup(groupId){
+  showConfirm('Delete this print group?','The prints themselves will not be deleted.',function(){
+    printGroups=printGroups.filter(function(g){return g.id!==groupId;});
+    savePrintGroups();
+    renderGroupsList();
+  });
+}
+function openAddPrintsToGroup(groupId){
+  const g=printGroups.find(function(g){return g.id===groupId;});
+  if(!g)return;
+  const sortedPrints=[...prints].sort(function(a,b){return(b.timestamp||0)-(a.timestamp||0);});
+  const items=[].concat(sortedPrints.map(function(p){
+    return{id:p.id,label:p.name,sublabel:(p.printer||'')+(p.hrs?' · '+p.hrs+'h':''),meta:g.printIds.includes(p.id)?'✓ Added':'',imageIcon:'🖨'};
+  }));
+  openPicker({title:'Add to "'+g.name+'"',mode:'list',items:items,selectedId:'',onSelect:function(id){
+    if(!g.printIds.includes(id)){g.printIds.push(id);savePrintGroups();}
+    renderGroupsList();
+    return false; // stay open so user can add multiple
   }});
 }
+function removePrintFromGroup(groupId,printId){
+  const g=printGroups.find(function(g){return g.id===groupId;});
+  if(!g)return;
+  g.printIds=g.printIds.filter(function(id){return id!==printId;});
+  savePrintGroups();
+  renderGroupsList();
+}
+// Called from order modal "📁 Attach Print Group" button
+function openOrderGroupPicker(){
+  if(!printGroups.length){toast('No Groups','Create print groups in the Prints tab first (📁 Groups button)','info',3000);return;}
+  const items=printGroups.map(function(g){
+    const cnt=g.printIds.length;
+    return{id:g.id,label:g.name,sublabel:cnt+' print'+(cnt!==1?'s':''),meta:'',imageIcon:'📁'};
+  });
+  openPicker({title:'Attach Print Group',mode:'list',items:items,selectedId:'',onSelect:function(id){
+    const g=printGroups.find(function(g){return g.id===id;});
+    if(!g)return;
+    var added=0;
+    g.printIds.forEach(function(pid){if(!_linkedPrintIds.includes(pid)){_linkedPrintIds.push(pid);added++;}});
+    renderLinkedPrintsList();
+    updateOrderCostFields();
+    if(added>0)toast('Group Attached',added+' print'+(added!==1?'s':'')+' added from "'+g.name+'"','success',2500);
+    else toast('Already Added','All prints from this group are already linked','info');
+  }});
+}
+
+// ════════════════════════════════════════
+// TMF FOLDERS
+// ════════════════════════════════════════
+function openTmfFoldersModal(){
+  renderTmfFoldersList();
+  document.getElementById('mod-tmf-folders').style.display='flex';
+}
+function closeTmfFoldersModal(){
+  document.getElementById('mod-tmf-folders').style.display='none';
+}
+function renderTmfFoldersList(){
+  const el=document.getElementById('tmf-folders-list');
+  if(!el)return;
+  if(!tmfFolders.length){
+    el.innerHTML='<div style="font-size:9px;color:var(--txt-d);padding:16px;text-align:center;border:1px dashed var(--bdr);border-radius:8px">No folders yet — create one below</div>';
+    return;
+  }
+  el.innerHTML=tmfFolders.map(function(f){
+    const cnt=tmfLib.filter(function(t){return t.folderId===f.id;}).length;
+    return '<div style="display:flex;align-items:center;gap:8px;background:var(--surf);border:1px solid var(--bdr);border-radius:8px;padding:10px 12px">'
+      +'<span style="font-size:16px">📁</span>'
+      +'<span style="flex:1;font-size:10px;font-weight:700;color:var(--txt-b)">'+esc(f.name)+'</span>'
+      +'<span style="font-size:7px;color:var(--txt-d)">'+cnt+' file'+(cnt!==1?'s':'')+'</span>'
+      +'<button onclick="renameTmfFolder(\''+f.id+'\')" class="btn btn-ghost btn-xs">✏ Rename</button>'
+      +'<button onclick="deleteTmfFolder(\''+f.id+'\')" class="btn btn-xs" style="background:transparent;border:1px solid rgba(239,68,68,.3);color:var(--red)">✕</button>'
+    +'</div>';
+  }).join('');
+}
+function createTmfFolder(){
+  const inp=document.getElementById('new-tmf-folder-name');
+  const name=(inp?inp.value:'').trim();
+  if(!name){toast('Name Required','Enter a folder name','warning');return;}
+  tmfFolders.push({id:uid(),name:name});
+  saveTmfFolders();
+  if(inp)inp.value='';
+  renderTmfFoldersList();
+  if(curTab==='tmf')renderTmf();
+}
+function deleteTmfFolder(folderId){
+  showConfirm('Delete this folder?','3MF files inside will become ungrouped.',function(){
+    tmfFolders=tmfFolders.filter(function(f){return f.id!==folderId;});
+    tmfLib=tmfLib.map(function(t){return t.folderId===folderId?Object.assign({},t,{folderId:null}):t;});
+    saveTmfFolders();saveTmfs();
+    renderTmfFoldersList();
+    if(curTab==='tmf')renderTmf();
+  });
+}
+function renameTmfFolder(folderId){
+  const f=tmfFolders.find(function(f){return f.id===folderId;});
+  if(!f)return;
+  openInlinePrompt('Rename folder','New name:',f.name,function(name){
+    if(!name||!name.trim())return;
+    f.name=name.trim();
+    saveTmfFolders();
+    renderTmfFoldersList();
+    if(curTab==='tmf')renderTmf();
+  });
+}
+// Called from each TMF card's 📁 button
+function assignTmfFolder(tmfId){
+  const t=tmfLib.find(function(x){return x.id===tmfId;});
+  if(!t)return;
+  const items=[{id:'',label:'— No Folder (Ungrouped) —',sublabel:'',meta:'',imageIcon:'📂'}]
+    .concat(tmfFolders.map(function(f){
+      const cnt=tmfLib.filter(function(x){return x.folderId===f.id;}).length;
+      return{id:f.id,label:f.name,sublabel:cnt+' file'+(cnt!==1?'s':''),meta:'',imageIcon:'📁'};
+    }));
+  const currentFolderId=t.folderId||'';
+  openPicker({title:'Assign to Folder',mode:'list',items:items,selectedId:currentFolderId,onSelect:function(id){
+    t.folderId=id||null;
+    saveTmfs();
+    const fname=id?(tmfFolders.find(function(f){return f.id===id;})||{}).name||'folder':'(ungrouped)';
+    toast('Folder Assigned',esc(t.name||'File')+' → '+esc(fname),'success',2000);
+    if(curTab==='tmf')renderTmf();
+  }});
+}
+
+// Inline prompt helper (used for rename)
+function openInlinePrompt(title,label,defaultVal,onConfirm){
+  // Re-use the existing showConfirm infrastructure with an input field
+  const id='_inlineprompt';
+  let old=document.getElementById(id);
+  if(old)old.remove();
+  const div=document.createElement('div');
+  div.id=id;
+  div.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9999;display:flex;align-items:center;justify-content:center';
+  div.innerHTML='<div style="background:var(--surf);border:1px solid var(--bdr2);border-radius:12px;padding:20px 24px;width:360px;max-width:94vw">'
+    +'<div style="font-family:Orbitron,monospace;font-size:12px;color:var(--txt-b);margin-bottom:10px">'+esc(title)+'</div>'
+    +'<div style="font-size:8px;color:var(--txt-d);margin-bottom:8px">'+esc(label)+'</div>'
+    +'<input id="_ipinput" type="text" value="'+esc(defaultVal)+'" style="width:100%;box-sizing:border-box;background:var(--bg);border:1px solid var(--bdr2);color:var(--txt);padding:8px 10px;font-family:\'Share Tech Mono\',monospace;font-size:9px;border-radius:6px;outline:none;margin-bottom:12px"/>'
+    +'<div style="display:flex;gap:8px;justify-content:flex-end">'
+      +'<button onclick="document.getElementById(\'_inlineprompt\').remove()" class="btn btn-ghost btn-sm">Cancel</button>'
+      +'<button id="_ipconfirm" class="btn btn-gold btn-sm">OK</button>'
+    +'</div>'
+  +'</div>';
+  document.body.appendChild(div);
+  const inp=document.getElementById('_ipinput');
+  if(inp){inp.focus();inp.select();}
+  document.getElementById('_ipconfirm').onclick=function(){
+    const val=(document.getElementById('_ipinput')||{}).value||'';
+    div.remove();
+    onConfirm(val);
+  };
+  inp.onkeydown=function(e){if(e.key==='Enter')document.getElementById('_ipconfirm').click();if(e.key==='Escape')div.remove();};
+}
+
 // Spool picker for fil-rows
 function openSpoolPickerForRow(rowId){
   const row=document.getElementById(rowId);if(!row)return;
@@ -22031,6 +22314,40 @@ function posShowReceipt(sale){
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
       <button onclick="dismissSqPayModal()" style="background:none;border:1px solid #2a2a40;color:#666;font-size:10px;padding:10px;border-radius:6px;cursor:pointer">Cancel</button>
       <button id="sq-pay-now-btn" onclick="submitSqPayment()" style="background:linear-gradient(135deg,#0d7a3e,#15803d);border:none;color:#fff;font-family:Orbitron,monospace;font-size:10px;font-weight:700;padding:10px;border-radius:6px;cursor:pointer;letter-spacing:1px">PAY NOW</button>
+    </div>
+  </div>
+</div>
+
+<!-- PRINT GROUPS MODAL -->
+<div class="overlay" id="mod-groups" style="display:none" onclick="if(event.target.id==='mod-groups')closeGroupsModal()">
+  <div class="modal" style="width:540px;max-width:96vw;max-height:92vh;display:flex;flex-direction:column">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-shrink:0">
+      <div style="font-family:Orbitron,monospace;font-size:13px;color:var(--txt-b);font-weight:700;flex:1">📁 Print Groups</div>
+      <button onclick="closeGroupsModal()" style="background:none;border:none;color:var(--txt-d);font-size:18px;cursor:pointer;padding:0 4px;line-height:1">&times;</button>
+    </div>
+    <div style="font-size:8px;color:var(--txt-d);margin-bottom:12px;flex-shrink:0">Group related print jobs into folders. In the Order modal, use "📁 Attach Print Group" to bulk-add all prints from a group at once.</div>
+    <div id="groups-list" style="overflow-y:auto;flex:1;display:flex;flex-direction:column;gap:8px;margin-bottom:12px"></div>
+    <div style="display:flex;gap:8px;flex-shrink:0;border-top:1px solid var(--bdr);padding-top:12px">
+      <input type="text" id="new-group-name" placeholder="New group name…" style="flex:1;background:var(--bg);border:1px solid var(--bdr2);color:var(--txt);padding:8px 10px;font-family:'Share Tech Mono',monospace;font-size:9px;border-radius:6px;outline:none"
+        onkeydown="if(event.key==='Enter')createPrintGroup()"/>
+      <button onclick="createPrintGroup()" class="btn btn-gold">+ Create Group</button>
+    </div>
+  </div>
+</div>
+
+<!-- TMF FOLDERS MODAL -->
+<div class="overlay" id="mod-tmf-folders" style="display:none" onclick="if(event.target.id==='mod-tmf-folders')closeTmfFoldersModal()">
+  <div class="modal" style="width:480px;max-width:96vw;max-height:92vh;display:flex;flex-direction:column">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-shrink:0">
+      <div style="font-family:Orbitron,monospace;font-size:13px;color:var(--txt-b);font-weight:700;flex:1">📁 3MF Folders</div>
+      <button onclick="closeTmfFoldersModal()" style="background:none;border:none;color:var(--txt-d);font-size:18px;cursor:pointer;padding:0 4px;line-height:1">&times;</button>
+    </div>
+    <div style="font-size:8px;color:var(--txt-d);margin-bottom:12px;flex-shrink:0">Organize your 3MF files into folders (e.g. one folder per model/character). In the 3MF picker, tap a folder to browse only its files.</div>
+    <div id="tmf-folders-list" style="overflow-y:auto;flex:1;display:flex;flex-direction:column;gap:6px;margin-bottom:12px"></div>
+    <div style="display:flex;gap:8px;flex-shrink:0;border-top:1px solid var(--bdr);padding-top:12px">
+      <input type="text" id="new-tmf-folder-name" placeholder="New folder name…" style="flex:1;background:var(--bg);border:1px solid var(--bdr2);color:var(--txt);padding:8px 10px;font-family:'Share Tech Mono',monospace;font-size:9px;border-radius:6px;outline:none"
+        onkeydown="if(event.key==='Enter')createTmfFolder()"/>
+      <button onclick="createTmfFolder()" class="btn btn-cyn">+ Create Folder</button>
     </div>
   </div>
 </div>
