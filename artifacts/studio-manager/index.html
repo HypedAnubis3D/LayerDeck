@@ -6426,14 +6426,14 @@ function _rebuildTmfPicker(doOpen){
     const folder=tmfFolders.find(function(f){return f.id===_tmfPickerFolder;});
     title=(folder?folder.name:'Folder')+' — 3MF Files';
     const folderFiles=tmfLib.filter(function(t){return t.folderId===_tmfPickerFolder;});
-    items=[{id:'\x00back',label:'← Back to All Folders',sublabel:'',meta:'',imageIcon:'↩'}]
+    items=[{id:'__back__',label:'← Back to All Folders',sublabel:'',meta:'',imageIcon:'↩'}]
       .concat([{id:'',label:'— Manual Entry (no 3MF) —',sublabel:'',meta:'',imageIcon:'📝'}])
       .concat(folderFiles.map(function(t){return{id:t.id,label:(t.name||'').replace(/\.gcode\.3mf$/i,'').replace(/\.3mf$/i,'').replace(/_/g,' ').trim()||t.name,sublabel:t.printer||'',meta:t.hrs?formatHms(t.hrs):'',imageIcon:'📦'};}));
   }else{
     title='3MF Library';
     const folderItems=tmfFolders.map(function(f){
       const cnt=tmfLib.filter(function(t){return t.folderId===f.id;}).length;
-      return{id:'\x00folder:'+f.id,label:f.name,sublabel:cnt+' file'+(cnt!==1?'s':''),meta:'',imageIcon:'📁'};
+      return{id:'__folder__:'+f.id,label:f.name,sublabel:cnt+' file'+(cnt!==1?'s':''),meta:'',imageIcon:'📁'};
     });
     const ungrouped=tmfLib.filter(function(t){return!t.folderId||!tmfFolders.find(function(f){return f.id===t.folderId;});});
     items=[{id:'',label:'— Manual Entry (no 3MF) —',sublabel:'',meta:'',imageIcon:'📝'}]
@@ -6441,8 +6441,8 @@ function _rebuildTmfPicker(doOpen){
       .concat(ungrouped.map(function(t){return{id:t.id,label:(t.name||'').replace(/\.gcode\.3mf$/i,'').replace(/\.3mf$/i,'').replace(/_/g,' ').trim()||t.name,sublabel:t.printer||'',meta:t.hrs?formatHms(t.hrs):'',imageIcon:'📦'};}));
   }
   const onSelect=function(id,item){
-    if(id==='\x00back'){_tmfPickerFolder=null;_rebuildTmfPickerInPlace();return false;}
-    if(id&&id.startsWith('\x00folder:')){_tmfPickerFolder=id.slice(8);_rebuildTmfPickerInPlace();return false;}
+    if(id==='__back__'){_tmfPickerFolder=null;_rebuildTmfPickerInPlace();return false;}
+    if(id&&id.startsWith('__folder__:')){_tmfPickerFolder=id.slice(11);_rebuildTmfPickerInPlace();return false;}
     const inp=document.getElementById(searchId);
     if(inp)inp.value=id&&item?item.label:'';
     if(ctx==='ep')selectEpTmf(id,id&&item?item.label:'');
