@@ -18054,11 +18054,13 @@ async function onPiPrintPaused(name,data){
   var toastBody=jobName+(hmsDesc?' — '+hmsDesc:' — needs attention');
   var el=toast('⏸ '+name+' PAUSED',toastBody,'warning',12000);
   if(lastHms)addHmsWikiLink(el,hmsEntryToCodeStr(lastHms));
+  var hmsCodeStr=lastHms?hmsEntryToCodeStr(lastHms):null;
   postToDiscord('print_failed',
     '⏸ Print Paused — '+name+
     '\nJob: '+jobName+
     '\nProgress: '+pct+'%'+
-    (hmsDesc?'\nReason: '+hmsDesc:'')+
+    (hmsCodeStr?'\nReason: HMS_'+hmsCodeStr+(hmsDesc?' — '+hmsDesc:''):'')+
+    (hmsCodeStr?'\n🔗 https://wiki.bambulab.com/en/x1/troubleshooting/hmscode/'+hmsCodeStr.replace(/-/g,'_'):'')+
     '\nCheck printer — manual intervention required');
 }
 
@@ -18078,7 +18080,12 @@ async function onPiHmsAlert(name,data,newEntries){
 
   var lines=['⚠️ Printer Alert — '+name];
   if(jobName&&jobName!=='Unknown')lines.push('Job: '+jobName);
-  descriptions.forEach(function(d){lines.push('• '+d);});
+  newEntries.forEach(function(entry,i){
+    var codeStr=hmsEntryToCodeStr(entry);
+    var desc=descriptions[i];
+    lines.push('• HMS_'+codeStr+' — '+desc);
+    lines.push('  🔗 https://wiki.bambulab.com/en/x1/troubleshooting/hmscode/'+codeStr.replace(/-/g,'_'));
+  });
   lines.push('Printer paused — check for filament or hardware issue');
 
   var hmsEl=toast('⚠️ '+name,descriptions[0],'warning',12000);

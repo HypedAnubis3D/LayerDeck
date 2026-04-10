@@ -111,6 +111,22 @@ function sendDiscordAlert(content) {
   _postDiscord(DISCORD_ALERTS_URL, content);
 }
 
+// Convert a raw Bambu MQTT HMS entry {attr, code} into the standard HMS code
+// string and a direct Bambu wiki URL.
+// attr (32-bit): upper 16 = Module, lower 16 = SubModule
+// code (32-bit): upper 16 = Severity, lower 16 = Error
+function hmsEntryToWikiInfo(entry) {
+  const attr = ((entry && entry.attr) || 0) >>> 0;
+  const cod  = ((entry && entry.code) || 0) >>> 0;
+  const module = ((attr >>> 16) & 0xFFFF).toString(16).toUpperCase().padStart(4, '0');
+  const submod = (attr & 0xFFFF).toString(16).toUpperCase().padStart(4, '0');
+  const sev    = ((cod >>> 16) & 0xFFFF).toString(16).toUpperCase().padStart(4, '0');
+  const err    = (cod & 0xFFFF).toString(16).toUpperCase().padStart(4, '0');
+  const hmsCode = `${module}-${submod}-${sev}-${err}`;
+  const wikiUrl = `https://wiki.bambulab.com/en/x1/troubleshooting/hmscode/${module}_${submod}_${sev}_${err}`;
+  return { hmsCode, wikiUrl };
+}
+
 // Printer status (online/offline) — goes to Pi Health channel, not Print Alerts
 function sendDiscordStatus(content) {
   _postDiscord(DISCORD_PI_HEALTH_URL || DISCORD_ALERTS_URL, content);
@@ -376,13 +392,14 @@ PRINTERS.forEach(printer => {
           if (_curPaused && !_prevPaused) {
             const hmsEntries = printerStates[printer.name].hms || [];
             let reason = 'Needs attention';
+            let pauseWikiLine = '';
             if (hmsEntries.length > 0) {
               const last = hmsEntries[hmsEntries.length - 1];
-              const attrHex = ((last.attr || 0) >>> 0).toString(16).padStart(4, '0');
-              const codeHex = ((last.code || 0) >>> 0).toString(16).padStart(4, '0');
-              reason = `Error 0x${attrHex}_0x${codeHex}`;
+              const { hmsCode, wikiUrl } = hmsEntryToWikiInfo(last);
+              reason = `HMS_${hmsCode}`;
+              pauseWikiLine = `\n🔗 ${wikiUrl}`;
             }
-            const pauseMsg = `⏸ **${printer.name}** paused — ${reason}\n📄 ${jobName}`;
+            const pauseMsg = `⏸ **${printer.name}** paused — ${reason}\n📄 ${jobName}${pauseWikiLine}`;
             sendDiscordAlert(pauseMsg);
             _sendPushAlert('print-paused', `⏸ ${printer.name} Paused`, `${jobName} — ${reason}`);
           }
@@ -418,14 +435,14 @@ PRINTERS.forEach(printer => {
             return true;
           });
           if (freshHms.length > 0) {
-            const codes = freshHms.map(h => {
-              const a = ((h.attr || 0) >>> 0).toString(16).padStart(4, '0');
-              const c = ((h.code || 0) >>> 0).toString(16).padStart(4, '0');
-              return `0x${a}_0x${c}`;
-            }).join(', ');
             const curJob = printerStates[printer.name].subtask_name || 'Unknown job';
-            sendDiscordAlert(`⚠️ **${printer.name}** HMS error: ${codes}\n📄 ${curJob}`);
-            _sendPushAlert('hms-error', `⚠️ ${printer.name} Hardware Error`, `${curJob} — ${codes}`);
+            const hmsLines = freshHms.map(h => {
+              const { hmsCode, wikiUrl } = hmsEntryToWikiInfo(h);
+              return `• HMS_${hmsCode}\n  🔗 ${wikiUrl}`;
+            });
+            const firstCode = hmsEntryToWikiInfo(freshHms[0]).hmsCode;
+            sendDiscordAlert(`⚠️ **${printer.name}** hardware error\n📄 ${curJob}\n${hmsLines.join('\n')}`);
+            _sendPushAlert('hms-error', `⚠️ ${printer.name} Hardware Error`, `${curJob} — HMS_${firstCode}`);
           }
         }
         // Clear HMS seen-codes when a print ends so the next print starts fresh
