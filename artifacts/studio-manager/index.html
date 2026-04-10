@@ -18294,18 +18294,33 @@ async function onPiPrintFinished(name,data){
   const jobNameCheck=(data.subtask_name||'').replace(/\.gcode\.3mf$/i,'').replace(/\.3mf$/i,'').replace(/\.gcode$/i,'').replace(/\.bgcode$/i,'')||'Unknown';
   // Skip calibration completions — never log them as user prints
   if(_isCalibJob(jobNameCheck)){return;}
-  // Dedup for the entire calendar day — prevents duplicate records when the app
-  // reloads and re-receives the FINISH MQTT state (can be minutes or hours later)
+  // Normalise the incoming job name once for all comparisons below
   const _todayStart=new Date();_todayStart.setHours(0,0,0,0);
+  const _jNormFin=_normName(jobNameCheck);
+  // Helper: does print record r match this job?
+  // Matches by display name OR by the filename of any 3MF linked to the record.
+  // This handles the common case where a queue item is named "Houndoom Parts"
+  // but Bambu sends the raw gcode filename "0229_-_Houndoom_-_V1_-_02.04.2...".
+  const _piMatchesJob=function(r){
+    if(_normName(r.name)===_jNormFin)return true;
+    const ids=[...(r.tmfIds||[]),...(r.tmfId?[r.tmfId]:[])];
+    if(!ids.length||typeof tmfLib==='undefined')return false;
+    return tmfLib.some(function(t){
+      if(!ids.includes(t.id))return false;
+      const fNorm=_normName((t.filename||'').replace(/\.gcode\.3mf$/i,'').replace(/\.3mf$/i,'').replace(/\.gcode$/i,'').replace(/\.bgcode$/i,''));
+      return fNorm&&fNorm===_jNormFin;
+    });
+  };
+  // Dedup: any print already logged today on this printer that matches — auto OR manual.
+  // Previously required autoFromPi which missed manually-promoted queue items on reload.
   const recentDup=prints.find(function(r){
-    return r.autoFromPi&&r.printer===name&&(_normName(r.name)===_normName(jobNameCheck))&&(r.finishedAt||r.timestamp||0)>=_todayStart.getTime();
+    return r.printer===name&&(r.finishedAt||r.timestamp||0)>=_todayStart.getTime()&&_piMatchesJob(r);
   });
-  // If the dup is a 'printing' placeholder (created when user clicked Edit), promote it
-  // to 'done' instead of skipping. True duplicates (status already 'done'/'failed') skip.
+  // 'printing' placeholder → promote to done. Already-done/failed record → skip entirely.
   if(recentDup&&recentDup.status!=='printing'){return;}
-  // Also check for a non-autoFromPi 'printing' placeholder (user opened Edit on a manually-added queue item)
+  // Find a 'printing' placeholder matching by name OR linked 3MF filename
   const _anyPrintingPlaceholder=prints.find(function(r){
-    return r.status==='printing'&&r.printer===name&&_normName(r.name)===_normName(jobNameCheck);
+    return r.status==='printing'&&r.printer===name&&_piMatchesJob(r);
   });
   const _promotePlaceholder=_anyPrintingPlaceholder||(recentDup&&recentDup.status==='printing'?recentDup:null);
   // If a placeholder already has user-assigned filaments, DON'T deplete spools again
@@ -18424,14 +18439,20 @@ async function onPiPrintFinished(name,data){
     // Preserve any filament/tmf info the user already filled in, only overwrite
     // duration and add finishedAt. If user manually set filaments, keep them.
     const _keepFilaments=(_promotePlaceholder.filaments&&_promotePlaceholder.filaments.length&&_promotePlaceholder.filaments.some(function(f){return f.spoolId;}));
+    // Resolve the placeholder's linked 3MF to get its clean display name
+    const _pTmfId=(_promotePlaceholder.tmfIds&&_promotePlaceholder.tmfIds[0])||_promotePlaceholder.tmfId||null;
+    const _pTmf=_pTmfId&&typeof tmfLib!=='undefined'?tmfLib.find(function(t){return t.id===_pTmfId;}):null;
     const _tapoWSnap=_getTapoWattsForPrinter(name);
     Object.assign(_promotePlaceholder,{
+      // Use the 3MF's clean name when one is linked — avoids raw gcode filenames
+      // appearing as the record name. Fall back to the existing placeholder name.
+      name:_pTmf?_pTmf.name:_promotePlaceholder.name,
       hrs:actualHrs,
       estimatedHrs:_finTmf&&_finTmf.hrs?_finTmf.hrs:undefined,
       filaments:_keepFilaments?_promotePlaceholder.filaments:filamentEntries,
       status:'done',
       finishedAt:Date.now(),
-      tmfName:(_promotePlaceholder.tmfName)||(_finTmf?_finTmf.name:undefined),
+      tmfName:(_promotePlaceholder.tmfName)||(_pTmf?_pTmf.name:undefined)||(_finTmf?_finTmf.name:undefined),
       tapoWatts:_tapoWSnap||undefined
     });
     printRecord=_promotePlaceholder;
