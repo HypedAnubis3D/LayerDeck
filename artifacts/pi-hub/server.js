@@ -2,6 +2,8 @@
  * LayerDeck Hub — Pi server.js
  * Updated: Section 30 — object boundary data (MQTT obj_list parsing),
  *          skip command support, failureSnapshot on FAILED state.
+ *          Section 31 — _lastTerminalState tracking (FAILED/FINISH) so app
+ *          can detect missed failures when it reconnects to an IDLE printer.
  *
  * Deploy: scp this file to ~/bambu-hub/server.js on the Pi, then:
  *   pm2 restart layerdeck-hub
@@ -400,6 +402,24 @@ PRINTERS.forEach(printer => {
             failedAt:    new Date().toISOString(),
             startTime:   printerStates[printer.name].printStartTime || null
           };
+        }
+
+        // Track last terminal state so the app can detect missed FAILED events
+        // when it was closed during a failure and reconnects to find the printer IDLE.
+        // The app checks _lastTerminalState in its RUNNING→IDLE recovery path.
+        if (gcodeState === 'FAILED') {
+          printerStates[printer.name]._lastTerminalState = 'FAILED';
+          printerStates[printer.name]._lastTerminalAt   = Date.now();
+          printerStates[printer.name]._lastJobName      = mqttPayload.print.subtask_name || printerStates[printer.name].subtask_name || '';
+        } else if (gcodeState === 'FINISH') {
+          printerStates[printer.name]._lastTerminalState = 'FINISH';
+          printerStates[printer.name]._lastTerminalAt   = Date.now();
+          printerStates[printer.name]._lastJobName      = mqttPayload.print.subtask_name || printerStates[printer.name].subtask_name || '';
+        } else if (gcodeState === 'RUNNING') {
+          // New print starting — clear so a previous failure isn't misread as the current job
+          printerStates[printer.name]._lastTerminalState = null;
+          printerStates[printer.name]._lastTerminalAt   = null;
+          printerStates[printer.name]._lastJobName      = null;
         }
 
         // ── HMS (Hardware Message System) — alert on new error codes ──────────
