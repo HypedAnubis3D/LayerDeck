@@ -4329,9 +4329,13 @@ function renderPrints(){
   // In-progress queue items that don't yet have a linked 'printing' print record
   // (once the user clicks Edit, a print record is created and they show up in f instead)
   const linkedPrintIds=new Set((prints||[]).filter(function(p){return p.fromQueueItemId;}).map(function(p){return p.fromQueueItemId;}));
+  const printIdSet=new Set((prints||[]).map(function(p){return p.id;}));
   const inProgressQ=(queueItems||[]).filter(function(qi){
     if(qi.stage!=='inprogress')return false;
-    if(linkedPrintIds.has(qi.id))return false; // already promoted to a print record
+    // Exclude if a print record already links back to this queue item via any tracking field
+    if(linkedPrintIds.has(qi.id))return false;
+    if(qi.printId&&printIdSet.has(qi.printId))return false;
+    if(qi.linkedPrintId&&printIdSet.has(qi.linkedPrintId))return false;
     if(fc&&qi.category!==fc)return false;
     if(fst&&fst!=='printing')return false;
     if(q&&!(qi.name+qi.category+qi.printer+(qi.notes||'')).toLowerCase().includes(q))return false;
@@ -5334,7 +5338,8 @@ function moveQueue(id,stage){
           printer:qi.printer||profile?.printer||printerRecords[0]?.name||'X1C',
           hrs:qi.hrs||profile?.hrs||0,qty:qi.qty||1,
           filaments:profile?.filaments||[],notes:qi.notes||'',
-          tmfName:profile?.tmfName||null,timestamp:Date.now(),status:'printing'
+          tmfName:profile?.tmfName||null,timestamp:Date.now(),status:'printing',
+          fromQueueItemId:id
         };
         prints.push(newPrint);savePrints();
         // Set BOTH link fields to the same record so openEditInProgressPrint never creates a second one
