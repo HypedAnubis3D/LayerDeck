@@ -18886,12 +18886,18 @@ async function fetchPiStatus(){
         // state before app reconnected), synthesise a finish event using the last known
         // subtask_name so the queue item doesn't stay stuck as "Printing" forever.
         if(curState==='IDLE'&&prevState==='RUNNING'){
-          var _recoveredJob=prev.subtask_name||p.subtask_name||'';
+          var _recoveredJob=prev.subtask_name||p.subtask_name||p._lastJobName||'';
           if(_recoveredJob&&!_isCalibJob(_recoveredJob)){
             // Merge prev (has subtask_name/AMS snapshot) with current p so duration
-            // fallbacks and AMS data are available inside onPiPrintFinished.
+            // fallbacks and AMS data are available inside onPiPrintFinished/Failed.
             var _missedData=Object.assign({},prev,p,{subtask_name:_recoveredJob});
-            onPiPrintFinished(name,_missedData);
+            // Pi Hub sets _lastTerminalState='FAILED' when it witnessed the failure
+            // even if the app was closed. Use that to call the correct handler.
+            if(p._lastTerminalState==='FAILED'){
+              onPiPrintFailed(name,_missedData);
+            } else {
+              onPiPrintFinished(name,_missedData);
+            }
           } else {
             // No job name recoverable — at minimum close stuck inprogress queue items
             var _stuckFixed=false;
