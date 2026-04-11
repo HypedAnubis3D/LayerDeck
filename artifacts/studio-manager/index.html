@@ -18311,9 +18311,23 @@ function reconcileMissingPiPrints(){
 }
 
 async function onPiPrintFinished(name,data){
-  const jobNameCheck=(data.subtask_name||'').replace(/\.gcode\.3mf$/i,'').replace(/\.3mf$/i,'').replace(/\.gcode$/i,'').replace(/\.bgcode$/i,'')||'Unknown';
+  const jobNameCheck=(data.subtask_name||'').replace(/\.gcode\.3mf$/i,'').replace(/\.3mf$/i,'').replace(/\.gcode$/i,'').replace(/\.bgcode$/i,'')||'';
   // Skip calibration completions — never log them as user prints
   if(_isCalibJob(jobNameCheck)){return;}
+  // Guard: empty job name means FINISH/IDLE state had no subtask_name — can't reliably
+  // match or create a print record. Close any stuck inprogress queue items and bail out
+  // to prevent creating 'Unknown' records with random filament depletion.
+  if(!jobNameCheck){
+    var _stuckQ=false;
+    (typeof queueItems!=='undefined'?queueItems:[]).forEach(function(q,i){
+      if(q.stage==='inprogress'&&(!q.printer||q.printer===name)){
+        queueItems[i]=Object.assign({},q,{stage:'done',completedAt:Date.now()});
+        _stuckQ=true;
+      }
+    });
+    if(_stuckQ){if(typeof saveQueue==='function')saveQueue();if(typeof render==='function')render();}
+    return;
+  }
   // Normalise the incoming job name once for all comparisons below
   const _todayStart=new Date();_todayStart.setHours(0,0,0,0);
   const _jNormFin=_normName(jobNameCheck);
@@ -18814,6 +18828,26 @@ async function fetchPiStatus(){
         if(curState==='RUNNING')  onPiPrintStarted(name,p);
         if(curState==='FINISH')   onPiPrintFinished(name,p);
         if(curState==='FAILED')   onPiPrintFailed(name,p);
+        // Handle missed FINISH: if prev was RUNNING and we're now IDLE (Bambu left FINISH
+        // state before app reconnected), synthesise a finish event using the last known
+        // subtask_name so the queue item doesn't stay stuck as "Printing" forever.
+        if(curState==='IDLE'&&prevState==='RUNNING'){
+          var _recoveredJob=prev.subtask_name||p.subtask_name||'';
+          if(_recoveredJob&&!_isCalibJob(_recoveredJob)){
+            // Merge prev (has subtask_name/AMS snapshot) with current p so duration
+            // fallbacks and AMS data are available inside onPiPrintFinished.
+            var _missedData=Object.assign({},prev,p,{subtask_name:_recoveredJob});
+            onPiPrintFinished(name,_missedData);
+          } else {
+            // No job name recoverable — at minimum close stuck inprogress queue items
+            var _stuckFixed=false;
+            queueItems=queueItems.map(function(q){
+              if(q.stage==='inprogress'&&q.printer===name){_stuckFixed=true;return Object.assign({},q,{stage:'done',completedAt:Date.now()});}
+              return q;
+            });
+            if(_stuckFixed){saveQueue();render();}
+          }
+        }
         // Fire pause alert on ANY transition into pause (not just RUNNING→PAUSE)
         // This catches: app-restarted-while-paused (OFFLINE→PAUSE), filament runout mid-print, etc.
         var prevPaused=prevState==='PAUSE'||prevState==='PAUSED';
