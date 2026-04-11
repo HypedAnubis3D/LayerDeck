@@ -5292,11 +5292,12 @@ function moveQueue(id,stage){
   // Moving to Done with a linked print → open finish modal (handles outcome, filament, timestamp)
   if(stage==='done'){
     const qi=queueItems.find(q=>q.id===id);
-    if(qi?.printId){
-      const linkedPrint=prints.find(p=>p.id===qi.printId&&p.status==='printing');
+    const _linkedId=qi&&(qi.printId||qi.linkedPrintId);
+    if(_linkedId){
+      const linkedPrint=prints.find(p=>p.id===_linkedId&&p.status==='printing');
       if(linkedPrint){
         fetch('/api/push/watch-print/'+id,{method:'DELETE'}).catch(()=>{});
-        openFinish(qi.printId);
+        openFinish(_linkedId);
         return;
       }
     }
@@ -9340,8 +9341,8 @@ function delPrint(id){
   if(!p)return;
   showConfirm('Delete "'+p.name+'"?','This cannot be undone.',()=>{
     prints=prints.filter(x=>x.id!==id);
-    // Remove linked queue item by printId OR matching auto-Pi item by name
-    queueItems=queueItems.filter(q=>q.printId!==id&&!(q.autoFromPi&&_normName(q.name)===_normName(p.name)));
+    // Remove linked queue item by printId, linkedPrintId, OR matching auto-Pi item by name
+    queueItems=queueItems.filter(q=>q.printId!==id&&q.linkedPrintId!==id&&!(q.autoFromPi&&_normName(q.name)===_normName(p.name)));
     savePrints();saveQueue();render();
     toast('Print Deleted',p.name,'warning');
   });
@@ -18198,7 +18199,7 @@ async function onPiPrintStarted(name,data){
       return true;
     });
     var alreadyInProgress=queueItems.some(function(q){
-      if(q.stage!=='inprogress'||q.printer!==name||!q.autoFromPi)return false;
+      if(q.stage!=='inprogress'||q.printer!==name)return false;
       if(matchedTmf&&q.tmfId===matchedTmf.id)return true;
       return _normName(q.name)===_normName(displayName)||(matchedTmf&&_normName(q.name)===_normName(matchedTmf.name));
     });
