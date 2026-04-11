@@ -17828,7 +17828,16 @@ function _onReady(){
   if(_sp.get('push-action')==='confirm-print'){
     const _pid=_sp.get('id');
     if(_pid){
-      queueItems=queueItems.map(q=>q.id===_pid?{...q,stage:'done'}:q);
+      // Grab link fields before remapping so we can update the print record too
+      const _pqiOrig=queueItems.find(q=>q.id===_pid);
+      const _pqiLinkedId=_pqiOrig&&(_pqiOrig.printId||_pqiOrig.linkedPrintId)||null;
+      queueItems=queueItems.map(q=>q.id===_pid?{...q,stage:'done',completedAt:Date.now()}:q);
+      // Mark the linked print record as done — otherwise it stays 'printing' and
+      // gets promoted as a placeholder on the next Pi Hub print of the same model.
+      if(_pqiLinkedId){
+        prints=prints.map(p=>p.id===_pqiLinkedId&&p.status==='printing'?{...p,status:'done',finishedAt:Date.now()}:p);
+        savePrints();
+      }
       saveQueue();render();
       toast('Print Confirmed','Marked as done ✓','success');
       window.history.replaceState({},'',window.location.pathname);
@@ -18322,7 +18331,7 @@ async function onPiPrintFinished(name,data){
   if(!jobNameCheck){
     var _stuckQ=false;
     (typeof queueItems!=='undefined'?queueItems:[]).forEach(function(q,i){
-      if(q.stage==='inprogress'&&(!q.printer||q.printer===name)){
+      if(q.stage==='inprogress'&&q.printer===name){
         queueItems[i]=Object.assign({},q,{stage:'done',completedAt:Date.now()});
         _stuckQ=true;
       }
@@ -18381,7 +18390,7 @@ async function onPiPrintFinished(name,data){
   const startTime=piPrintStartTimes[name]||0;
   const wallDurationMins=startTime?Math.round((Date.now()-startTime)/60000):0;
   // Fallback chain: wall-clock start → Pi Hub saved duration → 3MF estimate → active queue item hrs
-  const _activeQueueItem=typeof queueItems!=='undefined'?queueItems.find(function(q){return q.stage==='inprogress'&&(!q.printer||q.printer===name);}):null;
+  const _activeQueueItem=typeof queueItems!=='undefined'?queueItems.find(function(q){return q.stage==='inprogress'&&q.printer===name;}):null;
   const _queueFallbackMins=_activeQueueItem&&_activeQueueItem.hrs?Math.round(_activeQueueItem.hrs*60):0;
   const durationMins=wallDurationMins
     ||(data.lastCompletedDurationMins||0)
@@ -18536,7 +18545,7 @@ async function onPiPrintFinished(name,data){
 
   // Move queue card to done — use actualHrs already computed above
   queueItems=queueItems.map(q=>{
-    if(q.stage==='inprogress'&&(!q.printer||q.printer===name))return{...q,stage:'done',completedAt:Date.now(),hrs:actualHrs};
+    if(q.stage==='inprogress'&&q.printer===name)return{...q,stage:'done',completedAt:Date.now(),hrs:actualHrs};
     return q;
   });
   saveQueue();
