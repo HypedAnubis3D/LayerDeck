@@ -7112,7 +7112,7 @@ function confirmFinish(){
   // ── Move linked queue item to Done + clean up push watch ──
   const finishedPrint=prints.find(x=>x.id===id);
   if(finishedPrint){
-    const qi=queueItems.find(q=>q.printId===id||(q.name===finishedPrint.name&&(q.stage==='inprogress'||q.stage==='queued')));
+    const qi=queueItems.find(q=>q.printId===id||q.linkedPrintId===id||(q.name===finishedPrint.name&&(q.stage==='inprogress'||q.stage==='queued')));
     if(qi){
       queueItems=queueItems.map(q=>q.id===qi.id?{...q,stage:'done',finishedAt,outcome:finOutcome}:q);
       saveQueue();
@@ -18352,10 +18352,14 @@ async function onPiPrintFinished(name,data){
   });
   // 'printing' placeholder → promote to done. Already-done/failed record → skip entirely.
   if(recentDup&&recentDup.status!=='printing'){return;}
-  // Find a 'printing' placeholder matching by name OR linked 3MF filename
-  const _anyPrintingPlaceholder=prints.find(function(r){
-    return r.status==='printing'&&r.printer===name&&_piMatchesJob(r);
-  });
+  // Find the most-recent 'printing' placeholder matching by name OR linked 3MF filename.
+  // Use reduce (not find) to get the newest — prints.find() returns the oldest entry
+  // which could be a stale orphan from a previous bug.
+  const _anyPrintingPlaceholder=(function(){
+    var candidates=prints.filter(function(r){return r.status==='printing'&&r.printer===name&&_piMatchesJob(r);});
+    if(!candidates.length)return null;
+    return candidates.reduce(function(a,b){return (b.timestamp||0)>(a.timestamp||0)?b:a;});
+  })();
   const _promotePlaceholder=_anyPrintingPlaceholder||(recentDup&&recentDup.status==='printing'?recentDup:null);
   // If a placeholder already has user-assigned filaments, DON'T deplete spools again
   // here — the user's savePrint() call already deducted them. Only deplete when the
@@ -18387,6 +18391,10 @@ async function onPiPrintFinished(name,data){
   // Compare remain% at print start (snapshot) vs now to compute per-color grams used.
   // Falls back to single-spool estimation when AMS data isn't available.
   const startSnap=piAmsStartRemain[name]||{};
+  // True only when the app was live during this print — AMS deltas and duration are reliable.
+  // When false (app was closed and reopened mid-print) we still build the record but
+  // skip all automatic spool deduction to prevent random filament decrements.
+  const _hasStartData=startTime>0||Object.keys(startSnap).length>0;
   const filamentSlots=[]; // [{spoolId, grams, mat, col, slotKey}]
   let spoolsChanged=false;
 
@@ -18407,7 +18415,7 @@ async function onPiPrintFinished(name,data){
         const rawCol=tray.tray_color||'888888';
         const col='#'+rawCol.slice(0,6);
         filamentSlots.push({spoolId:mappedId||'',grams,mat,col,spool});
-        if(spool&&!_skipSpoolDepletion){
+        if(spool&&!_skipSpoolDepletion&&_hasStartData){
           spool.remaining=Math.max(0,(spool.remaining||totalG)-grams);
           spoolsChanged=true;
           usageHist.push({id:uid(),spoolId:spool.id,spoolName:spool.name||spool.material,amount:grams,date:new Date().toISOString().split('T')[0],timestamp:Date.now(),note:'Pi Hub — '+jobName+' (AMS slot '+(ui*4+ti+1)+')'});
@@ -18426,7 +18434,7 @@ async function onPiPrintFinished(name,data){
       const grams=Math.max(1,Math.round(extDelta/100*totalG));
       const mat=data.vt_tray.tray_sub_brands||data.vt_tray.tray_type||material;
       filamentSlots.push({spoolId:extSpoolId||'',grams,mat,col:'#888888',spool:extSpool});
-      if(extSpool&&!_skipSpoolDepletion){
+      if(extSpool&&!_skipSpoolDepletion&&_hasStartData){
         extSpool.remaining=Math.max(0,(extSpool.remaining||totalG)-grams);
         spoolsChanged=true;
         usageHist.push({id:uid(),spoolId:extSpool.id,spoolName:extSpool.name||extSpool.material,amount:grams,date:new Date().toISOString().split('T')[0],timestamp:Date.now(),note:'Pi Hub — '+jobName+' (Ext spool)'});
@@ -18443,10 +18451,16 @@ async function onPiPrintFinished(name,data){
       ||spools.find(s=>s.printer===name&&s.material&&s.material.toLowerCase().includes(material.toLowerCase())&&(s.remaining||0)>0)
       ||spools.find(s=>s.material&&s.material.toLowerCase().includes(material.toLowerCase())&&(s.remaining||0)>0);
     if(fallbackSpool&&totalFallbackG>0&&!_skipSpoolDepletion){
-      fallbackSpool.remaining=Math.max(0,(fallbackSpool.remaining||fallbackSpool.totalGrams||1000)-totalFallbackG);
-      spoolsChanged=true;
-      toast('Filament Auto-Deducted','Pi Hub: −'+totalFallbackG+'g from "'+fallbackSpool.name+'" for "'+jobName+'" · Set AMS slot mappings to stop this','warning',8000);
-      // Low spool alerts suppressed here — check spools manually or before conventions
+      if(_hasStartData){
+        // App was live when print started — AMS snapshot available, safe to deduct
+        fallbackSpool.remaining=Math.max(0,(fallbackSpool.remaining||fallbackSpool.totalGrams||1000)-totalFallbackG);
+        spoolsChanged=true;
+        toast('Filament Auto-Deducted','Pi Hub: −'+totalFallbackG+'g from "'+fallbackSpool.name+'" for "'+jobName+'" · Set AMS slot mappings to stop this','warning',8000);
+      } else {
+        // App was closed during this print — no reliable start snapshot, skip deduction
+        // to prevent random spool decrements. User should verify filament manually.
+        toast('Filament Not Deducted','"'+jobName+'" finished while app was closed — check '+fallbackSpool.name+' and adjust manually','info',9000);
+      }
     }
     if(tmfGramsArr){
       const tmfCols=(_earlyTmf.filamentColors||[]);
