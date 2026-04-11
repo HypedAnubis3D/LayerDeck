@@ -18275,9 +18275,11 @@ function reconcileMissingPiPrints(){
     const _qDone=q.completedAt||q.timestamp||0;
     if(_qDone<_todayMs)return; // only today's queue items
     const _qNorm=_normName(q.name);
-    // Check for matching print record — use normalized name to tolerate minor filename diffs
+    // Check for matching print record — direct link always wins; name match no longer
+    // requires autoFromPi since records promoted by onPiPrintFinished may not have it.
     const _exists=prints.find(function(r){
-      return r.autoFromPi&&r.printer===q.printer&&_normName(r.name)===_qNorm&&(r.finishedAt||r.timestamp||0)>=_todayMs;
+      if(r.fromQueueItemId===q.id)return true;
+      return r.printer===q.printer&&_normName(r.name)===_qNorm&&(r.finishedAt||r.timestamp||0)>=_todayMs;
     });
     if(_exists){
       // Patch existing record if it has no real duration
@@ -18571,6 +18573,35 @@ async function onPiPrintFailed(name,data){
 
   wasteLog.push({id:uid(),date:new Date().toISOString().split('T')[0],printerName:name,jobName,reason:'Print failure via MQTT',materialWasted:gramsWasted,timestamp:Date.now()});
   saveWasteLog();
+
+  // Mark any inprogress queue items for this printer+job as done (failed outcome)
+  // and mark their linked print records as failed so they don't stay stuck
+  // as "Printing" cards or get picked up as placeholders for future prints.
+  const _failedAt=Date.now();
+  const _jNormFail=_normName(jobName);
+  var _anyQueuedFixed=false;
+  queueItems=(typeof queueItems!=='undefined'?queueItems:[]).map(function(q){
+    if(q.stage!=='inprogress'||q.printer!==name)return q;
+    if(jobName!=='Unknown'&&_normName(q.name)!==_jNormFail)return q;
+    // Mark the linked print record(s) as failed
+    var _linkedIds=new Set([q.printId,q.linkedPrintId].filter(Boolean));
+    if(_linkedIds.size){
+      prints=(typeof prints!=='undefined'?prints:[]).map(function(p){
+        return _linkedIds.has(p.id)&&p.status==='printing'
+          ?Object.assign({},p,{status:'failed',finishedAt:_failedAt,failNote:'Pi Hub detected failure'})
+          :p;
+      });
+    }
+    // Also mark any orphaned 'printing' records matching by name
+    prints=(typeof prints!=='undefined'?prints:[]).map(function(p){
+      return p.status==='printing'&&p.printer===name&&_normName(p.name)===_jNormFail
+        ?Object.assign({},p,{status:'failed',finishedAt:_failedAt,failNote:'Pi Hub detected failure'})
+        :p;
+    });
+    _anyQueuedFixed=true;
+    return Object.assign({},q,{stage:'done',completedAt:_failedAt,outcome:'failed'});
+  });
+  if(_anyQueuedFixed){savePrints();saveQueue();}
 
   incrementPrinterStat(name,'failCount');
   render();
