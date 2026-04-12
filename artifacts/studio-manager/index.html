@@ -22581,5 +22581,328 @@ function posShowReceipt(sale){
     </div>
   </div>
 </div>
+
+<!-- ═══════════════════════════════════════════════════════════════
+     ANUBIS AI WIDGET — LayerDeck AI Assistant
+     Floating chat widget, streams from /api/ai/chat
+     ═══════════════════════════════════════════════════════════════ -->
+<style>
+  #_anubis-fab{position:fixed;bottom:22px;right:22px;z-index:9998;width:50px;height:50px;border-radius:50%;background:linear-gradient(135deg,#C9A84C,#a07830);border:1px solid rgba(201,168,76,0.5);box-shadow:0 4px 22px rgba(0,0,0,0.6);cursor:pointer;display:flex;align-items:center;justify-content:center;flex-direction:column;transition:all 0.2s ease;font-family:'Share Tech Mono',monospace;gap:1px}
+  #_anubis-fab:hover{transform:scale(1.07);box-shadow:0 6px 28px rgba(201,168,76,0.3)}
+  #_anubis-fab .fab-icon{font-size:18px;line-height:1;color:#0a0f1a}
+  #_anubis-fab .fab-lbl{font-size:5px;letter-spacing:2px;color:#0a0f1a;font-weight:700}
+  #_anubis-panel{position:fixed;bottom:0;right:0;z-index:9997;width:380px;height:100vh;max-width:100vw;background:#0a0f1a;border-left:1px solid rgba(34,211,238,0.15);display:flex;flex-direction:column;box-shadow:-8px 0 60px rgba(0,0,0,0.8);transition:transform 0.25s cubic-bezier(0.16,1,0.3,1);transform:translateX(100%);font-family:'Share Tech Mono',monospace}
+  #_anubis-panel.open{transform:translateX(0)}
+  ._anubis-hdr{padding:12px 14px;border-bottom:1px solid rgba(34,211,238,0.1);display:flex;align-items:center;justify-content:space-between;background:rgba(201,168,76,0.04);flex-shrink:0}
+  ._anubis-avatar{width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,#C9A84C,#a07830);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#0a0f1a;flex-shrink:0}
+  ._anubis-msgs{flex:1;overflow-y:auto;padding:12px 12px 6px;scroll-behavior:smooth}
+  ._anubis-msgs::-webkit-scrollbar{width:3px}
+  ._anubis-msgs::-webkit-scrollbar-thumb{background:#1e2a3a;border-radius:2px}
+  ._anubis-msg{display:flex;align-items:flex-start;gap:8px;margin-bottom:13px;animation:_anubis-fadeup 0.18s ease-out both}
+  ._anubis-msg.user{flex-direction:row-reverse}
+  ._anubis-bubble{max-width:82%;padding:8px 11px;font-size:12.5px;line-height:1.65}
+  ._anubis-bubble.ai{background:#111826;border:1px solid rgba(34,211,238,0.12);border-radius:3px 12px 12px 12px;color:#9ab8c8}
+  ._anubis-bubble.user{background:#1a1f2e;border:1px solid #2d3748;border-radius:12px 3px 12px 12px;color:#7a8899}
+  ._anubis-bubble .ai-label{font-size:7px;color:#22d3ee;letter-spacing:2px;margin-bottom:3px;opacity:0.6}
+  ._anubis-bubble .msg-time{font-size:8px;color:#1a2535;margin-top:3px;text-align:right}
+  ._anubis-bubble code{background:rgba(34,211,238,0.12);color:#22d3ee;padding:1px 5px;border-radius:3px;font-size:11px}
+  ._anubis-bubble ul{margin:5px 0;padding-left:16px}
+  ._anubis-bubble li{margin:2px 0}
+  ._anubis-bubble .ai-h1{font-size:13px;font-weight:700;color:#C9A84C;margin:8px 0 4px}
+  ._anubis-bubble .ai-h2{font-size:12px;font-weight:700;color:#22d3ee;margin:7px 0 3px}
+  ._anubis-bubble .ai-h3{font-size:11px;font-weight:600;color:#7ec8d8;margin:5px 0 2px}
+  ._anubis-dots-wrap{display:flex;align-items:center;gap:7px;padding:6px 4px}
+  ._anubis-dot{width:5px;height:5px;border-radius:50%;background:#22d3ee;animation:_anubis-dot 1.2s ease-in-out infinite}
+  ._anubis-dot-lbl{color:#1a4050;font-size:9px;letter-spacing:1.5px}
+  ._anubis-sugs{padding:0 10px 8px;display:flex;flex-wrap:wrap;gap:5px;flex-shrink:0}
+  ._anubis-sug{background:rgba(34,211,238,0.03);border:1px solid rgba(34,211,238,0.1);color:#1e4050;font-size:10px;padding:4px 9px;border-radius:20px;cursor:pointer;font-family:'Share Tech Mono',monospace;transition:all 0.15s ease}
+  ._anubis-sug:hover{background:rgba(34,211,238,0.1);border-color:rgba(34,211,238,0.4);color:#22d3ee}
+  ._anubis-input-row{padding:8px 10px 10px;border-top:1px solid rgba(34,211,238,0.08);flex-shrink:0;display:flex;gap:7px;align-items:flex-end}
+  ._anubis-textarea{width:100%;box-sizing:border-box;background:transparent;border:none;color:#6ab8c8;font-size:12px;padding:9px 11px;resize:none;font-family:'Share Tech Mono',monospace;line-height:1.5;outline:none}
+  ._anubis-textarea::placeholder{color:#1e3040}
+  ._anubis-send{width:38px;height:38px;border-radius:8px;flex-shrink:0;border:1px solid rgba(34,211,238,0.2);font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all 0.15s ease}
+  ._anubis-send:hover:not(:disabled){filter:brightness(1.15)}
+  ._anubis-send:disabled{cursor:not-allowed}
+  ._anubis-btn{background:none;border:none;cursor:pointer;padding:2px;display:flex;align-items:center;justify-content:center;color:#2a3848;transition:color 0.15s}
+  ._anubis-btn:hover{color:#7ec8d8}
+  @keyframes _anubis-fadeup{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
+  @keyframes _anubis-dot{0%,80%,100%{transform:scale(0.6);opacity:0.3}40%{transform:scale(1);opacity:1}}
+</style>
+
+<!-- Floating button -->
+<button id="_anubis-fab" onclick="_anubisToggle()" title="ANUBIS — LayerDeck AI">
+  <span class="fab-icon">𓂀</span>
+  <span class="fab-lbl">ANUBIS</span>
+</button>
+
+<!-- Chat panel -->
+<div id="_anubis-panel">
+  <!-- Header -->
+  <div class="_anubis-hdr">
+    <div style="display:flex;align-items:center;gap:9px">
+      <div class="_anubis-avatar">A</div>
+      <div>
+        <div style="color:#C9A84C;font-size:11px;font-weight:700;letter-spacing:3px">ANUBIS</div>
+        <div style="color:#1a3040;font-size:7px;letter-spacing:1.5px">LAYERDECK AI · HYPEDANUBIS3D</div>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px">
+      <div style="display:flex;align-items:center;gap:4px">
+        <div style="width:5px;height:5px;border-radius:50%;background:#22d3ee;box-shadow:0 0 5px #22d3ee"></div>
+        <span style="color:#1a4050;font-size:8px;letter-spacing:1px">ONLINE</span>
+      </div>
+      <button class="_anubis-btn" onclick="_anubisCtx()" title="Show live context" style="font-size:10px">⚡</button>
+      <button class="_anubis-btn" onclick="_anubisClear()" title="Clear chat" style="font-size:12px">🗑</button>
+      <button class="_anubis-btn" onclick="_anubisClose()" title="Close" style="font-size:16px">×</button>
+    </div>
+  </div>
+
+  <!-- Messages -->
+  <div class="_anubis-msgs" id="_anubis-msgs"></div>
+
+  <!-- Suggestions -->
+  <div class="_anubis-sugs" id="_anubis-sugs">
+    <button class="_anubis-sug" onclick="_anubisSend('What\'s printing right now?')">What's printing right now?</button>
+    <button class="_anubis-sug" onclick="_anubisSend('What should I start next?')">What should I start next?</button>
+    <button class="_anubis-sug" onclick="_anubisSend('Any low spool alerts?')">Any low spool alerts?</button>
+    <button class="_anubis-sug" onclick="_anubisSend('Best settings for creature balls on the P1S?')">Best settings for creature balls on P1S?</button>
+    <button class="_anubis-sug" onclick="_anubisSend('How does 3MF auto-fill work?')">How does 3MF auto-fill work?</button>
+    <button class="_anubis-sug" onclick="_anubisSend('My Etsy orders aren\'t importing — help.')">Etsy orders not importing — help</button>
+  </div>
+
+  <!-- Input -->
+  <div class="_anubis-input-row">
+    <div style="flex:1;border:1px solid rgba(34,211,238,0.15);border-radius:8px;background:#0c1018;overflow:hidden">
+      <textarea id="_anubis-input" class="_anubis-textarea" rows="2"
+        placeholder="Ask about printers, queue, filament, workflow…"
+        onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();_anubisSend()}"></textarea>
+    </div>
+    <button id="_anubis-send-btn" class="_anubis-send" onclick="_anubisSend()"
+      style="background:linear-gradient(135deg,#22d3ee,#0891b2);color:#061018">▲</button>
+  </div>
+</div>
+
+<script>
+(function(){
+  var _hist=[];
+  var _loading=false;
+  var _showSug=true;
+  var _panelOpen=false;
+
+  function _fmt(){return new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});}
+
+  function _md(s){
+    return s
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+      .replace(/`([^`\n]+)`/g,'<code>$1</code>')
+      .replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>')
+      .replace(/\*([^*\n]+)\*/g,'<em>$1</em>')
+      .replace(/^### (.+)$/gm,'<div class="ai-h3">$1</div>')
+      .replace(/^## (.+)$/gm,'<div class="ai-h2">$1</div>')
+      .replace(/^# (.+)$/gm,'<div class="ai-h1">$1</div>')
+      .replace(/^[-•]\s+(.+)$/gm,'<li>$1</li>')
+      .replace(/(<li>[\s\S]*?<\/li>(\n)?)+/g,function(m){return '<ul>'+m+'</ul>';})
+      .replace(/\n\n/g,'<br><br>')
+      .replace(/\n/g,'<br>');
+  }
+
+  function _buildContext(){
+    var lines=[];
+    try{
+      // Printer states
+      if(window.piPrevStates){
+        var states=Object.entries(piPrevStates);
+        if(states.length){
+          states.forEach(function(e){
+            var name=e[0],p=e[1];
+            var s=(p.gcode_state||'IDLE');
+            var job=(p.subtask_name||'').replace(/\.gcode\.3mf$/i,'').replace(/\.3mf$/i,'');
+            var pct=p.mc_percent||0;
+            var rem=p.mc_remaining_time||0;
+            var remStr=rem>0?(Math.floor(rem/60)+'h '+(rem%60)+'m remaining'):'';
+            lines.push('Printer '+name+': '+s+(job?' | Job: '+job:'')+(s==='RUNNING'?' | '+pct+'%':'')+(remStr?' | '+remStr:''));
+          });
+        }else{lines.push('Pi Hub: no printers connected');}
+      }else{lines.push('Pi Hub: not configured or offline');}
+      // Queue
+      var qi=window.queueItems||[];
+      var inprog=qi.filter(function(q){return q.stage==='inprogress';});
+      var queued=qi.filter(function(q){return q.stage==='queued';});
+      lines.push('Queue: '+inprog.length+' in progress, '+queued.length+' queued');
+      inprog.forEach(function(q){lines.push('  In Progress: '+q.name+(q.printer?' on '+q.printer:''));});
+      queued.slice(0,5).forEach(function(q){lines.push('  Queued: '+q.name+(q.priority==='urgent'||q.priority==='high'?' ['+q.priority+']':''));});
+      // Orders
+      var ords=window.orders||[];
+      var pending=ords.filter(function(o){return o.status!=='fulfilled'&&o.status!=='cancelled';});
+      lines.push('Pending orders: '+pending.length);
+      // Spools
+      var spls=window.spools||[];
+      var low=spls.filter(function(s){return s.remaining!=null&&s.remaining<150;});
+      if(low.length){
+        lines.push('Low spools (under 150g): '+low.map(function(s){return (s.color||'?')+' '+(s.material||'?')+' ('+s.remaining+'g)';}).join(', '));
+      }else{lines.push('No spools critically low');}
+      // Today revenue
+      var sls=window.sales||[];
+      var today=new Date().toDateString();
+      var todayRev=sls.filter(function(s){return new Date(s.timestamp).toDateString()===today;}).reduce(function(a,s){return a+(s.total||0);},0);
+      if(todayRev>0)lines.push("Today's sales: $"+todayRev.toFixed(2));
+      // Prints status
+      var prs=window.prints||[];
+      var activePrints=prs.filter(function(p){return p.status==='printing';});
+      if(activePrints.length)lines.push('Active print records: '+activePrints.map(function(p){return p.name;}).join(', '));
+    }catch(e){lines.push('(context error: '+e.message+')');}
+    return lines.join('\n');
+  }
+
+  function _appendMsg(role,content,streaming){
+    var msgs=document.getElementById('_anubis-msgs');
+    var isUser=role==='user';
+    var id='_anubis-m-'+Date.now()+'-'+Math.random().toString(36).slice(2);
+    var div=document.createElement('div');
+    div.className='_anubis-msg'+(isUser?' user':'');
+    div.innerHTML=
+      '<div class="_anubis-avatar" style="width:24px;height:24px;font-size:9px;flex-shrink:0;margin-top:2px;'+(isUser?'background:#1e2435;border:1px solid #2d3748;color:#4a5568;':'')+'">'+
+        (isUser?'T':'A')+
+      '</div>'+
+      '<div class="_anubis-bubble '+(isUser?'user':'ai')+'" id="'+id+'">'+
+        (!isUser?'<div class="ai-label">ANUBIS</div>':'')+
+        '<div class="msg-body">'+(isUser?content.replace(/</g,'&lt;'):_md(content))+'</div>'+
+        '<div class="msg-time">'+_fmt()+'</div>'+
+      '</div>';
+    msgs.appendChild(div);
+    msgs.scrollTop=msgs.scrollHeight;
+    return id;
+  }
+
+  function _updateMsg(id,text){
+    var el=document.getElementById(id);
+    if(!el)return;
+    el.querySelector('.msg-body').innerHTML=_md(text);
+    var msgs=document.getElementById('_anubis-msgs');
+    msgs.scrollTop=msgs.scrollHeight;
+  }
+
+  function _showDots(){
+    var msgs=document.getElementById('_anubis-msgs');
+    var d=document.createElement('div');
+    d.id='_anubis-typing';d.className='_anubis-dots-wrap';
+    d.innerHTML='<div class="_anubis-dot" style="animation-delay:0s"></div><div class="_anubis-dot" style="animation-delay:0.18s"></div><div class="_anubis-dot" style="animation-delay:0.36s"></div><span class="_anubis-dot-lbl">ANUBIS PROCESSING</span>';
+    msgs.appendChild(d);msgs.scrollTop=msgs.scrollHeight;
+  }
+  function _hideDots(){var d=document.getElementById('_anubis-typing');if(d)d.remove();}
+
+  function _setSendState(busy){
+    _loading=busy;
+    var btn=document.getElementById('_anubis-send-btn');
+    var inp=document.getElementById('_anubis-input');
+    if(btn){
+      btn.disabled=busy;
+      btn.style.background=busy?'rgba(34,211,238,0.06)':'linear-gradient(135deg,#22d3ee,#0891b2)';
+      btn.style.color=busy?'#1a3040':'#061018';
+      btn.textContent=busy?'⟳':'▲';
+    }
+    if(inp)inp.disabled=busy;
+  }
+
+  function _hideSuggestions(){
+    _showSug=false;
+    var el=document.getElementById('_anubis-sugs');
+    if(el)el.style.display='none';
+  }
+
+  window._anubisToggle=function(){
+    _panelOpen=!_panelOpen;
+    var panel=document.getElementById('_anubis-panel');
+    var fab=document.getElementById('_anubis-fab');
+    if(_panelOpen){
+      panel.classList.add('open');
+      fab.style.background='#0a0f1a';
+      fab.querySelector('.fab-icon').style.color='#C9A84C';
+      fab.querySelector('.fab-lbl').style.color='#C9A84C';
+      setTimeout(function(){document.getElementById('_anubis-input').focus();},120);
+      // Show welcome if empty
+      if(document.getElementById('_anubis-msgs').children.length===0){
+        _appendMsg('assistant',"The scales are balanced. ANUBIS is online.\n\nI know your setup cold — A1, P1 Room, P1 Closet, the Pi Hub, every Discord webhook. I can see your live queue, spool stock, and order count right now.\n\nWhat do you need?");
+      }
+    }else{
+      panel.classList.remove('open');
+      fab.style.background='linear-gradient(135deg,#C9A84C,#a07830)';
+      fab.querySelector('.fab-icon').style.color='#0a0f1a';
+      fab.querySelector('.fab-lbl').style.color='#0a0f1a';
+    }
+  };
+  window._anubisClose=function(){if(_panelOpen)_anubisToggle();};
+
+  window._anubisClear=function(){
+    _hist=[];_showSug=true;
+    document.getElementById('_anubis-msgs').innerHTML='';
+    document.getElementById('_anubis-sugs').style.display='';
+    _appendMsg('assistant','Session cleared. Ready.');
+  };
+
+  window._anubisCtx=function(){
+    var ctx=_buildContext();
+    _appendMsg('assistant','**Live context snapshot:**\n\n'+ctx);
+  };
+
+  window._anubisSend=async function(text){
+    var inp=document.getElementById('_anubis-input');
+    var t=(text||(inp?inp.value:'')).trim();
+    if(!t||_loading)return;
+    _hideSuggestions();
+    if(inp)inp.value='';
+    _appendMsg('user',t);
+    _hist.push({role:'user',content:t});
+    _setSendState(true);
+    _showDots();
+
+    var ctx=_buildContext();
+    var msgId=null;
+    var fullText='';
+
+    try{
+      var res=await fetch('/api/ai/chat',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({messages:_hist.slice(-20),context:ctx})
+      });
+      if(!res.ok||!res.body)throw new Error('HTTP '+res.status);
+
+      _hideDots();
+      msgId=_appendMsg('assistant','');
+
+      var reader=res.body.getReader();
+      var decoder=new TextDecoder();
+      var buf='';
+      while(true){
+        var chunk=await reader.read();
+        if(chunk.done)break;
+        buf+=decoder.decode(chunk.value,{stream:true});
+        var lines=buf.split('\n');
+        buf=lines.pop()||'';
+        for(var i=0;i<lines.length;i++){
+          var line=lines[i];
+          if(!line.startsWith('data: '))continue;
+          var payload=line.slice(6).trim();
+          if(payload==='[DONE]')break;
+          try{
+            var parsed=JSON.parse(payload);
+            if(parsed.text){fullText+=parsed.text;_updateMsg(msgId,fullText);}
+          }catch(e){}
+        }
+      }
+      if(!fullText)fullText='(no response)';
+      _updateMsg(msgId,fullText);
+      _hist.push({role:'assistant',content:fullText});
+    }catch(e){
+      _hideDots();
+      if(msgId)_updateMsg(msgId,'⚠ Connection error: '+e.message);
+      else _appendMsg('assistant','⚠ Connection error: '+e.message);
+    }
+    _setSendState(false);
+    setTimeout(function(){if(inp)inp.focus();},60);
+  };
+})();
+</script>
 </body>
 </html>

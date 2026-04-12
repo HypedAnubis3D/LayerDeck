@@ -15,6 +15,7 @@ import visionRouter from "./vision";
 import emailRouter from "./email";
 import catalogRouter from "./catalog";
 import etsyGmailRouter from "./etsy-gmail";
+import aiRouter from "./ai";
 
 const router: IRouter = Router();
 
@@ -34,5 +35,6 @@ router.use("/vision", visionRouter);
 router.use("/email", emailRouter);
 router.use("/catalog", catalogRouter);
 router.use("/etsy", etsyGmailRouter);
+router.use("/ai", aiRouter);
 
 export default router;

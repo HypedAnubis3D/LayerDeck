@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { Navbar } from '@/components/layout/Navbar';
+import { AIChatWidget } from '@/components/layout/AIChatWidget';
 import { StatCard } from '@/components/dashboard/StatCard';
 import { DropZone } from '@/components/upload/DropZone';
 import { PreviewList } from '@/components/upload/PreviewList';
@@ -124,6 +125,7 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col relative">
+      <AIChatWidget />
       <div className="absolute top-0 left-[20%] w-[60%] h-[300px] bg-primary/5 rounded-[100%] blur-[120px] pointer-events-none" />
 
       <Navbar />
