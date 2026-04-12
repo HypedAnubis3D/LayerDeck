@@ -1,0 +1,666 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chroma Canvas Stack Planner — HypedAnubis3D</title>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;900&family=Rajdhani:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --gold: #c9a84c;
+    --gold-bright: #f0c040;
+    --gold-dim: #7a6128;
+    --black: #0a0a0a;
+    --surface: #111111;
+    --surface2: #181818;
+    --surface3: #222222;
+    --text: #e8e0d0;
+    --text-dim: #888070;
+    --border: #272727;
+    --green: #3ddc84;
+    --green-dim: #1a6640;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--black);
+    color: var(--text);
+    font-family: 'Rajdhani', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background-image:
+      linear-gradient(rgba(201,168,76,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(201,168,76,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none; z-index: 0;
+  }
+  .container { position: relative; z-index: 1; max-width: 980px; margin: 0 auto; padding: 36px 20px 80px; }
+
+  /* HEADER */
+  header { text-align: center; margin-bottom: 40px; animation: fadeDown .5s ease both; }
+  .brand { font-family: 'Cinzel', serif; font-size: 10px; letter-spacing: 6px; color: var(--gold-dim); margin-bottom: 10px; }
+  h1 { font-family: 'Cinzel', serif; font-size: clamp(24px,4.5vw,38px); font-weight: 900; color: var(--gold); line-height: 1.1; margin-bottom: 8px; }
+  h1 span { color: var(--text); font-weight: 400; }
+  .subtitle { font-size: 14px; color: var(--text-dim); letter-spacing: 1px; }
+
+  /* WORKFLOW STEPS */
+  .workflow { display: flex; gap: 0; margin-bottom: 36px; animation: fadeUp .5s .1s ease both; }
+  .wf-step {
+    flex: 1; text-align: center; padding: 14px 8px;
+    background: var(--surface); border: 1px solid var(--border);
+    border-right: none;
+  }
+  .wf-step:last-child { border-right: 1px solid var(--border); }
+  .wf-step.active { background: var(--surface2); border-color: var(--gold-dim); }
+  .wf-num {
+    width: 24px; height: 24px; border-radius: 50%;
+    background: var(--surface3); border: 1px solid var(--border);
+    font-family: 'Cinzel', serif; font-size: 11px; font-weight: 600;
+    display: flex; align-items: center; justify-content: center;
+    margin: 0 auto 6px; color: var(--text-dim);
+  }
+  .wf-step.active .wf-num { background: var(--gold); color: var(--black); border-color: var(--gold); }
+  .wf-step.done .wf-num { background: var(--gold-dim); color: var(--black); border-color: var(--gold-dim); }
+  .wf-label { font-size: 11px; letter-spacing: 1px; color: var(--text-dim); font-family: 'Cinzel', serif; }
+  .wf-step.active .wf-label { color: var(--gold); }
+
+  /* UPLOAD */
+  .upload-zone {
+    border: 1px dashed var(--gold-dim); border-radius: 2px; padding: 44px 24px;
+    text-align: center; cursor: pointer; transition: all .3s;
+    background: var(--surface); margin-bottom: 20px;
+    animation: fadeUp .5s .15s ease both;
+  }
+  .upload-zone:hover, .upload-zone.drag-over {
+    border-color: var(--gold); border-style: solid;
+    background: var(--surface2); box-shadow: 0 0 24px rgba(201,168,76,0.08);
+  }
+  .upload-icon { font-size: 36px; margin-bottom: 12px; }
+  .upload-title { font-family: 'Cinzel', serif; font-size: 15px; color: var(--gold); letter-spacing: 2px; margin-bottom: 6px; }
+  .upload-sub { font-size: 13px; color: var(--text-dim); }
+  #fileInput { display: none; }
+
+  /* PREVIEW ROW */
+  .preview-row { display: none; gap: 14px; margin-bottom: 18px; align-items: center; animation: fadeUp .3s ease both; }
+  .preview-row.visible { display: flex; }
+  .prev-thumb { width: 68px; height: 68px; border-radius: 2px; object-fit: cover; border: 1px solid var(--border); flex-shrink: 0; }
+  .prev-fname { font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 2px; word-break: break-all; }
+  .prev-status { font-size: 12px; color: var(--green); letter-spacing: 1px; }
+  .change-btn {
+    background: transparent; border: 1px solid var(--border); color: var(--text-dim);
+    font-family: 'Rajdhani', sans-serif; font-size: 12px; letter-spacing: 1px;
+    padding: 6px 14px; cursor: pointer; transition: all .2s; white-space: nowrap; flex-shrink: 0;
+  }
+  .change-btn:hover { border-color: var(--gold-dim); color: var(--text); }
+
+  /* OPTIONS */
+  .options-row { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 18px; animation: fadeUp .5s .2s ease both; }
+  .opt-group { flex: 1; min-width: 140px; display: flex; flex-direction: column; gap: 5px; }
+  .opt-label { font-family: 'Cinzel', serif; font-size: 10px; letter-spacing: 3px; color: var(--gold-dim); text-transform: uppercase; }
+  select {
+    background: var(--surface2); border: 1px solid var(--border); color: var(--text);
+    font-family: 'Rajdhani', sans-serif; font-size: 14px;
+    padding: 9px 12px; border-radius: 2px; outline: none; transition: border-color .2s; width: 100%;
+  }
+  select:focus { border-color: var(--gold-dim); }
+
+  /* ANALYZE BTN */
+  .analyze-btn {
+    width: 100%; padding: 16px; background: transparent;
+    border: 1px solid var(--gold); color: var(--gold);
+    font-family: 'Cinzel', serif; font-size: 13px; letter-spacing: 4px;
+    cursor: pointer; transition: all .3s; position: relative; overflow: hidden;
+    margin-bottom: 36px;
+  }
+  .analyze-btn::before {
+    content: ''; position: absolute; top: 0; left: -100%; width: 100%; height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(201,168,76,0.12), transparent);
+    transition: left .5s;
+  }
+  .analyze-btn:hover::before { left: 100%; }
+  .analyze-btn:hover { background: rgba(201,168,76,0.07); box-shadow: 0 0 20px rgba(201,168,76,0.12); }
+  .analyze-btn:disabled { border-color: var(--border); color: var(--text-dim); cursor: not-allowed; }
+  .analyze-btn:disabled::before { display: none; }
+
+  /* LOADING */
+  .loading { display: none; text-align: center; padding: 60px 0; }
+  .loading.visible { display: block; }
+  .loading-ring { width: 44px; height: 44px; border: 1px solid var(--border); border-top-color: var(--gold); border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 16px; }
+  .loading-text { font-family: 'Cinzel', serif; font-size: 11px; letter-spacing: 4px; color: var(--gold-dim); }
+  .loading-sub { font-size: 12px; color: var(--text-dim); margin-top: 6px; }
+
+  /* ERROR */
+  .error-box { display: none; background: rgba(180,60,60,0.1); border: 1px solid rgba(180,60,60,0.3); color: #e08080; padding: 14px 18px; font-size: 14px; border-radius: 2px; margin-bottom: 18px; }
+  .error-box.visible { display: block; }
+
+  /* ====== RESULTS ====== */
+  .results { display: none; animation: fadeUp .5s ease both; }
+  .results.visible { display: block; }
+
+  .sec-header { display: flex; align-items: center; gap: 14px; margin-bottom: 16px; margin-top: 28px; }
+  .sec-title { font-family: 'Cinzel', serif; font-size: 12px; letter-spacing: 3px; color: var(--gold); white-space: nowrap; }
+  .sec-line { flex: 1; height: 1px; background: linear-gradient(to right, var(--gold-dim), transparent); }
+
+  /* Summary */
+  .summary-bar {
+    display: flex; flex-wrap: wrap; gap: 20px;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 2px; padding: 14px 18px; margin-bottom: 10px;
+  }
+  .sum-item { display: flex; flex-direction: column; gap: 2px; }
+  .sum-key { font-family: 'Cinzel', serif; font-size: 9px; letter-spacing: 3px; color: var(--gold-dim); }
+  .sum-val { font-size: 14px; font-weight: 600; color: var(--text); }
+
+  /* Palette strip */
+  .palette-strip { display: flex; height: 36px; border-radius: 2px; overflow: hidden; margin-bottom: 4px; border: 1px solid var(--border); }
+  .pal-swatch { flex: 1; }
+
+  /* ====== CHROMA CANVAS PANEL ====== */
+  .cc-panel {
+    background: var(--surface); border: 1px solid var(--border);
+    border-top: 2px solid var(--green); border-radius: 2px; overflow: hidden;
+  }
+  .cc-panel-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 20px; background: var(--surface2); border-bottom: 1px solid var(--border); flex-wrap: wrap; gap: 10px;
+  }
+  .cc-header-left { display: flex; align-items: center; gap: 10px; }
+  .cc-badge { background: var(--green); color: var(--black); font-family: 'Cinzel', serif; font-size: 9px; letter-spacing: 2px; padding: 3px 8px; border-radius: 1px; font-weight: 700; }
+  .cc-header-left span { font-family: 'Cinzel', serif; font-size: 13px; color: var(--text); letter-spacing: 1px; }
+  .cc-open-btn {
+    background: var(--green); color: var(--black); border: none;
+    font-family: 'Cinzel', serif; font-size: 10px; letter-spacing: 2px;
+    padding: 9px 18px; cursor: pointer; font-weight: 700;
+    text-decoration: none; display: inline-block; transition: opacity .2s;
+  }
+  .cc-open-btn:hover { opacity: .85; }
+
+  /* Steps */
+  .cc-steps { padding: 20px 20px 24px; display: flex; flex-direction: column; gap: 20px; }
+  .cc-step { display: flex; gap: 14px; }
+  .cc-step-num {
+    width: 26px; height: 26px; border-radius: 50%; flex-shrink: 0; margin-top: 1px;
+    background: var(--surface3); border: 1px solid var(--border);
+    font-family: 'Cinzel', serif; font-size: 11px;
+    display: flex; align-items: center; justify-content: center; color: var(--gold-dim);
+  }
+  .cc-step-title { font-size: 15px; font-weight: 700; color: var(--text); margin-bottom: 5px; }
+  .cc-step-desc { font-size: 13px; color: var(--text-dim); line-height: 1.6; font-weight: 300; }
+  .cc-step-desc strong { color: var(--gold); font-weight: 600; }
+
+  /* Settings pill row */
+  .settings-pills { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+  .s-pill {
+    background: var(--surface3); border: 1px solid var(--border);
+    border-radius: 2px; padding: 8px 14px;
+  }
+  .s-pill-key { font-family: 'Cinzel', serif; font-size: 9px; letter-spacing: 2px; color: var(--gold-dim); margin-bottom: 2px; }
+  .s-pill-val { font-size: 16px; font-weight: 700; color: var(--gold); }
+
+  /* Slot cards */
+  .slot-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 10px; margin-top: 12px; }
+  .slot-card {
+    background: var(--surface3); border: 1px solid var(--border);
+    border-radius: 2px; padding: 14px; display: flex; flex-direction: column; gap: 8px;
+  }
+  .slot-top { display: flex; align-items: center; gap: 10px; }
+  .slot-dot { width: 40px; height: 40px; border-radius: 50%; flex-shrink: 0; border: 1px solid rgba(255,255,255,0.1); }
+  .slot-label { font-family: 'Cinzel', serif; font-size: 9px; letter-spacing: 2px; color: var(--gold-dim); margin-bottom: 2px; }
+  .slot-name { font-size: 14px; font-weight: 700; color: var(--text); }
+  .slot-brand { font-size: 11px; color: var(--text-dim); }
+  .hex-row {
+    display: flex; align-items: center; gap: 8px;
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 2px; padding: 7px 10px; cursor: pointer; transition: border-color .2s;
+  }
+  .hex-row:hover { border-color: var(--gold-dim); }
+  .hex-dot { width: 16px; height: 16px; border-radius: 2px; flex-shrink: 0; }
+  .hex-val { font-family: 'Cinzel', serif; font-size: 12px; letter-spacing: 2px; color: var(--text); flex: 1; }
+  .hex-copy-lbl { font-size: 10px; letter-spacing: 1px; color: var(--text-dim); font-family: 'Cinzel', serif; transition: color .2s; }
+  .hex-copy-lbl.copied { color: var(--green); }
+  .slot-note { font-size: 11px; color: var(--text-dim); line-height: 1.5; }
+
+  /* Copy all */
+  .copy-all-btn {
+    margin-top: 14px; width: 100%; padding: 12px; background: transparent;
+    border: 1px solid var(--green-dim); color: var(--green);
+    font-family: 'Cinzel', serif; font-size: 11px; letter-spacing: 3px;
+    cursor: pointer; transition: all .2s;
+  }
+  .copy-all-btn:hover { background: rgba(61,220,132,0.06); border-color: var(--green); }
+  .copy-all-btn.copied { background: rgba(61,220,132,0.1); border-color: var(--green); }
+
+  /* Filament search tags */
+  .search-tags { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+  .search-tag {
+    display: flex; align-items: center; gap: 8px;
+    background: var(--surface3); border: 1px solid var(--border);
+    border-radius: 2px; padding: 7px 12px; cursor: pointer; transition: border-color .2s;
+  }
+  .search-tag:hover { border-color: var(--gold-dim); }
+  .tag-dot { width: 11px; height: 11px; border-radius: 50%; flex-shrink: 0; }
+  .tag-text { font-size: 13px; color: var(--text); }
+  .tag-copy { font-size: 10px; letter-spacing: 1px; color: var(--text-dim); font-family: 'Cinzel', serif; margin-left: 4px; transition: color .2s; }
+  .tag-copy.copied { color: var(--green); }
+
+  /* Notes */
+  .notes-box {
+    background: var(--surface); border: 1px solid var(--border);
+    border-left: 2px solid var(--gold-dim); padding: 16px 18px; border-radius: 2px;
+  }
+  .notes-key { font-family: 'Cinzel', serif; font-size: 9px; letter-spacing: 3px; color: var(--gold-dim); margin-bottom: 8px; }
+  .notes-body { font-size: 13px; color: var(--text-dim); line-height: 1.7; font-weight: 300; }
+  .notes-body strong { color: var(--gold); font-weight: 600; }
+
+  /* Reset */
+  .reset-row { display: flex; justify-content: center; margin-top: 28px; }
+  .reset-btn {
+    background: transparent; border: 1px solid var(--border); color: var(--text-dim);
+    font-family: 'Rajdhani', sans-serif; font-size: 12px; letter-spacing: 2px;
+    padding: 10px 28px; cursor: pointer; transition: all .2s; text-transform: uppercase;
+  }
+  .reset-btn:hover { border-color: var(--gold-dim); color: var(--text); }
+
+  @keyframes fadeDown { from { opacity:0;transform:translateY(-16px) } to { opacity:1;transform:translateY(0) } }
+  @keyframes fadeUp { from { opacity:0;transform:translateY(12px) } to { opacity:1;transform:translateY(0) } }
+  @keyframes spin { to { transform:rotate(360deg) } }
+
+  @media(max-width:600px){
+    .workflow { display: none; }
+    .slot-grid { grid-template-columns: 1fr; }
+    .settings-pills { flex-direction: column; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <header>
+    <div class="brand">HypedAnubis3D — MakerLab Tools</div>
+    <h1>Chroma Canvas <span>Stack Planner</span></h1>
+    <div class="subtitle">Upload an image · Get a ready-to-paste palette for Chroma Canvas</div>
+  </header>
+
+  <div class="workflow" id="workflow">
+    <div class="wf-step active" id="wf1"><div class="wf-num">1</div><div class="wf-label">Upload</div></div>
+    <div class="wf-step" id="wf2"><div class="wf-num">2</div><div class="wf-label">AI Analyzes</div></div>
+    <div class="wf-step" id="wf3"><div class="wf-num">3</div><div class="wf-label">Get Stack</div></div>
+    <div class="wf-step" id="wf4"><div class="wf-num">4</div><div class="wf-label">Open Chroma Canvas</div></div>
+    <div class="wf-step" id="wf5"><div class="wf-num">5</div><div class="wf-label">Paste & Print</div></div>
+  </div>
+
+  <div class="upload-zone" id="uploadZone">
+    <div class="upload-icon">🖼</div>
+    <div class="upload-title">Drop Your Image Here</div>
+    <div class="upload-sub">or click to browse · JPG, PNG, WEBP</div>
+    <input type="file" id="fileInput" accept="image/*">
+  </div>
+
+  <div class="preview-row" id="previewRow">
+    <img class="prev-thumb" id="prevThumb" src="" alt="">
+    <div style="flex:1">
+      <div class="prev-fname" id="prevFname">—</div>
+      <div class="prev-status">✓ Ready to analyze</div>
+    </div>
+    <button class="change-btn" id="changeBtn">Change Image</button>
+  </div>
+
+  <div class="options-row">
+    <div class="opt-group">
+      <div class="opt-label">Color Slots</div>
+      <select id="slotCount">
+        <option value="3">3 Colors (Minimal)</option>
+        <option value="4" selected>4 Colors (Standard)</option>
+        <option value="5">5 Colors (Detailed)</option>
+        <option value="6">6 Colors (Max)</option>
+      </select>
+    </div>
+    <div class="opt-group">
+      <div class="opt-label">Layer Height</div>
+      <select id="layerHeight">
+        <option value="0.08">0.08mm (Ultra Fine)</option>
+        <option value="0.10" selected>0.10mm (Fine)</option>
+        <option value="0.12">0.12mm (Standard)</option>
+        <option value="0.16">0.16mm (Draft)</option>
+      </select>
+    </div>
+    <div class="opt-group">
+      <div class="opt-label">Filament Type</div>
+      <select id="filamentType">
+        <option value="matte" selected>Matte PLA (Best for CC)</option>
+        <option value="basic">Basic PLA</option>
+        <option value="silk">Silk PLA</option>
+        <option value="any">Any</option>
+      </select>
+    </div>
+    <div class="opt-group">
+      <div class="opt-label">Print Style</div>
+      <select id="printStyle">
+        <option value="auto" selected>Auto-detect</option>
+        <option value="portrait">Portrait / Character</option>
+        <option value="landscape">Landscape / Scene</option>
+        <option value="logo">Logo / Flat Art</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="error-box" id="errorBox"></div>
+
+  <button class="analyze-btn" id="analyzeBtn" disabled>Analyze Image & Build Chroma Canvas Stack</button>
+
+  <div class="loading" id="loadingSection">
+    <div class="loading-ring"></div>
+    <div class="loading-text">Analyzing Image</div>
+    <div class="loading-sub">Extracting dominant colors · Mapping to Bambu filaments</div>
+  </div>
+
+  <!-- ===== RESULTS ===== -->
+  <div class="results" id="results">
+
+    <div class="sec-header"><div class="sec-title">Image Analysis</div><div class="sec-line"></div></div>
+    <div class="summary-bar" id="summaryBar"></div>
+    <div class="palette-strip" id="paletteStrip"></div>
+
+    <div class="sec-header" style="margin-top:28px;"><div class="sec-title">Chroma Canvas Setup</div><div class="sec-line"></div></div>
+
+    <div class="cc-panel">
+      <div class="cc-panel-header">
+        <div class="cc-header-left">
+          <span class="cc-badge">BAMBU</span>
+          <span>Ready-to-paste palette for Chroma Canvas</span>
+        </div>
+        <a href="https://makerworld.com/en/makerlab/chromaCanvas?from=makerlab" target="_blank" class="cc-open-btn">Open Chroma Canvas ↗</a>
+      </div>
+
+      <div class="cc-steps">
+
+        <div class="cc-step">
+          <div class="cc-step-num">1</div>
+          <div>
+            <div class="cc-step-title">Open Chroma Canvas & Upload Your Image</div>
+            <div class="cc-step-desc">Click <strong>Open Chroma Canvas ↗</strong> above. Upload the same image you analyzed here. Skip any preset color scheme — you'll build a custom palette in step 3.</div>
+          </div>
+        </div>
+
+        <div class="cc-step">
+          <div class="cc-step-num">2</div>
+          <div style="width:100%">
+            <div class="cc-step-title">Set These Values in the Settings Tab</div>
+            <div class="cc-step-desc">Match these settings before generating. The layer height is what the AI optimized the color stack for.</div>
+            <div class="settings-pills" id="settingsPills"></div>
+          </div>
+        </div>
+
+        <div class="cc-step">
+          <div class="cc-step-num">3</div>
+          <div style="width:100%">
+            <div class="cc-step-title">Build Your Custom Palette — Slot by Slot</div>
+            <div class="cc-step-desc">In Chroma Canvas, select <strong>Custom Palette</strong>. Add each slot below in order. Click any hex code to copy it, then paste it into the Chroma Canvas color picker. <strong>Slot 1 = darkest/bottom, last slot = lightest/top.</strong></div>
+            <div class="slot-grid" id="slotGrid"></div>
+            <button class="copy-all-btn" id="copyAllBtn">Copy All Hex Codes in Order</button>
+          </div>
+        </div>
+
+        <div class="cc-step">
+          <div class="cc-step-num">4</div>
+          <div style="width:100%">
+            <div class="cc-step-title">Find These Bambu Filaments (Optional but Recommended)</div>
+            <div class="cc-step-desc">Search these names in Chroma Canvas's filament library to match actual Bambu Lab spools. Click any name to copy it.</div>
+            <div class="search-tags" id="searchTags"></div>
+          </div>
+        </div>
+
+        <div class="cc-step">
+          <div class="cc-step-num">5</div>
+          <div>
+            <div class="cc-step-title">Generate, Tweak & Export</div>
+            <div class="cc-step-desc">Hit <strong>Generate</strong> in Chroma Canvas. If contrast looks flat, drag the <strong>gradient curve</strong> sliders. Export the <strong>.3MF</strong> and open in Bambu Studio → send to your A1 or P1.</div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <div class="sec-header"><div class="sec-title">Print Notes</div><div class="sec-line"></div></div>
+    <div class="notes-box">
+      <div class="notes-key">AI Recommendations for This Image</div>
+      <div class="notes-body" id="notesBody"></div>
+    </div>
+
+    <div class="reset-row">
+      <button class="reset-btn" id="resetBtn">↩ Analyze Another Image</button>
+    </div>
+
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+let file = null, b64 = null, stack = null;
+
+$('uploadZone').onclick = () => $('fileInput').click();
+$('uploadZone').ondragover = e => { e.preventDefault(); $('uploadZone').classList.add('drag-over'); };
+$('uploadZone').ondragleave = () => $('uploadZone').classList.remove('drag-over');
+$('uploadZone').ondrop = e => { e.preventDefault(); $('uploadZone').classList.remove('drag-over'); const f = e.dataTransfer.files[0]; if (f?.type.startsWith('image/')) loadFile(f); };
+$('fileInput').onchange = e => { if (e.target.files[0]) loadFile(e.target.files[0]); };
+$('changeBtn').onclick = () => $('fileInput').click();
+$('analyzeBtn').onclick = analyze;
+$('resetBtn').onclick = reset;
+$('copyAllBtn').onclick = copyAll;
+
+function loadFile(f) {
+  file = f;
+  const r = new FileReader();
+  r.onload = e => {
+    b64 = e.target.result.split(',')[1];
+    $('prevThumb').src = e.target.result;
+    $('prevFname').textContent = f.name;
+    $('previewRow').classList.add('visible');
+    $('analyzeBtn').disabled = false;
+    hideErr(); setWF(1);
+  };
+  r.readAsDataURL(f);
+}
+
+function reset() {
+  file = null; b64 = null; stack = null;
+  $('fileInput').value = '';
+  $('previewRow').classList.remove('visible');
+  $('results').classList.remove('visible');
+  $('loadingSection').classList.remove('visible');
+  $('analyzeBtn').disabled = true;
+  hideErr(); setWF(0);
+}
+
+function setWF(active) {
+  for (let i = 1; i <= 5; i++) {
+    const el = $('wf'+i), num = el.querySelector('.wf-num');
+    el.classList.remove('active','done');
+    if (i < active) { el.classList.add('done'); num.textContent = '✓'; }
+    else { if (i === active) el.classList.add('active'); num.textContent = i; }
+  }
+}
+
+function showErr(m) { $('errorBox').textContent = m; $('errorBox').classList.add('visible'); }
+function hideErr() { $('errorBox').classList.remove('visible'); }
+
+async function analyze() {
+  if (!b64) return;
+  const slots = $('slotCount').value;
+  const lh = $('layerHeight').value;
+  const ft = { matte:'Matte PLA', basic:'Basic PLA', silk:'Silk PLA', any:'PLA' }[$('filamentType').value];
+  const ps = $('printStyle').value;
+
+  $('analyzeBtn').disabled = true;
+  $('loadingSection').classList.add('visible');
+  $('results').classList.remove('visible');
+  hideErr(); setWF(2);
+
+  const prompt = `You are an expert at Bambu Lab's Chroma Canvas filament painting tool.
+
+Analyze this image and return a ${slots}-slot color palette optimized for Chroma Canvas at ${lh}mm layer height using ${ft}.
+Print style: ${ps === 'auto' ? 'auto-detect from image' : ps}
+
+IMPORTANT RULES:
+- Slot 1 = DARKEST color (background/shadow, printed first at bottom)
+- Slot ${slots} = LIGHTEST color (highlight/foreground, printed last at top)
+- Sequence must go dark → light for Chroma Canvas depth mapping to work correctly
+- Recommend real Bambu Lab ${ft} filament names (e.g. "Bambu Lab Matte Black", "Bambu Lab Matte Ivory White")
+- Hex codes should represent printable filament colors, not raw image pixels
+
+Return ONLY valid JSON, no markdown:
+{
+  "imageSummary": "brief subject description",
+  "detectedStyle": "portrait|landscape|logo|abstract",
+  "layerHeight": "${lh}",
+  "recommendedTotalLayers": 25,
+  "recommendedPrintSize": "120x120mm",
+  "plateThickness": "1.2mm",
+  "slots": [
+    {
+      "slot": 1,
+      "role": "Background / Darkest",
+      "colorName": "Rich Black",
+      "hex": "#1a1a1a",
+      "bambuFilamentName": "Bambu Lab Matte Black",
+      "searchTerm": "Bambu Lab Matte Black",
+      "roleNote": "what this layer represents visually in the print"
+    }
+  ],
+  "amsLoadOrder": "short tip on AMS slot assignment",
+  "printNotes": "2-3 specific Chroma Canvas tips for this image: gradient slider advice, contrast adjustments, layer count recommendation"
+}`;
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 1000,
+        messages: [{ role: 'user', content: [
+          { type: 'image', source: { type: 'base64', media_type: file.type || 'image/jpeg', data: b64 } },
+          { type: 'text', text: prompt }
+        ]}]
+      })
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error.message);
+    const raw = data.content.map(b => b.text || '').join('');
+    stack = JSON.parse(raw.replace(/```json|```/g,'').trim());
+    render(stack);
+  } catch(e) {
+    $('loadingSection').classList.remove('visible');
+    $('analyzeBtn').disabled = false;
+    setWF(1);
+    showErr('Analysis failed: ' + e.message + '. Check your image and try again.');
+  }
+}
+
+function render(d) {
+  $('loadingSection').classList.remove('visible');
+  setWF(3);
+
+  // Summary
+  $('summaryBar').innerHTML = `
+    <div class="sum-item"><div class="sum-key">Subject</div><div class="sum-val" style="font-size:13px;max-width:260px">${d.imageSummary}</div></div>
+    <div class="sum-item"><div class="sum-key">Style</div><div class="sum-val">${d.detectedStyle}</div></div>
+    <div class="sum-item"><div class="sum-key">Color Slots</div><div class="sum-val">${d.slots.length}</div></div>
+    <div class="sum-item"><div class="sum-key">Layer Height</div><div class="sum-val">${d.layerHeight}mm</div></div>
+    <div class="sum-item"><div class="sum-key">Total Layers</div><div class="sum-val">~${d.recommendedTotalLayers}</div></div>
+  `;
+
+  // Palette strip
+  $('paletteStrip').innerHTML = '';
+  d.slots.forEach(s => {
+    const sw = document.createElement('div');
+    sw.className = 'pal-swatch';
+    sw.style.background = s.hex;
+    $('paletteStrip').appendChild(sw);
+  });
+
+  // Settings pills
+  $('settingsPills').innerHTML = `
+    <div class="s-pill"><div class="s-pill-key">Layer Height</div><div class="s-pill-val">${d.layerHeight}mm</div></div>
+    <div class="s-pill"><div class="s-pill-key">Print Size</div><div class="s-pill-val">${d.recommendedPrintSize}</div></div>
+    <div class="s-pill"><div class="s-pill-key">Plate Thickness</div><div class="s-pill-val">${d.plateThickness}</div></div>
+    <div class="s-pill"><div class="s-pill-key">Total Layers</div><div class="s-pill-val">~${d.recommendedTotalLayers}</div></div>
+  `;
+
+  // Slot cards
+  $('slotGrid').innerHTML = '';
+  d.slots.forEach(s => {
+    const card = document.createElement('div');
+    card.className = 'slot-card';
+    card.innerHTML = `
+      <div class="slot-top">
+        <div class="slot-dot" style="background:${s.hex}"></div>
+        <div>
+          <div class="slot-label">SLOT ${s.slot} · ${s.role.toUpperCase()}</div>
+          <div class="slot-name">${s.colorName}</div>
+          <div class="slot-brand">${s.bambuFilamentName}</div>
+        </div>
+      </div>
+      <div class="hex-row" onclick="copyHex('${s.hex}', this)">
+        <div class="hex-dot" style="background:${s.hex}"></div>
+        <div class="hex-val">${s.hex.toUpperCase()}</div>
+        <div class="hex-copy-lbl">COPY</div>
+      </div>
+      <div class="slot-note">${s.roleNote}</div>
+    `;
+    $('slotGrid').appendChild(card);
+  });
+
+  // Search tags
+  $('searchTags').innerHTML = '';
+  d.slots.forEach(s => {
+    const tag = document.createElement('div');
+    tag.className = 'search-tag';
+    tag.innerHTML = `<div class="tag-dot" style="background:${s.hex}"></div><span class="tag-text">${s.searchTerm}</span><span class="tag-copy">COPY</span>`;
+    tag.onclick = () => {
+      navigator.clipboard.writeText(s.searchTerm).then(() => {
+        const lbl = tag.querySelector('.tag-copy');
+        lbl.textContent = '✓ COPIED'; lbl.classList.add('copied');
+        setTimeout(() => { lbl.textContent = 'COPY'; lbl.classList.remove('copied'); }, 1500);
+      });
+    };
+    $('searchTags').appendChild(tag);
+  });
+
+  // Notes
+  $('notesBody').innerHTML = `
+    <strong>AMS Load Order:</strong> ${d.amsLoadOrder}<br><br>
+    ${d.printNotes
+      .replace(/Chroma Canvas/g, '<strong>Chroma Canvas</strong>')
+      .replace(/\b(slot \d+|Slot \d+|layer \d+|Layer \d+)/gi, m => `<strong>${m}</strong>`)
+      .replace(/\b(gradient|contrast|layers)\b/gi, m => `<strong>${m}</strong>`)}
+  `;
+
+  $('results').classList.add('visible');
+  $('analyzeBtn').disabled = false;
+  $('results').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function copyHex(hex, el) {
+  navigator.clipboard.writeText(hex).then(() => {
+    const lbl = el.querySelector('.hex-copy-lbl');
+    lbl.textContent = '✓ COPIED'; lbl.classList.add('copied');
+    setTimeout(() => { lbl.textContent = 'COPY'; lbl.classList.remove('copied'); }, 1500);
+  });
+}
+
+function copyAll() {
+  if (!stack) return;
+  const txt = stack.slots.map(s => `Slot ${s.slot} — ${s.colorName}: ${s.hex.toUpperCase()}`).join('\n');
+  navigator.clipboard.writeText(txt).then(() => {
+    const btn = $('copyAllBtn');
+    btn.textContent = '✓ Copied All Hex Codes'; btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = 'Copy All Hex Codes in Order'; btn.classList.remove('copied'); }, 2000);
+  });
+}
+</script>
+</body>
+</html>

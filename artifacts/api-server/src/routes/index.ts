@@ -16,6 +16,7 @@ import emailRouter from "./email";
 import catalogRouter from "./catalog";
 import etsyGmailRouter from "./etsy-gmail";
 import aiRouter from "./ai";
+import chromaCanvasRouter from "./chromaCanvas";
 
 const router: IRouter = Router();
 
@@ -36,5 +37,6 @@ router.use("/email", emailRouter);
 router.use("/catalog", catalogRouter);
 router.use("/etsy", etsyGmailRouter);
 router.use("/ai", aiRouter);
+router.use("/chroma-canvas", chromaCanvasRouter);
 
 export default router;

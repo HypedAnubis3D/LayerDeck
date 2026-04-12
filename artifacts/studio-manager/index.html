@@ -1744,6 +1744,18 @@ header{
       </div>
     </div>
 
+    <!-- TOOLS -->
+    <div class="sb-group" id="sbg-tools">
+      <div class="sb-group-hdr" onclick="toggleGroup('sbg-tools')">
+        <span class="sb-group-icon">🛠</span>
+        <span class="sb-group-name">Tools</span>
+        <span class="sb-group-chevron">▾</span>
+      </div>
+      <div class="sb-group-body">
+        <button class="nav-item" id="nav-chromacanvas" onclick="navTo('chromacanvas',this)"><span class="nav-icon">🎨</span><span class="nav-label">Chroma Canvas Planner</span></button>
+      </div>
+    </div>
+
   </div>
   <div class="sidebar-footer">
     <div style="display:flex;align-items:center;justify-content:flex-end">
@@ -2406,6 +2418,193 @@ header{
 
 <!-- NOZZLE WEAR TRACKER -->
 <div id="tab-nozzle" style="display:none"></div>
+
+<!-- CHROMA CANVAS STACK PLANNER -->
+<div id="tab-chromacanvas" style="display:none">
+
+  <!-- Page header -->
+  <div class="printer-card" style="margin-bottom:8px;text-align:center;padding:16px 12px">
+    <div style="font-family:'Orbitron',monospace;font-size:11px;font-weight:700;color:var(--gold-b);letter-spacing:3px;margin-bottom:5px">🎨 CHROMA CANVAS STACK PLANNER</div>
+    <div style="font-size:8px;color:var(--txt-d);letter-spacing:1px">Upload an image · AI maps colors to Bambu filaments · Paste the palette into Chroma Canvas</div>
+  </div>
+
+  <!-- INPUT SECTION -->
+  <div id="cc-input-section">
+
+    <!-- Upload zone -->
+    <div id="cc-upload-zone" class="printer-card" style="margin-bottom:8px;border:1.5px dashed rgba(139,92,246,.4);text-align:center;cursor:pointer;padding:28px 16px;transition:border-color .2s,background .2s"
+      onclick="document.getElementById('cc-file-inp').click()"
+      ondragover="event.preventDefault();this.style.borderColor='var(--pur)';this.style.background='rgba(139,92,246,.08)'"
+      ondragleave="this.style.borderColor='';this.style.background=''"
+      ondrop="event.preventDefault();this.style.borderColor='';this.style.background='';if(event.dataTransfer.files[0]?.type.startsWith('image/'))ccLoadFile(event.dataTransfer.files[0])">
+      <div style="font-size:32px;margin-bottom:8px">🖼</div>
+      <div style="font-family:'Orbitron',monospace;font-size:9px;font-weight:700;color:var(--pur);letter-spacing:2px;margin-bottom:4px">DROP YOUR IMAGE HERE</div>
+      <div style="font-size:8px;color:var(--txt-d)">or click to browse · JPG, PNG, WEBP</div>
+      <input type="file" id="cc-file-inp" accept="image/*" style="display:none" onchange="if(this.files[0])ccLoadFile(this.files[0]);this.value=''">
+    </div>
+
+    <!-- Preview row -->
+    <div id="cc-preview-row" style="display:none" class="printer-card" style="margin-bottom:8px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <img id="cc-prev-thumb" src="" alt="" style="width:56px;height:56px;border-radius:6px;object-fit:cover;border:1px solid var(--bdr);flex-shrink:0">
+        <div style="flex:1;min-width:0">
+          <div id="cc-prev-fname" style="font-size:9px;font-weight:600;color:var(--txt-b);margin-bottom:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">—</div>
+          <div style="font-size:8px;color:var(--grn)">✓ Ready to analyze</div>
+        </div>
+        <button class="btn btn-ghost btn-xs" onclick="document.getElementById('cc-file-inp').click()">Change</button>
+      </div>
+    </div>
+
+    <!-- Options -->
+    <div class="printer-card" style="margin-bottom:8px">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <div>
+          <div style="font-size:6px;color:var(--txt-d);letter-spacing:2px;margin-bottom:4px;font-family:'Orbitron',monospace">COLOR SLOTS</div>
+          <select id="cc-slots" style="width:100%;background:var(--bg);border:1px solid var(--bdr2);color:var(--txt-b);padding:6px 8px;font-family:'Share Tech Mono',monospace;font-size:9px;border-radius:4px">
+            <option value="3">3 Colors (Minimal)</option>
+            <option value="4" selected>4 Colors (Standard)</option>
+            <option value="5">5 Colors (Detailed)</option>
+            <option value="6">6 Colors (Max)</option>
+          </select>
+        </div>
+        <div>
+          <div style="font-size:6px;color:var(--txt-d);letter-spacing:2px;margin-bottom:4px;font-family:'Orbitron',monospace">LAYER HEIGHT</div>
+          <select id="cc-lh" style="width:100%;background:var(--bg);border:1px solid var(--bdr2);color:var(--txt-b);padding:6px 8px;font-family:'Share Tech Mono',monospace;font-size:9px;border-radius:4px">
+            <option value="0.08">0.08mm (Ultra Fine)</option>
+            <option value="0.10" selected>0.10mm (Fine)</option>
+            <option value="0.12">0.12mm (Standard)</option>
+            <option value="0.16">0.16mm (Draft)</option>
+          </select>
+        </div>
+        <div>
+          <div style="font-size:6px;color:var(--txt-d);letter-spacing:2px;margin-bottom:4px;font-family:'Orbitron',monospace">FILAMENT TYPE</div>
+          <select id="cc-ft" style="width:100%;background:var(--bg);border:1px solid var(--bdr2);color:var(--txt-b);padding:6px 8px;font-family:'Share Tech Mono',monospace;font-size:9px;border-radius:4px">
+            <option value="matte" selected>Matte PLA (Best for CC)</option>
+            <option value="basic">Basic PLA</option>
+            <option value="silk">Silk PLA</option>
+            <option value="any">Any PLA</option>
+          </select>
+        </div>
+        <div>
+          <div style="font-size:6px;color:var(--txt-d);letter-spacing:2px;margin-bottom:4px;font-family:'Orbitron',monospace">PRINT STYLE</div>
+          <select id="cc-ps" style="width:100%;background:var(--bg);border:1px solid var(--bdr2);color:var(--txt-b);padding:6px 8px;font-family:'Share Tech Mono',monospace;font-size:9px;border-radius:4px">
+            <option value="auto" selected>Auto-detect</option>
+            <option value="portrait">Portrait / Character</option>
+            <option value="landscape">Landscape / Scene</option>
+            <option value="logo">Logo / Flat Art</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- Error box -->
+    <div id="cc-error" style="display:none;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);color:var(--red);padding:10px 14px;border-radius:6px;font-size:8px;margin-bottom:8px"></div>
+
+    <!-- Analyze button -->
+    <button id="cc-analyze-btn" disabled onclick="ccAnalyze()" class="btn btn-pur" style="width:100%;padding:12px;font-family:'Orbitron',monospace;font-size:9px;letter-spacing:2px;opacity:.45;cursor:not-allowed">🎨 ANALYZE IMAGE &amp; BUILD CHROMA CANVAS STACK</button>
+
+  </div>
+
+  <!-- LOADING STATE -->
+  <div id="cc-loading" style="display:none;text-align:center;padding:48px 16px">
+    <div style="width:36px;height:36px;border:2px solid var(--bdr2);border-top-color:var(--pur);border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 14px"></div>
+    <div style="font-family:'Orbitron',monospace;font-size:9px;font-weight:700;color:var(--pur);letter-spacing:2px;margin-bottom:4px">ANALYZING IMAGE</div>
+    <div style="font-size:8px;color:var(--txt-d)">Extracting dominant colors · Mapping to Bambu filaments</div>
+  </div>
+
+  <!-- RESULTS SECTION -->
+  <div id="cc-results" style="display:none">
+
+    <!-- Image Analysis summary -->
+    <div style="font-family:'Orbitron',monospace;font-size:8px;font-weight:700;color:var(--gold-b);letter-spacing:2px;margin:0 0 8px">IMAGE ANALYSIS</div>
+    <div id="cc-summary-bar" class="printer-card" style="margin-bottom:6px;display:flex;flex-wrap:wrap;gap:16px;padding:12px 14px"></div>
+
+    <!-- Palette strip -->
+    <div id="cc-palette-strip" style="display:flex;height:28px;border-radius:6px;overflow:hidden;margin-bottom:12px;border:1px solid var(--bdr)"></div>
+
+    <!-- Chroma Canvas Setup panel -->
+    <div style="font-family:'Orbitron',monospace;font-size:8px;font-weight:700;color:var(--grn);letter-spacing:2px;margin:0 0 8px">CHROMA CANVAS SETUP</div>
+    <div class="printer-card" style="margin-bottom:8px;border-top:2px solid var(--grn);padding:0">
+
+      <!-- Panel header -->
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;background:rgba(40,184,88,.06);border-bottom:1px solid var(--bdr);flex-wrap:wrap;gap:8px">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="background:var(--grn);color:#000;font-family:'Orbitron',monospace;font-size:7px;letter-spacing:1px;padding:3px 7px;border-radius:3px;font-weight:700">BAMBU</span>
+          <span style="font-size:8px;color:var(--txt-b)">Ready-to-paste palette for Chroma Canvas</span>
+        </div>
+        <a href="https://makerworld.com/en/makerlab/chromaCanvas?from=makerlab" target="_blank" rel="noopener"
+           style="background:var(--grn);color:#000;border:none;font-family:'Orbitron',monospace;font-size:8px;letter-spacing:1px;padding:8px 14px;border-radius:5px;cursor:pointer;font-weight:700;text-decoration:none;white-space:nowrap">Open Chroma Canvas ↗</a>
+      </div>
+
+      <!-- Steps -->
+      <div style="padding:14px;display:flex;flex-direction:column;gap:16px">
+
+        <!-- Step 1 -->
+        <div style="display:flex;gap:12px">
+          <div style="width:24px;height:24px;border-radius:50%;flex-shrink:0;background:var(--surf);border:1px solid var(--bdr2);font-family:'Orbitron',monospace;font-size:9px;display:flex;align-items:center;justify-content:center;color:var(--txt-d);margin-top:1px">1</div>
+          <div>
+            <div style="font-size:9px;font-weight:700;color:var(--txt-b);margin-bottom:3px">Open Chroma Canvas &amp; Upload Your Image</div>
+            <div style="font-size:8px;color:var(--txt-d);line-height:1.6">Click <strong style="color:var(--grn)">Open Chroma Canvas ↗</strong> above. Upload the same image you analyzed here. Skip any preset color scheme — you'll build a custom palette in step 3.</div>
+          </div>
+        </div>
+
+        <!-- Step 2: Settings pills -->
+        <div style="display:flex;gap:12px">
+          <div style="width:24px;height:24px;border-radius:50%;flex-shrink:0;background:var(--surf);border:1px solid var(--bdr2);font-family:'Orbitron',monospace;font-size:9px;display:flex;align-items:center;justify-content:center;color:var(--txt-d);margin-top:1px">2</div>
+          <div style="width:100%">
+            <div style="font-size:9px;font-weight:700;color:var(--txt-b);margin-bottom:3px">Match These Settings in the Settings Tab</div>
+            <div style="font-size:8px;color:var(--txt-d);margin-bottom:8px">The layer height is what the AI optimized the color stack for.</div>
+            <div id="cc-settings-pills" style="display:flex;flex-wrap:wrap;gap:6px"></div>
+          </div>
+        </div>
+
+        <!-- Step 3: Slot cards -->
+        <div style="display:flex;gap:12px">
+          <div style="width:24px;height:24px;border-radius:50%;flex-shrink:0;background:var(--surf);border:1px solid var(--bdr2);font-family:'Orbitron',monospace;font-size:9px;display:flex;align-items:center;justify-content:center;color:var(--txt-d);margin-top:1px">3</div>
+          <div style="width:100%">
+            <div style="font-size:9px;font-weight:700;color:var(--txt-b);margin-bottom:3px">Build Your Custom Palette — Slot by Slot</div>
+            <div style="font-size:8px;color:var(--txt-d);margin-bottom:8px">Select <strong style="color:var(--pur)">Custom Palette</strong> in Chroma Canvas. Click any hex code to copy it. <strong style="color:var(--txt-b)">Slot 1 = darkest/bottom, last slot = lightest/top.</strong></div>
+            <div id="cc-slot-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:8px"></div>
+            <button id="cc-copy-all-btn" class="btn btn-ghost" style="width:100%;margin-top:10px;font-size:8px;border-color:rgba(40,184,88,.3);color:var(--grn)" onclick="ccCopyAll()">Copy All Hex Codes in Order</button>
+          </div>
+        </div>
+
+        <!-- Step 4: Filament search tags -->
+        <div style="display:flex;gap:12px">
+          <div style="width:24px;height:24px;border-radius:50%;flex-shrink:0;background:var(--surf);border:1px solid var(--bdr2);font-family:'Orbitron',monospace;font-size:9px;display:flex;align-items:center;justify-content:center;color:var(--txt-d);margin-top:1px">4</div>
+          <div style="width:100%">
+            <div style="font-size:9px;font-weight:700;color:var(--txt-b);margin-bottom:3px">Find These Bambu Filaments (Optional)</div>
+            <div style="font-size:8px;color:var(--txt-d);margin-bottom:8px">Search these names in Chroma Canvas's filament library. Click to copy the search term.</div>
+            <div id="cc-search-tags" style="display:flex;flex-wrap:wrap;gap:6px"></div>
+          </div>
+        </div>
+
+        <!-- Step 5: Static -->
+        <div style="display:flex;gap:12px">
+          <div style="width:24px;height:24px;border-radius:50%;flex-shrink:0;background:var(--surf);border:1px solid var(--bdr2);font-family:'Orbitron',monospace;font-size:9px;display:flex;align-items:center;justify-content:center;color:var(--txt-d);margin-top:1px">5</div>
+          <div>
+            <div style="font-size:9px;font-weight:700;color:var(--txt-b);margin-bottom:3px">Generate, Tweak &amp; Export</div>
+            <div style="font-size:8px;color:var(--txt-d);line-height:1.6">Hit <strong style="color:var(--grn)">Generate</strong> in Chroma Canvas. If contrast looks flat, drag the <strong style="color:var(--gold-b)">gradient curve</strong> sliders. Export the <strong style="color:var(--gold-b)">.3MF</strong> and open in Bambu Studio → send to your A1 or P1.</div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Print Notes -->
+    <div style="font-family:'Orbitron',monospace;font-size:8px;font-weight:700;color:var(--gold-b);letter-spacing:2px;margin:0 0 8px">PRINT NOTES</div>
+    <div class="printer-card" style="margin-bottom:12px;border-left:2px solid rgba(201,168,76,.4)">
+      <div style="font-size:6px;color:var(--txt-d);letter-spacing:2px;font-family:'Orbitron',monospace;margin-bottom:6px">AI RECOMMENDATIONS FOR THIS IMAGE</div>
+      <div id="cc-notes-body" style="font-size:8px;color:var(--txt-d);line-height:1.7"></div>
+    </div>
+
+    <!-- Reset -->
+    <div style="text-align:center;padding-bottom:16px">
+      <button class="btn btn-ghost" style="font-size:8px;letter-spacing:1px" onclick="ccReset()">↩ Analyze Another Image</button>
+    </div>
+
+  </div>
+</div>
 
 <!-- MULTI-MACHINE SPLITTER -->
 
@@ -4223,6 +4422,7 @@ function render(){
   if(curTab==='history') renderHistory();
   if(curTab==='stats')   renderStats();
   if(curTab==='labels')  renderLabels();
+  if(curTab==='chromacanvas') renderChromaCanvas();
 }
 
 function pct(s){return s.total?Math.round(s.remaining/s.total*100):0;}
@@ -8010,7 +8210,7 @@ function saveShiny(){ss(KEYS.shiny,shinyRolls);}
 function saveBatch(){ss(KEYS.batch,batchPlate);}
 
 // ════════ TAB SWITCH EXTENSION ════════
-const ALL_TABS=['dashboard','spools','prints','tmf','queue','orders','scheduler','shiny','revenue','customers','batch','maint','forecast','priceengine','shop','history','stats','backup','labels'];
+const ALL_TABS=['dashboard','spools','prints','tmf','queue','orders','scheduler','shiny','revenue','customers','batch','maint','forecast','priceengine','shop','history','stats','backup','labels','chromacanvas'];
 
 const _origSwitch=switchTab;
 function switchTab(t,el){
@@ -8969,7 +9169,8 @@ const TAB_NAMES={
   revenue:'Revenue',customers:'Customers',batch:'Batch Planner',
   integrations:'Integrations',etsy:'Etsy',maint:'Maintenance & Nozzles',forecast:'Forecast',
   priceengine:'Price AI',shop:'Shop List',history:'History',
-  stats:'Stats',backup:'Backup',labels:'Labels'
+  stats:'Stats',backup:'Backup',labels:'Labels',
+  chromacanvas:'🎨 Chroma Canvas Planner'
 };
 
 function navTo(tab, el){
@@ -13671,7 +13872,8 @@ function openGroupForTab(tab){
     revenue:'sbg-business',catalog:'sbg-business',catalogItems:'sbg-business',tax:'sbg-business',convention:'sbg-business',priceengine:'sbg-business',labels:'sbg-business',failrate:'sbg-business',
     printers:'sbg-ops',spools:'sbg-ops',fildb:'sbg-ops',drying:'sbg-ops',power:'sbg-ops',maint:'sbg-ops',nozzle:'sbg-ops',waste:'sbg-ops',purchases:'sbg-ops',shipping:'sbg-ops',forecast:'sbg-ops',restock:'sbg-ops',shop:'sbg-ops',
     shopify:'sbg-integrations',etsy:'sbg-integrations',square:'sbg-integrations',discord:'sbg-integrations',pihub:'sbg-integrations',social:'sbg-integrations',
-    sync:'sbg-system',history:'sbg-system',stats:'sbg-system',backup:'sbg-system'
+    sync:'sbg-system',history:'sbg-system',stats:'sbg-system',backup:'sbg-system',
+    chromacanvas:'sbg-tools'
   };
   const target=tabGroups[tab];
   if(!target)return;
@@ -23553,6 +23755,221 @@ function posShowReceipt(sale){
     _setSendState(false);
     setTimeout(function(){if(inp)inp.focus();},60);
   };
+})();
+</script>
+
+<!-- CHROMA CANVAS STACK PLANNER JS -->
+<script>
+(function(){
+  var _ccImageBase64 = null;
+  var _ccImageType = null;
+  var _ccLastStack = null;
+
+  window.ccLoadFile = function(file){
+    if(!file || !file.type.startsWith('image/')) return;
+    var reader = new FileReader();
+    reader.onload = function(e){
+      _ccImageBase64 = e.target.result.split(',')[1];
+      _ccImageType = file.type;
+      var thumb = document.getElementById('cc-prev-thumb');
+      var fname = document.getElementById('cc-prev-fname');
+      if(thumb) thumb.src = e.target.result;
+      if(fname) fname.textContent = file.name;
+      var zone = document.getElementById('cc-upload-zone');
+      var row = document.getElementById('cc-preview-row');
+      var btn = document.getElementById('cc-analyze-btn');
+      if(zone) zone.style.display = 'none';
+      if(row)  row.style.display  = 'block';
+      if(btn){ btn.disabled = false; btn.style.opacity = '1'; btn.style.cursor = 'pointer'; }
+      var err = document.getElementById('cc-error');
+      if(err) err.style.display = 'none';
+    };
+    reader.readAsDataURL(file);
+  };
+
+  window.ccAnalyze = async function(){
+    if(!_ccImageBase64){ _ccShowError('Please upload an image first.'); return; }
+    var slots   = document.getElementById('cc-slots')?.value || '4';
+    var lh      = document.getElementById('cc-lh')?.value   || '0.10';
+    var ft      = document.getElementById('cc-ft')?.value   || 'matte';
+    var ps      = document.getElementById('cc-ps')?.value   || 'auto';
+    var btn     = document.getElementById('cc-analyze-btn');
+    var inp     = document.getElementById('cc-input-section');
+    var load    = document.getElementById('cc-loading');
+    if(btn){ btn.disabled=true; btn.style.opacity='.45'; }
+    if(inp)  inp.style.display = 'none';
+    if(load) load.style.display = 'block';
+    var err  = document.getElementById('cc-error');
+    if(err)  err.style.display  = 'none';
+    try {
+      var resp = await fetch(getApiUrl('chroma-canvas/analyze'),{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({
+          imageBase64:_ccImageBase64,
+          imageType:_ccImageType,
+          slots, layerHeight:lh, filamentType:ft, printStyle:ps
+        })
+      });
+      var data = await resp.json();
+      if(data.error) throw new Error(data.error);
+      _ccLastStack = data.stack;
+      if(load) load.style.display = 'none';
+      ccRenderResults(_ccLastStack);
+    } catch(e){
+      if(load) load.style.display = 'none';
+      if(inp)  inp.style.display  = 'block';
+      if(btn){ btn.disabled=false; btn.style.opacity='1'; }
+      _ccShowError('AI analysis failed: ' + (e.message||'Unknown error'));
+    }
+  };
+
+  function _ccShowError(msg){
+    var err = document.getElementById('cc-error');
+    if(!err) return;
+    err.textContent = '⚠ ' + msg;
+    err.style.display = 'block';
+  }
+
+  window.ccRenderResults = function(stack){
+    var res = document.getElementById('cc-results');
+    if(res) res.style.display = 'block';
+
+    // Summary bar
+    var bar = document.getElementById('cc-summary-bar');
+    if(bar){
+      var items = [
+        ['Subject', stack.imageSummary],
+        ['Style', stack.detectedStyle],
+        ['Layer Height', stack.layerHeight + 'mm'],
+        ['Total Layers', stack.recommendedTotalLayers],
+        ['Print Size', stack.recommendedPrintSize],
+        ['Plate Thickness', stack.plateThickness],
+      ];
+      bar.innerHTML = items.map(function(i){
+        return '<div><div style="font-size:6px;color:var(--txt-d);letter-spacing:2px;font-family:\'Orbitron\',monospace;margin-bottom:2px">'+i[0].toUpperCase()+'</div>'
+          + '<div style="font-size:9px;color:var(--txt-b);font-weight:600">'+i[1]+'</div></div>';
+      }).join('');
+    }
+
+    // Palette strip
+    var strip = document.getElementById('cc-palette-strip');
+    if(strip && stack.slots){
+      strip.innerHTML = stack.slots.map(function(s){
+        return '<div title="Slot '+s.slot+': '+s.colorName+'" style="flex:1;background:'+s.hex+'"></div>';
+      }).join('');
+    }
+
+    // Settings pills
+    var pills = document.getElementById('cc-settings-pills');
+    if(pills){
+      var slotEl = document.getElementById('cc-slots');
+      var lhEl   = document.getElementById('cc-lh');
+      var ftEl   = document.getElementById('cc-ft');
+      var pillData = [
+        ['Layer Height', stack.layerHeight+'mm'],
+        ['Slots', (slotEl?.value||'4')+' Colors'],
+        ['Filament', ftEl?.options[ftEl.selectedIndex]?.text || 'Matte PLA'],
+      ];
+      pills.innerHTML = pillData.map(function(p){
+        return '<span style="background:rgba(40,184,88,.1);border:1px solid rgba(40,184,88,.25);color:var(--grn);padding:4px 10px;border-radius:20px;font-family:\'Share Tech Mono\',monospace;font-size:8px">'
+          + '<span style="opacity:.7">'+p[0]+': </span><strong>'+p[1]+'</strong></span>';
+      }).join('');
+    }
+
+    // Slot grid
+    var grid = document.getElementById('cc-slot-grid');
+    if(grid && stack.slots){
+      grid.innerHTML = stack.slots.map(function(s){
+        var isLight = _ccLum(s.hex) > 0.6;
+        return '<div style="border:1px solid var(--bdr);border-radius:6px;overflow:hidden">'
+          + '<div style="background:'+s.hex+';padding:10px 12px;display:flex;justify-content:space-between;align-items:center">'
+          + '<div style="font-family:\'Orbitron\',monospace;font-size:7px;font-weight:700;color:'+(isLight?'rgba(0,0,0,.7)':'rgba(255,255,255,.9)')+';letter-spacing:1px">SLOT '+(s.slot)+'</div>'
+          + '<div style="cursor:pointer;background:'+(isLight?'rgba(0,0,0,.15)':'rgba(255,255,255,.2)')+';border-radius:3px;padding:3px 7px;font-family:\'Share Tech Mono\',monospace;font-size:9px;color:'+(isLight?'#000':'#fff')+'" onclick="ccCopyHex(\''+s.hex+'\',this)">'+s.hex+'</div>'
+          + '</div>'
+          + '<div style="padding:8px 10px;background:var(--surf)">'
+          + '<div style="font-size:8px;font-weight:700;color:var(--txt-b);margin-bottom:2px">'+s.colorName+'</div>'
+          + '<div style="font-size:7px;color:var(--txt-d);margin-bottom:3px">'+s.role+'</div>'
+          + '<div style="font-size:7px;color:var(--pur)">'+s.bambuFilamentName+'</div>'
+          + (s.roleNote ? '<div style="font-size:7px;color:var(--txt-d);margin-top:3px;font-style:italic">'+s.roleNote+'</div>' : '')
+          + '</div></div>';
+      }).join('');
+    }
+
+    // Search tags
+    var tags = document.getElementById('cc-search-tags');
+    if(tags && stack.slots){
+      tags.innerHTML = stack.slots.map(function(s){
+        return '<button class="btn btn-ghost" style="font-family:\'Share Tech Mono\',monospace;font-size:8px;padding:4px 10px;border-color:var(--bdr2)" onclick="ccCopyText(\''+s.searchTerm.replace(/'/g,"\\'")+'\')" title="Copy search term">'+s.searchTerm+'</button>';
+      }).join('');
+    }
+
+    // Print notes
+    var notes = document.getElementById('cc-notes-body');
+    if(notes){
+      notes.innerHTML = stack.printNotes
+        ? stack.printNotes.split(/\n|\.(?=\s)/).filter(Boolean).map(function(line){
+            line = line.trim().replace(/^[-•]\s*/,'');
+            return line ? '<div style="padding:3px 0">• '+line+(line.endsWith('.')?'':'.')+'</div>' : '';
+          }).join('')
+        : stack.amsLoadOrder || 'No notes available.';
+      if(stack.amsLoadOrder){
+        notes.innerHTML += '<div style="margin-top:8px;padding:8px 10px;background:rgba(139,92,246,.08);border-radius:4px;border-left:2px solid var(--pur);font-size:8px;color:var(--txt-d)"><span style="color:var(--pur);font-weight:700">AMS Load Order: </span>'+stack.amsLoadOrder+'</div>';
+      }
+    }
+  };
+
+  window.ccCopyHex = function(hex, el){
+    navigator.clipboard.writeText(hex).then(function(){
+      var prev = el.textContent;
+      el.textContent = '✓ Copied!';
+      setTimeout(function(){ el.textContent = prev; }, 1200);
+    }).catch(function(){ toast('Copy','Use Ctrl+C to copy','warn',2000); });
+  };
+
+  window.ccCopyText = function(text){
+    navigator.clipboard.writeText(text).then(function(){
+      toast('Copied',text,'ok',1800);
+    }).catch(function(){ toast('Copy','Failed to copy to clipboard','warn',2000); });
+  };
+
+  window.ccCopyAll = function(){
+    if(!_ccLastStack?.slots) return;
+    var hexes = _ccLastStack.slots.map(function(s){ return 'Slot '+s.slot+' ('+s.colorName+'): '+s.hex; }).join('\n');
+    navigator.clipboard.writeText(hexes).then(function(){
+      var btn = document.getElementById('cc-copy-all-btn');
+      if(btn){ var prev=btn.textContent; btn.textContent='✓ All Copied!'; setTimeout(function(){btn.textContent=prev;},1500); }
+    }).catch(function(){ toast('Copy','Failed','warn',2000); });
+  };
+
+  window.ccReset = function(){
+    _ccImageBase64 = null;
+    _ccImageType   = null;
+    _ccLastStack   = null;
+    var zone = document.getElementById('cc-upload-zone');
+    var row  = document.getElementById('cc-preview-row');
+    var btn  = document.getElementById('cc-analyze-btn');
+    var inp  = document.getElementById('cc-input-section');
+    var res  = document.getElementById('cc-results');
+    var err  = document.getElementById('cc-error');
+    if(zone) zone.style.display = 'block';
+    if(row)  row.style.display  = 'none';
+    if(inp)  inp.style.display  = 'block';
+    if(res)  res.style.display  = 'none';
+    if(err)  err.style.display  = 'none';
+    if(btn){ btn.disabled=true; btn.style.opacity='.45'; btn.style.cursor='not-allowed'; }
+    var thumb = document.getElementById('cc-prev-thumb');
+    if(thumb) thumb.src = '';
+  };
+
+  function _ccLum(hex){
+    var c = hex.replace('#','');
+    if(c.length===3) c=c[0]+c[0]+c[1]+c[1]+c[2]+c[2];
+    var r=parseInt(c.slice(0,2),16)/255, g=parseInt(c.slice(2,4),16)/255, b=parseInt(c.slice(4,6),16)/255;
+    return 0.299*r+0.587*g+0.114*b;
+  }
+
+  window.renderChromaCanvas = function(){};
 })();
 </script>
 </body>
