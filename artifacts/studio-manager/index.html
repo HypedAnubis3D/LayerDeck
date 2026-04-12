@@ -1828,10 +1828,8 @@ header{
         <option>TPU 95A</option><option>TPU 90A</option><option>TPU 68D</option><option>TPU 85A</option>
         <option>Support W</option><option>Support G</option><option>HIPS</option><option>BVOH</option><option>PVA</option>
       </select>
-      <select class="flt" id="sp-p" onchange="render()">
-        <option value="">All Printers</option>
-        <option>X1C</option><option>X1E</option><option>P1S</option><option>P1P</option>
-        <option>A1</option><option>A1 Mini</option><option>H2D</option><option>Unloaded</option>
+      <select class="flt" id="sp-b" onchange="render()">
+        <option value="">All Brands</option>
       </select>
       <select class="flt" id="sp-a" onchange="render()">
         <option value="">All Stock</option>
@@ -4258,11 +4256,13 @@ function renderSpools(){
   (function(){const c=document.getElementById('sth-crit');const l=document.getElementById('sth-low');const o=document.getElementById('sth-ok');if(c)c.value=_spoolThreshCrit;if(l)l.value=_spoolThreshLow;if(o)o.value=_spoolThreshOk;})();
   const q=(document.getElementById('sp-s').value||'').toLowerCase();
   const fm=document.getElementById('sp-m').value;
-  const fp=document.getElementById('sp-p').value;
+  const _spBrandEl=document.getElementById('sp-b');
+  if(_spBrandEl){const _cb=_spBrandEl.value;const _brs=[...new Set(spools.map(s=>(s.brand||'').trim()).filter(Boolean))].sort();_spBrandEl.innerHTML='<option value="">All Brands</option>'+_brs.map(b=>'<option value="'+esc(b)+'"'+(_cb===b?' selected':'')+'>'+esc(b)+'</option>').join('');if(_cb)_spBrandEl.value=_cb;}
+  const fb=(_spBrandEl&&_spBrandEl.value)||'';
   const fa=document.getElementById('sp-a').value;
   const f=spools.filter(s=>{
     if(fm&&s.material!==fm)return false;
-    if(fp&&s.printer!==fp)return false;
+    if(fb&&(s.brand||'').trim()!==fb)return false;
     if(fa==='critical'&&pct(s)>=_spoolThreshCrit)return false;
     if(fa==='low'&&(pct(s)>=_spoolThreshLow||pct(s)<_spoolThreshCrit))return false;
     if(fa==='ok'&&(pct(s)<_spoolThreshLow||pct(s)>=_spoolThreshOk))return false;
@@ -9195,11 +9195,13 @@ function renderSpools(){
   (function(){const c=document.getElementById('sth-crit');const l=document.getElementById('sth-low');const o=document.getElementById('sth-ok');if(c)c.value=_spoolThreshCrit;if(l)l.value=_spoolThreshLow;if(o)o.value=_spoolThreshOk;})();
   const q=(document.getElementById('sp-s').value||'').toLowerCase();
   const fm=document.getElementById('sp-m').value;
-  const fp=document.getElementById('sp-p').value;
+  const _spBrandEl=document.getElementById('sp-b');
+  if(_spBrandEl){const _cb=_spBrandEl.value;const _brs=[...new Set(spools.map(s=>(s.brand||'').trim()).filter(Boolean))].sort();_spBrandEl.innerHTML='<option value="">All Brands</option>'+_brs.map(b=>'<option value="'+esc(b)+'"'+(_cb===b?' selected':'')+'>'+esc(b)+'</option>').join('');if(_cb)_spBrandEl.value=_cb;}
+  const fb=(_spBrandEl&&_spBrandEl.value)||'';
   const fa=document.getElementById('sp-a').value;
   const f=spools.filter(s=>{
     if(fm&&s.material!==fm)return false;
-    if(fp&&s.printer!==fp)return false;
+    if(fb&&(s.brand||'').trim()!==fb)return false;
     if(fa==='critical'&&pct(s)>=_spoolThreshCrit)return false;
     if(fa==='low'&&(pct(s)>=_spoolThreshLow||pct(s)<_spoolThreshCrit))return false;
     if(fa==='ok'&&(pct(s)<_spoolThreshLow||pct(s)>=_spoolThreshOk))return false;
