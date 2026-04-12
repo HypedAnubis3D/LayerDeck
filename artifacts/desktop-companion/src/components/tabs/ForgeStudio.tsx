@@ -85,184 +85,107 @@ function hexToLab(hex: string): [number, number, number] {
   return pixelToLab(parseInt(hex.slice(1, 3), 16), parseInt(hex.slice(3, 5), 16), parseInt(hex.slice(5, 7), 16));
 }
 
-function sampleImagePixels(base64: string, type: string, res: number): Promise<Uint8ClampedArray> {
-  return new Promise(resolve => {
-    const img = new Image();
-    img.onload = () => {
-      const canvas = document.createElement('canvas');
-      canvas.width = res; canvas.height = res;
-      const ctx = canvas.getContext('2d')!;
-      ctx.drawImage(img, 0, 0, res, res);
-      resolve(ctx.getImageData(0, 0, res, res).data);
-    };
-    img.src = `data:${type};base64,${base64}`;
-  });
-}
-
-// Maximal-rectangle greedy meshing — merges adjacent active pixels into minimal rectangles
-// Adapted from Kromacut (MIT license) https://github.com/vycdev/Kromacut
-function greedyMerge(active: Uint8Array, W: number, H: number): Array<{ x: number; y: number; w: number; h: number }> {
-  const visited = new Uint8Array(W * H);
-  const rects: Array<{ x: number; y: number; w: number; h: number }> = [];
-  for (let y = 0; y < H; y++) {
-    for (let x = 0; x < W; x++) {
-      const idx = y * W + x;
-      if (!active[idx] || visited[idx]) continue;
-      let w = 1;
-      while (x + w < W && active[y * W + (x + w)] && !visited[y * W + (x + w)]) w++;
-      let h = 1, canExpand = true;
-      while (y + h < H && canExpand) {
-        for (let dx = 0; dx < w; dx++) {
-          if (!active[(y + h) * W + (x + dx)] || visited[(y + h) * W + (x + dx)]) {
-            canExpand = false; break;
-          }
-        }
-        if (canExpand) h++;
-      }
-      for (let dy = 0; dy < h; dy++)
-        for (let dx = 0; dx < w; dx++)
-          visited[(y + dy) * W + (x + dx)] = 1;
-      rects.push({ x, y, w, h });
-    }
-  }
-  return rects;
-}
-
-const TFACE = [
-  [0,2,1],[0,3,2], [5,7,4],[5,6,7],
-  [4,3,0],[4,7,3], [1,2,6],[1,6,5],
-  [0,1,5],[0,5,4], [3,7,6],[3,6,2],
-] as const;
-
 async function build3MF(
   slots: Slot[], printMM: number, lh: number,
   imageBase64?: string, imageType?: string
 ): Promise<Blob> {
+  const IMG_RES = 120;
+  const scale = printMM / IMG_RES;
   const half = printMM / 2;
+  const PLATE = 0.5;
+  const totalH = PLATE + slots.length * lh * 5;
+
+  // ── Sample image at 120×120 ───────────────────────────────────────────────
+  let pixelData: Uint8ClampedArray | null = null;
+  if (imageBase64) {
+    pixelData = await new Promise(resolve => {
+      const img = new Image();
+      img.onload = () => {
+        const c = document.createElement('canvas');
+        c.width = IMG_RES; c.height = IMG_RES;
+        const ctx = c.getContext('2d')!;
+        ctx.drawImage(img, 0, 0, IMG_RES, IMG_RES);
+        resolve(ctx.getImageData(0, 0, IMG_RES, IMG_RES).data);
+      };
+      img.src = `data:${imageType || 'image/jpeg'};base64,${imageBase64}`;
+    });
+  }
+
+  // ── Build single heightmap mesh ───────────────────────────────────────────
+  // Each pixel → vertex (x_mm, y_mm, height_mm); lum → height; lum → slot color
+  const vLines: string[] = [];
+  for (let row = 0; row < IMG_RES; row++) {
+    for (let col = 0; col < IMG_RES; col++) {
+      let lum = 0.5;
+      if (pixelData) {
+        const di = (row * IMG_RES + col) * 4;
+        lum = (pixelData[di] * 0.299 + pixelData[di+1] * 0.587 + pixelData[di+2] * 0.114) / 255;
+      }
+      const z = PLATE + lum * (totalH - PLATE);
+      const x = col * scale - half;
+      const y = row * scale - half;
+      vLines.push(`<vertex x="${x.toFixed(3)}" y="${y.toFixed(3)}" z="${z.toFixed(3)}"/>`);
+    }
+  }
+
+  const tLines: string[] = [];
+  for (let row = 0; row < IMG_RES - 1; row++) {
+    for (let col = 0; col < IMG_RES - 1; col++) {
+      const a = row * IMG_RES + col;
+      const b = row * IMG_RES + col + 1;
+      const c = (row + 1) * IMG_RES + col;
+      const d = (row + 1) * IMG_RES + col + 1;
+      let lum = 0.5;
+      if (pixelData) {
+        const di = (row * IMG_RES + col) * 4;
+        lum = (pixelData[di] * 0.299 + pixelData[di+1] * 0.587 + pixelData[di+2] * 0.114) / 255;
+      }
+      const si = Math.min(Math.floor(lum * slots.length), slots.length - 1);
+      tLines.push(`<triangle v1="${a}" v2="${c}" v3="${b}" p1="${si}"/>`);
+      tLines.push(`<triangle v1="${b}" v2="${c}" v3="${d}" p1="${si}"/>`);
+    }
+  }
+
+  // ── m:colorgroup — one entry per slot ─────────────────────────────────────
+  const colorGroup = slots.map(s =>
+    `      <m:color color="${s.hex || '#888888'}"/>`
+  ).join('\n');
+
+  const model = `<?xml version="1.0" encoding="UTF-8"?>
+<model unit="millimeter" xml:lang="en-US"
+  xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02"
+  xmlns:m="http://schemas.microsoft.com/3dmanufacturing/material/2015/02">
+  <resources>
+    <m:colorgroup id="1">
+${colorGroup}
+    </m:colorgroup>
+    <object id="10" type="model" pid="1" pindex="0" name="LayerDeck_Forge">
+      <mesh>
+        <vertices>${vLines.join('')}</vertices>
+        <triangles>${tLines.join('')}</triangles>
+      </mesh>
+    </object>
+  </resources>
+  <build>
+    <item objectid="10"/>
+  </build>
+</model>`;
 
   const contentTypes = `<?xml version="1.0" encoding="UTF-8"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
   <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
   <Default Extension="model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/>
-  <Default Extension="config" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/>
 </Types>`;
 
   const rels = `<?xml version="1.0" encoding="UTF-8"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
   <Relationship Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel" Target="/3D/3dmodel.model" Id="rel0"/>
-  <Relationship Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel" Target="/Metadata/model_settings.config" Id="rel1"/>
 </Relationships>`;
-
-  // ── Z ranges per slot ─────────────────────────────────────────────────────
-  const slabThicks = slots.map(s => Math.max(1, (s.layerEnd || 1) - (s.layerStart || 0)) * lh);
-  const zBots: number[] = [], zTops: number[] = [];
-  let zA = 0;
-  slabThicks.forEach(t => { zBots.push(zA); zA += t; zTops.push(zA); });
-
-  // ── Per-pixel slot assignment via LAB color distance ──────────────────────
-  const slotLabs = slots.map(s => hexToLab(s.hex || '#888888'));
-  const imgRes = Math.min(Math.round(printMM), 150);
-  const stepMM = printMM / imgRes;
-  let topSlotIdx: Int32Array | null = null;
-
-  if (imageBase64) {
-    const pixelData = await sampleImagePixels(imageBase64, imageType || 'image/jpeg', imgRes);
-    topSlotIdx = new Int32Array(imgRes * imgRes);
-    for (let py = 0; py < imgRes; py++) {
-      for (let px = 0; px < imgRes; px++) {
-        const di = (py * imgRes + px) * 4;
-        const lab = pixelToLab(pixelData[di], pixelData[di + 1], pixelData[di + 2]);
-        let best = 0, bestDist = Infinity;
-        slotLabs.forEach((sl, si) => {
-          const d = (lab[0]-sl[0])**2 + (lab[1]-sl[1])**2 + (lab[2]-sl[2])**2;
-          if (d < bestDist) { bestDist = d; best = si; }
-        });
-        topSlotIdx[py * imgRes + px] = best;
-      }
-    }
-  }
-
-  // ── basematerials for 3MF color reference ────────────────────────────────
-  const baseMats = slots.map((s, i) =>
-    `      <base name="${escXml(s.colorName || 'Slot' + (i + 1))}" displaycolor="${s.hex || '#888888'}"/>`
-  ).join('\n');
-
-  // ── Greedy heightmap mesh per slot ────────────────────────────────────────
-  // Slot K is active for a pixel when topSlotIdx[pixel] >= K, meaning
-  // filament K appears somewhere in the vertical stack at that pixel.
-  let objectsXml = '', buildItems = '';
-  slots.forEach((slot, i) => {
-    const zBot = zBots[i], zTop = zTops[i];
-    const objId = i + 10;
-
-    const active = new Uint8Array(imgRes * imgRes);
-    if (topSlotIdx) {
-      for (let p = 0; p < active.length; p++) active[p] = topSlotIdx[p] >= i ? 1 : 0;
-    } else {
-      active.fill(1);
-    }
-
-    const rects = greedyMerge(active, imgRes, imgRes);
-
-    const verts: number[] = [], tris: number[] = [];
-    for (const { x, y, w, h } of rects) {
-      const ox = x * stepMM - half, oy = y * stepMM - half;
-      const ox2 = ox + w * stepMM, oy2 = oy + h * stepMM;
-      const vBase = verts.length / 3;
-      verts.push(
-        ox,  oy,  zBot,  ox2, oy,  zBot,  ox2, oy2, zBot,  ox,  oy2, zBot,
-        ox,  oy,  zTop,  ox2, oy,  zTop,  ox2, oy2, zTop,  ox,  oy2, zTop
-      );
-      TFACE.forEach(t => tris.push(vBase + t[0], vBase + t[1], vBase + t[2]));
-    }
-
-    const vLines: string[] = [], tLines: string[] = [];
-    for (let vi = 0; vi < verts.length; vi += 3)
-      vLines.push(`<vertex x="${verts[vi].toFixed(3)}" y="${verts[vi+1].toFixed(3)}" z="${verts[vi+2].toFixed(3)}"/>`);
-    for (let ti = 0; ti < tris.length; ti += 3)
-      tLines.push(`<triangle v1="${tris[ti]}" v2="${tris[ti+1]}" v3="${tris[ti+2]}"/>`);
-
-    objectsXml +=
-      `    <object id="${objId}" type="model" pid="1" pindex="${i}" name="${escXml(slot.colorName || 'Slot' + (i + 1))}">\n` +
-      `      <mesh>\n        <vertices>${vLines.join('')}</vertices>\n        <triangles>${tLines.join('')}</triangles>\n      </mesh>\n    </object>\n`;
-    buildItems += `    <item objectid="${objId}"/>\n`;
-  });
-
-  const model = `<?xml version="1.0" encoding="UTF-8"?>
-<model unit="millimeter" xml:lang="en-US"
-  xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
-  <resources>
-    <basematerials id="1">
-${baseMats}
-    </basematerials>
-${objectsXml}  </resources>
-  <build>
-${buildItems}  </build>
-</model>`;
-
-  // ── model_settings.config — Bambu Studio extruder assignment ─────────────
-  // Format adapted from Kromacut (MIT) https://github.com/vycdev/Kromacut
-  let cfgObjects = '';
-  slots.forEach((slot, i) => {
-    cfgObjects += ` <object id="${i + 10}">\n  <metadata key="name" value="${escXml(slot.colorName || 'Slot' + (i + 1))}"/>\n  <metadata key="extruder" value="${i + 1}"/>\n </object>\n`;
-  });
-  let cfgInstances = '';
-  slots.forEach((_s, i) => {
-    cfgInstances += `  <model_instance>\n   <metadata key="object_id" value="${i + 10}"/>\n   <metadata key="instance_id" value="0"/>\n  </model_instance>\n`;
-  });
-  const modelConfig = `<?xml version="1.0" encoding="UTF-8"?>
-<config>
-${cfgObjects} <plate>
-  <metadata key="plater_id" value="1"/>
-  <metadata key="locked" value="false"/>
-${cfgInstances} </plate>
-</config>`;
 
   const zip = new JSZip();
   zip.file('[Content_Types].xml', contentTypes);
   zip.folder('_rels')!.file('.rels', rels);
   zip.folder('3D')!.file('3dmodel.model', model);
-  zip.folder('Metadata')!.file('model_settings.config', modelConfig);
   return zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } });
 }
 
@@ -435,68 +358,120 @@ export function ForgeStudio() {
     img.src = `data:${imgData.type};base64,${imgData.base64}`;
   }, [stage, previewTab, liveSlots, imgData]);
 
-  // ── 3D Three.js preview ──────────────────────────────────────────────────────
+  // ── 3D Three.js preview — heightmap terrain ──────────────────────────────────
   useEffect(() => {
     if (stage !== 'preview' || previewTab !== '3d' || !liveSlots.length || !stack) return;
     const container = container3dRef.current;
     if (!container) return;
     if (threeCleanup.current) { threeCleanup.current(); threeCleanup.current = null; }
 
-    const w = container.clientWidth || 480;
-    const h = container.clientHeight || 480;
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-    renderer.setPixelRatio(window.devicePixelRatio);
-    renderer.setSize(w, h);
-    renderer.setClearColor(0x000000, 0);
-    container.appendChild(renderer.domElement);
-
-    const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(40, w / h, 0.1, 2000);
-
-    scene.add(new THREE.AmbientLight(0xffffff, 0.6));
-    const dl = new THREE.DirectionalLight(0xffffff, 0.8);
-    dl.position.set(1, 2, 3); scene.add(dl);
-
     const printMM = parseFloat((stack.recommendedPrintSize || '120mm').replace(/[^0-9.]/g, '')) || 120;
     const lh = parseFloat(stack.layerHeight || '0.10') || 0.10;
-    // Slabs: X=printMM wide, Y=printMM tall, Z=slabThickness — stacked along Z
-    let zCursor = 0;
-    liveSlots.forEach(slot => {
-      const layerCount = Math.max(1, (slot.layerEnd || 1) - (slot.layerStart || 0));
-      const slabZ = layerCount * lh;
-      const geo = new THREE.BoxGeometry(printMM, printMM, slabZ);
-      const mat = new THREE.MeshLambertMaterial({ color: new THREE.Color(slot.hex || '#888') });
-      const mesh = new THREE.Mesh(geo, mat);
-      mesh.position.set(0, 0, zCursor + slabZ / 2);
-      scene.add(mesh);
-      zCursor += slabZ;
-    });
+    const IMG_RES = 120;
+    const scale = printMM / IMG_RES;
+    const half = printMM / 2;
+    const PLATE = 0.5;
+    const totalH = PLATE + liveSlots.length * lh * 5;
 
-    // Camera at ~45° above-and-to-the-side looking at the centre of the stack
-    const totalZ = zCursor;
-    const camDist = Math.max(printMM * 1.5, 80);
-    const midZ = totalZ / 2;
-    camera.position.set(camDist, camDist, midZ + camDist);
-    const controls = new OrbitControls(camera, renderer.domElement);
-    controls.enableDamping = true; controls.dampingFactor = 0.1;
-    controls.target.set(0, 0, midZ); controls.update();
+    function initScene(pixelData: Uint8ClampedArray | null) {
+      const w = container!.clientWidth || 480;
+      const h = container!.clientHeight || 480;
+      const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+      renderer.setPixelRatio(window.devicePixelRatio);
+      renderer.setSize(w, h);
+      renderer.setClearColor(0x000000, 0);
+      container!.appendChild(renderer.domElement);
 
-    let animId: number;
-    function animate() { animId = requestAnimationFrame(animate); controls.update(); renderer.render(scene, camera); }
-    animate();
+      const scene = new THREE.Scene();
+      const camera = new THREE.PerspectiveCamera(40, w / h, 0.1, 2000);
+      scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+      const dl = new THREE.DirectionalLight(0xffffff, 0.8);
+      dl.position.set(1, 2, 1); scene.add(dl);
 
-    const ro = new ResizeObserver(entries => {
-      const { width, height } = entries[0].contentRect;
-      renderer.setSize(width, height); camera.aspect = width / height; camera.updateProjectionMatrix();
-    });
-    ro.observe(container);
+      if (pixelData) {
+        // Heightmap mesh: dark pixels low, bright pixels high; vertex color = slot color
+        const verts: number[] = [], colors: number[] = [], indices: number[] = [];
+        for (let row = 0; row < IMG_RES; row++) {
+          for (let col = 0; col < IMG_RES; col++) {
+            const di = (row * IMG_RES + col) * 4;
+            const r = pixelData[di], g = pixelData[di+1], b = pixelData[di+2];
+            const lum = (r * 0.299 + g * 0.587 + b * 0.114) / 255;
+            const colH = PLATE + lum * (totalH - PLATE);
+            const si = Math.min(Math.floor(lum * liveSlots.length), liveSlots.length - 1);
+            const hex = liveSlots[si].hex || '#888888';
+            verts.push(col * scale - half, colH, row * scale - half);
+            colors.push(parseInt(hex.slice(1,3),16)/255, parseInt(hex.slice(3,5),16)/255, parseInt(hex.slice(5,7),16)/255);
+          }
+        }
+        for (let row = 0; row < IMG_RES - 1; row++) {
+          for (let col = 0; col < IMG_RES - 1; col++) {
+            const a = row * IMG_RES + col;
+            const b = row * IMG_RES + col + 1;
+            const c = (row + 1) * IMG_RES + col;
+            const d = (row + 1) * IMG_RES + col + 1;
+            indices.push(a, c, b, b, c, d);
+          }
+        }
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
+        geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+        geo.setIndex(indices);
+        geo.computeVertexNormals();
+        scene.add(new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ vertexColors: true })));
+      } else {
+        // Fallback: flat slab per slot (no image)
+        let zCursor = 0;
+        liveSlots.forEach(slot => {
+          const layerCount = Math.max(1, (slot.layerEnd || 1) - (slot.layerStart || 0));
+          const slabZ = layerCount * lh;
+          const geo = new THREE.BoxGeometry(printMM, slabZ, printMM);
+          const mat = new THREE.MeshLambertMaterial({ color: new THREE.Color(slot.hex || '#888') });
+          const mesh = new THREE.Mesh(geo, mat);
+          mesh.position.set(0, zCursor + slabZ / 2, 0);
+          scene.add(mesh); zCursor += slabZ;
+        });
+      }
 
-    threeCleanup.current = () => {
-      cancelAnimationFrame(animId); ro.disconnect(); renderer.dispose();
-      if (container.contains(renderer.domElement)) container.removeChild(renderer.domElement);
-    };
+      const midH = totalH / 2;
+      const camDist = Math.max(printMM * 1.4, 80);
+      camera.position.set(camDist, midH + camDist * 0.8, camDist);
+      const controls = new OrbitControls(camera, renderer.domElement);
+      controls.target.set(0, midH, 0);
+      controls.enableDamping = true; controls.dampingFactor = 0.1;
+      controls.update();
+
+      let animId: number;
+      function animate() { animId = requestAnimationFrame(animate); controls.update(); renderer.render(scene, camera); }
+      animate();
+
+      const ro = new ResizeObserver(entries => {
+        const { width, height } = entries[0].contentRect;
+        renderer.setSize(width, height); camera.aspect = width / height; camera.updateProjectionMatrix();
+      });
+      ro.observe(container!);
+
+      threeCleanup.current = () => {
+        cancelAnimationFrame(animId); ro.disconnect(); renderer.dispose();
+        if (container!.contains(renderer.domElement)) container!.removeChild(renderer.domElement);
+      };
+    }
+
+    if (imgData) {
+      const img = new Image();
+      img.onload = () => {
+        const off = document.createElement('canvas');
+        off.width = IMG_RES; off.height = IMG_RES;
+        const ctx = off.getContext('2d')!;
+        ctx.drawImage(img, 0, 0, IMG_RES, IMG_RES);
+        initScene(ctx.getImageData(0, 0, IMG_RES, IMG_RES).data);
+      };
+      img.src = `data:${imgData.type};base64,${imgData.base64}`;
+    } else {
+      initScene(null);
+    }
+
     return () => { if (threeCleanup.current) { threeCleanup.current(); threeCleanup.current = null; } };
-  }, [stage, previewTab, liveSlots, stack]);
+  }, [stage, previewTab, liveSlots, stack, imgData]);
 
   // ── Swap ─────────────────────────────────────────────────────────────────────
   const swapSlot = swapIdx !== null ? liveSlots[swapIdx] : null;
