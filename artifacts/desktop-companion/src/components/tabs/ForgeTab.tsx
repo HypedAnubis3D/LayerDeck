@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
-import { Flame, RefreshCw, Download, ExternalLink, PackageOpen } from 'lucide-react';
+import { Flame, RefreshCw, Download, ExternalLink, PackageOpen, Cpu } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { ForgeStudio } from './ForgeStudio';
 
 interface ForgeExport {
   id: string;
@@ -71,36 +72,26 @@ function ExportCard({ exp }: { exp: ForgeExport }) {
       </div>
 
       <div className="flex gap-2">
-        <Button
-          size="sm"
-          className="flex-1 gap-1.5 text-xs font-semibold"
-          onClick={handleOpen}
-          disabled={!downloadUrl}
-        >
-          <ExternalLink className="h-3.5 w-3.5" />
-          Open in Bambu Studio
+        <Button size="sm" className="flex-1 gap-1.5 text-xs font-semibold" onClick={handleOpen} disabled={!downloadUrl}>
+          <ExternalLink className="h-3.5 w-3.5" /> Open in Bambu Studio
         </Button>
-        <Button
-          size="sm"
-          variant="outline"
-          className="gap-1.5 text-xs border-white/10 hover:border-white/20"
-          onClick={handleOpen}
-          disabled={!downloadUrl}
-          title="Save 3MF file"
-        >
-          <Download className="h-3.5 w-3.5" />
-          Save 3MF
+        <Button size="sm" variant="outline" className="gap-1.5 text-xs border-white/10 hover:border-white/20"
+          onClick={handleOpen} disabled={!downloadUrl} title="Save 3MF file">
+          <Download className="h-3.5 w-3.5" /> Save 3MF
         </Button>
       </div>
     </div>
   );
 }
 
+type SubTab = 'queue' | 'studio';
+
 interface ForgeTabProps {
   onNewExportCount?: (count: number) => void;
 }
 
 export function ForgeTab({ onNewExportCount }: ForgeTabProps) {
+  const [subTab, setSubTab] = useState<SubTab>('queue');
   const lastKnownCount = useRef<number | null>(null);
 
   const { data: exports = [], isLoading, refetch, isFetching } = useQuery({
@@ -115,53 +106,69 @@ export function ForgeTab({ onNewExportCount }: ForgeTabProps) {
       return;
     }
     const newCount = exports.length - lastKnownCount.current;
-    if (newCount > 0 && onNewExportCount) {
-      onNewExportCount(newCount);
-    }
+    if (newCount > 0 && onNewExportCount) onNewExportCount(newCount);
     lastKnownCount.current = exports.length;
   }, [exports.length, onNewExportCount]);
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
+      {/* Header */}
       <div className="flex items-center justify-between">
-        <div>
-          <h3 className="font-display text-base font-semibold tracking-wide flex items-center gap-2">
-            <Flame className="h-4 w-4 text-orange-400" />
-            Forge Export Queue
-          </h3>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            {exports.length} export{exports.length !== 1 ? 's' : ''} · polled every 30 seconds
-          </p>
+        <h3 className="font-display text-base font-semibold tracking-wide flex items-center gap-2">
+          <Flame className="h-4 w-4 text-orange-400" /> Forge
+        </h3>
+
+        {/* Sub-tab switcher */}
+        <div className="flex gap-1 bg-white/5 rounded-lg p-1">
+          <button onClick={() => setSubTab('queue')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all
+              ${subTab === 'queue' ? 'bg-orange-500 text-white' : 'text-muted-foreground hover:text-foreground'}`}>
+            <PackageOpen className="h-3.5 w-3.5" /> Export Queue
+            {exports.length > 0 && (
+              <span className="ml-0.5 rounded-full bg-white/20 px-1.5 py-0 text-[10px] leading-4">{exports.length}</span>
+            )}
+          </button>
+          <button onClick={() => setSubTab('studio')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all
+              ${subTab === 'studio' ? 'bg-orange-500 text-white' : 'text-muted-foreground hover:text-foreground'}`}>
+            <Cpu className="h-3.5 w-3.5" /> Forge Studio
+          </button>
         </div>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => refetch()}
-          disabled={isFetching}
-          className="gap-1.5 text-muted-foreground border border-white/5 hover:border-white/10"
-        >
-          <RefreshCw className={`h-3.5 w-3.5 ${isFetching ? 'animate-spin' : ''}`} />
-          Refresh
-        </Button>
       </div>
 
-      {isLoading ? (
-        <div className="flex items-center justify-center py-16 text-muted-foreground">
-          <RefreshCw className="h-5 w-5 animate-spin mr-2" /> Loading exports…
-        </div>
-      ) : exports.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-16 text-muted-foreground/50 text-center rounded-2xl border border-white/5 bg-card/20">
-          <PackageOpen className="h-10 w-10 mb-3 opacity-30" />
-          <p className="text-sm">No Forge exports yet.</p>
-          <p className="text-xs mt-1">Analyze an image in LayerDeck mobile and tap Export 3MF.</p>
-        </div>
-      ) : (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {exports.map(exp => (
-            <ExportCard key={exp.id} exp={exp} />
-          ))}
+      {/* ── EXPORT QUEUE ─────────────────────────────────────────────────── */}
+      {subTab === 'queue' && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-muted-foreground">
+              {exports.length} export{exports.length !== 1 ? 's' : ''} · polled every 30 seconds
+            </p>
+            <Button variant="ghost" size="sm" onClick={() => refetch()} disabled={isFetching}
+              className="gap-1.5 text-muted-foreground border border-white/5 hover:border-white/10">
+              <RefreshCw className={`h-3.5 w-3.5 ${isFetching ? 'animate-spin' : ''}`} /> Refresh
+            </Button>
+          </div>
+
+          {isLoading ? (
+            <div className="flex items-center justify-center py-16 text-muted-foreground">
+              <RefreshCw className="h-5 w-5 animate-spin mr-2" /> Loading exports…
+            </div>
+          ) : exports.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 text-muted-foreground/50 text-center rounded-2xl border border-white/5 bg-card/20">
+              <PackageOpen className="h-10 w-10 mb-3 opacity-30" />
+              <p className="text-sm">No Forge exports yet.</p>
+              <p className="text-xs mt-1">Use Forge Studio above, or export from LayerDeck mobile.</p>
+            </div>
+          ) : (
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {exports.map(exp => <ExportCard key={exp.id} exp={exp} />)}
+            </div>
+          )}
         </div>
       )}
+
+      {/* ── FORGE STUDIO ─────────────────────────────────────────────────── */}
+      {subTab === 'studio' && <ForgeStudio />}
     </div>
   );
 }
