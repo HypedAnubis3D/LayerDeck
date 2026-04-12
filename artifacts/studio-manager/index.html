@@ -22628,6 +22628,19 @@ function posShowReceipt(sale){
   ._anubis-btn:hover{color:#7ec8d8}
   @keyframes _anubis-fadeup{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
   @keyframes _anubis-dot{0%,80%,100%{transform:scale(0.6);opacity:0.3}40%{transform:scale(1);opacity:1}}
+  ._anubis-hist-back{width:100%;padding:9px 14px;border:none;border-bottom:1px solid rgba(34,211,238,0.08);background:rgba(34,211,238,0.02);color:#1a4050;font-size:9px;letter-spacing:2px;cursor:pointer;text-align:left;font-family:'Share Tech Mono',monospace;flex-shrink:0;transition:color 0.15s;display:none}
+  ._anubis-hist-back:hover{color:#22d3ee;background:rgba(34,211,238,0.05)}
+  #_anubis-hist-panel,#_anubis-hist-view{flex:1;overflow-y:auto;padding:10px 12px;display:none}
+  #_anubis-hist-panel::-webkit-scrollbar,#_anubis-hist-view::-webkit-scrollbar{width:3px}
+  #_anubis-hist-panel::-webkit-scrollbar-thumb,#_anubis-hist-view::-webkit-scrollbar-thumb{background:#1e2a3a;border-radius:2px}
+  ._anubis-hist-item{padding:10px 12px;border:1px solid rgba(34,211,238,0.08);border-radius:8px;margin-bottom:7px;cursor:pointer;transition:all 0.15s;background:#0c1018}
+  ._anubis-hist-item:hover{border-color:rgba(34,211,238,0.3);background:#111826}
+  ._anubis-hist-date{font-size:8px;color:#1a4050;letter-spacing:1.5px;margin-bottom:4px;text-transform:uppercase}
+  ._anubis-hist-preview{font-size:11px;color:#3a5868;line-height:1.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  ._anubis-hist-count{font-size:8px;color:#1a3040;margin-top:3px}
+  ._anubis-hist-empty{text-align:center;padding:40px 16px;color:#1a3040;font-size:11px;line-height:1.8}
+  ._anubis-hist-del{background:none;border:none;cursor:pointer;color:#1a3040;font-size:11px;padding:4px 6px;border-radius:4px;transition:color 0.15s;float:right;margin-top:-2px}
+  ._anubis-hist-del:hover{color:#c02020}
 </style>
 
 <!-- Floating button -->
@@ -22653,9 +22666,24 @@ function posShowReceipt(sale){
         <span style="color:#1a4050;font-size:8px;letter-spacing:1px">ONLINE</span>
       </div>
       <button class="_anubis-btn" onclick="_anubisCtx()" title="Show live context" style="font-size:10px">⚡</button>
+      <button class="_anubis-btn" id="_anubis-hist-btn" onclick="_anubisHistoryOpen()" title="Chat history" style="font-size:12px">📋</button>
       <button class="_anubis-btn" onclick="_anubisClear()" title="Clear chat" style="font-size:12px">🗑</button>
       <button class="_anubis-btn" onclick="_anubisClose()" title="Close" style="font-size:16px">×</button>
     </div>
+  </div>
+
+  <!-- History back strip (shown in history views) -->
+  <button class="_anubis-hist-back" id="_anubis-back-btn" onclick="_anubisHistBack()">← BACK TO HISTORY</button>
+
+  <!-- History list panel -->
+  <div id="_anubis-hist-panel">
+    <div style="font-size:8px;color:#1a4050;letter-spacing:2.5px;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid rgba(34,211,238,0.06)">PAST SESSIONS</div>
+    <div id="_anubis-hist-items"></div>
+  </div>
+
+  <!-- Single session view panel -->
+  <div id="_anubis-hist-view">
+    <div id="_anubis-hist-view-msgs"></div>
   </div>
 
   <!-- Messages -->
@@ -22835,14 +22863,115 @@ function posShowReceipt(sale){
       fab.style.display='';
     }
   };
-  window._anubisClose=function(){if(_panelOpen)_anubisToggle();};
+  // ── History helpers ──────────────────────────────────────────
+  var _HIST_KEY='_anubis_sessions';
+  var _MAX_SESSIONS=30;
+  var _currentView='chat'; // 'chat'|'list'|'session'
+
+  function _saveSessions(arr){try{localStorage.setItem(_HIST_KEY,JSON.stringify(arr));}catch(e){}}
+  function _loadSessions(){try{return JSON.parse(localStorage.getItem(_HIST_KEY)||'[]');}catch(e){return[];}}
+
+  function _saveCurrentSession(){
+    var userMsgs=_hist.filter(function(m){return m.role==='user';});
+    if(!userMsgs.length)return;
+    var sessions=_loadSessions();
+    var preview=userMsgs[0].content.slice(0,80)+(userMsgs[0].content.length>80?'…':'');
+    sessions.unshift({
+      id:Date.now()+'',
+      date:new Date().toLocaleString([],{month:'short',day:'numeric',year:'numeric',hour:'2-digit',minute:'2-digit'}),
+      preview:preview,
+      count:_hist.length,
+      msgs:_hist.slice()
+    });
+    if(sessions.length>_MAX_SESSIONS)sessions=sessions.slice(0,_MAX_SESSIONS);
+    _saveSessions(sessions);
+  }
+
+  function _showView(view){
+    _currentView=view;
+    var msgs=document.getElementById('_anubis-msgs');
+    var sugs=document.getElementById('_anubis-sugs');
+    var inp=document.querySelector('._anubis-input-row');
+    var histPanel=document.getElementById('_anubis-hist-panel');
+    var histView=document.getElementById('_anubis-hist-view');
+    var backBtn=document.getElementById('_anubis-back-btn');
+    if(view==='chat'){
+      msgs.style.display='';histPanel.style.display='none';histView.style.display='none';
+      if(sugs)sugs.style.display=_showSug?'':'none';
+      if(inp)inp.style.display='';backBtn.style.display='none';
+    }else if(view==='list'){
+      msgs.style.display='none';histPanel.style.display='';histView.style.display='none';
+      if(sugs)sugs.style.display='none';if(inp)inp.style.display='none';backBtn.style.display='none';
+    }else if(view==='session'){
+      msgs.style.display='none';histPanel.style.display='none';histView.style.display='';
+      if(sugs)sugs.style.display='none';if(inp)inp.style.display='none';
+      backBtn.style.display='';
+    }
+  }
+
+  window._anubisHistoryOpen=function(){
+    _showView('list');
+    var items=document.getElementById('_anubis-hist-items');
+    var sessions=_loadSessions();
+    if(!sessions.length){
+      items.innerHTML='<div class="_anubis-hist-empty">No saved sessions yet.<br><br>Past conversations are saved<br>automatically when you close the chat.</div>';
+      return;
+    }
+    items.innerHTML=sessions.map(function(s,i){
+      return '<div class="_anubis-hist-item" onclick="_anubisHistViewSession('+i+')">'+
+        '<button class="_anubis-hist-del" onclick="event.stopPropagation();_anubisHistDelete('+i+')" title="Delete">✕</button>'+
+        '<div class="_anubis-hist-date">'+s.date+'</div>'+
+        '<div class="_anubis-hist-preview">'+s.preview.replace(/</g,'&lt;')+'</div>'+
+        '<div class="_anubis-hist-count">'+(s.count||0)+' messages</div>'+
+      '</div>';
+    }).join('');
+  };
+
+  window._anubisHistViewSession=function(idx){
+    var sessions=_loadSessions();
+    var s=sessions[idx];if(!s)return;
+    _showView('session');
+    var container=document.getElementById('_anubis-hist-view-msgs');
+    if(!s.msgs||!s.msgs.length){container.innerHTML='<div style="color:#1a3040;font-size:11px;padding:20px;text-align:center">No messages in this session.</div>';return;}
+    container.innerHTML=s.msgs.map(function(m){
+      var isUser=m.role==='user';
+      return '<div class="_anubis-msg'+(isUser?' user':'')+'">'+
+        '<div class="_anubis-avatar" style="width:24px;height:24px;font-size:9px;flex-shrink:0;margin-top:2px;'+(isUser?'background:#1e2435;border:1px solid #2d3748;color:#4a5568;':'')+'">'+(isUser?'T':'A')+'</div>'+
+        '<div class="_anubis-bubble '+(isUser?'user':'ai')+'">'+
+          (!isUser?'<div class="ai-label">ANUBIS</div>':'')+
+          '<div class="msg-body">'+(isUser?m.content.replace(/</g,'&lt;'):_md(m.content))+'</div>'+
+        '</div>'+
+      '</div>';
+    }).join('');
+    container.scrollTop=0;
+  };
+
+  window._anubisHistDelete=function(idx){
+    var sessions=_loadSessions();
+    sessions.splice(idx,1);
+    _saveSessions(sessions);
+    _anubisHistoryOpen();
+  };
+
+  window._anubisHistBack=function(){_showView('list');_anubisHistoryOpen();};
+
+  window._anubisClose=function(){
+    if(!_panelOpen)return;
+    _saveCurrentSession();
+    _showView('chat');
+    _anubisToggle();
+  };
 
   window._anubisClear=function(){
+    _saveCurrentSession();
     _hist=[];_showSug=true;
+    _showView('chat');
     document.getElementById('_anubis-msgs').innerHTML='';
     document.getElementById('_anubis-sugs').style.display='';
-    _appendMsg('assistant','Session cleared. Ready.');
+    _appendMsg('assistant','Session saved. Ready for a new conversation.');
   };
+
+  window.addEventListener('beforeunload',function(){_saveCurrentSession();});
 
   window._anubisCtx=function(){
     var ctx=_buildContext();
