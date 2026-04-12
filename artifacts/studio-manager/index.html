@@ -1874,6 +1874,7 @@ header{
       <option value="failed">Failed</option>
     </select>
     <button class="btn btn-ghost btn-sm" onclick="openGroupsModal()">📁 Groups</button>
+    <button class="btn btn-ghost btn-sm" onclick="navTo('queue')" id="pr-queue-btn">📋 Print Queue <span id="pr-queue-badge" style="display:none;background:var(--pur);color:#fff;font-size:7px;padding:1px 4px;border-radius:6px;margin-left:2px;font-family:'Orbitron',monospace;font-weight:700"></span></button>
     <span class="cnt" id="pr-cnt"></span>
   </div>
   <div class="prints-grid" id="prints-grid"></div>
@@ -2516,9 +2517,8 @@ header{
     <button class="bn-item" id="bn-prints" onclick="navTo('prints');setBottomNav('prints')">
       <span class="bn-icon">🖨</span><span class="bn-label">Prints</span>
     </button>
-    <button class="bn-item" id="bn-queue" onclick="navTo('queue');setBottomNav('queue')">
-      <span class="bn-icon">📋</span><span class="bn-label">Queue</span>
-      <span class="bn-badge" id="bn-badge-queue">!</span>
+    <button class="bn-item" id="bn-printers" onclick="navTo('printers');setBottomNav('printers')">
+      <span class="bn-icon">🖥</span><span class="bn-label">Printers</span>
     </button>
     <button class="bn-item" id="bn-orders" onclick="navTo('orders');setBottomNav('orders')">
       <span class="bn-icon">📬</span><span class="bn-label">Orders</span>
@@ -4973,6 +4973,7 @@ function renderQueue(){
   var stages=[{key:'queued',label:'Queued',color:'var(--pur)'},{key:'inprogress',label:'In Progress',color:'var(--cyn)'},{key:'done',label:'Done',color:'var(--grn)'}];
   var active=queueItems.filter(function(q){return q.stage!=='done';}).length;
   document.getElementById('q-cnt').textContent=active+' active';
+  var _pqb=document.getElementById('pr-queue-badge');if(_pqb){_pqb.textContent=active||'';_pqb.style.display=active>0?'inline':'none';}
   document.getElementById('kanban-board').innerHTML=stages.map(function(st){
     var items=queueItems.filter(function(q){return (q.stage||'queued')===st.key;});
     // Sort queued section by sortOrder ascending
@@ -12256,7 +12257,7 @@ function hapticSuccess(){haptic([40,30,40]);}
 function hapticError(){haptic([80,40,80]);}
 
 // ── BOTTOM NAV ──
-const BN_TABS=['dashboard','prints','queue','orders','spools'];
+const BN_TABS=['dashboard','prints','printers','orders','spools'];
 function setBottomNav(tab){
   hapticLight();
   BN_TABS.forEach(t=>{
