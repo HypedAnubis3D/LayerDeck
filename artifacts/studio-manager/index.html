@@ -3499,7 +3499,7 @@ header{
     <!-- Add print row -->
     <div style="margin-bottom:5px">
       <input type="text" id="eo-print-search" placeholder="🔍 Tap to search & add a print…" readonly
-        onclick="openOrderPrintPicker()" onfocus="this.blur();openOrderPrintPicker()"
+        onclick="openOrderPrintPicker()"
         class="srch" style="width:100%;box-sizing:border-box;cursor:pointer;outline:none"/>
     </div>
     <div style="margin-bottom:10px">
@@ -3628,7 +3628,7 @@ header{
 </div>
 
 <!-- GENERIC PICKER MODAL -->
-<div class="overlay" id="mod-picker" style="display:none" onclick="if(event.target.id==='mod-picker')closePicker()">
+<div class="overlay" id="mod-picker" style="display:none;z-index:400" onclick="if(event.target.id==='mod-picker')closePicker()">
 <div class="modal" style="width:520px;max-width:96vw;max-height:90vh;display:flex;flex-direction:column">
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
     <div id="picker-title" style="font-family:Orbitron,sans-serif;font-size:12px;color:var(--txt-b);font-weight:700;letter-spacing:.5px"></div>
@@ -7407,7 +7407,7 @@ function addOrderItemRow(type,item,cid){
   if(type==='catalog'){
     const prefillName=item&&item.name?esc(item.name):'';
     const prefillCatId=item&&item._catalogId?item._catalogId:'';
-    row.innerHTML='<input type="text" class="oir-name oir-cat-inp srch" placeholder="🔍 Tap to search catalog…" value="'+prefillName+'" data-cat-id="'+prefillCatId+'" readonly onclick="openCatalogPicker(\''+id+'\')" onfocus="this.blur();openCatalogPicker(\''+id+'\')" style="cursor:pointer;min-width:0;flex:1">'
+    row.innerHTML='<input type="text" class="oir-name oir-cat-inp srch" placeholder="🔍 Tap to search catalog…" value="'+prefillName+'" data-cat-id="'+prefillCatId+'" readonly onclick="openCatalogPicker(\''+id+'\')" style="cursor:pointer;min-width:0;flex:1">'
       +'<input class="oir-qty" type="number" min="1" value="'+qty+'" oninput="'+updCall+'">'
       +'<input class="oir-price" type="number" min="0" step="0.01" value="'+priceVal+'" placeholder="0.00" oninput="'+updCall+'">'
       +'<button class="oi-rm" onclick="removeOrderItemRow(\''+id+'\',\''+cid+'\')">✕</button>';
