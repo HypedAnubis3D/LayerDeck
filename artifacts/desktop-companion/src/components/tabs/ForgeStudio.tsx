@@ -96,9 +96,9 @@ async function build3MF(
   const totalH = PLATE + slots.length * lh * 5;
 
   // ── Sample image at 120×120 ───────────────────────────────────────────────
-  let pixelData: Uint8ClampedArray | null = null;
+  let rawPixels: Uint8ClampedArray | null = null;
   if (imageBase64) {
-    pixelData = await new Promise(resolve => {
+    rawPixels = await new Promise(resolve => {
       const img = new Image();
       img.onload = () => {
         const c = document.createElement('canvas');
@@ -111,16 +111,36 @@ async function build3MF(
     });
   }
 
-  // ── Build single heightmap mesh ───────────────────────────────────────────
-  // Each pixel → vertex (x_mm, y_mm, height_mm); lum → height; lum → slot color
+  // Fix 1: extract brightness then box-blur (radius=2) to smooth jagged spikes
+  const bright = new Float32Array(IMG_RES * IMG_RES);
+  for (let i = 0; i < bright.length; i++) {
+    if (rawPixels) {
+      const di = i * 4;
+      bright[i] = (rawPixels[di] * 0.299 + rawPixels[di+1] * 0.587 + rawPixels[di+2] * 0.114) / 255;
+    } else {
+      bright[i] = 0.5;
+    }
+  }
+  const R = 2;
+  const blurred = new Float32Array(IMG_RES * IMG_RES);
+  for (let y = 0; y < IMG_RES; y++) {
+    for (let x = 0; x < IMG_RES; x++) {
+      let sum = 0, cnt = 0;
+      for (let dy = -R; dy <= R; dy++) {
+        for (let dx = -R; dx <= R; dx++) {
+          const nx = x + dx, ny = y + dy;
+          if (nx >= 0 && nx < IMG_RES && ny >= 0 && ny < IMG_RES) { sum += bright[ny * IMG_RES + nx]; cnt++; }
+        }
+      }
+      blurred[y * IMG_RES + x] = sum / cnt;
+    }
+  }
+
+  // ── Build single heightmap mesh (Fix 2: exact slot color; Fix 3: centered mm coords)
   const vLines: string[] = [];
   for (let row = 0; row < IMG_RES; row++) {
     for (let col = 0; col < IMG_RES; col++) {
-      let lum = 0.5;
-      if (pixelData) {
-        const di = (row * IMG_RES + col) * 4;
-        lum = (pixelData[di] * 0.299 + pixelData[di+1] * 0.587 + pixelData[di+2] * 0.114) / 255;
-      }
+      const lum = blurred[row * IMG_RES + col];
       const z = PLATE + lum * (totalH - PLATE);
       const x = col * scale - half;
       const y = row * scale - half;
@@ -135,11 +155,7 @@ async function build3MF(
       const b = row * IMG_RES + col + 1;
       const c = (row + 1) * IMG_RES + col;
       const d = (row + 1) * IMG_RES + col + 1;
-      let lum = 0.5;
-      if (pixelData) {
-        const di = (row * IMG_RES + col) * 4;
-        lum = (pixelData[di] * 0.299 + pixelData[di+1] * 0.587 + pixelData[di+2] * 0.114) / 255;
-      }
+      const lum = blurred[row * IMG_RES + col];
       const si = Math.min(Math.floor(lum * slots.length), slots.length - 1);
       tLines.push(`<triangle v1="${a}" v2="${c}" v3="${b}" p1="${si}"/>`);
       tLines.push(`<triangle v1="${b}" v2="${c}" v3="${d}" p1="${si}"/>`);
@@ -389,17 +405,37 @@ export function ForgeStudio() {
       dl.position.set(1, 2, 1); scene.add(dl);
 
       if (pixelData) {
-        // Heightmap mesh: dark pixels low, bright pixels high; vertex color = slot color
+        // Fix 1: extract brightness + box blur (radius=2) for smooth terrain
+        const bright3d = new Float32Array(IMG_RES * IMG_RES);
+        for (let i = 0; i < bright3d.length; i++) {
+          const di = i * 4;
+          bright3d[i] = (pixelData[di] * 0.299 + pixelData[di+1] * 0.587 + pixelData[di+2] * 0.114) / 255;
+        }
+        const R3d = 2;
+        const blur3d = new Float32Array(IMG_RES * IMG_RES);
+        for (let y = 0; y < IMG_RES; y++) {
+          for (let x = 0; x < IMG_RES; x++) {
+            let sum = 0, cnt = 0;
+            for (let dy = -R3d; dy <= R3d; dy++) {
+              for (let dx = -R3d; dx <= R3d; dx++) {
+                const nx = x + dx, ny = y + dy;
+                if (nx >= 0 && nx < IMG_RES && ny >= 0 && ny < IMG_RES) { sum += bright3d[ny * IMG_RES + nx]; cnt++; }
+              }
+            }
+            blur3d[y * IMG_RES + x] = sum / cnt;
+          }
+        }
+
+        // Build with raw pixel coords; center() + scale() applied after
         const verts: number[] = [], colors: number[] = [], indices: number[] = [];
         for (let row = 0; row < IMG_RES; row++) {
           for (let col = 0; col < IMG_RES; col++) {
-            const di = (row * IMG_RES + col) * 4;
-            const r = pixelData[di], g = pixelData[di+1], b = pixelData[di+2];
-            const lum = (r * 0.299 + g * 0.587 + b * 0.114) / 255;
+            const lum = blur3d[row * IMG_RES + col];
             const colH = PLATE + lum * (totalH - PLATE);
+            // Fix 2: snap to exact slot color (no blending between slots)
             const si = Math.min(Math.floor(lum * liveSlots.length), liveSlots.length - 1);
             const hex = liveSlots[si].hex || '#888888';
-            verts.push(col * scale - half, colH, row * scale - half);
+            verts.push(col, colH, row);
             colors.push(parseInt(hex.slice(1,3),16)/255, parseInt(hex.slice(3,5),16)/255, parseInt(hex.slice(5,7),16)/255);
           }
         }
@@ -417,6 +453,9 @@ export function ForgeStudio() {
         geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
         geo.setIndex(indices);
         geo.computeVertexNormals();
+        // Fix 3: center at origin, scale X/Z to exact print size in mm
+        geo.center();
+        geo.scale(printMM / IMG_RES, 1, printMM / IMG_RES);
         scene.add(new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ vertexColors: true })));
       } else {
         // Fallback: flat slab per slot (no image)
@@ -432,11 +471,11 @@ export function ForgeStudio() {
         });
       }
 
-      const midH = totalH / 2;
+      // After geo.center() the mesh is centered at origin in all axes
       const camDist = Math.max(printMM * 1.4, 80);
-      camera.position.set(camDist, midH + camDist * 0.8, camDist);
+      camera.position.set(camDist, camDist * 0.8, camDist);
       const controls = new OrbitControls(camera, renderer.domElement);
-      controls.target.set(0, midH, 0);
+      controls.target.set(0, 0, 0);
       controls.enableDamping = true; controls.dampingFactor = 0.1;
       controls.update();
 
