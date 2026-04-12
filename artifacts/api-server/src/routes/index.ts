@@ -17,6 +17,7 @@ import catalogRouter from "./catalog";
 import etsyGmailRouter from "./etsy-gmail";
 import aiRouter from "./ai";
 import chromaCanvasRouter from "./chromaCanvas";
+import forgeRouter from "./forge";
 
 const router: IRouter = Router();
 
@@ -38,5 +39,6 @@ router.use("/catalog", catalogRouter);
 router.use("/etsy", etsyGmailRouter);
 router.use("/ai", aiRouter);
 router.use("/chroma-canvas", chromaCanvasRouter);
+router.use("/forge", forgeRouter);
 
 export default router;
