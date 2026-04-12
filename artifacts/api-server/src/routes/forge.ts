@@ -1,41 +1,15 @@
 import { Router } from "express";
 import { createClient } from "@supabase/supabase-js";
-import { Pool } from "pg";
 
 const router = Router();
 const FORGE_BUCKET = "forge-exports";
 
-// ── Supabase (storage only) ────────────────────────────────────────────────────
 function getSupabase() {
   const url = process.env.SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_ANON_KEY;
   if (!url || !key) return null;
   return createClient(url, key, { auth: { persistSession: false } });
 }
-
-// ── Local Postgres (forge_exports table) ──────────────────────────────────────
-const db = new Pool({ connectionString: process.env.DATABASE_URL });
-
-async function ensureForgeTable() {
-  await db.query(`
-    CREATE TABLE IF NOT EXISTS forge_exports (
-      id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
-      created_at TIMESTAMPTZ DEFAULT now(),
-      image_name TEXT,
-      stl_url TEXT,
-      download_url TEXT,
-      slot_count INTEGER,
-      layer_height TEXT,
-      print_size TEXT,
-      palette JSONB,
-      layer_instructions JSONB,
-      status TEXT DEFAULT 'ready'
-    )
-  `);
-}
-
-// Run on first load — idempotent
-ensureForgeTable().catch(() => {});
 
 // ── POST /api/forge/analyze ────────────────────────────────────────────────────
 router.post("/analyze", async (req, res) => {
@@ -197,14 +171,15 @@ Return ONLY valid JSON, no markdown:
     const stack = JSON.parse(cleaned);
     return res.json({ stack });
   } catch (err) {
-    return res.status(500).json({
-      error: err instanceof Error ? err.message : "Unknown error",
-    });
+    return res.status(500).json({ error: err instanceof Error ? err.message : "Unknown error" });
   }
 });
 
 // ── POST /api/forge/export ─────────────────────────────────────────────────────
 router.post("/export", async (req, res) => {
+  const sb = getSupabase();
+  if (!sb) return res.status(500).json({ error: "Supabase not configured" });
+
   const { stlBase64, filename, palette, layerInstructions, layerHeight, printSize, slotCount } =
     req.body as {
       stlBase64: string;
@@ -220,87 +195,71 @@ router.post("/export", async (req, res) => {
     return res.status(400).json({ error: "stlBase64 and filename required" });
   }
 
-  const stlBuffer = Buffer.from(stlBase64, "base64");
-  const storageKey = `${Date.now()}-${filename.replace(/[^a-zA-Z0-9._-]/g, "_")}.stl`;
-  let stlUrl = "";
-
-  // Try Supabase Storage first
-  const sb = getSupabase();
-  if (sb) {
-    try {
-      const { error: uploadError } = await sb.storage
-        .from(FORGE_BUCKET)
-        .upload(storageKey, stlBuffer, { contentType: "model/stl", upsert: false });
-
-      if (!uploadError) {
-        const { data: urlData } = sb.storage.from(FORGE_BUCKET).getPublicUrl(storageKey);
-        stlUrl = urlData?.publicUrl ?? "";
-      }
-    } catch {
-      // Storage unavailable — continue with empty url
-    }
-  }
-
   try {
-    const result = await db.query(
-      `INSERT INTO forge_exports (image_name, stl_url, download_url, slot_count, layer_height, print_size, palette, layer_instructions, status)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'ready')
-       RETURNING id`,
-      [
-        filename,
-        stlUrl,
-        stlUrl,
-        slotCount,
-        layerHeight,
-        printSize,
-        JSON.stringify(palette),
-        JSON.stringify(layerInstructions),
-      ]
-    );
+    const stlBuffer = Buffer.from(stlBase64, "base64");
+    const storageKey = `${Date.now()}-${filename.replace(/[^a-zA-Z0-9._-]/g, "_")}.stl`;
 
-    const exportId = result.rows[0].id;
+    const { error: uploadError } = await sb.storage
+      .from(FORGE_BUCKET)
+      .upload(storageKey, stlBuffer, { contentType: "model/stl", upsert: false });
 
-    // If no Supabase URL, generate a local download endpoint URL
-    const downloadUrl = stlUrl || `/api/forge/exports/${exportId}/download`;
+    if (uploadError) throw new Error(`Storage upload failed: ${uploadError.message}`);
 
-    await db.query(`UPDATE forge_exports SET download_url=$1 WHERE id=$2`, [downloadUrl, exportId]);
+    const { data: urlData } = sb.storage.from(FORGE_BUCKET).getPublicUrl(storageKey);
+    const stlUrl = urlData?.publicUrl ?? "";
 
-    return res.json({ exportId, stlUrl, downloadUrl });
+    const { data: row, error: dbError } = await sb
+      .from("forge_exports")
+      .insert({
+        image_name: filename,
+        stl_url: stlUrl,
+        download_url: stlUrl,
+        slot_count: slotCount,
+        layer_height: layerHeight,
+        print_size: printSize,
+        palette,
+        layer_instructions: layerInstructions,
+        status: "ready",
+      })
+      .select()
+      .single();
+
+    if (dbError) throw new Error(`DB insert failed: ${dbError.message}`);
+
+    return res.json({ exportId: row.id, stlUrl, downloadUrl: stlUrl });
   } catch (err) {
-    return res.status(500).json({
-      error: err instanceof Error ? err.message : "Export failed",
-    });
+    return res.status(500).json({ error: err instanceof Error ? err.message : "Export failed" });
   }
 });
 
 // ── GET /api/forge/exports ─────────────────────────────────────────────────────
 router.get("/exports", async (_req, res) => {
-  try {
-    const result = await db.query(
-      "SELECT * FROM forge_exports ORDER BY created_at DESC LIMIT 50"
-    );
-    return res.json({ exports: result.rows });
-  } catch (err) {
-    return res.status(500).json({ error: err instanceof Error ? err.message : "Query failed" });
-  }
+  const sb = getSupabase();
+  if (!sb) return res.status(500).json({ error: "Supabase not configured" });
+
+  const { data, error } = await sb
+    .from("forge_exports")
+    .select("*")
+    .order("created_at", { ascending: false });
+
+  if (error) return res.status(500).json({ error: error.message });
+  return res.json({ exports: data ?? [] });
 });
 
 // ── GET /api/forge/exports/:id/download ───────────────────────────────────────
 router.get("/exports/:id/download", async (req, res) => {
-  try {
-    const result = await db.query(
-      "SELECT stl_url, download_url, image_name FROM forge_exports WHERE id = $1",
-      [req.params.id]
-    );
-    if (!result.rows.length) return res.status(404).json({ error: "Export not found" });
-    const row = result.rows[0];
-    return res.json({
-      downloadUrl: row.download_url || row.stl_url,
-      filename: row.image_name,
-    });
-  } catch (err) {
-    return res.status(500).json({ error: err instanceof Error ? err.message : "Query failed" });
-  }
+  const sb = getSupabase();
+  if (!sb) return res.status(500).json({ error: "Supabase not configured" });
+
+  const { data: row, error } = await sb
+    .from("forge_exports")
+    .select("stl_url, download_url, image_name")
+    .eq("id", req.params.id)
+    .single();
+
+  if (error || !row) return res.status(404).json({ error: "Export not found" });
+
+  return res.json({ downloadUrl: row.download_url || row.stl_url, filename: row.image_name });
 });
 
 export default router;
