@@ -24408,74 +24408,99 @@ function posShowReceipt(sale){
         '  <Relationship Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel" Target="/3D/3dmodel.model" Id="rel0"/>\n' +
         '</Relationships>';
 
-      // ── 3D/3dmodel.model ──────────────────────────────────────────────────
-      // One <material> element per slot — Bambu Studio reads materialid on each object
-      var matDefs = slots.map(function(s, i) {
-        return '    <material id="' + (i+1) + '" name="' + escXml(s.colorName||'Slot'+(i+1)) + '" displaycolor="' + (s.hex||'#888888') + '"/>';
+      // ── 3D/3dmodel.model — heightmap geometry ────────────────────────────
+      // ── Z ranges per slot ────────────────────────────────────────────────
+      var slabThicks = slots.map(function(s) {
+        return Math.max(1, (s.layerEnd||1) - (s.layerStart||0)) * lh;
+      });
+      var zBots = [], zTops = [], zA = 0;
+      slabThicks.forEach(function(t) { zBots.push(zA); zA += t; zTops.push(zA); });
+      var totalH3MF = zA;
+      var baseThick = slabThicks[0];
+
+      // ── Sample image pixels at print resolution ───────────────────────────
+      var imgRes = Math.min(Math.round(printMM), 150);
+      var pixelData = _img64 ? await new Promise(function(resolve) {
+        var img = new Image();
+        img.onload = function() {
+          var c = document.createElement('canvas');
+          c.width = imgRes; c.height = imgRes;
+          var ctx = c.getContext('2d');
+          ctx.drawImage(img, 0, 0, imgRes, imgRes);
+          resolve(ctx.getImageData(0, 0, imgRes, imgRes).data);
+        };
+        img.src = 'data:' + (_imgType||'image/jpeg') + ';base64,' + _img64;
+      }) : null;
+
+      // ── Fix 2: colorgroup XML (Bambu Studio color assignment) ─────────────
+      var colorGroupXml = slots.map(function(s, i) {
+        return '    <m:colorgroup id="' + (i+1) + '">\n      <m:color color="' + (s.hex||'#888888') + '"/>\n    </m:colorgroup>';
       }).join('\n');
 
-      // One <object> per slab — each is a rectangular prism
-      var objects = '';
-      var buildItems = '';
-      var zCursor = 0;
+      // ── Fix 3: Heightmap mesh per slot ────────────────────────────────────
+      // Each pixel becomes a column extruded to brightness-mapped height.
+      // Slot N contains pixels where pixHeight > zBots[N].
+      var objects = '', buildItems = '';
+      var stepMM = printMM / imgRes;
+      var TFACE = [[0,2,1],[0,3,2],[5,7,4],[5,6,7],[4,3,0],[4,7,3],[1,2,6],[1,6,5],[0,1,5],[0,5,4],[3,7,6],[3,6,2]];
 
       slots.forEach(function(slot, i) {
-        var layerCount = Math.max(1, (slot.layerEnd||1) - (slot.layerStart||0));
-        var slabZ = layerCount * lh;
-        var objId = i + 10; // object IDs start at 10; material IDs are 1-based
+        var zBot = zBots[i], zTop = zTops[i];
+        var objId = i + 10;
+        var verts = [], tris = [];
 
-        // Slab: X=printMM wide, Y=printMM tall, Z=slabZ thin — stacked along Z
-        var ox = -half, oy = -half, oz = zCursor;
-        var w = printMM, h = printMM, d = slabZ;
+        for (var py = 0; py < imgRes; py++) {
+          for (var px = 0; px < imgRes; px++) {
+            var colTop;
+            if (pixelData) {
+              var di = (py * imgRes + px) * 4;
+              var br = (pixelData[di]*0.299 + pixelData[di+1]*0.587 + pixelData[di+2]*0.114) / 255;
+              var pixH = baseThick + br * (totalH3MF - baseThick);
+              if (pixH <= zBot + 0.0001) continue;
+              colTop = Math.min(pixH, zTop);
+            } else {
+              colTop = zTop;
+            }
+            if (colTop - zBot < 0.0001) continue;
 
-        // 8 vertices of the rectangular prism
-        var verts = [
-          [ox,   oy,   oz  ], // 0
-          [ox+w, oy,   oz  ], // 1
-          [ox+w, oy+h, oz  ], // 2
-          [ox,   oy+h, oz  ], // 3
-          [ox,   oy,   oz+d], // 4
-          [ox+w, oy,   oz+d], // 5
-          [ox+w, oy+h, oz+d], // 6
-          [ox,   oy+h, oz+d], // 7
-        ];
+            var ox = px * stepMM - half, oy = py * stepMM - half;
+            var ox2 = ox + stepMM, oy2 = oy + stepMM;
+            var vBase = verts.length / 3;
+            verts.push(
+              ox,  oy,  zBot,  ox2, oy,  zBot,  ox2, oy2, zBot,  ox,  oy2, zBot,
+              ox,  oy,  colTop, ox2, oy,  colTop, ox2, oy2, colTop, ox,  oy2, colTop
+            );
+            TFACE.forEach(function(t) { tris.push(vBase+t[0], vBase+t[1], vBase+t[2]); });
+          }
+        }
 
-        // 12 triangles — outward CCW normals
-        var tris = [
-          [0,2,1],[0,3,2], // front  (−Z face)
-          [5,7,4],[5,6,7], // back   (+Z face)
-          [4,3,0],[4,7,3], // left   (−X face)
-          [1,2,6],[1,6,5], // right  (+X face)
-          [0,1,5],[0,5,4], // bottom (−Y face)
-          [3,7,6],[3,6,2], // top    (+Y face)
-        ];
+        var vLines = [], tLines = [];
+        for (var vi = 0; vi < verts.length; vi += 3) {
+          vLines.push('<vertex x="'+verts[vi].toFixed(3)+'" y="'+verts[vi+1].toFixed(3)+'" z="'+verts[vi+2].toFixed(3)+'"/>');
+        }
+        for (var ti = 0; ti < tris.length; ti += 3) {
+          tLines.push('<triangle v1="'+tris[ti]+'" v2="'+tris[ti+1]+'" v3="'+tris[ti+2]+'"/>');
+        }
 
-        var vertXml = verts.map(function(v) {
-          return '            <vertex x="' + v[0].toFixed(4) + '" y="' + v[1].toFixed(4) + '" z="' + v[2].toFixed(4) + '"/>';
-        }).join('\n');
-
-        var triXml = tris.map(function(t) {
-          return '            <triangle v1="' + t[0] + '" v2="' + t[1] + '" v3="' + t[2] + '"/>';
-        }).join('\n');
-
+        // Fix 1 + 2: BambuStudio:FilamentId metadata + colorgroup reference
         objects +=
-          '    <object id="' + objId + '" type="model" materialid="' + (i+1) + '" name="' + escXml((slot.colorName||'Slot'+(i+1)).replace(/\s+/g,'_')) + '">\n' +
+          '    <object id="' + objId + '" type="model" colorgroup="' + (i+1) + '" name="' + escXml((slot.colorName||'Slot'+(i+1)).replace(/\s+/g,'_')) + '">\n' +
+          '      <metadata name="BambuStudio:FilamentId">' + (i+1) + '</metadata>\n' +
           '      <mesh>\n' +
-          '        <vertices>\n' + vertXml + '\n        </vertices>\n' +
-          '        <triangles>\n' + triXml + '\n        </triangles>\n' +
+          '        <vertices>' + vLines.join('') + '</vertices>\n' +
+          '        <triangles>' + tLines.join('') + '</triangles>\n' +
           '      </mesh>\n' +
           '    </object>\n';
-
         buildItems += '    <item objectid="' + objId + '"/>\n';
-        zCursor += slabZ;
       });
 
       var model =
         '<?xml version="1.0" encoding="UTF-8"?>\n' +
         '<model unit="millimeter" xml:lang="en-US"\n' +
-        '  xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">\n' +
+        '  xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02"\n' +
+        '  xmlns:m="http://schemas.microsoft.com/3dmanufacturing/material/2015/02">\n' +
         '  <resources>\n' +
-        matDefs + '\n' +
+        colorGroupXml + '\n' +
         objects +
         '  </resources>\n' +
         '  <build>\n' + buildItems + '  </build>\n' +

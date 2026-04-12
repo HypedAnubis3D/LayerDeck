@@ -1,0 +1,38 @@
+The 3MF opens with multiple objects but three things are wrong. Fix all three:
+Fix 1 — Each slab must have a unique filament assignment
+In the 3MF XML, each <object> needs a unique p:UUID and the build item needs a p:colorgroup reference. But more importantly for Bambu Studio compatibility, use this structure — Bambu reads filament assignments from the m:metadata on each object:
+xml<object id="1" type="model">
+  <metadata name="BambuStudio:FilamentId">1</metadata>
+  <!-- slab 1 geometry -->
+</object>
+<object id="2" type="model">
+  <metadata name="BambuStudio:FilamentId">2</metadata>
+  <!-- slab 2 geometry -->
+</object>
+Fix 2 — Material colors must use Bambu Studio's expected format
+Bambu Studio reads slab colors from the filament list, not from 3MF material displaycolors. Add this to the 3MF <resources> section so Bambu Studio picks up the color per filament slot:
+xml<m:colorgroup id="1">
+  <m:color color="#1a1a1a"/>
+</m:colorgroup>
+<m:colorgroup id="2">
+  <m:color color="#8B0000"/>
+</m:colorgroup>
+And reference each colorgroup from its object: colorgroup="1" attribute on the <object> tag.
+Fix 3 — The geometry needs to be a height map, not flat boxes
+This is the core of how filament painting works. The model is NOT a flat tile — it's a relief where image brightness controls slab height:
+
+Analyze the uploaded image pixel brightness (0–255)
+Dark pixels (brightness ~0) = minimum height, only the base slab is present
+Light pixels (brightness ~255) = maximum height, all slabs are stacked
+Each pixel column of the model is extruded to a height proportional to its brightness
+
+The simplest correct approach:
+
+Resize the image to match the print resolution (e.g. 120px × 120px for a 120mm print at 1mm/pixel)
+For each pixel, compute brightness = (R*0.299 + G*0.587 + B*0.114) / 255
+Map brightness to total model height: pixelHeight = minHeight + (brightness * (maxHeight - minHeight))
+Where minHeight = plateThickness (e.g. 1.2mm) and maxHeight = plateThickness + (numSlots * slabThickness)
+Build a mesh where each pixel is a column extruded to its computed height
+Color each column based on which slab it reaches into
+
+This is exactly how HueForge and Chroma Canvas work. Without this, the print is just flat boxes with no image information. The 3MF must encode the height map for the print to look like anything.

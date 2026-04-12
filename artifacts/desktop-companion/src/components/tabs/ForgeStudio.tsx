@@ -82,8 +82,28 @@ function escXml(s: string) {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-async function build3MF(slots: Slot[], printMM: number, lh: number): Promise<Blob> {
+async function sampleImagePixels(base64: string, type: string, res: number): Promise<Uint8ClampedArray> {
+  return new Promise(resolve => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = res; canvas.height = res;
+      const ctx = canvas.getContext('2d')!;
+      ctx.drawImage(img, 0, 0, res, res);
+      resolve(ctx.getImageData(0, 0, res, res).data);
+    };
+    img.src = `data:${type};base64,${base64}`;
+  });
+}
+
+const TFACE = [[0,2,1],[0,3,2],[5,7,4],[5,6,7],[4,3,0],[4,7,3],[1,2,6],[1,6,5],[0,1,5],[0,5,4],[3,7,6],[3,6,2]] as const;
+
+async function build3MF(
+  slots: Slot[], printMM: number, lh: number,
+  imageBase64?: string, imageType?: string
+): Promise<Blob> {
   const half = printMM / 2;
+
   const contentTypes = `<?xml version="1.0" encoding="UTF-8"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
   <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
@@ -95,43 +115,78 @@ async function build3MF(slots: Slot[], printMM: number, lh: number): Promise<Blo
   <Relationship Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel" Target="/3D/3dmodel.model" Id="rel0"/>
 </Relationships>`;
 
-  // One <material> element per slot — Bambu Studio reads materialid on each object
-  const materialsXml = slots.map((s, i) =>
-    `    <material id="${i + 1}" name="${escXml(s.colorName || 'Slot' + (i + 1))}" displaycolor="${s.hex || '#888888'}"/>`
+  // ── Z ranges per slot ───────────────────────────────────────────────────────
+  const slabThicks = slots.map(s => Math.max(1, (s.layerEnd || 1) - (s.layerStart || 0)) * lh);
+  const zBots: number[] = [], zTops: number[] = [];
+  let zA = 0;
+  slabThicks.forEach(t => { zBots.push(zA); zA += t; zTops.push(zA); });
+  const totalH = zA;
+  const baseThick = slabThicks[0];
+
+  // ── Sample image at print resolution ────────────────────────────────────────
+  const imgRes = Math.min(Math.round(printMM), 150);
+  const pixelData = imageBase64 ? await sampleImagePixels(imageBase64, imageType || 'image/jpeg', imgRes) : null;
+  const stepMM = printMM / imgRes;
+
+  // ── Fix 2: m:colorgroup per slot ────────────────────────────────────────────
+  const colorGroupXml = slots.map((s, i) =>
+    `    <m:colorgroup id="${i + 1}">\n      <m:color color="${s.hex || '#888888'}"/>\n    </m:colorgroup>`
   ).join('\n');
 
-  let objectsXml = '', buildItems = '', zCursor = 0;
+  // ── Fix 3: Heightmap mesh per slot ──────────────────────────────────────────
+  let objectsXml = '', buildItems = '';
   slots.forEach((slot, i) => {
-    const layerCount = Math.max(1, (slot.layerEnd || 1) - (slot.layerStart || 0));
-    const slabZ = layerCount * lh;
-    // Slab: X=printMM wide, Y=printMM tall, Z=slabZ thin — stacked along Z axis
-    const ox = -half, oy = -half, oz = zCursor, w = printMM, h = printMM, d = slabZ;
-    const v = [
-      [ox,   oy,   oz  ], [ox+w, oy,   oz  ], [ox+w, oy+h, oz  ], [ox,   oy+h, oz  ],
-      [ox,   oy,   oz+d], [ox+w, oy,   oz+d], [ox+w, oy+h, oz+d], [ox,   oy+h, oz+d],
-    ];
-    const t = [[0,2,1],[0,3,2],[5,7,4],[5,6,7],[4,3,0],[4,7,3],[1,2,6],[1,6,5],[0,1,5],[0,5,4],[3,7,6],[3,6,2]];
-    const vx = v.map(p => `            <vertex x="${p[0].toFixed(4)}" y="${p[1].toFixed(4)}" z="${p[2].toFixed(4)}"/>`).join('\n');
-    const tx = t.map(p => `            <triangle v1="${p[0]}" v2="${p[1]}" v3="${p[2]}"/>`).join('\n');
-    const materialId = i + 1;
+    const zBot = zBots[i], zTop = zTops[i];
     const objId = i + 10;
-    objectsXml += `    <object id="${objId}" type="model" materialid="${materialId}" name="${escXml(slot.colorName || 'Slot' + (i + 1))}">
-      <mesh>
-        <vertices>\n${vx}\n        </vertices>
-        <triangles>\n${tx}\n        </triangles>
-      </mesh>
-    </object>\n`;
+    const verts: number[] = [], tris: number[] = [];
+
+    for (let py = 0; py < imgRes; py++) {
+      for (let px = 0; px < imgRes; px++) {
+        let colTop: number;
+        if (pixelData) {
+          const di = (py * imgRes + px) * 4;
+          const br = (pixelData[di] * 0.299 + pixelData[di + 1] * 0.587 + pixelData[di + 2] * 0.114) / 255;
+          const pixH = baseThick + br * (totalH - baseThick);
+          if (pixH <= zBot + 0.0001) continue;
+          colTop = Math.min(pixH, zTop);
+        } else {
+          colTop = zTop;
+        }
+        if (colTop - zBot < 0.0001) continue;
+
+        const ox = px * stepMM - half, oy = py * stepMM - half;
+        const ox2 = ox + stepMM, oy2 = oy + stepMM;
+        const vBase = verts.length / 3;
+        verts.push(
+          ox,  oy,  zBot,  ox2, oy,  zBot,  ox2, oy2, zBot,  ox,  oy2, zBot,
+          ox,  oy,  colTop, ox2, oy,  colTop, ox2, oy2, colTop, ox,  oy2, colTop
+        );
+        TFACE.forEach(t => tris.push(vBase + t[0], vBase + t[1], vBase + t[2]));
+      }
+    }
+
+    const vLines: string[] = [], tLines: string[] = [];
+    for (let vi = 0; vi < verts.length; vi += 3)
+      vLines.push(`<vertex x="${verts[vi].toFixed(3)}" y="${verts[vi+1].toFixed(3)}" z="${verts[vi+2].toFixed(3)}"/>`);
+    for (let ti = 0; ti < tris.length; ti += 3)
+      tLines.push(`<triangle v1="${tris[ti]}" v2="${tris[ti+1]}" v3="${tris[ti+2]}"/>`);
+
+    // Fix 1 + 2: BambuStudio:FilamentId metadata + colorgroup reference
+    objectsXml += `    <object id="${objId}" type="model" colorgroup="${i + 1}" name="${escXml(slot.colorName || 'Slot' + (i + 1))}">\n` +
+      `      <metadata name="BambuStudio:FilamentId">${i + 1}</metadata>\n` +
+      `      <mesh>\n        <vertices>${vLines.join('')}</vertices>\n        <triangles>${tLines.join('')}</triangles>\n      </mesh>\n    </object>\n`;
     buildItems += `    <item objectid="${objId}"/>\n`;
-    zCursor += slabZ;
   });
 
   const model = `<?xml version="1.0" encoding="UTF-8"?>
 <model unit="millimeter" xml:lang="en-US"
-  xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
+  xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02"
+  xmlns:m="http://schemas.microsoft.com/3dmanufacturing/material/2015/02">
   <resources>
-${materialsXml}
+${colorGroupXml}
 ${objectsXml}  </resources>
-  <build>\n${buildItems}  </build>
+  <build>
+${buildItems}  </build>
 </model>`;
 
   const zip = new JSZip();
@@ -395,7 +450,7 @@ export function ForgeStudio() {
     try {
       const printMM = parseFloat((stack.recommendedPrintSize || '120mm').replace(/[^0-9.]/g, '')) || 120;
       const lh = parseFloat(stack.layerHeight || '0.10') || 0.10;
-      const blob = await build3MF(liveSlots, printMM, lh);
+      const blob = await build3MF(liveSlots, printMM, lh, imgData?.base64, imgData?.type);
       const safeName = (stack.imageSummary || 'forge').replace(/[^a-zA-Z0-9]+/g, '_').slice(0, 40);
       const filename = `LayerDeck_Forge_${safeName}_${liveSlots.length}color.3mf`;
       setExportedBlob({ blob, filename });
