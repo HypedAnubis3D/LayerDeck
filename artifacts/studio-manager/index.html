@@ -1839,6 +1839,19 @@ header{
         <option value="full">🔵 Full</option>
       </select>
     </div>
+    <div style="margin-top:6px">
+      <select class="flt" id="sp-sort" onchange="render()" style="width:100%">
+        <option value="recent">↕ Sort: Recently Added</option>
+        <option value="name-az">Name (A–Z)</option>
+        <option value="name-za">Name (Z–A)</option>
+        <option value="rem-asc">Remaining: Least first</option>
+        <option value="rem-desc">Remaining: Most first</option>
+        <option value="pct-asc">% Remaining: Least first</option>
+        <option value="pct-desc">% Remaining: Most first</option>
+        <option value="mat-az">Material (A–Z)</option>
+        <option value="brand-az">Brand (A–Z)</option>
+      </select>
+    </div>
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:8px;padding-top:8px;border-top:1px solid var(--bdr2)">
       <label style="font-size:7px;color:var(--txt-d);display:flex;align-items:center;gap:3px">🔴 Critical &lt;<input type="number" min="1" max="49" id="sth-crit" oninput="updateSpoolThresh('crit',this.value)" style="width:34px;background:var(--bdr);border:1px solid var(--bdr2);border-radius:3px;color:var(--txt-b);padding:1px 3px;font-size:7px">%</label>
       <label style="font-size:7px;color:var(--txt-d);display:flex;align-items:center;gap:3px">🟡 Low &lt;<input type="number" min="2" max="79" id="sth-low" oninput="updateSpoolThresh('low',this.value)" style="width:34px;background:var(--bdr);border:1px solid var(--bdr2);border-radius:3px;color:var(--txt-b);padding:1px 3px;font-size:7px">%</label>
@@ -9257,6 +9270,23 @@ function renderSpools(){
   const groupMap=new Map();
   f.forEach(s=>{const k=getGroupKey(s);if(!groupMap.has(k))groupMap.set(k,[]);groupMap.get(k).push(s);});
   const groups=[...groupMap.entries()];
+
+  // ── Sort groups ──
+  const _sortVal=(document.getElementById('sp-sort')?.value)||'recent';
+  groups.sort(([,as],[,bs])=>{
+    const rA=as[0],rB=bs[0];
+    if(_sortVal==='name-az') return ((rA.brand||'')+rA.name).localeCompare((rB.brand||'')+rB.name);
+    if(_sortVal==='name-za') return ((rB.brand||'')+rB.name).localeCompare((rA.brand||'')+rA.name);
+    if(_sortVal==='rem-asc'){const a=as.reduce((x,s)=>x+s.remaining,0),b=bs.reduce((x,s)=>x+s.remaining,0);return a-b;}
+    if(_sortVal==='rem-desc'){const a=as.reduce((x,s)=>x+s.remaining,0),b=bs.reduce((x,s)=>x+s.remaining,0);return b-a;}
+    if(_sortVal==='pct-asc'){const tA=as.reduce((x,s)=>x+s.total,0),rA2=as.reduce((x,s)=>x+s.remaining,0),tB=bs.reduce((x,s)=>x+s.total,0),rB2=bs.reduce((x,s)=>x+s.remaining,0);return (tA?rA2/tA:0)-(tB?rB2/tB:0);}
+    if(_sortVal==='pct-desc'){const tA=as.reduce((x,s)=>x+s.total,0),rA2=as.reduce((x,s)=>x+s.remaining,0),tB=bs.reduce((x,s)=>x+s.total,0),rB2=bs.reduce((x,s)=>x+s.remaining,0);return (tB?rB2/tB:0)-(tA?rA2/tA:0);}
+    if(_sortVal==='mat-az') return (rA.material||'').localeCompare(rB.material||'');
+    if(_sortVal==='brand-az') return (rA.brand||'').localeCompare(rB.brand||'');
+    // recent (default): newest spool timestamp first
+    const tsA=Math.max(...as.map(s=>s.timestamp||0)),tsB=Math.max(...bs.map(s=>s.timestamp||0));
+    return tsB-tsA;
+  });
 
   document.getElementById('sp-cnt').textContent=groups.length+' color'+(groups.length!==1?'s':'')+' · '+f.length+' spool'+(f.length!==1?'s':'');
   const g=document.getElementById('spool-grid');
