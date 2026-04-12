@@ -22738,10 +22738,16 @@ function posShowReceipt(sale){
       lines.push('Pending orders: '+pending.length);
       // Spools
       var spls=window.spools||[];
-      var low=spls.filter(function(s){return s.remaining!=null&&s.remaining<150;});
-      if(low.length){
-        lines.push('Low spools (under 150g): '+low.map(function(s){return (s.color||'?')+' '+(s.material||'?')+' ('+s.remaining+'g)';}).join(', '));
-      }else{lines.push('No spools critically low');}
+      if(spls.length){
+        lines.push('Spool inventory ('+spls.length+' spools):');
+        spls.forEach(function(s){
+          var rem=s.remaining!=null?s.remaining+'g remaining':'unknown remaining';
+          var brand=s.brand?s.brand+' ':'';
+          var label=(s.color||'?')+' '+(s.material||'?')+' ('+brand+rem+(s.remaining!=null&&s.remaining<150?' ⚠LOW':'')+(s.remaining!=null&&s.remaining===0?' EMPTY':'')+')';
+          if(s.name&&s.name!==(s.color||'')+' '+(s.material||''))label=s.name+': '+label;
+          lines.push('  • '+label);
+        });
+      }else{lines.push('No spools in inventory');}
       // Today revenue
       var sls=window.sales||[];
       var today=new Date().toDateString();
