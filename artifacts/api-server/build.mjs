@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { build as esbuild } from "esbuild";
 import esbuildPluginPino from "esbuild-plugin-pino";
 import { rm } from "node:fs/promises";
+import { copyFileSync, existsSync } from "node:fs";
 
 // Plugins (e.g. 'esbuild-plugin-pino') may use `require` to resolve dependencies
 globalThis.require = createRequire(import.meta.url);
@@ -120,7 +121,23 @@ globalThis.__dirname = __bannerPath.dirname(globalThis.__filename);
   });
 }
 
-buildAll().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+buildAll()
+  .then(() => {
+    // Copy pi-hub server.js into dist so /api/pihub/server-js can serve it in production.
+    const src = path.resolve(artifactDir, '../pi-hub/server.js');
+    const dest = path.resolve(artifactDir, 'dist/pi-hub-server.js');
+    try {
+      if (existsSync(src)) {
+        copyFileSync(src, dest);
+        console.log('Copied pi-hub/server.js → dist/pi-hub-server.js');
+      } else {
+        console.warn('pi-hub/server.js not found at', src, '— skipping copy');
+      }
+    } catch (e) {
+      console.warn('Could not copy pi-hub/server.js:', e.message);
+    }
+  })
+  .catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });

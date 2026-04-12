@@ -245,10 +245,15 @@ router.post('/alert', async (req, res) => {
 // Safe update command (validates JS before replacing):
 //   curl -fsSL <appOrigin>/api/pihub/server-js -o /tmp/server-new.js && node --check /tmp/server-new.js && mv /tmp/server-new.js ~/bambu-hub/server.js && pm2 restart layerdeck-hub
 router.get('/server-js', (_req, res) => {
-  // Try multiple candidate paths — location differs between dev and deployed envs
+  // Try multiple candidate paths — location differs between dev and deployed envs.
+  // __dirname is set by the build banner to the dist/ directory, so dist/pi-hub-server.js
+  // is the primary target (copied there by build.mjs).
   const candidates = [
+    path.resolve(__dirname, 'pi-hub-server.js'),
     path.resolve(process.cwd(), '../pi-hub/server.js'),
     path.resolve(process.cwd(), '../studio-manager/public/pi-hub-server.js'),
+    path.resolve(process.cwd(), 'artifacts/pi-hub/server.js'),
+    path.resolve(process.cwd(), 'artifacts/studio-manager/public/pi-hub-server.js'),
     path.resolve(process.cwd(), '../../artifacts/pi-hub/server.js'),
     path.resolve(process.cwd(), '../../artifacts/studio-manager/public/pi-hub-server.js'),
   ];
