@@ -1752,7 +1752,7 @@ header{
         <span class="sb-group-chevron">▾</span>
       </div>
       <div class="sb-group-body">
-        <button class="nav-item" id="nav-chromacanvas" onclick="navTo('chromacanvas',this)"><span class="nav-icon">🎨</span><span class="nav-label">Chroma Canvas Planner</span></button>
+        <button class="nav-item" id="nav-forge" onclick="navTo('forge',this)"><span class="nav-icon">🔥</span><span class="nav-label">Forge</span></button>
       </div>
     </div>
 
@@ -2419,57 +2419,66 @@ header{
 <!-- NOZZLE WEAR TRACKER -->
 <div id="tab-nozzle" style="display:none"></div>
 
-<!-- CHROMA CANVAS STACK PLANNER -->
-<div id="tab-chromacanvas" style="display:none">
+<!-- FORGE (LayerDeck Forge) -->
+<div id="tab-forge" style="display:none">
 
-  <!-- Page header -->
-  <div class="printer-card" style="margin-bottom:8px;text-align:center;padding:16px 12px">
-    <div style="font-family:'Orbitron',monospace;font-size:11px;font-weight:700;color:var(--gold-b);letter-spacing:3px;margin-bottom:5px">🎨 CHROMA CANVAS STACK PLANNER</div>
-    <div style="font-size:8px;color:var(--txt-d);letter-spacing:1px">Upload an image · AI maps colors to Bambu filaments · Paste the palette into Chroma Canvas</div>
-  </div>
+  <!-- SETUP STATE -->
+  <div id="forge-setup">
 
-  <!-- INPUT SECTION -->
-  <div id="cc-input-section">
-
-    <!-- Upload zone -->
-    <div id="cc-upload-zone" class="printer-card" style="margin-bottom:8px;border:1.5px dashed rgba(139,92,246,.4);text-align:center;cursor:pointer;padding:28px 16px;transition:border-color .2s,background .2s"
-      onclick="document.getElementById('cc-file-inp').click()"
-      ondragover="event.preventDefault();this.style.borderColor='var(--pur)';this.style.background='rgba(139,92,246,.08)'"
-      ondragleave="this.style.borderColor='';this.style.background=''"
-      ondrop="event.preventDefault();this.style.borderColor='';this.style.background='';if(event.dataTransfer.files[0]?.type.startsWith('image/'))ccLoadFile(event.dataTransfer.files[0])">
-      <div style="font-size:32px;margin-bottom:8px">🖼</div>
-      <div style="font-family:'Orbitron',monospace;font-size:9px;font-weight:700;color:var(--pur);letter-spacing:2px;margin-bottom:4px">DROP YOUR IMAGE HERE</div>
-      <div style="font-size:8px;color:var(--txt-d)">or click to browse · JPG, PNG, WEBP</div>
-      <input type="file" id="cc-file-inp" accept="image/*" style="display:none" onchange="if(this.files[0])ccLoadFile(this.files[0]);this.value=''">
+    <!-- Header -->
+    <div class="printer-card" style="margin-bottom:8px;text-align:center;padding:16px 12px;border-top:2px solid #f97316">
+      <div style="font-family:'Orbitron',monospace;font-size:12px;font-weight:900;color:#f97316;letter-spacing:3px;margin-bottom:4px">🔥 LAYERDECK FORGE</div>
+      <div style="font-size:8px;color:var(--txt-d);letter-spacing:1px">Upload image · AI picks your filaments · Live preview · Export STL</div>
     </div>
 
-    <!-- Preview row -->
-    <div id="cc-preview-row" style="display:none" class="printer-card" style="margin-bottom:8px">
+    <!-- Section A: Upload zone -->
+    <div id="forge-upload-zone" class="printer-card" style="margin-bottom:8px;border:1.5px dashed rgba(249,115,22,.4);text-align:center;cursor:pointer;padding:28px 16px;transition:border-color .2s,background .2s"
+      onclick="document.getElementById('forge-file-inp').click()"
+      ondragover="event.preventDefault();this.style.borderColor='#f97316';this.style.background='rgba(249,115,22,.06)'"
+      ondragleave="this.style.borderColor='';this.style.background=''"
+      ondrop="event.preventDefault();this.style.borderColor='';this.style.background='';var f=event.dataTransfer.files[0];if(f&&f.type.startsWith('image/'))forgeLoadFile(f)">
+      <div style="font-size:32px;margin-bottom:8px">🖼</div>
+      <div style="font-family:'Orbitron',monospace;font-size:9px;font-weight:700;color:#f97316;letter-spacing:2px;margin-bottom:4px">DROP YOUR IMAGE HERE</div>
+      <div style="font-size:8px;color:var(--txt-d)">or tap to browse · JPG, PNG, WEBP</div>
+      <input type="file" id="forge-file-inp" accept="image/*" style="display:none" onchange="if(this.files[0])forgeLoadFile(this.files[0]);this.value=''">
+    </div>
+
+    <!-- Image preview row -->
+    <div id="forge-img-row" class="printer-card" style="display:none;margin-bottom:8px">
       <div style="display:flex;align-items:center;gap:10px">
-        <img id="cc-prev-thumb" src="" alt="" style="width:56px;height:56px;border-radius:6px;object-fit:cover;border:1px solid var(--bdr);flex-shrink:0">
+        <img id="forge-thumb" src="" alt="" style="width:52px;height:52px;border-radius:6px;object-fit:cover;border:1px solid var(--bdr);flex-shrink:0">
         <div style="flex:1;min-width:0">
-          <div id="cc-prev-fname" style="font-size:9px;font-weight:600;color:var(--txt-b);margin-bottom:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">—</div>
+          <div id="forge-fname" style="font-size:9px;font-weight:600;color:var(--txt-b);margin-bottom:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">—</div>
           <div style="font-size:8px;color:var(--grn)">✓ Ready to analyze</div>
         </div>
-        <button class="btn btn-ghost btn-xs" onclick="document.getElementById('cc-file-inp').click()">Change</button>
+        <button class="btn btn-ghost btn-xs" onclick="document.getElementById('forge-file-inp').click()">Change</button>
       </div>
     </div>
 
-    <!-- Options -->
+    <!-- Section B: Spool inventory -->
+    <div class="printer-card" style="margin-bottom:8px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <div style="font-size:6px;color:var(--txt-d);letter-spacing:2px;font-family:'Orbitron',monospace">YOUR INVENTORY</div>
+        <div id="forge-spool-count" style="font-size:8px;color:var(--txt-d)">Loading spools…</div>
+      </div>
+      <div id="forge-spool-swatches" style="display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;min-height:28px"></div>
+    </div>
+
+    <!-- Section C: Settings grid -->
     <div class="printer-card" style="margin-bottom:8px">
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
         <div>
-          <div style="font-size:6px;color:var(--txt-d);letter-spacing:2px;margin-bottom:4px;font-family:'Orbitron',monospace">COLOR SLOTS</div>
-          <select id="cc-slots" style="width:100%;background:var(--bg);border:1px solid var(--bdr2);color:var(--txt-b);padding:6px 8px;font-family:'Share Tech Mono',monospace;font-size:9px;border-radius:4px">
-            <option value="3">3 Colors (Minimal)</option>
-            <option value="4" selected>4 Colors (Standard)</option>
-            <option value="5">5 Colors (Detailed)</option>
-            <option value="6">6 Colors (Max)</option>
+          <div style="font-size:6px;color:var(--txt-d);letter-spacing:2px;font-family:'Orbitron',monospace;margin-bottom:4px">COLOR SLOTS</div>
+          <select id="forge-slots" style="width:100%;background:var(--bg);border:1px solid var(--bdr2);color:var(--txt-b);padding:6px 8px;font-family:'Share Tech Mono',monospace;font-size:9px;border-radius:4px">
+            <option value="3">3 Colors</option>
+            <option value="4" selected>4 Colors</option>
+            <option value="5">5 Colors</option>
+            <option value="6">6 Colors</option>
           </select>
         </div>
         <div>
-          <div style="font-size:6px;color:var(--txt-d);letter-spacing:2px;margin-bottom:4px;font-family:'Orbitron',monospace">LAYER HEIGHT</div>
-          <select id="cc-lh" style="width:100%;background:var(--bg);border:1px solid var(--bdr2);color:var(--txt-b);padding:6px 8px;font-family:'Share Tech Mono',monospace;font-size:9px;border-radius:4px">
+          <div style="font-size:6px;color:var(--txt-d);letter-spacing:2px;font-family:'Orbitron',monospace;margin-bottom:4px">LAYER HEIGHT</div>
+          <select id="forge-lh" style="width:100%;background:var(--bg);border:1px solid var(--bdr2);color:var(--txt-b);padding:6px 8px;font-family:'Share Tech Mono',monospace;font-size:9px;border-radius:4px">
             <option value="0.08">0.08mm (Ultra Fine)</option>
             <option value="0.10" selected>0.10mm (Fine)</option>
             <option value="0.12">0.12mm (Standard)</option>
@@ -2477,17 +2486,18 @@ header{
           </select>
         </div>
         <div>
-          <div style="font-size:6px;color:var(--txt-d);letter-spacing:2px;margin-bottom:4px;font-family:'Orbitron',monospace">FILAMENT TYPE</div>
-          <select id="cc-ft" style="width:100%;background:var(--bg);border:1px solid var(--bdr2);color:var(--txt-b);padding:6px 8px;font-family:'Share Tech Mono',monospace;font-size:9px;border-radius:4px">
-            <option value="matte" selected>Matte PLA (Best for CC)</option>
-            <option value="basic">Basic PLA</option>
-            <option value="silk">Silk PLA</option>
-            <option value="any">Any PLA</option>
+          <div style="font-size:6px;color:var(--txt-d);letter-spacing:2px;font-family:'Orbitron',monospace;margin-bottom:4px">PRINT SIZE</div>
+          <select id="forge-psize" style="width:100%;background:var(--bg);border:1px solid var(--bdr2);color:var(--txt-b);padding:6px 8px;font-family:'Share Tech Mono',monospace;font-size:9px;border-radius:4px">
+            <option value="80mm">80mm (Mini)</option>
+            <option value="100mm">100mm (Small)</option>
+            <option value="120mm" selected>120mm (Standard)</option>
+            <option value="150mm">150mm (Large)</option>
+            <option value="200mm">200mm (XL)</option>
           </select>
         </div>
         <div>
-          <div style="font-size:6px;color:var(--txt-d);letter-spacing:2px;margin-bottom:4px;font-family:'Orbitron',monospace">PRINT STYLE</div>
-          <select id="cc-ps" style="width:100%;background:var(--bg);border:1px solid var(--bdr2);color:var(--txt-b);padding:6px 8px;font-family:'Share Tech Mono',monospace;font-size:9px;border-radius:4px">
+          <div style="font-size:6px;color:var(--txt-d);letter-spacing:2px;font-family:'Orbitron',monospace;margin-bottom:4px">PRINT STYLE</div>
+          <select id="forge-pstyle" style="width:100%;background:var(--bg);border:1px solid var(--bdr2);color:var(--txt-b);padding:6px 8px;font-family:'Share Tech Mono',monospace;font-size:9px;border-radius:4px">
             <option value="auto" selected>Auto-detect</option>
             <option value="portrait">Portrait / Character</option>
             <option value="landscape">Landscape / Scene</option>
@@ -2497,114 +2507,84 @@ header{
       </div>
     </div>
 
-    <!-- Error box -->
-    <div id="cc-error" style="display:none;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);color:var(--red);padding:10px 14px;border-radius:6px;font-size:8px;margin-bottom:8px"></div>
+    <!-- Error + Analyze button -->
+    <div id="forge-error" style="display:none;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);color:var(--red);padding:10px 14px;border-radius:6px;font-size:8px;margin-bottom:8px"></div>
+    <button id="forge-btn" disabled onclick="forgeAnalyze()" style="width:100%;padding:13px;font-family:'Orbitron',monospace;font-size:10px;font-weight:700;letter-spacing:2px;border:none;border-radius:6px;cursor:not-allowed;opacity:.45;background:linear-gradient(135deg,#f97316,#dc2626);color:#fff">🔥 Analyze with Forge</button>
 
-    <!-- Analyze button -->
-    <button id="cc-analyze-btn" disabled onclick="ccAnalyze()" class="btn btn-pur" style="width:100%;padding:12px;font-family:'Orbitron',monospace;font-size:9px;letter-spacing:2px;opacity:.45;cursor:not-allowed">Analyze</button>
-
-  </div>
+  </div><!-- /forge-setup -->
 
   <!-- LOADING STATE -->
-  <div id="cc-loading" style="display:none;text-align:center;padding:48px 16px">
-    <div style="width:36px;height:36px;border:2px solid var(--bdr2);border-top-color:var(--pur);border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 14px"></div>
-    <div style="font-family:'Orbitron',monospace;font-size:9px;font-weight:700;color:var(--pur);letter-spacing:2px;margin-bottom:4px">ANALYZING IMAGE</div>
-    <div style="font-size:8px;color:var(--txt-d)">Extracting dominant colors · Mapping to Bambu filaments</div>
+  <div id="forge-loading" style="display:none;text-align:center;padding:60px 16px">
+    <div style="width:40px;height:40px;border:2px solid var(--bdr2);border-top-color:#f97316;border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 16px"></div>
+    <div style="font-family:'Orbitron',monospace;font-size:9px;font-weight:700;color:#f97316;letter-spacing:2px;margin-bottom:4px">ANALYZING IMAGE</div>
+    <div style="font-size:8px;color:var(--txt-d)">Matching colors to your inventory · Building palette</div>
   </div>
 
-  <!-- RESULTS SECTION -->
-  <div id="cc-results" style="display:none">
+  <!-- PREVIEW STATE -->
+  <div id="forge-preview-state" style="display:none">
 
-    <!-- Image Analysis summary -->
-    <div style="font-family:'Orbitron',monospace;font-size:8px;font-weight:700;color:var(--gold-b);letter-spacing:2px;margin:0 0 8px">IMAGE ANALYSIS</div>
-    <div id="cc-summary-bar" class="printer-card" style="margin-bottom:6px;display:flex;flex-wrap:wrap;gap:16px;padding:12px 14px"></div>
+    <!-- A. Summary bar -->
+    <div id="forge-summary-bar" style="margin-bottom:8px"></div>
 
-    <!-- Palette strip -->
-    <div id="cc-palette-strip" style="display:flex;height:28px;border-radius:6px;overflow:hidden;margin-bottom:12px;border:1px solid var(--bdr)"></div>
+    <!-- B. Palette strip -->
+    <div style="font-size:6px;color:var(--txt-d);letter-spacing:2px;font-family:'Orbitron',monospace;margin-bottom:4px">PALETTE — TAP TO SWAP</div>
+    <div id="forge-palette-strip" style="display:flex;height:36px;border-radius:8px;overflow:hidden;margin-bottom:10px;border:1px solid var(--bdr)"></div>
 
-    <!-- Chroma Canvas Setup panel -->
-    <div style="font-family:'Orbitron',monospace;font-size:8px;font-weight:700;color:var(--grn);letter-spacing:2px;margin:0 0 8px">CHROMA CANVAS SETUP</div>
-    <div class="printer-card" style="margin-bottom:8px;border-top:2px solid var(--grn);padding:0">
-
-      <!-- Panel header -->
-      <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;background:rgba(40,184,88,.06);border-bottom:1px solid var(--bdr);flex-wrap:wrap;gap:8px">
-        <div style="display:flex;align-items:center;gap:8px">
-          <span style="background:var(--grn);color:#000;font-family:'Orbitron',monospace;font-size:7px;letter-spacing:1px;padding:3px 7px;border-radius:3px;font-weight:700">BAMBU</span>
-          <span style="font-size:8px;color:var(--txt-b)">Ready-to-paste palette for Chroma Canvas</span>
-        </div>
-        <a href="https://makerworld.com/en/makerlab/chromaCanvas?from=makerlab" target="_blank" rel="noopener"
-           style="background:var(--grn);color:#000;border:none;font-family:'Orbitron',monospace;font-size:8px;letter-spacing:1px;padding:8px 14px;border-radius:5px;cursor:pointer;font-weight:700;text-decoration:none;white-space:nowrap">Open Chroma Canvas ↗</a>
+    <!-- C. Preview panel (2D / 3D) -->
+    <div class="printer-card" style="margin-bottom:8px;padding:10px">
+      <div style="display:flex;gap:4px;margin-bottom:8px">
+        <button id="forge-tab-2d" onclick="forgeShow2D()" style="flex:1;padding:6px;border:none;border-radius:4px;background:var(--pur);color:#fff;font-family:'Orbitron',monospace;font-size:7px;font-weight:700;cursor:pointer;letter-spacing:1px">2D PREVIEW</button>
+        <button id="forge-tab-3d" onclick="forgeShow3D()" style="flex:1;padding:6px;border:none;border-radius:4px;background:var(--surf);color:var(--txt-d);font-family:'Orbitron',monospace;font-size:7px;font-weight:700;cursor:pointer;letter-spacing:1px">3D VIEW</button>
       </div>
-
-      <!-- Steps -->
-      <div style="padding:14px;display:flex;flex-direction:column;gap:16px">
-
-        <!-- Step 1 -->
-        <div style="display:flex;gap:12px">
-          <div style="width:24px;height:24px;border-radius:50%;flex-shrink:0;background:var(--surf);border:1px solid var(--bdr2);font-family:'Orbitron',monospace;font-size:9px;display:flex;align-items:center;justify-content:center;color:var(--txt-d);margin-top:1px">1</div>
-          <div>
-            <div style="font-size:9px;font-weight:700;color:var(--txt-b);margin-bottom:3px">Open Chroma Canvas &amp; Upload Your Image</div>
-            <div style="font-size:8px;color:var(--txt-d);line-height:1.6">Click <strong style="color:var(--grn)">Open Chroma Canvas ↗</strong> above. Upload the same image you analyzed here. Skip any preset color scheme — you'll build a custom palette in step 3.</div>
-          </div>
-        </div>
-
-        <!-- Step 2: Settings pills -->
-        <div style="display:flex;gap:12px">
-          <div style="width:24px;height:24px;border-radius:50%;flex-shrink:0;background:var(--surf);border:1px solid var(--bdr2);font-family:'Orbitron',monospace;font-size:9px;display:flex;align-items:center;justify-content:center;color:var(--txt-d);margin-top:1px">2</div>
-          <div style="width:100%">
-            <div style="font-size:9px;font-weight:700;color:var(--txt-b);margin-bottom:3px">Match These Settings in the Settings Tab</div>
-            <div style="font-size:8px;color:var(--txt-d);margin-bottom:8px">The layer height is what the AI optimized the color stack for.</div>
-            <div id="cc-settings-pills" style="display:flex;flex-wrap:wrap;gap:6px"></div>
-          </div>
-        </div>
-
-        <!-- Step 3: Slot cards -->
-        <div style="display:flex;gap:12px">
-          <div style="width:24px;height:24px;border-radius:50%;flex-shrink:0;background:var(--surf);border:1px solid var(--bdr2);font-family:'Orbitron',monospace;font-size:9px;display:flex;align-items:center;justify-content:center;color:var(--txt-d);margin-top:1px">3</div>
-          <div style="width:100%">
-            <div style="font-size:9px;font-weight:700;color:var(--txt-b);margin-bottom:3px">Build Your Custom Palette — Slot by Slot</div>
-            <div style="font-size:8px;color:var(--txt-d);margin-bottom:8px">Select <strong style="color:var(--pur)">Custom Palette</strong> in Chroma Canvas. Click any hex code to copy it. <strong style="color:var(--txt-b)">Slot 1 = darkest/bottom, last slot = lightest/top.</strong></div>
-            <div id="cc-slot-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:8px"></div>
-            <button id="cc-copy-all-btn" class="btn btn-ghost" style="width:100%;margin-top:10px;font-size:8px;border-color:rgba(40,184,88,.3);color:var(--grn)" onclick="ccCopyAll()">Copy All Hex Codes in Order</button>
-          </div>
-        </div>
-
-        <!-- Step 4: Filament search tags -->
-        <div style="display:flex;gap:12px">
-          <div style="width:24px;height:24px;border-radius:50%;flex-shrink:0;background:var(--surf);border:1px solid var(--bdr2);font-family:'Orbitron',monospace;font-size:9px;display:flex;align-items:center;justify-content:center;color:var(--txt-d);margin-top:1px">4</div>
-          <div style="width:100%">
-            <div style="font-size:9px;font-weight:700;color:var(--txt-b);margin-bottom:3px">Find These Bambu Filaments (Optional)</div>
-            <div style="font-size:8px;color:var(--txt-d);margin-bottom:8px">Search these names in Chroma Canvas's filament library. Click to copy the search term.</div>
-            <div id="cc-search-tags" style="display:flex;flex-wrap:wrap;gap:6px"></div>
-          </div>
-        </div>
-
-        <!-- Step 5: Static -->
-        <div style="display:flex;gap:12px">
-          <div style="width:24px;height:24px;border-radius:50%;flex-shrink:0;background:var(--surf);border:1px solid var(--bdr2);font-family:'Orbitron',monospace;font-size:9px;display:flex;align-items:center;justify-content:center;color:var(--txt-d);margin-top:1px">5</div>
-          <div>
-            <div style="font-size:9px;font-weight:700;color:var(--txt-b);margin-bottom:3px">Generate, Tweak &amp; Export</div>
-            <div style="font-size:8px;color:var(--txt-d);line-height:1.6">Hit <strong style="color:var(--grn)">Generate</strong> in Chroma Canvas. If contrast looks flat, drag the <strong style="color:var(--gold-b)">gradient curve</strong> sliders. Export the <strong style="color:var(--gold-b)">.3MF</strong> and open in Bambu Studio → send to your A1 or P1.</div>
-          </div>
-        </div>
-
+      <div id="forge-2d-panel">
+        <div id="forge-2d-progress" style="display:none;text-align:center;font-size:8px;color:var(--txt-d);padding:8px 0">Rendering preview…</div>
+        <canvas id="forge-2d-canvas" style="width:100%;border-radius:6px;display:block"></canvas>
       </div>
+      <div id="forge-3d-panel" style="display:none">
+        <canvas id="forge-3d-canvas" style="width:100%;height:280px;border-radius:6px;display:block;touch-action:none"></canvas>
+        <div style="font-size:7px;color:var(--txt-d);text-align:center;margin-top:4px">Drag to rotate</div>
+      </div>
+      <div id="forge-size-display" style="font-size:8px;color:var(--txt-d);text-align:center;margin-top:6px">—</div>
     </div>
 
-    <!-- Print Notes -->
-    <div style="font-family:'Orbitron',monospace;font-size:8px;font-weight:700;color:var(--gold-b);letter-spacing:2px;margin:0 0 8px">PRINT NOTES</div>
-    <div class="printer-card" style="margin-bottom:12px;border-left:2px solid rgba(201,168,76,.4)">
-      <div style="font-size:6px;color:var(--txt-d);letter-spacing:2px;font-family:'Orbitron',monospace;margin-bottom:6px">AI RECOMMENDATIONS FOR THIS IMAGE</div>
-      <div id="cc-notes-body" style="font-size:8px;color:var(--txt-d);line-height:1.7"></div>
+    <!-- D. Slot cards -->
+    <div style="font-family:'Orbitron',monospace;font-size:8px;font-weight:700;color:var(--txt-d);letter-spacing:2px;margin:0 0 6px">COLOR STACK</div>
+    <div id="forge-slot-cards" style="margin-bottom:10px"></div>
+
+    <!-- E. Layer instructions -->
+    <div style="font-family:'Orbitron',monospace;font-size:8px;font-weight:700;color:var(--grn);letter-spacing:2px;margin:0 0 6px">LAYER INSTRUCTIONS</div>
+    <div class="printer-card" style="margin-bottom:10px;border-left:2px solid var(--grn)">
+      <div style="font-size:6px;color:var(--txt-d);letter-spacing:2px;font-family:'Orbitron',monospace;margin-bottom:8px">AMS LOAD ORDER &amp; LAYER RANGES</div>
+      <div id="forge-layer-instr"></div>
     </div>
 
-    <!-- Reset -->
+    <!-- F. Quality score + Forge tips -->
+    <div style="font-family:'Orbitron',monospace;font-size:8px;font-weight:700;color:var(--gold-b);letter-spacing:2px;margin:0 0 6px">QUALITY SCORE</div>
+    <div class="printer-card" style="margin-bottom:10px;border-left:2px solid var(--gold-dim)">
+      <div id="forge-quality"></div>
+    </div>
+
+    <!-- G. Export + Reset -->
+    <button onclick="forgeExport()" style="width:100%;padding:13px;font-family:'Orbitron',monospace;font-size:9px;font-weight:700;letter-spacing:2px;margin-bottom:6px;border:none;border-radius:6px;cursor:pointer;background:var(--grn);color:#fff">⬇ Export STL — Open in Bambu Studio</button>
     <div style="text-align:center;padding-bottom:16px">
-      <button class="btn btn-ghost" style="font-size:8px;letter-spacing:1px" onclick="ccReset()">↩ Analyze Another Image</button>
+      <button class="btn btn-ghost" style="font-size:8px" onclick="forgeReset()">↩ Analyze Another Image</button>
     </div>
 
+  </div><!-- /forge-preview-state -->
+
+  <!-- SLOT SWAP MODAL -->
+  <div id="forge-swap-modal" style="display:none;position:fixed;inset:0;z-index:500;background:rgba(0,0,0,.75);align-items:flex-end;justify-content:center" onclick="if(event.target===this)forgeCloseSwap()">
+    <div style="background:var(--bg);border-radius:16px 16px 0 0;width:100%;max-width:480px;max-height:72dvh;display:flex;flex-direction:column;overflow:hidden;padding-bottom:env(safe-area-inset-bottom)">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--bdr);flex-shrink:0">
+        <div style="font-family:'Orbitron',monospace;font-size:9px;font-weight:700;color:var(--txt-b);letter-spacing:1px">SWAP FILAMENT</div>
+        <button onclick="forgeCloseSwap()" style="background:none;border:none;color:var(--txt-d);font-size:20px;cursor:pointer;padding:0;line-height:1">✕</button>
+      </div>
+      <div id="forge-swap-body" style="overflow-y:auto;padding:14px 16px;flex:1"></div>
+    </div>
   </div>
-</div>
+
+</div><!-- /tab-forge -->
+
 
 <!-- MULTI-MACHINE SPLITTER -->
 
@@ -4422,7 +4402,7 @@ function render(){
   if(curTab==='history') renderHistory();
   if(curTab==='stats')   renderStats();
   if(curTab==='labels')  renderLabels();
-  if(curTab==='chromacanvas') renderChromaCanvas();
+  if(curTab==='forge') renderForge();
 }
 
 function pct(s){return s.total?Math.round(s.remaining/s.total*100):0;}
@@ -8210,7 +8190,7 @@ function saveShiny(){ss(KEYS.shiny,shinyRolls);}
 function saveBatch(){ss(KEYS.batch,batchPlate);}
 
 // ════════ TAB SWITCH EXTENSION ════════
-const ALL_TABS=['dashboard','spools','prints','tmf','queue','orders','scheduler','shiny','revenue','customers','batch','maint','forecast','priceengine','shop','history','stats','backup','labels','chromacanvas'];
+const ALL_TABS=['dashboard','spools','prints','tmf','queue','orders','scheduler','shiny','revenue','customers','batch','maint','forecast','priceengine','shop','history','stats','backup','labels','forge'];
 
 const _origSwitch=switchTab;
 function switchTab(t,el){
@@ -9170,7 +9150,7 @@ const TAB_NAMES={
   integrations:'Integrations',etsy:'Etsy',maint:'Maintenance & Nozzles',forecast:'Forecast',
   priceengine:'Price AI',shop:'Shop List',history:'History',
   stats:'Stats',backup:'Backup',labels:'Labels',
-  chromacanvas:'🎨 Chroma Canvas Planner'
+  forge:'🔥 Forge'
 };
 
 function navTo(tab, el){
@@ -13873,7 +13853,7 @@ function openGroupForTab(tab){
     printers:'sbg-ops',spools:'sbg-ops',fildb:'sbg-ops',drying:'sbg-ops',power:'sbg-ops',maint:'sbg-ops',nozzle:'sbg-ops',waste:'sbg-ops',purchases:'sbg-ops',shipping:'sbg-ops',forecast:'sbg-ops',restock:'sbg-ops',shop:'sbg-ops',
     shopify:'sbg-integrations',etsy:'sbg-integrations',square:'sbg-integrations',discord:'sbg-integrations',pihub:'sbg-integrations',social:'sbg-integrations',
     sync:'sbg-system',history:'sbg-system',stats:'sbg-system',backup:'sbg-system',
-    chromacanvas:'sbg-tools'
+    forge:'sbg-tools'
   };
   const target=tabGroups[tab];
   if(!target)return;
@@ -23758,218 +23738,634 @@ function posShowReceipt(sale){
 })();
 </script>
 
-<!-- CHROMA CANVAS STACK PLANNER JS -->
+<!-- FORGE JS -->
 <script>
 (function(){
-  var _ccImageBase64 = null;
-  var _ccImageType = null;
-  var _ccLastStack = null;
+  'use strict';
 
-  window.ccLoadFile = function(file){
-    if(!file || !file.type.startsWith('image/')) return;
+  // ── State ──────────────────────────────────────────────────────────────────
+  var _img64 = null, _imgType = null, _stack = null;
+  var _spools = [];
+  var _renderToken = 0;
+  var _3dRenderer = null, _3dAnimId = null;
+  var _curPreviewTab = '2d';
+  var _swapSlotIdx = null;
+
+  // ── Spool loading ──────────────────────────────────────────────────────────
+  async function loadSpools() {
+    var countEl = document.getElementById('forge-spool-count');
+    if (countEl) countEl.textContent = 'Loading spools…';
+
+    try {
+      if (typeof supabaseClient !== 'undefined' && supabaseClient) {
+        var result = await supabaseClient
+          .from('ha3d_spools')
+          .select('id,name,color,material,brand,amsSlot,remaining,total')
+          .gt('remaining', 50)
+          .order('remaining', { ascending: false });
+        if (!result.error && result.data && result.data.length > 0) {
+          _spools = result.data;
+          renderSwatches();
+          return;
+        }
+      }
+    } catch(e) {}
+
+    // Fallback: in-memory spools array
+    _spools = (typeof spools !== 'undefined' ? spools : [])
+      .filter(function(s){ return (s.remaining || 0) > 50; })
+      .sort(function(a,b){ return (b.remaining||0) - (a.remaining||0); });
+    renderSwatches();
+  }
+
+  function renderSwatches() {
+    var countEl = document.getElementById('forge-spool-count');
+    var swatchEl = document.getElementById('forge-spool-swatches');
+    if (countEl) countEl.textContent = _spools.length + ' spools available';
+    if (!swatchEl) return;
+    if (!_spools.length) {
+      swatchEl.innerHTML = '<div style="font-size:8px;color:var(--txt-d)">No spools with &gt;50g remaining.</div>';
+      return;
+    }
+    swatchEl.innerHTML = _spools.map(function(s, i) {
+      var low = (s.remaining || 0) < 100;
+      return '<div onclick="forgeSwatchTip(this,' + i + ')" title="' + fesc(s.name) + '" ' +
+        'style="flex-shrink:0;width:28px;height:28px;border-radius:50%;background:' + (s.color||'#888') + ';' +
+        'border:1.5px solid ' + (low ? '#ef4444' : 'var(--bdr)') + ';cursor:pointer"></div>';
+    }).join('');
+  }
+
+  window.forgeSwatchTip = function(el, idx) {
+    var s = _spools[idx];
+    if (!s) return;
+    toast(s.name || 'Spool',
+      (s.brand || '') + ' · ' + (s.remaining || 0) + 'g remaining' + ((s.remaining||0) < 100 ? ' ⚠ LOW' : ''),
+      'ok', 2000);
+  };
+
+  // ── File loading ───────────────────────────────────────────────────────────
+  window.forgeLoadFile = function(file) {
+    if (!file || !file.type.startsWith('image/')) return;
     var reader = new FileReader();
-    reader.onload = function(e){
-      _ccImageBase64 = e.target.result.split(',')[1];
-      _ccImageType = file.type;
-      var thumb = document.getElementById('cc-prev-thumb');
-      var fname = document.getElementById('cc-prev-fname');
-      if(thumb) thumb.src = e.target.result;
-      if(fname) fname.textContent = file.name;
-      var zone = document.getElementById('cc-upload-zone');
-      var row = document.getElementById('cc-preview-row');
-      var btn = document.getElementById('cc-analyze-btn');
-      if(zone) zone.style.display = 'none';
-      if(row)  row.style.display  = 'block';
-      if(btn){ btn.disabled = false; btn.style.opacity = '1'; btn.style.cursor = 'pointer'; }
-      var err = document.getElementById('cc-error');
-      if(err) err.style.display = 'none';
+    reader.onload = function(e) {
+      _img64 = e.target.result.split(',')[1];
+      _imgType = file.type;
+
+      var thumb = document.getElementById('forge-thumb');
+      var fname = document.getElementById('forge-fname');
+      var zone  = document.getElementById('forge-upload-zone');
+      var row   = document.getElementById('forge-img-row');
+      var btn   = document.getElementById('forge-btn');
+
+      if (thumb) thumb.src = e.target.result;
+      if (fname) fname.textContent = file.name;
+      if (zone)  zone.style.display  = 'none';
+      if (row)   row.style.display   = 'block';
+      if (btn)   { btn.disabled = false; btn.style.opacity = '1'; btn.style.cursor = 'pointer'; }
+
+      var err = document.getElementById('forge-error');
+      if (err) err.style.display = 'none';
     };
     reader.readAsDataURL(file);
   };
 
-  window.ccAnalyze = async function(){
-    if(!_ccImageBase64){ _ccShowError('Please upload an image first.'); return; }
-    var slots   = document.getElementById('cc-slots')?.value || '4';
-    var lh      = document.getElementById('cc-lh')?.value   || '0.10';
-    var ft      = document.getElementById('cc-ft')?.value   || 'matte';
-    var ps      = document.getElementById('cc-ps')?.value   || 'auto';
-    var btn     = document.getElementById('cc-analyze-btn');
-    var inp     = document.getElementById('cc-input-section');
-    var load    = document.getElementById('cc-loading');
-    if(btn){ btn.disabled=true; btn.style.opacity='.45'; }
-    if(inp)  inp.style.display = 'none';
-    if(load) load.style.display = 'block';
-    var err  = document.getElementById('cc-error');
-    if(err)  err.style.display  = 'none';
+  // ── LAB color math ─────────────────────────────────────────────────────────
+  function hexToRgb(hex) {
+    var c = hex.replace('#', '');
+    if (c.length === 3) c = c[0]+c[0]+c[1]+c[1]+c[2]+c[2];
+    return [parseInt(c.slice(0,2),16), parseInt(c.slice(2,4),16), parseInt(c.slice(4,6),16)];
+  }
+
+  function hexToLab(hex) {
+    var rgb = hexToRgb(hex);
+    var r = rgb[0]/255, g = rgb[1]/255, b = rgb[2]/255;
+    var toLinear = function(v){ return v > 0.04045 ? Math.pow((v+0.055)/1.055, 2.4) : v/12.92; };
+    var lr = toLinear(r), lg = toLinear(g), lb = toLinear(b);
+    var x = lr*0.4124564 + lg*0.3575761 + lb*0.1804375;
+    var y = lr*0.2126729 + lg*0.7151522 + lb*0.0721750;
+    var z = lr*0.0193339 + lg*0.1191920 + lb*0.9503041;
+    var f = function(t){ return t > 0.008856 ? Math.cbrt(t) : 7.787*t + 16/116; };
+    var fx = f(x/0.95047), fy = f(y/1.0), fz = f(z/1.08883);
+    return [116*fy - 16, 500*(fx-fy), 200*(fy-fz)];
+  }
+
+  function rgbToLab(r, g, b) {
+    var h = '#' + ('0'+r.toString(16)).slice(-2) + ('0'+g.toString(16)).slice(-2) + ('0'+b.toString(16)).slice(-2);
+    return hexToLab(h);
+  }
+
+  function labDistance(a, b) {
+    var dL = a[0]-b[0], da = a[1]-b[1], db = a[2]-b[2];
+    return Math.sqrt(dL*dL + da*da + db*db);
+  }
+
+  function isLight(hex) {
+    var rgb = hexToRgb(hex);
+    return (0.299*rgb[0] + 0.587*rgb[1] + 0.114*rgb[2]) / 255 > 0.55;
+  }
+
+  // ── HTML escape helpers ───────────────────────────────────────────────────
+  function fesc(s) {
+    return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  // ── 2D preview rendering ──────────────────────────────────────────────────
+  function render2DPreview(slots) {
+    if (!_img64 || !slots || !slots.length) return;
+    var token = ++_renderToken;
+    var progressEl = document.getElementById('forge-2d-progress');
+    var canvas = document.getElementById('forge-2d-canvas');
+    if (!canvas) return;
+
+    if (progressEl) progressEl.style.display = 'block';
+
+    var paletteLabs = slots.map(function(s){ return hexToLab(s.hex); });
+    var paletteRGBs = slots.map(function(s){ return hexToRgb(s.hex); });
+
+    var img = new Image();
+    img.onload = function() {
+      var MAX = 400;
+      var scale = Math.min(1, MAX / Math.max(img.width, img.height));
+      var w = Math.max(1, Math.round(img.width * scale));
+      var h = Math.max(1, Math.round(img.height * scale));
+
+      var src = document.createElement('canvas');
+      src.width = w; src.height = h;
+      var sCtx = src.getContext('2d');
+      sCtx.filter = 'blur(1px)';
+      sCtx.drawImage(img, 0, 0, w, h);
+      var srcData = sCtx.getImageData(0, 0, w, h).data;
+
+      canvas.width = w; canvas.height = h;
+      var outCtx = canvas.getContext('2d');
+      var outData = outCtx.createImageData(w, h);
+
+      var row = 0;
+      var CHUNK = 16;
+
+      function processChunk() {
+        if (token !== _renderToken) return;
+        var end = Math.min(row + CHUNK, h);
+        for (var y = row; y < end; y++) {
+          for (var x = 0; x < w; x++) {
+            var i = (y * w + x) * 4;
+            var pr = srcData[i], pg = srcData[i+1], pb = srcData[i+2];
+            var pixLab = rgbToLab(pr, pg, pb);
+            var minD = Infinity, best = 0;
+            for (var k = 0; k < paletteLabs.length; k++) {
+              var d = labDistance(pixLab, paletteLabs[k]);
+              if (d < minD) { minD = d; best = k; }
+            }
+            var rgb = paletteRGBs[best];
+            outData.data[i]   = rgb[0];
+            outData.data[i+1] = rgb[1];
+            outData.data[i+2] = rgb[2];
+            outData.data[i+3] = 255;
+          }
+        }
+        row = end;
+        if (row < h) {
+          requestAnimationFrame(processChunk);
+        } else {
+          outCtx.putImageData(outData, 0, 0);
+          if (progressEl) progressEl.style.display = 'none';
+        }
+      }
+      requestAnimationFrame(processChunk);
+    };
+    img.src = 'data:' + _imgType + ';base64,' + _img64;
+  }
+
+  // ── 3D preview (Three.js) ─────────────────────────────────────────────────
+  function init3D(stack) {
+    var canvas = document.getElementById('forge-3d-canvas');
+    if (!canvas) return;
+
+    function buildScene() {
+      if (_3dRenderer) { try { _3dRenderer.dispose(); } catch(e){} cancelAnimationFrame(_3dAnimId); _3dRenderer = null; }
+
+      var w = canvas.clientWidth || 300;
+      var h = 280;
+
+      var scene = new THREE.Scene();
+      scene.background = new THREE.Color('#0d1117');
+
+      var cam = new THREE.PerspectiveCamera(45, w/h, 0.1, 2000);
+      cam.position.set(80, 100, 130);
+      cam.lookAt(0, 0, 0);
+
+      var renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.setSize(w, h, false);
+      _3dRenderer = renderer;
+
+      scene.add(new THREE.AmbientLight(0xffffff, 0.65));
+      var dir = new THREE.DirectionalLight(0xffffff, 0.8);
+      dir.position.set(1, 2, 1.5);
+      scene.add(dir);
+
+      var group = new THREE.Group();
+      var printMM = parseFloat((stack.recommendedPrintSize||'120mm').replace(/[^0-9.]/g,'')) || 120;
+      var lh = parseFloat(stack.layerHeight || '0.10') || 0.10;
+      var zCursor = 0;
+
+      (stack.slots || []).forEach(function(slot) {
+        var layerCount = Math.max(1, (slot.layerEnd||1) - (slot.layerStart||0));
+        var slabH = layerCount * lh;
+        var geo = new THREE.BoxGeometry(printMM, slabH, printMM);
+        var mat = new THREE.MeshPhongMaterial({ color: new THREE.Color(slot.hex || '#888888'), shininess: 40 });
+        var mesh = new THREE.Mesh(geo, mat);
+        mesh.position.set(0, zCursor + slabH/2, 0);
+        zCursor += slabH;
+        group.add(mesh);
+      });
+
+      var totalH = zCursor;
+      group.position.set(0, -totalH/2, 0);
+      scene.add(group);
+
+      var rotY = 0.5, rotX = 0.35;
+      group.rotation.y = rotY;
+      group.rotation.x = rotX;
+
+      var isDragging = false, lastX = 0, lastY = 0;
+      canvas.addEventListener('pointerdown', function(e){ isDragging = true; lastX = e.clientX; lastY = e.clientY; canvas.setPointerCapture(e.pointerId); });
+      canvas.addEventListener('pointerup',   function(){ isDragging = false; });
+      canvas.addEventListener('pointermove', function(e){
+        if (!isDragging) return;
+        rotY += (e.clientX - lastX) * 0.012;
+        rotX += (e.clientY - lastY) * 0.006;
+        rotX = Math.max(-0.7, Math.min(1.3, rotX));
+        lastX = e.clientX; lastY = e.clientY;
+        group.rotation.y = rotY;
+        group.rotation.x = rotX;
+      });
+
+      function animate() {
+        _3dAnimId = requestAnimationFrame(animate);
+        renderer.render(scene, cam);
+      }
+      animate();
+    }
+
+    if (typeof THREE === 'undefined') {
+      var s = document.createElement('script');
+      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js';
+      s.onload = buildScene;
+      document.head.appendChild(s);
+    } else {
+      buildScene();
+    }
+  }
+
+  // ── Analyze ────────────────────────────────────────────────────────────────
+  window.forgeAnalyze = async function() {
+    if (!_img64) { forgeShowErr('Please upload an image first.'); return; }
+
+    var slots  = document.getElementById('forge-slots')?.value  || '4';
+    var lh     = document.getElementById('forge-lh')?.value     || '0.10';
+    var psize  = document.getElementById('forge-psize')?.value  || '120mm';
+    var pstyle = document.getElementById('forge-pstyle')?.value || 'auto';
+
+    var setup = document.getElementById('forge-setup');
+    var load  = document.getElementById('forge-loading');
+    var btn   = document.getElementById('forge-btn');
+    var err   = document.getElementById('forge-error');
+
+    if (setup) setup.style.display = 'none';
+    if (load)  load.style.display  = 'block';
+    if (btn)   { btn.disabled = true; btn.style.opacity = '.45'; }
+    if (err)   err.style.display   = 'none';
+
+    var spoolPayload = _spools.map(function(s){
+      return { id:s.id, name:s.name, color:s.color, material:s.material, brand:s.brand, remaining:s.remaining };
+    });
+
     try {
-      var resp = await fetch('/api/chroma-canvas/analyze',{
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({
-          imageBase64:_ccImageBase64,
-          imageType:_ccImageType,
-          slots, layerHeight:lh, filamentType:ft, printStyle:ps
+      var resp = await fetch('/api/forge/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          imageBase64: _img64,
+          imageType:   _imgType,
+          slots:       slots,
+          layerHeight: lh,
+          printSize:   psize,
+          printStyle:  pstyle,
+          availableSpools: spoolPayload
         })
       });
       var data = await resp.json();
-      if(data.error) throw new Error(data.error);
-      _ccLastStack = data.stack;
-      if(load) load.style.display = 'none';
-      ccRenderResults(_ccLastStack);
-    } catch(e){
-      if(load) load.style.display = 'none';
-      if(inp)  inp.style.display  = 'block';
-      if(btn){ btn.disabled=false; btn.style.opacity='1'; }
-      _ccShowError('AI analysis failed: ' + (e.message||'Unknown error'));
+      if (data.error) throw new Error(data.error);
+      _stack = data.stack;
+      if (load) load.style.display = 'none';
+      forgeRenderPreview(_stack);
+    } catch(e) {
+      if (load)  load.style.display  = 'none';
+      if (setup) setup.style.display = 'block';
+      if (btn)   { btn.disabled = false; btn.style.opacity = '1'; }
+      forgeShowErr('Analysis failed: ' + (e.message || 'Unknown error'));
     }
   };
 
-  function _ccShowError(msg){
-    var err = document.getElementById('cc-error');
-    if(!err) return;
+  function forgeShowErr(msg) {
+    var err = document.getElementById('forge-error');
+    if (!err) return;
     err.textContent = '⚠ ' + msg;
     err.style.display = 'block';
   }
 
-  window.ccRenderResults = function(stack){
-    var res = document.getElementById('cc-results');
-    if(res) res.style.display = 'block';
+  // ── Render preview ─────────────────────────────────────────────────────────
+  window.forgeRenderPreview = function(stack) {
+    var previewEl = document.getElementById('forge-preview-state');
+    if (previewEl) previewEl.style.display = 'block';
 
-    // Summary bar
-    var bar = document.getElementById('cc-summary-bar');
-    if(bar){
-      var items = [
-        ['Subject', stack.imageSummary],
-        ['Style', stack.detectedStyle],
-        ['Layer Height', stack.layerHeight + 'mm'],
-        ['Total Layers', stack.recommendedTotalLayers],
-        ['Print Size', stack.recommendedPrintSize],
-        ['Plate Thickness', stack.plateThickness],
+    // A. Summary bar
+    var bar = document.getElementById('forge-summary-bar');
+    if (bar) {
+      var pills = [
+        ['Subject', stack.imageSummary || '—'],
+        ['Style',   stack.detectedStyle || '—'],
+        ['Slots',   (stack.slots||[]).length],
+        ['Layer H', (stack.layerHeight||'—') + 'mm'],
+        ['Size',    stack.recommendedPrintSize || '—'],
+        ['Layers',  stack.estimatedLayers || '—'],
       ];
-      bar.innerHTML = items.map(function(i){
-        return '<div><div style="font-size:6px;color:var(--txt-d);letter-spacing:2px;font-family:\'Orbitron\',monospace;margin-bottom:2px">'+i[0].toUpperCase()+'</div>'
-          + '<div style="font-size:9px;color:var(--txt-b);font-weight:600">'+i[1]+'</div></div>';
+      bar.innerHTML = '<div style="display:flex;flex-wrap:wrap;gap:5px">' +
+        pills.map(function(p){
+          return '<div style="background:var(--surf);border:1px solid var(--bdr);border-radius:20px;padding:3px 9px;white-space:nowrap">' +
+            '<span style="font-size:6px;color:var(--txt-d);letter-spacing:1px;text-transform:uppercase;margin-right:3px">' + p[0] + ':</span>' +
+            '<span style="font-size:8px;color:var(--txt-b);font-weight:600">' + fesc(String(p[1])) + '</span></div>';
+        }).join('') + '</div>';
+    }
+
+    // B. Palette strip
+    var strip = document.getElementById('forge-palette-strip');
+    if (strip && stack.slots) {
+      strip.innerHTML = stack.slots.map(function(s, i) {
+        var light = isLight(s.hex);
+        return '<div onclick="forgeSwapSlot(' + i + ')" title="Slot ' + s.slot + ': ' + fesc(s.colorName) + ' — tap to swap" ' +
+          'style="flex:1;background:' + s.hex + ';position:relative;cursor:pointer">' +
+          '<div style="position:absolute;bottom:2px;left:0;right:0;text-align:center;font-size:7px;font-weight:700;color:' +
+          (light ? 'rgba(0,0,0,.6)' : 'rgba(255,255,255,.8)') + '">' + s.slot + '</div></div>';
       }).join('');
     }
 
-    // Palette strip
-    var strip = document.getElementById('cc-palette-strip');
-    if(strip && stack.slots){
-      strip.innerHTML = stack.slots.map(function(s){
-        return '<div title="Slot '+s.slot+': '+s.colorName+'" style="flex:1;background:'+s.hex+'"></div>';
-      }).join('');
+    // C. Size display
+    var sizeEl = document.getElementById('forge-size-display');
+    if (sizeEl) {
+      var ps = stack.recommendedPrintSize || '—';
+      var pt = stack.plateThickness || '—';
+      sizeEl.textContent = ps + ' · ' + pt + ' tall';
     }
 
-    // Settings pills
-    var pills = document.getElementById('cc-settings-pills');
-    if(pills){
-      var slotEl = document.getElementById('cc-slots');
-      var lhEl   = document.getElementById('cc-lh');
-      var ftEl   = document.getElementById('cc-ft');
-      var pillData = [
-        ['Layer Height', stack.layerHeight+'mm'],
-        ['Slots', (slotEl?.value||'4')+' Colors'],
-        ['Filament', ftEl?.options[ftEl.selectedIndex]?.text || 'Matte PLA'],
-      ];
-      pills.innerHTML = pillData.map(function(p){
-        return '<span style="background:rgba(40,184,88,.1);border:1px solid rgba(40,184,88,.25);color:var(--grn);padding:4px 10px;border-radius:20px;font-family:\'Share Tech Mono\',monospace;font-size:8px">'
-          + '<span style="opacity:.7">'+p[0]+': </span><strong>'+p[1]+'</strong></span>';
-      }).join('');
-    }
+    // D. Slot cards
+    renderSlotCards(stack);
 
-    // Slot grid
-    var grid = document.getElementById('cc-slot-grid');
-    if(grid && stack.slots){
-      grid.innerHTML = stack.slots.map(function(s){
-        var isLight = _ccLum(s.hex) > 0.6;
-        return '<div style="border:1px solid var(--bdr);border-radius:6px;overflow:hidden">'
-          + '<div style="background:'+s.hex+';padding:10px 12px;display:flex;justify-content:space-between;align-items:center">'
-          + '<div style="font-family:\'Orbitron\',monospace;font-size:7px;font-weight:700;color:'+(isLight?'rgba(0,0,0,.7)':'rgba(255,255,255,.9)')+';letter-spacing:1px">SLOT '+(s.slot)+'</div>'
-          + '<div style="cursor:pointer;background:'+(isLight?'rgba(0,0,0,.15)':'rgba(255,255,255,.2)')+';border-radius:3px;padding:3px 7px;font-family:\'Share Tech Mono\',monospace;font-size:9px;color:'+(isLight?'#000':'#fff')+'" onclick="ccCopyHex(\''+s.hex+'\',this)">'+s.hex+'</div>'
-          + '</div>'
-          + '<div style="padding:8px 10px;background:var(--surf)">'
-          + '<div style="font-size:8px;font-weight:700;color:var(--txt-b);margin-bottom:2px">'+s.colorName+'</div>'
-          + '<div style="font-size:7px;color:var(--txt-d);margin-bottom:3px">'+s.role+'</div>'
-          + '<div style="font-size:7px;color:var(--pur)">'+s.bambuFilamentName+'</div>'
-          + (s.roleNote ? '<div style="font-size:7px;color:var(--txt-d);margin-top:3px;font-style:italic">'+s.roleNote+'</div>' : '')
-          + '</div></div>';
-      }).join('');
-    }
+    // E. Layer instructions
+    renderLayerInstructions(stack);
 
-    // Search tags
-    var tags = document.getElementById('cc-search-tags');
-    if(tags && stack.slots){
-      tags.innerHTML = stack.slots.map(function(s){
-        return '<button class="btn btn-ghost" style="font-family:\'Share Tech Mono\',monospace;font-size:8px;padding:4px 10px;border-color:var(--bdr2)" onclick="ccCopyText(\''+s.searchTerm.replace(/'/g,"\\'")+'\')" title="Copy search term">'+s.searchTerm+'</button>';
-      }).join('');
-    }
+    // F. Quality score + tips
+    renderQualityScore(stack);
 
-    // Print notes
-    var notes = document.getElementById('cc-notes-body');
-    if(notes){
-      notes.innerHTML = stack.printNotes
-        ? stack.printNotes.split(/\n|\.(?=\s)/).filter(Boolean).map(function(line){
-            line = line.trim().replace(/^[-•]\s*/,'');
-            return line ? '<div style="padding:3px 0">• '+line+(line.endsWith('.')?'':'.')+'</div>' : '';
-          }).join('')
-        : stack.amsLoadOrder || 'No notes available.';
-      if(stack.amsLoadOrder){
-        notes.innerHTML += '<div style="margin-top:8px;padding:8px 10px;background:rgba(139,92,246,.08);border-radius:4px;border-left:2px solid var(--pur);font-size:8px;color:var(--txt-d)"><span style="color:var(--pur);font-weight:700">AMS Load Order: </span>'+stack.amsLoadOrder+'</div>';
-      }
-    }
+    // Start 2D render
+    forgeShow2D();
   };
 
-  window.ccCopyHex = function(hex, el){
-    navigator.clipboard.writeText(hex).then(function(){
-      var prev = el.textContent;
-      el.textContent = '✓ Copied!';
-      setTimeout(function(){ el.textContent = prev; }, 1200);
-    }).catch(function(){ toast('Copy','Use Ctrl+C to copy','warn',2000); });
+  // ── Preview tab toggle ─────────────────────────────────────────────────────
+  window.forgeShow2D = function() {
+    _curPreviewTab = '2d';
+    var p2 = document.getElementById('forge-2d-panel');
+    var p3 = document.getElementById('forge-3d-panel');
+    var b2 = document.getElementById('forge-tab-2d');
+    var b3 = document.getElementById('forge-tab-3d');
+    if (p2) p2.style.display = 'block';
+    if (p3) p3.style.display = 'none';
+    if (b2) { b2.style.background = 'var(--pur)'; b2.style.color = '#fff'; }
+    if (b3) { b3.style.background = 'var(--surf)'; b3.style.color = 'var(--txt-d)'; }
+    if (_stack && _img64) render2DPreview(_stack.slots);
   };
 
-  window.ccCopyText = function(text){
-    navigator.clipboard.writeText(text).then(function(){
-      toast('Copied',text,'ok',1800);
-    }).catch(function(){ toast('Copy','Failed to copy to clipboard','warn',2000); });
+  window.forgeShow3D = function() {
+    _curPreviewTab = '3d';
+    var p2 = document.getElementById('forge-2d-panel');
+    var p3 = document.getElementById('forge-3d-panel');
+    var b2 = document.getElementById('forge-tab-2d');
+    var b3 = document.getElementById('forge-tab-3d');
+    if (p2) p2.style.display = 'none';
+    if (p3) p3.style.display = 'block';
+    if (b2) { b2.style.background = 'var(--surf)'; b2.style.color = 'var(--txt-d)'; }
+    if (b3) { b3.style.background = 'var(--pur)'; b3.style.color = '#fff'; }
+    if (_stack) init3D(_stack);
   };
 
-  window.ccCopyAll = function(){
-    if(!_ccLastStack?.slots) return;
-    var hexes = _ccLastStack.slots.map(function(s){ return 'Slot '+s.slot+' ('+s.colorName+'): '+s.hex; }).join('\n');
-    navigator.clipboard.writeText(hexes).then(function(){
-      var btn = document.getElementById('cc-copy-all-btn');
-      if(btn){ var prev=btn.textContent; btn.textContent='✓ All Copied!'; setTimeout(function(){btn.textContent=prev;},1500); }
-    }).catch(function(){ toast('Copy','Failed','warn',2000); });
-  };
-
-  window.ccReset = function(){
-    _ccImageBase64 = null;
-    _ccImageType   = null;
-    _ccLastStack   = null;
-    var zone = document.getElementById('cc-upload-zone');
-    var row  = document.getElementById('cc-preview-row');
-    var btn  = document.getElementById('cc-analyze-btn');
-    var inp  = document.getElementById('cc-input-section');
-    var res  = document.getElementById('cc-results');
-    var err  = document.getElementById('cc-error');
-    if(zone) zone.style.display = 'block';
-    if(row)  row.style.display  = 'none';
-    if(inp)  inp.style.display  = 'block';
-    if(res)  res.style.display  = 'none';
-    if(err)  err.style.display  = 'none';
-    if(btn){ btn.disabled=true; btn.style.opacity='.45'; btn.style.cursor='not-allowed'; }
-    var thumb = document.getElementById('cc-prev-thumb');
-    if(thumb) thumb.src = '';
-  };
-
-  function _ccLum(hex){
-    var c = hex.replace('#','');
-    if(c.length===3) c=c[0]+c[0]+c[1]+c[1]+c[2]+c[2];
-    var r=parseInt(c.slice(0,2),16)/255, g=parseInt(c.slice(2,4),16)/255, b=parseInt(c.slice(4,6),16)/255;
-    return 0.299*r+0.587*g+0.114*b;
+  // ── Slot cards ─────────────────────────────────────────────────────────────
+  function renderSlotCards(stack) {
+    var el = document.getElementById('forge-slot-cards');
+    if (!el || !stack.slots) return;
+    el.innerHTML = stack.slots.map(function(s, i) {
+      var light = isLight(s.hex);
+      var fg    = light ? 'rgba(0,0,0,.8)' : 'rgba(255,255,255,.9)';
+      var fgd   = light ? 'rgba(0,0,0,.5)' : 'rgba(255,255,255,.6)';
+      var matchedSpool = _spools.find(function(sp){ return sp.color === s.hex; });
+      var isLow = matchedSpool && (matchedSpool.remaining||0) < 100;
+      return '<div style="border:1px solid var(--bdr);border-radius:6px;overflow:hidden;margin-bottom:6px">' +
+        '<div style="background:' + s.hex + ';padding:10px 12px;display:flex;align-items:center;justify-content:space-between">' +
+          '<div style="display:flex;align-items:center;gap:6px">' +
+            '<div style="width:8px;height:8px;border-radius:50%;background:rgba(' + (light?'0,0,0':'255,255,255') + ',.25)"></div>' +
+            '<span style="font-family:\'Orbitron\',monospace;font-size:7px;font-weight:700;color:' + fg + '">SLOT ' + s.slot + '</span>' +
+            '<span style="font-size:7px;color:' + fgd + '">' + fesc(s.role||'') + '</span>' +
+          '</div>' +
+          '<button onclick="forgeSwapSlot(' + i + ')" style="background:rgba(' + (light?'0,0,0':'255,255,255') + ',.15);border:none;border-radius:3px;padding:3px 8px;font-size:7px;color:' + fg + ';cursor:pointer;font-family:\'Share Tech Mono\',monospace">⇄ Swap</button>' +
+        '</div>' +
+        '<div style="padding:10px 12px;background:var(--surf)">' +
+          '<div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:4px">' +
+            '<div>' +
+              '<div style="font-size:9px;font-weight:700;color:var(--txt-b)">' + fesc(s.colorName) + '</div>' +
+              '<div style="font-size:7px;color:var(--pur)">' + fesc(s.bambuFilamentName||'') + '</div>' +
+            '</div>' +
+            '<div style="font-family:\'Share Tech Mono\',monospace;font-size:8px;color:var(--txt-d);cursor:pointer;margin-left:8px" onclick="forgeCopyHex(\'' + s.hex + '\',this)">' + s.hex + '</div>' +
+          '</div>' +
+          (matchedSpool ? '<div style="font-size:7px;color:' + (isLow?'var(--red)':'var(--grn)') + '">' + (isLow?'⚠ Low — ':'✓ ') + (matchedSpool.remaining||0) + 'g remaining</div>' : '') +
+          (s.roleNote ? '<div style="font-size:7px;color:var(--txt-d);font-style:italic;margin-top:3px">' + fesc(s.roleNote) + '</div>' : '') +
+          '<div style="font-size:7px;color:var(--txt-d);margin-top:3px">Layers ' + (s.layerStart||0) + '–' + (s.layerEnd||0) + '</div>' +
+        '</div>' +
+        '</div>';
+    }).join('');
   }
 
-  window.renderChromaCanvas = function(){};
+  window.forgeCopyHex = function(hex, el) {
+    navigator.clipboard.writeText(hex).then(function(){
+      var prev = el.textContent;
+      el.textContent = '✓ Copied';
+      setTimeout(function(){ el.textContent = prev; }, 1400);
+    });
+  };
+
+  // ── Layer instructions ─────────────────────────────────────────────────────
+  function renderLayerInstructions(stack) {
+    var el = document.getElementById('forge-layer-instr');
+    if (!el) return;
+    var instr = stack.layerInstructions || [];
+    if (!instr.length) { el.innerHTML = '<div style="font-size:8px;color:var(--txt-d)">No layer data.</div>'; return; }
+    var lh = parseFloat(stack.layerHeight || '0.10');
+    var total = stack.estimatedLayers || 0;
+    el.innerHTML = '<div style="font-family:\'Share Tech Mono\',monospace;font-size:8px">' +
+      instr.map(function(row, i) {
+        var isFirst = i === 0, isLast = i === instr.length - 1;
+        return '<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--bdr)' + (isLast?';border-bottom:none':'') + '">' +
+          '<span style="color:var(--txt-d);flex-shrink:0;min-width:64px">Slot ' + (row.amsSlot||i+1) + '</span>' +
+          '<span style="width:10px;height:10px;border-radius:50%;background:' + (row.hex||'#888') + ';flex-shrink:0;display:inline-block;border:1px solid var(--bdr)"></span>' +
+          '<span style="flex:1;color:var(--txt-b);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + fesc(row.spoolName||'') + '</span>' +
+          '<span style="color:var(--txt-d);white-space:nowrap;font-size:7px">' + (row.layerStart||0) + '–' + (row.layerEnd||0) + '</span>' +
+          (isFirst ? '<span style="color:var(--grn);font-size:7px;flex-shrink:0">First</span>' : isLast ? '<span style="color:var(--gold-b);font-size:7px;flex-shrink:0">Last</span>' : '') +
+          '</div>';
+      }).join('') +
+      '<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--bdr);color:var(--txt-d)">' + total + ' layers · ' + lh.toFixed(2) + 'mm ea · ~' + (total*lh).toFixed(1) + 'mm tall</div>' +
+      '</div>';
+  }
+
+  // ── Quality score ──────────────────────────────────────────────────────────
+  function renderQualityScore(stack) {
+    var el = document.getElementById('forge-quality');
+    if (!el) return;
+    var qs = stack.qualityScore || {};
+    var score = qs.score || 0;
+    var scoreColor = score >= 7 ? 'var(--grn)' : score >= 5 ? 'var(--gold-b)' : 'var(--red)';
+    el.innerHTML =
+      '<div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">' +
+        '<div style="width:44px;height:44px;border-radius:50%;border:2.5px solid ' + scoreColor + ';display:flex;align-items:center;justify-content:center;font-family:\'Orbitron\',monospace;font-size:15px;font-weight:700;color:' + scoreColor + ';flex-shrink:0">' + score + '</div>' +
+        '<div><div style="font-size:10px;font-weight:700;color:var(--txt-b)">' + fesc(qs.label||'') + '</div><div style="font-size:8px;color:var(--txt-d);margin-top:2px">' + fesc(qs.detail||'') + '</div></div>' +
+      '</div>' +
+      (stack.forgeTips && stack.forgeTips.length ?
+        '<div style="font-size:6px;color:var(--txt-d);letter-spacing:2px;font-family:\'Orbitron\',monospace;margin-bottom:6px">FORGE TIPS</div>' +
+        stack.forgeTips.map(function(tip, i){
+          return '<div style="font-size:8px;color:var(--txt-d);padding:4px 0;border-bottom:1px solid var(--bdr);line-height:1.5"><span style="color:var(--pur)">' + (i+1) + '.</span> ' + fesc(tip) + '</div>';
+        }).join('') : '');
+  }
+
+  // ── Slot swap modal ────────────────────────────────────────────────────────
+  window.forgeSwapSlot = function(slotIdx) {
+    if (!_stack || !_stack.slots) return;
+    if (!_spools.length) { toast('No Inventory', 'No spools available to swap', 'warn', 2000); return; }
+    _swapSlotIdx = slotIdx;
+    var slot = _stack.slots[slotIdx];
+    var slotLab = hexToLab(slot.hex);
+
+    var sorted = _spools.slice().sort(function(a, b) {
+      return labDistance(hexToLab(a.color), slotLab) - labDistance(hexToLab(b.color), slotLab);
+    });
+
+    var modal = document.getElementById('forge-swap-modal');
+    var body  = document.getElementById('forge-swap-body');
+    if (!modal || !body) return;
+
+    body.innerHTML =
+      '<div style="font-size:9px;font-weight:700;color:var(--txt-b);margin-bottom:10px">Swapping Slot ' + slot.slot + ' — ' + fesc(slot.colorName) + '</div>' +
+      sorted.map(function(s, i) {
+        var isCurrent = s.color === slot.hex;
+        var isLow     = (s.remaining||0) < 100;
+        return '<div onclick="forgeConfirmSwap(\'' + fesc(s.color) + '\',\'' + fesc(s.name) + '\')" ' +
+          'style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--bdr);cursor:pointer">' +
+          '<div style="width:28px;height:28px;border-radius:50%;background:' + s.color + ';flex-shrink:0;border:' + (isCurrent?'2px solid var(--pur)':'1px solid var(--bdr)') + '"></div>' +
+          '<div style="flex:1;min-width:0">' +
+            '<div style="font-size:9px;font-weight:600;color:var(--txt-b)">' + fesc(s.name||'') + (isCurrent?' <span style="color:var(--pur);font-size:7px">✓ Current</span>':'') + '</div>' +
+            '<div style="font-size:7px;color:var(--txt-d)">' + fesc(s.brand||'') + ' · ' + (s.color||'') + '</div>' +
+          '</div>' +
+          '<div style="text-align:right;flex-shrink:0"><div style="font-size:8px;color:' + (isLow?'var(--red)':'var(--txt-d)') + '">' + (s.remaining||0) + 'g' + (isLow?' ⚠':'') + '</div></div>' +
+          '</div>';
+      }).join('') +
+      '<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--bdr)">' +
+        '<div style="font-size:7px;color:var(--txt-d);margin-bottom:6px">Or enter custom hex:</div>' +
+        '<div style="display:flex;gap:6px;align-items:center">' +
+          '<input id="forge-custom-color" type="color" value="' + slot.hex + '" oninput="document.getElementById(\'forge-custom-hex\').value=this.value" style="width:32px;height:28px;border:1px solid var(--bdr);border-radius:4px;cursor:pointer;padding:0;background:none;flex-shrink:0">' +
+          '<input id="forge-custom-hex" type="text" value="' + slot.hex + '" maxlength="7" oninput="document.getElementById(\'forge-custom-color\').value=this.value" placeholder="#rrggbb" style="flex:1;background:var(--bg);border:1px solid var(--bdr2);color:var(--txt-b);padding:5px 8px;font-family:\'Share Tech Mono\',monospace;font-size:9px;border-radius:4px">' +
+          '<button onclick="forgeApplyCustomHex()" class="btn btn-pur btn-xs">Apply</button>' +
+        '</div>' +
+      '</div>';
+
+    modal.style.display = 'flex';
+  };
+
+  window.forgeConfirmSwap = function(hex, name) {
+    if (_swapSlotIdx === null || !_stack) return;
+    _stack.slots[_swapSlotIdx].hex = hex;
+    _stack.slots[_swapSlotIdx].colorName = name;
+    _stack.slots[_swapSlotIdx].bambuFilamentName = name;
+
+    var modal = document.getElementById('forge-swap-modal');
+    if (modal) modal.style.display = 'none';
+
+    var strip = document.getElementById('forge-palette-strip');
+    if (strip) {
+      strip.innerHTML = _stack.slots.map(function(s, i) {
+        var light = isLight(s.hex);
+        return '<div onclick="forgeSwapSlot(' + i + ')" title="Slot ' + s.slot + ': ' + fesc(s.colorName) + '" ' +
+          'style="flex:1;background:' + s.hex + ';position:relative;cursor:pointer">' +
+          '<div style="position:absolute;bottom:2px;left:0;right:0;text-align:center;font-size:7px;font-weight:700;color:' +
+          (light ? 'rgba(0,0,0,.6)' : 'rgba(255,255,255,.8)') + '">' + s.slot + '</div></div>';
+      }).join('');
+    }
+
+    renderSlotCards(_stack);
+
+    if (_curPreviewTab === '2d') {
+      render2DPreview(_stack.slots);
+    } else {
+      init3D(_stack);
+    }
+  };
+
+  window.forgeApplyCustomHex = function() {
+    var hexInput = document.getElementById('forge-custom-hex');
+    var hex = (hexInput ? hexInput.value : '').trim();
+    if (!/^#[0-9a-fA-F]{6}$/.test(hex)) {
+      toast('Invalid', 'Enter a valid hex like #ff5500', 'error', 2000);
+      return;
+    }
+    forgeConfirmSwap(hex, hex);
+  };
+
+  window.forgeCloseSwap = function() {
+    var m = document.getElementById('forge-swap-modal');
+    if (m) m.style.display = 'none';
+  };
+
+  // ── Export (Step 3 placeholder) ────────────────────────────────────────────
+  window.forgeExport = function() {
+    toast('Coming Soon', 'STL export will be available shortly', 'ok', 2500);
+  };
+
+  // ── Reset ──────────────────────────────────────────────────────────────────
+  window.forgeReset = function() {
+    _img64 = null; _imgType = null; _stack = null;
+    _renderToken++;
+    if (_3dRenderer) { try { _3dRenderer.dispose(); } catch(e){} cancelAnimationFrame(_3dAnimId); _3dRenderer = null; }
+
+    var zone    = document.getElementById('forge-upload-zone');
+    var row     = document.getElementById('forge-img-row');
+    var setup   = document.getElementById('forge-setup');
+    var preview = document.getElementById('forge-preview-state');
+    var load    = document.getElementById('forge-loading');
+    var btn     = document.getElementById('forge-btn');
+    var err     = document.getElementById('forge-error');
+    var thumb   = document.getElementById('forge-thumb');
+
+    if (zone)    zone.style.display    = 'block';
+    if (row)     row.style.display     = 'none';
+    if (setup)   setup.style.display   = 'block';
+    if (preview) preview.style.display = 'none';
+    if (load)    load.style.display    = 'none';
+    if (err)     err.style.display     = 'none';
+    if (thumb)   thumb.src             = '';
+    if (btn)     { btn.disabled = true; btn.style.opacity = '.45'; btn.style.cursor = 'not-allowed'; }
+  };
+
+  // ── Tab entry point ────────────────────────────────────────────────────────
+  window.renderForge = function() {
+    if (_spools.length === 0) loadSpools();
+  };
+
 })();
 </script>
 </body>
