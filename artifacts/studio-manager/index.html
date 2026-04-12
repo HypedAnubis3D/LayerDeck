@@ -3933,7 +3933,7 @@ const MAT_C={'PLA Basic':'#3a80e0','PLA Matte':'#8858c0','PLA Silk':'#c09828','P
 const WEAR_FACTOR={'PLA-CF':3.0,'PA-CF':3.0,'PA-GF':3.0,'PC-CF':3.0,'PPS-CF':3.0,'PETG-CF':2.5,'ABS-CF':2.5,'ABS-GF':2.5,'ASA-CF':2.5,'PLA-GF':2.5,'PLA Glow':1.5,'PLA Metal':1.5,'PLA Marble':1.3,'PC':1.2,'PA':1.2,'PPS':1.2,'PC-CF':3.0};
 function matWear(m){return WEAR_FACTOR[m]||1.0;}
 
-let spools=[],usageHist=[],prints=[],tmfLib=[],queueItems=[],orders=[],sales=[],maintLog=[],inPersonInventory=[];
+var spools=[],usageHist=[],prints=[],tmfLib=[],queueItems=[],orders=[],sales=[],maintLog=[],inPersonInventory=[];
 let printGroups=[],tmfFolders=[],_tmfCollapsed=new Set();
 let dashHidden=[];
 let notifIds=new Set();
@@ -17863,7 +17863,7 @@ let piHubConfig=null;   // loaded from Supabase printerHub collection
 let piLiveData={};      // {printerName: {...mqttFields}}
 let piVisionData=null;  // latest from /vision/status — { enabled, results, log, ... }
 let _piVisionFetching=false;
-let piPrevStates={};    // for state transition detection — persisted to survive page refresh
+var piPrevStates={};    // for state transition detection — persisted to survive page refresh
 let piActualPrinterNames=[];  // actual printer names from Pi Hub status keys (may differ from app config names)
 // Restore compact state snapshot (gcode_state + hms only) from localStorage to prevent re-firing alerts on reload
 try{var _s=localStorage.getItem('piPrevStateKeys');if(_s){var _r=JSON.parse(_s)||{};Object.keys(_r).forEach(function(k){piPrevStates[k]=_r[k];});}}catch(e){}
@@ -22587,6 +22587,7 @@ function posShowReceipt(sale){
      Floating chat widget, streams from /api/ai/chat
      ═══════════════════════════════════════════════════════════════ -->
 <style>
+  @media(max-width:768px){#_anubis-fab{bottom:78px !important;}}
   #_anubis-fab{position:fixed;bottom:22px;right:22px;z-index:9998;width:50px;height:50px;border-radius:50%;background:linear-gradient(135deg,#C9A84C,#a07830);border:1px solid rgba(201,168,76,0.5);box-shadow:0 4px 22px rgba(0,0,0,0.6);cursor:pointer;display:flex;align-items:center;justify-content:center;flex-direction:column;transition:all 0.2s ease;font-family:'Share Tech Mono',monospace;gap:1px}
   #_anubis-fab:hover{transform:scale(1.07);box-shadow:0 6px 28px rgba(201,168,76,0.3)}
   #_anubis-fab .fab-icon{font-size:18px;line-height:1;color:#0a0f1a}
