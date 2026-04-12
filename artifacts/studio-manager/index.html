@@ -23998,11 +23998,11 @@ function posShowReceipt(sale){
       var IMG_RES = 120;
       var scale3d = printMM / IMG_RES;
       var half3d = printMM / 2;
-      var PLATE = 0.5;
-      var totalH3d = PLATE + slots3d.length * lh * 5;
+      var plateThickness = 1.2;
+      var totalColorHeight3d = 1.6;
 
       function buildHeightScene(pixelData) {
-        // Fix 1: extract brightness then box blur (radius=2) for smooth terrain
+        // Fix 1: extract brightness then box blur (radius=4) for smooth terrain
         var bright3 = new Float32Array(IMG_RES * IMG_RES);
         for (var bi = 0; bi < bright3.length; bi++) {
           if (pixelData) {
@@ -24012,7 +24012,7 @@ function posShowReceipt(sale){
             bright3[bi] = 0.5;
           }
         }
-        var BLR = 2;
+        var BLR = 4;
         var blurArr = new Float32Array(IMG_RES * IMG_RES);
         for (var by = 0; by < IMG_RES; by++) {
           for (var bx = 0; bx < IMG_RES; bx++) {
@@ -24032,7 +24032,7 @@ function posShowReceipt(sale){
         for (var row = 0; row < IMG_RES; row++) {
           for (var col = 0; col < IMG_RES; col++) {
             var lum = blurArr[row * IMG_RES + col];
-            var colH = PLATE + lum * (totalH3d - PLATE);
+            var colH = plateThickness + lum * totalColorHeight3d;
             // Fix 2: snap to exact slot color
             var si = Math.min(Math.floor(lum * slots3d.length), slots3d.length - 1);
             var hex3 = (slots3d[si] && slots3d[si].hex) || '#888888';
@@ -24054,9 +24054,10 @@ function posShowReceipt(sale){
         geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
         geo.setIndex(indices);
         geo.computeVertexNormals();
-        // Fix 3: center at origin, scale X/Z to exact print size in mm
+        // Fix 3: center at origin, scale X/Z to exact print size in mm, sit on plate
         geo.center();
         geo.scale(printMM / IMG_RES, 1, printMM / IMG_RES);
+        geo.translate(0, plateThickness / 2, 0);
         var mat = new THREE.MeshLambertMaterial({ vertexColors: true });
         scene.add(new THREE.Mesh(geo, mat));
 
@@ -24461,8 +24462,8 @@ function posShowReceipt(sale){
       // Luminance → height; floor(lum * nSlots) → slot index → face color
       var IMG_RES_3MF = 120;
       var scale3mf = printMM / IMG_RES_3MF;
-      var PLATE_3MF = 0.5;
-      var totalH_3MF = PLATE_3MF + slots.length * lh * 5;
+      var plateThickness3mf = 1.2;
+      var totalColorHeight3mf = 1.6;
 
       var pixelData3mf = null;
       if (_img64) {
@@ -24489,7 +24490,7 @@ function posShowReceipt(sale){
           bright3mf[bi3] = 0.5;
         }
       }
-      var BLR3 = 2;
+      var BLR3 = 4;
       var blur3mf = new Float32Array(IMG_RES_3MF * IMG_RES_3MF);
       for (var b3y = 0; b3y < IMG_RES_3MF; b3y++) {
         for (var b3x = 0; b3x < IMG_RES_3MF; b3x++) {
@@ -24509,7 +24510,7 @@ function posShowReceipt(sale){
       for (var row3 = 0; row3 < IMG_RES_3MF; row3++) {
         for (var col3 = 0; col3 < IMG_RES_3MF; col3++) {
           var lum3 = blur3mf[row3 * IMG_RES_3MF + col3];
-          var z3 = PLATE_3MF + lum3 * (totalH_3MF - PLATE_3MF);
+          var z3 = plateThickness3mf + lum3 * totalColorHeight3mf;
           var x3 = col3 * scale3mf - half;
           var y3 = row3 * scale3mf - half;
           vLines3mf.push('<vertex x="'+x3.toFixed(3)+'" y="'+y3.toFixed(3)+'" z="'+z3.toFixed(3)+'"/>');

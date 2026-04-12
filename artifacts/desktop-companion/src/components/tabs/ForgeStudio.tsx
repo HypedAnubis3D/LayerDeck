@@ -92,8 +92,8 @@ async function build3MF(
   const IMG_RES = 120;
   const scale = printMM / IMG_RES;
   const half = printMM / 2;
-  const PLATE = 0.5;
-  const totalH = PLATE + slots.length * lh * 5;
+  const plateThickness = 1.2;
+  const totalColorHeight = 1.6;
 
   // ── Sample image at 120×120 ───────────────────────────────────────────────
   let rawPixels: Uint8ClampedArray | null = null;
@@ -111,7 +111,7 @@ async function build3MF(
     });
   }
 
-  // Fix 1: extract brightness then box-blur (radius=2) to smooth jagged spikes
+  // Fix 1: extract brightness then box-blur (radius=4) to smooth jagged spikes
   const bright = new Float32Array(IMG_RES * IMG_RES);
   for (let i = 0; i < bright.length; i++) {
     if (rawPixels) {
@@ -121,7 +121,7 @@ async function build3MF(
       bright[i] = 0.5;
     }
   }
-  const R = 2;
+  const R = 4;
   const blurred = new Float32Array(IMG_RES * IMG_RES);
   for (let y = 0; y < IMG_RES; y++) {
     for (let x = 0; x < IMG_RES; x++) {
@@ -141,7 +141,7 @@ async function build3MF(
   for (let row = 0; row < IMG_RES; row++) {
     for (let col = 0; col < IMG_RES; col++) {
       const lum = blurred[row * IMG_RES + col];
-      const z = PLATE + lum * (totalH - PLATE);
+      const z = plateThickness + lum * totalColorHeight;
       const x = col * scale - half;
       const y = row * scale - half;
       vLines.push(`<vertex x="${x.toFixed(3)}" y="${y.toFixed(3)}" z="${z.toFixed(3)}"/>`);
@@ -386,8 +386,8 @@ export function ForgeStudio() {
     const IMG_RES = 120;
     const scale = printMM / IMG_RES;
     const half = printMM / 2;
-    const PLATE = 0.5;
-    const totalH = PLATE + liveSlots.length * lh * 5;
+    const plateThickness = 1.2;
+    const totalColorHeight = 1.6;
 
     function initScene(pixelData: Uint8ClampedArray | null) {
       const w = container!.clientWidth || 480;
@@ -405,13 +405,13 @@ export function ForgeStudio() {
       dl.position.set(1, 2, 1); scene.add(dl);
 
       if (pixelData) {
-        // Fix 1: extract brightness + box blur (radius=2) for smooth terrain
+        // Fix 1: extract brightness + box blur (radius=4) for smooth terrain
         const bright3d = new Float32Array(IMG_RES * IMG_RES);
         for (let i = 0; i < bright3d.length; i++) {
           const di = i * 4;
           bright3d[i] = (pixelData[di] * 0.299 + pixelData[di+1] * 0.587 + pixelData[di+2] * 0.114) / 255;
         }
-        const R3d = 2;
+        const R3d = 4;
         const blur3d = new Float32Array(IMG_RES * IMG_RES);
         for (let y = 0; y < IMG_RES; y++) {
           for (let x = 0; x < IMG_RES; x++) {
@@ -431,7 +431,7 @@ export function ForgeStudio() {
         for (let row = 0; row < IMG_RES; row++) {
           for (let col = 0; col < IMG_RES; col++) {
             const lum = blur3d[row * IMG_RES + col];
-            const colH = PLATE + lum * (totalH - PLATE);
+            const colH = plateThickness + lum * totalColorHeight;
             // Fix 2: snap to exact slot color (no blending between slots)
             const si = Math.min(Math.floor(lum * liveSlots.length), liveSlots.length - 1);
             const hex = liveSlots[si].hex || '#888888';
@@ -453,9 +453,10 @@ export function ForgeStudio() {
         geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
         geo.setIndex(indices);
         geo.computeVertexNormals();
-        // Fix 3: center at origin, scale X/Z to exact print size in mm
+        // Fix 3: center at origin, scale X/Z to exact print size in mm, sit on plate
         geo.center();
         geo.scale(printMM / IMG_RES, 1, printMM / IMG_RES);
+        geo.translate(0, plateThickness / 2, 0);
         scene.add(new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ vertexColors: true })));
       } else {
         // Fallback: flat slab per slot (no image)
