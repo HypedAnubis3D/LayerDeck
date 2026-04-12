@@ -2428,7 +2428,7 @@ header{
     <!-- Header -->
     <div class="printer-card" style="margin-bottom:8px;text-align:center;padding:16px 12px;border-top:2px solid #f97316">
       <div style="font-family:'Orbitron',monospace;font-size:12px;font-weight:900;color:#f97316;letter-spacing:3px;margin-bottom:4px">🔥 LAYERDECK FORGE</div>
-      <div style="font-size:8px;color:var(--txt-d);letter-spacing:1px">Upload image · AI picks your filaments · Live preview · Export STL</div>
+      <div style="font-size:8px;color:var(--txt-d);letter-spacing:1px">Upload image · AI picks your filaments · Live preview · Export 3MF</div>
     </div>
 
     <!-- Section A: Upload zone -->
@@ -2565,7 +2565,7 @@ header{
     </div>
 
     <!-- G. Export + Reset -->
-    <button onclick="forgeExport()" style="width:100%;padding:13px;font-family:'Orbitron',monospace;font-size:9px;font-weight:700;letter-spacing:2px;margin-bottom:6px;border:none;border-radius:6px;cursor:pointer;background:var(--grn);color:#fff">⬇ Export STL — Open in Bambu Studio</button>
+    <button id="forge-export-btn" onclick="forgeExport()" style="width:100%;padding:13px;font-family:'Orbitron',monospace;font-size:9px;font-weight:700;letter-spacing:2px;margin-bottom:6px;border:none;border-radius:6px;cursor:pointer;background:var(--grn);color:#fff">⬇ Export 3MF — Open in Bambu Studio</button>
     <div style="text-align:center;padding-bottom:16px">
       <button class="btn btn-ghost" style="font-size:8px" onclick="forgeReset()">↩ Analyze Another Image</button>
     </div>
@@ -24342,9 +24342,153 @@ function posShowReceipt(sale){
     if (m) m.style.display = 'none';
   };
 
-  // ── Export (Step 3 placeholder) ────────────────────────────────────────────
-  window.forgeExport = function() {
-    toast('Coming Soon', 'STL export will be available shortly', 'ok', 2500);
+  // ── XML escape helper ──────────────────────────────────────────────────────
+  function escXml(s) {
+    return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&apos;');
+  }
+
+  // ── 3MF Export ─────────────────────────────────────────────────────────────
+  window.forgeExport = async function() {
+    if (!_stack || !(_stack.slots||[]).length) {
+      toast('No Data', 'Run an analysis first', 'warn', 2000);
+      return;
+    }
+
+    var btn = document.getElementById('forge-export-btn');
+    if (btn) { btn.textContent = '⏳ Generating 3MF…'; btn.disabled = true; }
+
+    try {
+      // Lazy-load JSZip
+      if (typeof JSZip === 'undefined') {
+        await new Promise(function(resolve, reject) {
+          var s = document.createElement('script');
+          s.src = 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';
+          s.onload = resolve; s.onerror = reject;
+          document.head.appendChild(s);
+        });
+      }
+
+      var slots   = _stack.slots;
+      var printMM = parseFloat((_stack.recommendedPrintSize||'120mm').replace(/[^0-9.]/g,'')) || 120;
+      var lh      = parseFloat(_stack.layerHeight || '0.10') || 0.10;
+      var half    = printMM / 2;
+
+      // ── [Content_Types].xml ────────────────────────────────────────────────
+      var contentTypes =
+        '<?xml version="1.0" encoding="UTF-8"?>\n' +
+        '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">\n' +
+        '  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>\n' +
+        '  <Default Extension="model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/>\n' +
+        '</Types>';
+
+      // ── _rels/.rels ────────────────────────────────────────────────────────
+      var rels =
+        '<?xml version="1.0" encoding="UTF-8"?>\n' +
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">\n' +
+        '  <Relationship Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel" Target="/3D/3dmodel.model" Id="rel0"/>\n' +
+        '</Relationships>';
+
+      // ── 3D/3dmodel.model ──────────────────────────────────────────────────
+      // basematerials: one <base> per filament slot (solid displaycolor)
+      var baseMats = slots.map(function(s, i) {
+        return '      <base name="' + escXml(s.colorName||'Slot'+(i+1)) + '" displaycolor="' + (s.hex||'#888888') + '"/>';
+      }).join('\n');
+
+      // One <object> per slab — each is a rectangular prism
+      var objects = '';
+      var buildItems = '';
+      var zCursor = 0;
+
+      slots.forEach(function(slot, i) {
+        var layerCount = Math.max(1, (slot.layerEnd||1) - (slot.layerStart||0));
+        var slabH = layerCount * lh;
+        var objId = i + 2; // IDs: 1=basematerials, 2+ = objects
+
+        // Box: centered on XZ plane, stacked upward on Y axis
+        var ox = -half, oy = zCursor, oz = -half;
+        var w = printMM, h = slabH, d = printMM;
+
+        // 8 vertices of the rectangular prism
+        var verts = [
+          [ox,   oy,   oz  ], // 0: left  bottom front
+          [ox+w, oy,   oz  ], // 1: right bottom front
+          [ox+w, oy+h, oz  ], // 2: right top    front
+          [ox,   oy+h, oz  ], // 3: left  top    front
+          [ox,   oy,   oz+d], // 4: left  bottom back
+          [ox+w, oy,   oz+d], // 5: right bottom back
+          [ox+w, oy+h, oz+d], // 6: right top    back
+          [ox,   oy+h, oz+d], // 7: left  top    back
+        ];
+
+        // 12 triangles — outward CCW normals (verified per face)
+        var tris = [
+          [0,2,1],[0,3,2], // front  (−Z)
+          [5,7,4],[5,6,7], // back   (+Z)
+          [4,3,0],[4,7,3], // left   (−X)
+          [1,2,6],[1,6,5], // right  (+X)
+          [0,1,5],[0,5,4], // bottom (−Y)
+          [3,7,6],[3,6,2], // top    (+Y)
+        ];
+
+        var vertXml = verts.map(function(v) {
+          return '            <vertex x="' + v[0].toFixed(4) + '" y="' + v[1].toFixed(4) + '" z="' + v[2].toFixed(4) + '"/>';
+        }).join('\n');
+
+        var triXml = tris.map(function(t) {
+          return '            <triangle v1="' + t[0] + '" v2="' + t[1] + '" v3="' + t[2] + '"/>';
+        }).join('\n');
+
+        objects +=
+          '    <object id="' + objId + '" type="model" name="' + escXml((slot.colorName||'Slot'+(i+1)).replace(/\s+/g,'_')) + '" pid="1" pindex="' + i + '">\n' +
+          '      <mesh>\n' +
+          '        <vertices>\n' + vertXml + '\n        </vertices>\n' +
+          '        <triangles>\n' + triXml + '\n        </triangles>\n' +
+          '      </mesh>\n' +
+          '    </object>\n';
+
+        buildItems += '    <item objectid="' + objId + '"/>\n';
+        zCursor += slabH;
+      });
+
+      var model =
+        '<?xml version="1.0" encoding="UTF-8"?>\n' +
+        '<model unit="millimeter" xml:lang="en-US"\n' +
+        '  xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">\n' +
+        '  <resources>\n' +
+        '    <basematerials id="1">\n' + baseMats + '\n    </basematerials>\n' +
+        objects +
+        '  </resources>\n' +
+        '  <build>\n' + buildItems + '  </build>\n' +
+        '</model>';
+
+      // Pack into ZIP and trigger download
+      var zip = new JSZip();
+      zip.file('[Content_Types].xml', contentTypes);
+      zip.folder('_rels').file('.rels', rels);
+      zip.folder('3D').file('3dmodel.model', model);
+
+      var blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } });
+
+      var safeName = ((_stack.imageSummary||'forge_model').replace(/[^a-zA-Z0-9]+/g,'_')||'forge_model').slice(0,40);
+      var filename  = 'LayerDeck_Forge_' + safeName + '_' + slots.length + 'color.3mf';
+
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url; a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(function(){ URL.revokeObjectURL(url); }, 15000);
+
+      toast('3MF Downloaded', 'Open in Bambu Studio — assign each colored object to an AMS slot', 'ok', 5000);
+
+    } catch(e) {
+      toast('Export Failed', e.message || 'Unknown error', 'error', 3000);
+      console.error('[Forge export]', e);
+    } finally {
+      var btn2 = document.getElementById('forge-export-btn');
+      if (btn2) { btn2.textContent = '⬇ Export 3MF — Open in Bambu Studio'; btn2.disabled = false; }
+    }
   };
 
   // ── Reset ──────────────────────────────────────────────────────────────────
