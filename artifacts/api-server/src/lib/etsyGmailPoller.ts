@@ -614,8 +614,25 @@ async function pollGmail(): Promise<void> {
   }
 }
 
+// Pre-populate _discordNotifiedOrders from DB so server restarts don't re-fire Discord alerts
+// for orders that were already notified in a previous session.
+async function loadDiscordNotifiedOrders(): Promise<void> {
+  try {
+    const res = await pool.query(
+      `SELECT DISTINCT order_number FROM etsy_gmail_imports WHERE order_number IS NOT NULL`
+    );
+    for (const row of res.rows) {
+      if (row.order_number) _discordNotifiedOrders.add(row.order_number as string);
+    }
+    logger.info({ count: _discordNotifiedOrders.size }, "Loaded Discord-notified order numbers from DB");
+  } catch (err) {
+    logger.warn({ err }, "Could not load Discord-notified orders from DB — restart dupes possible");
+  }
+}
+
 export async function startEtsyGmailPoller(): Promise<void> {
   await initDb();
+  await loadDiscordNotifiedOrders();
   logger.info("Etsy Gmail poller started");
   setTimeout(async () => {
     await pollGmail();

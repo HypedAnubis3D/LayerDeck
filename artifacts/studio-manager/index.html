@@ -18916,9 +18916,13 @@ async function fetchPiStatus(){
       }
 
       // HMS (Hardware Message System) alert detection — fires on new entries
+      // Guard: only alert when printer is actively RUNNING or PAUSED.
+      // Stale HMS codes on an IDLE/FINISH printer (e.g. after restart or reconnect) are ignored.
       var prevHms=prev.hms||[];
       var curHms=p.hms||[];
-      if(curHms.length>prevHms.length){
+      var curStateForHms=curState||'';
+      var printerActiveForHms=curStateForHms==='RUNNING'||curStateForHms==='PAUSE'||curStateForHms==='PAUSED';
+      if(curHms.length>prevHms.length&&printerActiveForHms){
         onPiHmsAlert(name,p,curHms.slice(prevHms.length));
       }
 
