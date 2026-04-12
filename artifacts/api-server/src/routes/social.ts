@@ -201,9 +201,11 @@ router.post("/upload/multi", upload.array("files", 10), async (req, res) => {
 });
 
 // Helper: build IG container body
-function buildIgContainer(postType: string, resolvedMedia: string, caption: string | undefined, token: string): Record<string, string | boolean> {
+interface IgUserTag { username: string; x: number; y: number; }
+
+function buildIgContainer(postType: string, resolvedMedia: string, caption: string | undefined, token: string, userTags?: IgUserTag[]): Record<string, unknown> {
   const mediaIsVideo = !!resolvedMedia.match(/\.(mp4|mov|avi|mkv|webm)(\?|$)/i);
-  const body: Record<string, string | boolean> = { access_token: token };
+  const body: Record<string, unknown> = { access_token: token };
   if (postType === "story") {
     body.media_type = "STORIES";
     if (mediaIsVideo) body.video_url = resolvedMedia; else body.image_url = resolvedMedia;
@@ -216,6 +218,14 @@ function buildIgContainer(postType: string, resolvedMedia: string, caption: stri
     // Image post or image reel fallback
     body.image_url = resolvedMedia;
     if (caption) body.caption = caption;
+    // user_tags only supported on image posts (not reels/stories/videos)
+    if (userTags && userTags.length > 0) {
+      body.user_tags = JSON.stringify(userTags.map(t => ({
+        username: t.username,
+        x: Math.max(0, Math.min(1, t.x / 100)),
+        y: Math.max(0, Math.min(1, t.y / 100)),
+      })));
+    }
   }
   return body;
 }
@@ -227,8 +237,8 @@ router.post("/instagram", async (req, res) => {
   const token = process.env.META_ACCESS_TOKEN;
   if (!token) return res.status(500).json({ error: "META_ACCESS_TOKEN not set" });
 
-  const { mediaUrl, imageUrl, caption, postType = "post" } = req.body as {
-    mediaUrl?: string; imageUrl?: string; caption?: string; postType?: "post" | "reel" | "story";
+  const { mediaUrl, imageUrl, caption, postType = "post", userTags } = req.body as {
+    mediaUrl?: string; imageUrl?: string; caption?: string; postType?: "post" | "reel" | "story"; userTags?: IgUserTag[];
   };
   const resolvedMedia = mediaUrl ?? imageUrl;
   if (!resolvedMedia) return res.status(400).json({ error: "mediaUrl required" });
@@ -239,7 +249,7 @@ router.post("/instagram", async (req, res) => {
     if (!igInfo?.id) return res.status(400).json({ error: "Cannot resolve Instagram Business Account ID." });
 
     const mediaIsVideo = !!resolvedMedia.match(/\.(mp4|mov|avi|mkv|webm)(\?|$)/i);
-    const containerBody = buildIgContainer(postType, resolvedMedia, caption, token);
+    const containerBody = buildIgContainer(postType, resolvedMedia, caption, token, userTags);
 
     // Create container (fast — returns in < 3s)
     const createRes = await fetch(`${IG_BASE}/${igInfo.id}/media`, {

@@ -21351,6 +21351,15 @@ let _calYear=new Date().getFullYear();
 let _calMonth=new Date().getMonth();
 let _calDay=null;
 
+// ── IG Photo tagging + hashtag helper state ──
+let _scPhotoTags=[]; // [{username,x,y}] — IG user_tags
+let _scTagMode=false;
+let _scTagPending=null; // {x,y} awaiting username input
+let _scRecentHashtags=JSON.parse(localStorage.getItem('ha3d_recent_hashtags_v1')||'[]');
+let _scHashtagSets=JSON.parse(localStorage.getItem('ha3d_hashtag_sets_v1')||'[]');
+function _saveHashtagSets(){localStorage.setItem('ha3d_hashtag_sets_v1',JSON.stringify(_scHashtagSets));}
+function _saveRecentHashtags(){localStorage.setItem('ha3d_recent_hashtags_v1',JSON.stringify(_scRecentHashtags));}
+
 // Caption templates for common post types
 const SOCIAL_TEMPLATES=[
   {key:'new_drop',label:'🆕 New Drop',
@@ -21397,6 +21406,7 @@ function _renderMediaGrid(){
   }).join('');
   el.innerHTML='<div style="display:flex;gap:6px;flex-wrap:wrap;padding:6px">'+items+'</div>';
   el.style.display='block';
+  scUpdateTagsUI();
 }
 function socialRemoveMedia(idx){
   _scMediaUrls.splice(idx,1);
@@ -21498,9 +21508,338 @@ function _resetComposer(){
   _scMediaUrls=[];
   _scMediaUrl='';
   _scMediaMimes={};
+  _scPhotoTags=[];
+  _scTagPending=null;
+  _scTagMode=false;
   _renderMediaGrid();
   const upEl=document.getElementById('sc-upload-status');
   if(upEl)upEl.textContent='';
+  scUpdateCounters();
+  scUpdateTagsUI();
+}
+
+// ── Caption helpers: counters, @ panel, # panel, hashtag sets ──
+function _countHashtags(text){return (text.match(/#\w+/g)||[]).length;}
+
+function scUpdateCounters(){
+  const cap=(document.getElementById('sc-caption')?document.getElementById('sc-caption').value:'')||'';
+  const tags=(document.getElementById('sc-tags')?document.getElementById('sc-tags').value:'')||'';
+  const charCount=cap.length;
+  const hashCount=_countHashtags(cap+' '+tags);
+  const charEl=document.getElementById('sc-char-counter');
+  const hashEl=document.getElementById('sc-hash-counter');
+  if(charEl){
+    charEl.textContent=charCount.toLocaleString()+' / 2,200';
+    charEl.style.color=charCount>2200?'var(--red)':charCount>1800?'var(--gold)':'var(--txt-d)';
+  }
+  if(hashEl){
+    hashEl.textContent=hashCount+' / 5 #';
+    hashEl.style.color=hashCount>=5?'var(--red)':hashCount>=4?'var(--gold)':'var(--txt-d)';
+  }
+}
+
+function scCaptionInput(el){
+  scUpdateCounters();
+  if(_scPlatform!=='ig')return;
+  const val=el.value||'';
+  const pos=el.selectionStart||val.length;
+  const before=val.substring(0,pos);
+  const lastAt=before.lastIndexOf('@');
+  const lastHash=before.lastIndexOf('#');
+  const lastBreak=Math.max(before.lastIndexOf(' '),before.lastIndexOf('\n'));
+  const atPanel=document.getElementById('sc-at-panel');
+  const hashPanel=document.getElementById('sc-hash-panel');
+  // @ trigger: @ is the most-recent special char and right at cursor
+  if(lastAt>lastHash&&lastAt>lastBreak&&lastAt===before.length-1){
+    if(atPanel)atPanel.style.display='block';
+    if(hashPanel)hashPanel.style.display='none';
+    const inp=document.getElementById('sc-at-inp');
+    if(inp){inp.value='';setTimeout(function(){inp.focus();},30);}
+    return;
+  }
+  // # trigger
+  if(lastHash>lastAt&&lastHash>lastBreak&&lastHash===before.length-1){
+    if(atPanel)atPanel.style.display='none';
+    scShowHashSuggest();
+    return;
+  }
+  if(atPanel)atPanel.style.display='none';
+  if(hashPanel)hashPanel.style.display='none';
+}
+
+function scCaptionKeyDown(event){
+  if(event.key==='Escape'){
+    const ap=document.getElementById('sc-at-panel');const hp=document.getElementById('sc-hash-panel');
+    if(ap)ap.style.display='none';if(hp)hp.style.display='none';
+  }
+}
+
+function scInsertAt(){
+  const inp=document.getElementById('sc-at-inp');
+  const username=(inp?inp.value.trim().replace(/^@+/,''):'');
+  if(!username)return;
+  const capEl=document.getElementById('sc-caption');
+  if(!capEl)return;
+  const pos=capEl.selectionStart||capEl.value.length;
+  const val=capEl.value;
+  const before=val.substring(0,pos);
+  const lastAt=before.lastIndexOf('@');
+  let newVal,newPos;
+  if(lastAt>=0&&lastAt===before.length-1){
+    newVal=val.substring(0,lastAt)+'@'+username+' '+val.substring(pos);
+    newPos=lastAt+username.length+2;
+  }else{
+    newVal=val.substring(0,pos)+'@'+username+' '+val.substring(pos);
+    newPos=pos+username.length+2;
+  }
+  capEl.value=newVal;capEl.setSelectionRange(newPos,newPos);capEl.focus();
+  const ap=document.getElementById('sc-at-panel');if(ap)ap.style.display='none';
+  scUpdateCounters();
+}
+
+function scCloseAtPanel(){
+  const ap=document.getElementById('sc-at-panel');if(ap)ap.style.display='none';
+  document.getElementById('sc-caption')?.focus();
+}
+
+function scShowHashSuggest(){
+  const panel=document.getElementById('sc-hash-panel');
+  const chips=document.getElementById('sc-hash-chips');
+  if(!panel||!chips)return;
+  if(!_scRecentHashtags.length){panel.style.display='none';return;}
+  chips.innerHTML=_scRecentHashtags.slice(0,12).map(function(h){
+    return '<button class="btn btn-ghost btn-xs" style="font-size:7px" onclick="scInsertHash(\''+esc(h)+'\')">'+esc('#'+h.replace(/^#+/,''))+'</button>';
+  }).join('');
+  panel.style.display='block';
+}
+
+function scInsertHash(tag){
+  const capEl=document.getElementById('sc-caption');
+  if(!capEl)return;
+  const pos=capEl.selectionStart||capEl.value.length;
+  const val=capEl.value;
+  const tagsVal=(document.getElementById('sc-tags')?document.getElementById('sc-tags').value:'')||'';
+  if(_countHashtags(val+' '+tagsVal)>=5){
+    toast('Hashtag limit','Instagram allows max 5 hashtags per post (Dec 2025 policy)','warning',3000);
+    const hp=document.getElementById('sc-hash-panel');if(hp)hp.style.display='none';
+    return;
+  }
+  const before=val.substring(0,pos);
+  const lastHash=before.lastIndexOf('#');
+  const insertTag=tag.startsWith('#')?tag:'#'+tag;
+  let newVal,newPos;
+  if(lastHash>=0&&lastHash===before.length-1){
+    newVal=val.substring(0,lastHash)+insertTag+' '+val.substring(pos);
+    newPos=lastHash+insertTag.length+1;
+  }else{
+    const needSpace=pos>0&&val[pos-1]!==' '&&val[pos-1]!=='\n';
+    newVal=val.substring(0,pos)+(needSpace?' ':'')+insertTag+' '+val.substring(pos);
+    newPos=pos+(needSpace?1:0)+insertTag.length+1;
+  }
+  capEl.value=newVal;capEl.setSelectionRange(newPos,newPos);capEl.focus();
+  const hp=document.getElementById('sc-hash-panel');if(hp)hp.style.display='none';
+  const tagClean=insertTag.replace(/^#+/,'');
+  _scRecentHashtags=_scRecentHashtags.filter(function(h){return h!==tagClean;});
+  _scRecentHashtags.unshift(tagClean);
+  if(_scRecentHashtags.length>20)_scRecentHashtags=_scRecentHashtags.slice(0,20);
+  _saveRecentHashtags();
+  scUpdateCounters();
+}
+
+function scCloseHashPanel(){
+  const hp=document.getElementById('sc-hash-panel');if(hp)hp.style.display='none';
+  document.getElementById('sc-caption')?.focus();
+}
+
+function scToggleHashtagSetsPanel(){
+  const panel=document.getElementById('sc-hashtag-sets-panel');
+  if(!panel)return;
+  const open=panel.style.display!=='none';
+  panel.style.display=open?'none':'block';
+  if(!open)scRenderHashtagSetsInComposer();
+}
+
+function scRenderHashtagSetsInComposer(){
+  const el=document.getElementById('sc-sets-list');
+  if(!el)return;
+  if(!_scHashtagSets.length){
+    el.innerHTML='<div style="font-size:8px;color:var(--txt-d);font-style:italic">No sets yet — create one in the Hashtag Sets section below</div>';
+    return;
+  }
+  const cap=(document.getElementById('sc-caption')?document.getElementById('sc-caption').value:'')||'';
+  const tags=(document.getElementById('sc-tags')?document.getElementById('sc-tags').value:'')||'';
+  const cur=_countHashtags(cap+' '+tags);
+  el.innerHTML=_scHashtagSets.map(function(s){
+    const cnt=(s.hashtags||[]).length;
+    const over=cur+cnt>5;
+    return '<div style="display:flex;align-items:center;gap:6px;padding:5px 8px;background:rgba(255,255,255,.04);border-radius:5px">'
+      +'<div style="flex:1;min-width:0">'
+        +'<div style="font-size:8px;color:var(--txt-b);font-weight:600">'+esc(s.name)+'</div>'
+        +'<div style="font-size:7px;color:var(--txt-d);margin-top:1px">'+(s.hashtags||[]).map(function(h){return '#'+h.replace(/^#+/,'');}).join(' ')+'</div>'
+      +'</div>'
+      +(over?'<span style="font-size:6px;color:var(--gold)">would exceed limit</span>':'')
+      +'<button class="btn btn-pur btn-xs" style="font-size:7px;flex-shrink:0" onclick="scInsertHashtagSet(\''+s.id+'\')">Insert</button>'
+    +'</div>';
+  }).join('');
+}
+
+function scInsertHashtagSet(setId){
+  const s=_scHashtagSets.find(function(x){return x.id===setId;});
+  if(!s||!s.hashtags||!s.hashtags.length)return;
+  const capEl=document.getElementById('sc-caption');
+  const tagsEl=document.getElementById('sc-tags');
+  const cap=(capEl?capEl.value:'')||'';
+  const tags=(tagsEl?tagsEl.value:'')||'';
+  const cur=_countHashtags(cap+' '+tags);
+  if(cur+s.hashtags.length>5){
+    toast('Hashtag limit','Inserting "'+s.name+'" would exceed the 5 hashtag limit (would be '+(cur+s.hashtags.length)+')','warning',3500);
+    return;
+  }
+  const tagStr=s.hashtags.map(function(h){return h.startsWith('#')?h:'#'+h;}).join(' ');
+  if(tagsEl){tagsEl.value=(tagsEl.value.trim()?tagsEl.value.trim()+' ':'')+tagStr;}
+  else if(capEl){capEl.value=(capEl.value.trim()?capEl.value.trim()+'\n\n':'')+tagStr;}
+  const hp=document.getElementById('sc-hashtag-sets-panel');if(hp)hp.style.display='none';
+  scUpdateCounters();
+  toast('Set inserted','"'+s.name+'" added to hashtags','success',2000);
+}
+
+// ── Hashtag Sets Settings management ──
+function scRenderHashtagSetsSettings(){
+  const el=document.getElementById('sc-hsets-manage');
+  if(!el)return;
+  if(!_scHashtagSets.length){
+    el.innerHTML='<div style="font-size:8px;color:var(--txt-d);font-style:italic">No sets yet — type a name and click "+ New Set" below</div>';
+    return;
+  }
+  el.innerHTML=_scHashtagSets.map(function(s){
+    const tagStr=(s.hashtags||[]).map(function(h){return '#'+h.replace(/^#+/,'');}).join(' ');
+    return '<div style="background:var(--bg);border:1px solid var(--bdr);border-radius:6px;padding:8px">'
+      +'<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">'
+        +'<div style="flex:1;font-size:9px;font-weight:600;color:var(--txt-b)">'+esc(s.name)+'</div>'
+        +'<span style="font-size:7px;color:var(--txt-d)">'+(s.hashtags||[]).length+'/5</span>'
+        +'<button style="background:transparent;border:1px solid rgba(239,68,68,.3);color:var(--red);font-size:7px;padding:2px 7px;border-radius:4px;cursor:pointer" onclick="scDeleteHashtagSet(\''+s.id+'\')">✕</button>'
+      +'</div>'
+      +'<input placeholder="#tag1 #tag2 … (max 5)" value="'+esc(tagStr)+'" onchange="scUpdateHashtagSetTags(\''+s.id+'\',this.value)" style="width:100%;box-sizing:border-box;background:var(--surf);border:1px solid var(--bdr2);color:var(--txt-b);padding:5px 8px;font-family:\'Share Tech Mono\',monospace;font-size:9px;border-radius:4px"/>'
+    +'</div>';
+  }).join('');
+}
+
+function scCreateHashtagSet(){
+  const inp=document.getElementById('sc-new-hset-name');
+  const name=(inp?inp.value.trim():'');
+  if(!name){toast('Enter a set name','','warning');return;}
+  _scHashtagSets.push({id:uid(),name:name,hashtags:[]});
+  _saveHashtagSets();
+  if(inp)inp.value='';
+  scRenderHashtagSetsSettings();
+  toast('Set created','"'+name+'" — add up to 5 hashtags in the field below it','success',3000);
+}
+
+function scDeleteHashtagSet(setId){
+  showConfirm('Delete hashtag set?','This cannot be undone.',function(){
+    _scHashtagSets=_scHashtagSets.filter(function(s){return s.id!==setId;});
+    _saveHashtagSets();
+    scRenderHashtagSetsSettings();
+    toast('Deleted','','success',1500);
+  });
+}
+
+function scUpdateHashtagSetTags(setId,val){
+  const s=_scHashtagSets.find(function(x){return x.id===setId;});
+  if(!s)return;
+  const tags=(val.match(/#?\w+/g)||[]).map(function(t){return t.replace(/^#+/,'');}).filter(Boolean).slice(0,5);
+  s.hashtags=tags;
+  _saveHashtagSets();
+  scRenderHashtagSetsSettings();
+  toast('Set saved',tags.length+' hashtag'+(tags.length!==1?'s':''),'success',1500);
+}
+
+// ── IG Photo Tagging ──
+function scUpdateTagsUI(){
+  const row=document.getElementById('sc-tag-people-row');
+  const badge=document.getElementById('sc-tag-count-badge');
+  const hasImage=_scMediaUrls.some(function(u){return !_isVideoUrl(u);});
+  if(row)row.style.display=(_scPlatform==='ig'&&hasImage)?'block':'none';
+  if(badge)badge.textContent=_scPhotoTags.length?_scPhotoTags.length+' tagged':'';
+  // Keep tag editor image in sync
+  const tagImg=document.getElementById('sc-tag-img');
+  if(tagImg){
+    const firstImg=_scMediaUrls.find(function(u){return !_isVideoUrl(u);});
+    if(firstImg&&tagImg.getAttribute('src')!==firstImg)tagImg.src=firstImg;
+  }
+  scRenderTagPins();
+}
+
+function scToggleTagEditor(){
+  const editor=document.getElementById('sc-tag-editor');
+  if(!editor)return;
+  const open=editor.style.display!=='none';
+  editor.style.display=open?'none':'block';
+  if(!open){
+    const tagImg=document.getElementById('sc-tag-img');
+    const firstImg=_scMediaUrls.find(function(u){return !_isVideoUrl(u);});
+    if(tagImg&&firstImg)tagImg.src=firstImg;
+    const inpWrap=document.getElementById('sc-tag-inp-wrap');
+    if(inpWrap)inpWrap.style.display='none';
+    _scTagPending=null;
+    scRenderTagPins();
+  }
+}
+
+function scImageTagClick(event){
+  const wrap=document.getElementById('sc-tag-img-wrap');
+  if(!wrap)return;
+  const rect=wrap.getBoundingClientRect();
+  const x=Math.round(((event.clientX-rect.left)/rect.width)*100);
+  const y=Math.round(((event.clientY-rect.top)/rect.height)*100);
+  _scTagPending={x:Math.max(0,Math.min(100,x)),y:Math.max(0,Math.min(100,y))};
+  const inpWrap=document.getElementById('sc-tag-inp-wrap');
+  if(inpWrap)inpWrap.style.display='block';
+  const inp=document.getElementById('sc-tag-inp');
+  if(inp){inp.value='';setTimeout(function(){inp.focus();},30);}
+}
+
+function scConfirmTag(){
+  if(!_scTagPending)return;
+  const inp=document.getElementById('sc-tag-inp');
+  const username=(inp?inp.value.trim().replace(/^@+/,''):'');
+  if(!username){toast('Enter a username','','warning');return;}
+  _scPhotoTags.push({username:username,x:_scTagPending.x,y:_scTagPending.y});
+  _scTagPending=null;
+  const inpWrap=document.getElementById('sc-tag-inp-wrap');
+  if(inpWrap)inpWrap.style.display='none';
+  if(inp)inp.value='';
+  scRenderTagPins();
+  scUpdateTagsUI();
+  toast('@'+username+' tagged','Tap × on the pin to remove','success',2000);
+}
+
+function scCancelTag(){
+  _scTagPending=null;
+  const inpWrap=document.getElementById('sc-tag-inp-wrap');
+  if(inpWrap)inpWrap.style.display='none';
+}
+
+function scRemovePhotoTag(idx){
+  _scPhotoTags.splice(idx,1);
+  scRenderTagPins();
+  scUpdateTagsUI();
+}
+
+function scRenderTagPins(){
+  const el=document.getElementById('sc-tag-pins');
+  if(!el)return;
+  el.innerHTML=_scPhotoTags.map(function(t,i){
+    return '<div style="position:absolute;left:'+t.x+'%;top:'+t.y+'%;transform:translate(-50%,-50%);pointer-events:auto;z-index:2">'
+      +'<div style="position:relative;display:flex;flex-direction:column;align-items:center">'
+        +'<div style="background:rgba(0,0,0,0.78);color:#fff;font-size:7px;padding:2px 6px;border-radius:10px;white-space:nowrap;display:flex;align-items:center;gap:3px;backdrop-filter:blur(4px)">'
+          +'@'+esc(t.username)
+          +'<button onclick="event.stopPropagation();scRemovePhotoTag('+i+')" style="background:none;border:none;color:rgba(255,255,255,.65);font-size:9px;cursor:pointer;padding:0 0 0 2px;line-height:1">×</button>'
+        +'</div>'
+        +'<div style="width:5px;height:5px;border-radius:50%;background:rgba(255,255,255,.9);border:1.5px solid rgba(0,0,0,.35);margin-top:2px"></div>'
+      +'</div>'
+    +'</div>';
+  }).join('');
 }
 
 // ── Post to Instagram ──
@@ -21518,7 +21857,7 @@ async function postToInstagram(postId){
     // Step 1: create container (fast for all types)
     const res=await fetch('/api/social/instagram',{
       method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({mediaUrl:media,caption:p.caption||'',postType:p.postType||'post'})
+      body:JSON.stringify({mediaUrl:media,caption:p.caption||'',postType:p.postType||'post',userTags:p.userTags||undefined})
     });
     const json=await _igSafeJson(res);
     if(!res.ok||json.error){
@@ -21597,7 +21936,16 @@ function _buildNewPost(status,schedFor){
   if(!cap&&_scPostType!=='story'){toast('Add a caption first','','error');return null;}
   if(!media){toast('Add media first','Pick from gallery or paste a URL','error');return null;}
   const fullCaption=tags?cap+'\n\n'+tags:cap;
-  return {id:uid(),caption:fullCaption,mediaUrl:media,mediaUrls:allUrls,postType:_scPostType,addToStory:_scAddStory,platform:_scPlatform,scheduledFor:schedFor||null,status:status,createdAt:Date.now()};
+  // Save any hashtags from this post to recent list
+  const hashMatches=(fullCaption.match(/#\w+/g)||[]);
+  hashMatches.forEach(function(h){
+    const tag=h.replace(/^#+/,'');
+    _scRecentHashtags=_scRecentHashtags.filter(function(r){return r!==tag;});
+    _scRecentHashtags.unshift(tag);
+  });
+  if(_scRecentHashtags.length>20)_scRecentHashtags=_scRecentHashtags.slice(0,20);
+  _saveRecentHashtags();
+  return {id:uid(),caption:fullCaption,mediaUrl:media,mediaUrls:allUrls,postType:_scPostType,addToStory:_scAddStory,platform:_scPlatform,userTags:_scPhotoTags.length?_scPhotoTags.slice():undefined,scheduledFor:schedFor||null,status:status,createdAt:Date.now()};
 }
 let _postNowLock=false;
 async function socialPostNow(){
@@ -22005,13 +22353,37 @@ function renderSocial(){
           +'</div>'
         +'</div>'
       +'</div>'
-      // Caption
+      // Caption (@ mention + # helper + live counters)
       +'<div style="margin-bottom:8px">'
         +'<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">'
           +'<div style="font-size:7px;color:var(--txt-d);letter-spacing:1px">CAPTION</div>'
           +'<span id="sc-caption-hint" style="font-size:7px;color:var(--txt-d)"></span>'
         +'</div>'
-        +'<textarea id="sc-caption" rows="4" placeholder="Write your caption… or pick a template above" style="width:100%;box-sizing:border-box;background:rgba(0,0,0,0.3);border:1px solid var(--bdr);color:var(--txt-b);font-family:\'Share Tech Mono\',monospace;font-size:9px;padding:8px 10px;border-radius:6px;resize:vertical;line-height:1.5"></textarea>'
+        +'<textarea id="sc-caption" rows="4" placeholder="Write your caption… or pick a template above" oninput="scCaptionInput(this)" onkeydown="scCaptionKeyDown(event)" style="width:100%;box-sizing:border-box;background:rgba(0,0,0,0.3);border:1px solid var(--bdr);color:var(--txt-b);font-family:\'Share Tech Mono\',monospace;font-size:9px;padding:8px 10px;border-radius:6px;resize:vertical;line-height:1.5"></textarea>'
+        +'<div id="sc-at-panel" style="display:none;background:var(--surf);border:1px solid rgba(130,80,255,.4);border-radius:6px;padding:8px;margin-top:4px">'
+          +'<div style="font-size:7px;color:var(--pur);font-weight:700;margin-bottom:6px">Insert @username in caption</div>'
+          +'<div style="display:flex;gap:6px;align-items:center">'
+            +'<span style="font-size:11px;color:var(--pur);font-weight:700">@</span>'
+            +'<input id="sc-at-inp" placeholder="username" autocorrect="off" autocapitalize="none" style="flex:1;background:var(--bg);border:1px solid var(--bdr2);color:var(--txt-b);padding:5px 8px;font-family:\'Share Tech Mono\',monospace;font-size:9px;border-radius:4px" onkeydown="if(event.key===\'Enter\'){scInsertAt();event.preventDefault();}">'
+            +'<button class="btn btn-pur btn-xs" onclick="scInsertAt()">Insert</button>'
+            +'<button class="btn btn-ghost btn-xs" onclick="scCloseAtPanel()">✕</button>'
+          +'</div>'
+        +'</div>'
+        +'<div id="sc-hash-panel" style="display:none;background:var(--surf);border:1px solid rgba(139,92,246,.25);border-radius:6px;padding:7px;margin-top:4px">'
+          +'<div style="font-size:7px;color:var(--txt-d);font-weight:600;margin-bottom:5px">Recent hashtags — tap to insert</div>'
+          +'<div id="sc-hash-chips" style="display:flex;flex-wrap:wrap;gap:4px"></div>'
+          +'<button class="btn btn-ghost btn-xs" style="margin-top:5px;font-size:7px" onclick="scCloseHashPanel()">Close</button>'
+        +'</div>'
+        +'<div style="display:flex;align-items:center;gap:8px;margin-top:5px;flex-wrap:wrap">'
+          +'<span id="sc-char-counter" style="font-size:7px;color:var(--txt-d)">0 / 2,200</span>'
+          +'<span style="font-size:7px;color:var(--txt-d)">·</span>'
+          +'<span id="sc-hash-counter" style="font-size:7px;color:var(--txt-d)">0 / 5 #</span>'
+          +'<div style="flex:1"></div>'
+          +'<button class="btn btn-ghost btn-xs" style="font-size:7px" onclick="scToggleHashtagSetsPanel()">📋 Hashtag Sets</button>'
+        +'</div>'
+        +'<div id="sc-hashtag-sets-panel" style="display:none;background:var(--surf);border:1px solid var(--bdr);border-radius:6px;padding:8px;margin-top:6px">'
+          +'<div id="sc-sets-list" style="display:flex;flex-direction:column;gap:4px;margin-bottom:6px"></div>'
+        +'</div>'
       +'</div>'
       // Media picker
       +'<div style="margin-bottom:8px">'
@@ -22025,12 +22397,32 @@ function renderSocial(){
           +'<span id="sc-upload-status" style="font-size:7px;color:var(--cyn)"></span>'
         +'</div>'
         +'<input class="srch" id="sc-media-url" placeholder="https://… publicly accessible image or video URL" style="width:100%;box-sizing:border-box;margin-bottom:6px"/>'
-        +'<div id="sc-media-preview" style="display:none;border-radius:8px;overflow:hidden;border:1px solid var(--bdr);max-height:200px"></div>'
+        +'<div id="sc-media-preview" style="display:none;border-radius:8px;overflow:hidden;border:1px solid var(--bdr)"></div>'
+        +'<div id="sc-tag-people-row" style="display:none;margin-top:6px">'
+          +'<button class="btn btn-ghost btn-sm" style="font-size:8px" onclick="scToggleTagEditor()">👤 Tag People</button>'
+          +'<span id="sc-tag-count-badge" style="font-size:7px;color:var(--pur);margin-left:8px"></span>'
+        +'</div>'
+        +'<div id="sc-tag-editor" style="display:none;margin-top:8px;background:var(--surf);border:1px solid rgba(130,80,255,.25);border-radius:8px;padding:10px">'
+          +'<div style="font-size:7px;color:var(--cyn);margin-bottom:6px">Click the image to place a tag · Tags appear on Instagram</div>'
+          +'<div id="sc-tag-img-wrap" style="position:relative;display:inline-block;cursor:crosshair;max-width:100%" onclick="scImageTagClick(event)">'
+            +'<img id="sc-tag-img" src="" style="max-width:100%;border-radius:6px;display:block;pointer-events:none"/>'
+            +'<div id="sc-tag-pins" style="position:absolute;inset:0;pointer-events:none"></div>'
+          +'</div>'
+          +'<div id="sc-tag-inp-wrap" style="display:none;margin-top:8px">'
+            +'<div style="font-size:7px;color:var(--txt-d);margin-bottom:4px">Tag username at this position:</div>'
+            +'<div style="display:flex;gap:6px;align-items:center">'
+              +'<span style="font-size:11px;color:var(--pur);font-weight:700">@</span>'
+              +'<input id="sc-tag-inp" placeholder="username" autocorrect="off" autocapitalize="none" style="flex:1;background:var(--bg);border:1px solid var(--bdr2);color:var(--txt-b);padding:5px 8px;font-family:\'Share Tech Mono\',monospace;font-size:9px;border-radius:4px" onkeydown="if(event.key===\'Enter\'){scConfirmTag();event.preventDefault();}">'
+              +'<button class="btn btn-pur btn-xs" onclick="scConfirmTag()">Tag</button>'
+              +'<button class="btn btn-ghost btn-xs" onclick="scCancelTag()">Cancel</button>'
+            +'</div>'
+          +'</div>'
+        +'</div>'
       +'</div>'
       // Hashtags
       +'<div style="margin-bottom:10px">'
         +'<div style="font-size:7px;color:var(--txt-d);letter-spacing:1px;margin-bottom:4px">HASHTAGS</div>'
-        +'<input class="srch" id="sc-tags" placeholder="#3dprinting #hypedanubis3d #pokemon3d…" style="width:100%;box-sizing:border-box"/>'
+        +'<input class="srch" id="sc-tags" oninput="scUpdateCounters()" placeholder="#3dprinting #hypedanubis3d #pokemon3d…" style="width:100%;box-sizing:border-box"/>'
       +'</div>'
       
       // Post Now / Schedule toggle
@@ -22085,10 +22477,21 @@ function renderSocial(){
     +'</div>':'')
 
     // ── POSTED HISTORY ──
-    +(posted.length?'<div class="printer-card">'
+    +(posted.length?'<div class="printer-card" style="margin-bottom:8px">'
       +'<div style="font-family:\'Orbitron\',monospace;font-size:9px;font-weight:700;color:var(--grn);letter-spacing:2px;margin-bottom:10px">POSTED ('+posted.length+')</div>'
       +postedCards
-    +'</div>':'');
+    +'</div>':'')
+
+    // ── HASHTAG SETS SETTINGS ──
+    +'<div class="printer-card">'
+      +'<div style="font-family:\'Orbitron\',monospace;font-size:9px;font-weight:700;color:var(--txt-d);letter-spacing:2px;margin-bottom:12px">⚙ HASHTAG SETS</div>'
+      +'<div style="font-size:8px;color:var(--txt-d);margin-bottom:8px">Create named hashtag sets (max 5 tags each) for quick insertion into your posts.</div>'
+      +'<div id="sc-hsets-manage" style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px"></div>'
+      +'<div style="display:flex;gap:6px">'
+        +'<input id="sc-new-hset-name" placeholder="Set name (e.g. Creature Balls)" class="srch" style="flex:1"/>'
+        +'<button class="btn btn-ghost" style="font-size:8px" onclick="scCreateHashtagSet()">+ New Set</button>'
+      +'</div>'
+    +'</div>';
 
   // Restore composer button states
   socialSetType(_scPostType);
@@ -22102,6 +22505,10 @@ function renderSocial(){
     _scMediaUrls=[_scMediaUrl];
     _renderMediaGrid();
   }
+  // Restore IG-specific UI and counters
+  scUpdateTagsUI();
+  scUpdateCounters();
+  scRenderHashtagSetsSettings();
 
   // Async API status badge
   checkSocialApiStatus().then(function(s){
