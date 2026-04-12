@@ -23999,20 +23999,23 @@ function posShowReceipt(sale){
 
       (stack.slots || []).forEach(function(slot) {
         var layerCount = Math.max(1, (slot.layerEnd||1) - (slot.layerStart||0));
-        var slabH = layerCount * lh;
-        var geo = new THREE.BoxGeometry(printMM, slabH, printMM);
+        var slabZ = layerCount * lh;
+        // Slab: X=printMM wide, Y=printMM tall, Z=slabZ thin — stacked along Z
+        var geo = new THREE.BoxGeometry(printMM, printMM, slabZ);
         var mat = new THREE.MeshPhongMaterial({ color: new THREE.Color(slot.hex || '#888888'), shininess: 40 });
         var mesh = new THREE.Mesh(geo, mat);
-        mesh.position.set(0, zCursor + slabH/2, 0);
-        zCursor += slabH;
+        mesh.position.set(0, 0, zCursor + slabZ/2);
+        zCursor += slabZ;
         group.add(mesh);
       });
 
-      var totalH = zCursor;
-      group.position.set(0, -totalH/2, 0);
+      var totalZ = zCursor;
+      // Centre the stack at the origin so it sits in the camera's view
+      group.position.set(0, 0, -totalZ/2);
       scene.add(group);
 
-      var rotY = 0.5, rotX = 0.35;
+      // Initial angle: tilt so the top face is visible (~45° above isometric view)
+      var rotY = 0.5, rotX = -0.55;
       group.rotation.y = rotY;
       group.rotation.x = rotX;
 
@@ -24406,9 +24409,9 @@ function posShowReceipt(sale){
         '</Relationships>';
 
       // ── 3D/3dmodel.model ──────────────────────────────────────────────────
-      // basematerials: one <base> per filament slot (solid displaycolor)
-      var baseMats = slots.map(function(s, i) {
-        return '      <base name="' + escXml(s.colorName||'Slot'+(i+1)) + '" displaycolor="' + (s.hex||'#888888') + '"/>';
+      // One <material> element per slot — Bambu Studio reads materialid on each object
+      var matDefs = slots.map(function(s, i) {
+        return '    <material id="' + (i+1) + '" name="' + escXml(s.colorName||'Slot'+(i+1)) + '" displaycolor="' + (s.hex||'#888888') + '"/>';
       }).join('\n');
 
       // One <object> per slab — each is a rectangular prism
@@ -24418,33 +24421,33 @@ function posShowReceipt(sale){
 
       slots.forEach(function(slot, i) {
         var layerCount = Math.max(1, (slot.layerEnd||1) - (slot.layerStart||0));
-        var slabH = layerCount * lh;
-        var objId = i + 2; // IDs: 1=basematerials, 2+ = objects
+        var slabZ = layerCount * lh;
+        var objId = i + 10; // object IDs start at 10; material IDs are 1-based
 
-        // Box: centered on XZ plane, stacked upward on Y axis
-        var ox = -half, oy = zCursor, oz = -half;
-        var w = printMM, h = slabH, d = printMM;
+        // Slab: X=printMM wide, Y=printMM tall, Z=slabZ thin — stacked along Z
+        var ox = -half, oy = -half, oz = zCursor;
+        var w = printMM, h = printMM, d = slabZ;
 
         // 8 vertices of the rectangular prism
         var verts = [
-          [ox,   oy,   oz  ], // 0: left  bottom front
-          [ox+w, oy,   oz  ], // 1: right bottom front
-          [ox+w, oy+h, oz  ], // 2: right top    front
-          [ox,   oy+h, oz  ], // 3: left  top    front
-          [ox,   oy,   oz+d], // 4: left  bottom back
-          [ox+w, oy,   oz+d], // 5: right bottom back
-          [ox+w, oy+h, oz+d], // 6: right top    back
-          [ox,   oy+h, oz+d], // 7: left  top    back
+          [ox,   oy,   oz  ], // 0
+          [ox+w, oy,   oz  ], // 1
+          [ox+w, oy+h, oz  ], // 2
+          [ox,   oy+h, oz  ], // 3
+          [ox,   oy,   oz+d], // 4
+          [ox+w, oy,   oz+d], // 5
+          [ox+w, oy+h, oz+d], // 6
+          [ox,   oy+h, oz+d], // 7
         ];
 
-        // 12 triangles — outward CCW normals (verified per face)
+        // 12 triangles — outward CCW normals
         var tris = [
-          [0,2,1],[0,3,2], // front  (−Z)
-          [5,7,4],[5,6,7], // back   (+Z)
-          [4,3,0],[4,7,3], // left   (−X)
-          [1,2,6],[1,6,5], // right  (+X)
-          [0,1,5],[0,5,4], // bottom (−Y)
-          [3,7,6],[3,6,2], // top    (+Y)
+          [0,2,1],[0,3,2], // front  (−Z face)
+          [5,7,4],[5,6,7], // back   (+Z face)
+          [4,3,0],[4,7,3], // left   (−X face)
+          [1,2,6],[1,6,5], // right  (+X face)
+          [0,1,5],[0,5,4], // bottom (−Y face)
+          [3,7,6],[3,6,2], // top    (+Y face)
         ];
 
         var vertXml = verts.map(function(v) {
@@ -24456,7 +24459,7 @@ function posShowReceipt(sale){
         }).join('\n');
 
         objects +=
-          '    <object id="' + objId + '" type="model" name="' + escXml((slot.colorName||'Slot'+(i+1)).replace(/\s+/g,'_')) + '" pid="1" pindex="' + i + '">\n' +
+          '    <object id="' + objId + '" type="model" materialid="' + (i+1) + '" name="' + escXml((slot.colorName||'Slot'+(i+1)).replace(/\s+/g,'_')) + '">\n' +
           '      <mesh>\n' +
           '        <vertices>\n' + vertXml + '\n        </vertices>\n' +
           '        <triangles>\n' + triXml + '\n        </triangles>\n' +
@@ -24464,7 +24467,7 @@ function posShowReceipt(sale){
           '    </object>\n';
 
         buildItems += '    <item objectid="' + objId + '"/>\n';
-        zCursor += slabH;
+        zCursor += slabZ;
       });
 
       var model =
@@ -24472,7 +24475,7 @@ function posShowReceipt(sale){
         '<model unit="millimeter" xml:lang="en-US"\n' +
         '  xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">\n' +
         '  <resources>\n' +
-        '    <basematerials id="1">\n' + baseMats + '\n    </basematerials>\n' +
+        matDefs + '\n' +
         objects +
         '  </resources>\n' +
         '  <build>\n' + buildItems + '  </build>\n' +

@@ -95,37 +95,41 @@ async function build3MF(slots: Slot[], printMM: number, lh: number): Promise<Blo
   <Relationship Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel" Target="/3D/3dmodel.model" Id="rel0"/>
 </Relationships>`;
 
-  const baseMats = slots.map(s =>
-    `      <base name="${escXml(s.colorName || 'Slot' + s.slot)}" displaycolor="${s.hex || '#888'}"/>`
+  // One <material> element per slot — Bambu Studio reads materialid on each object
+  const materialsXml = slots.map((s, i) =>
+    `    <material id="${i + 1}" name="${escXml(s.colorName || 'Slot' + (i + 1))}" displaycolor="${s.hex || '#888888'}"/>`
   ).join('\n');
 
   let objectsXml = '', buildItems = '', zCursor = 0;
   slots.forEach((slot, i) => {
     const layerCount = Math.max(1, (slot.layerEnd || 1) - (slot.layerStart || 0));
-    const h = layerCount * lh;
-    const ox = -half, oy = zCursor, oz = -half, w = printMM, d = printMM;
+    const slabZ = layerCount * lh;
+    // Slab: X=printMM wide, Y=printMM tall, Z=slabZ thin — stacked along Z axis
+    const ox = -half, oy = -half, oz = zCursor, w = printMM, h = printMM, d = slabZ;
     const v = [
-      [ox, oy, oz], [ox+w, oy, oz], [ox+w, oy+h, oz], [ox, oy+h, oz],
-      [ox, oy, oz+d], [ox+w, oy, oz+d], [ox+w, oy+h, oz+d], [ox, oy+h, oz+d],
+      [ox,   oy,   oz  ], [ox+w, oy,   oz  ], [ox+w, oy+h, oz  ], [ox,   oy+h, oz  ],
+      [ox,   oy,   oz+d], [ox+w, oy,   oz+d], [ox+w, oy+h, oz+d], [ox,   oy+h, oz+d],
     ];
     const t = [[0,2,1],[0,3,2],[5,7,4],[5,6,7],[4,3,0],[4,7,3],[1,2,6],[1,6,5],[0,1,5],[0,5,4],[3,7,6],[3,6,2]];
     const vx = v.map(p => `            <vertex x="${p[0].toFixed(4)}" y="${p[1].toFixed(4)}" z="${p[2].toFixed(4)}"/>`).join('\n');
     const tx = t.map(p => `            <triangle v1="${p[0]}" v2="${p[1]}" v3="${p[2]}"/>`).join('\n');
-    objectsXml += `    <object id="${i+2}" type="model" name="${escXml(slot.colorName||'Slot'+slot.slot)}" pid="1" pindex="${i}">
+    const materialId = i + 1;
+    const objId = i + 10;
+    objectsXml += `    <object id="${objId}" type="model" materialid="${materialId}" name="${escXml(slot.colorName || 'Slot' + (i + 1))}">
       <mesh>
         <vertices>\n${vx}\n        </vertices>
         <triangles>\n${tx}\n        </triangles>
       </mesh>
     </object>\n`;
-    buildItems += `    <item objectid="${i+2}"/>\n`;
-    zCursor += h;
+    buildItems += `    <item objectid="${objId}"/>\n`;
+    zCursor += slabZ;
   });
 
   const model = `<?xml version="1.0" encoding="UTF-8"?>
 <model unit="millimeter" xml:lang="en-US"
   xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
   <resources>
-    <basematerials id="1">\n${baseMats}\n    </basematerials>
+${materialsXml}
 ${objectsXml}  </resources>
   <build>\n${buildItems}  </build>
 </model>`;
@@ -322,31 +326,35 @@ export function ForgeStudio() {
     container.appendChild(renderer.domElement);
 
     const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(35, w / h, 0.1, 2000);
-    camera.position.set(160, 130, 200);
+    const camera = new THREE.PerspectiveCamera(40, w / h, 0.1, 2000);
 
     scene.add(new THREE.AmbientLight(0xffffff, 0.6));
     const dl = new THREE.DirectionalLight(0xffffff, 0.8);
-    dl.position.set(100, 200, 100); scene.add(dl);
+    dl.position.set(1, 2, 3); scene.add(dl);
 
     const printMM = parseFloat((stack.recommendedPrintSize || '120mm').replace(/[^0-9.]/g, '')) || 120;
     const lh = parseFloat(stack.layerHeight || '0.10') || 0.10;
+    // Slabs: X=printMM wide, Y=printMM tall, Z=slabThickness — stacked along Z
     let zCursor = 0;
     liveSlots.forEach(slot => {
       const layerCount = Math.max(1, (slot.layerEnd || 1) - (slot.layerStart || 0));
-      const slabH = layerCount * lh;
-      const geo = new THREE.BoxGeometry(printMM, slabH, printMM);
+      const slabZ = layerCount * lh;
+      const geo = new THREE.BoxGeometry(printMM, printMM, slabZ);
       const mat = new THREE.MeshLambertMaterial({ color: new THREE.Color(slot.hex || '#888') });
       const mesh = new THREE.Mesh(geo, mat);
-      mesh.position.set(0, zCursor + slabH / 2, 0);
+      mesh.position.set(0, 0, zCursor + slabZ / 2);
       scene.add(mesh);
-      zCursor += slabH;
+      zCursor += slabZ;
     });
 
-    camera.lookAt(0, zCursor / 2, 0);
+    // Camera at ~45° above-and-to-the-side looking at the centre of the stack
+    const totalZ = zCursor;
+    const camDist = Math.max(printMM * 1.5, 80);
+    const midZ = totalZ / 2;
+    camera.position.set(camDist, camDist, midZ + camDist);
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true; controls.dampingFactor = 0.1;
-    controls.target.set(0, zCursor / 2, 0); controls.update();
+    controls.target.set(0, 0, midZ); controls.update();
 
     let animId: number;
     function animate() { animId = requestAnimationFrame(animate); controls.update(); renderer.render(scene, camera); }
