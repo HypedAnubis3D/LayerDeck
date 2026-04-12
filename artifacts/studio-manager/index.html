@@ -22816,9 +22816,7 @@ function posShowReceipt(sale){
     var fab=document.getElementById('_anubis-fab');
     if(_panelOpen){
       panel.classList.add('open');
-      fab.style.background='#0a0f1a';
-      fab.querySelector('.fab-icon').style.color='#C9A84C';
-      fab.querySelector('.fab-lbl').style.color='#C9A84C';
+      fab.style.display='none';
       setTimeout(function(){document.getElementById('_anubis-input').focus();},120);
       // Show welcome if empty
       if(document.getElementById('_anubis-msgs').children.length===0){
@@ -22826,9 +22824,7 @@ function posShowReceipt(sale){
       }
     }else{
       panel.classList.remove('open');
-      fab.style.background='linear-gradient(135deg,#C9A84C,#a07830)';
-      fab.querySelector('.fab-icon').style.color='#0a0f1a';
-      fab.querySelector('.fab-lbl').style.color='#0a0f1a';
+      fab.style.display='';
     }
   };
   window._anubisClose=function(){if(_panelOpen)_anubisToggle();};
