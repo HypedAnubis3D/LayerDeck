@@ -3497,15 +3497,10 @@ header{
     <div style="font-size:7px;color:var(--txt-d);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:5px">Linked Print Jobs <span style="color:var(--txt-d);font-weight:400;text-transform:none;letter-spacing:0">(one per plate)</span></div>
     <div id="eo-linked-prints-list" style="display:flex;flex-direction:column;gap:4px;margin-bottom:7px"></div>
     <!-- Add print row -->
-    <div style="position:relative;margin-bottom:5px">
-      <div style="display:flex;gap:5px;align-items:center">
-        <input type="text" id="eo-print-search" placeholder="🔍 Search prints…" autocomplete="off"
-          oninput="filterOrderPrintSearch()" onfocus="filterOrderPrintSearch()"
-          class="srch" style="flex:1;outline:none;min-width:0"/>
-        <input type="hidden" id="eo-print-selected-id"/>
-        <button type="button" onclick="addLinkedPrint()" style="flex-shrink:0;background:var(--surf);border:1px solid var(--gold);color:var(--gold);padding:6px 10px;font-size:9px;font-weight:700;border-radius:6px;cursor:pointer;white-space:nowrap">+ Add</button>
-      </div>
-      <div id="eo-print-results" style="display:none;position:absolute;left:0;right:52px;top:calc(100% + 2px);z-index:999;background:var(--surf2);border:1px solid var(--bdr2);border-radius:8px;max-height:200px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,.6)"></div>
+    <div style="margin-bottom:5px">
+      <input type="text" id="eo-print-search" placeholder="🔍 Tap to search & add a print…" readonly
+        onclick="openOrderPrintPicker()" onfocus="this.blur();openOrderPrintPicker()"
+        class="srch" style="width:100%;box-sizing:border-box;cursor:pointer;outline:none"/>
     </div>
     <div style="margin-bottom:10px">
       <button type="button" onclick="openOrderGroupPicker()" style="width:100%;background:rgba(100,100,200,0.08);border:1px dashed rgba(130,80,255,0.4);color:var(--pur);padding:6px 10px;font-size:8px;font-weight:600;border-radius:6px;cursor:pointer;text-align:left">📁 Attach Print Group — bulk-add all prints from a group</button>
@@ -4066,45 +4061,32 @@ function calcOrderCost(o){
 }
 // ── Working state for the order modal's linked prints list ──
 let _linkedPrintIds=[];
-// Reset the print search when opening the modal
+// Reset the print search trigger when opening the modal
 function populateOrderPrintDropdown(){
   const inp=document.getElementById('eo-print-search');
-  const hid=document.getElementById('eo-print-selected-id');
-  const res=document.getElementById('eo-print-results');
   if(inp)inp.value='';
-  if(hid)hid.value='';
-  if(res)res.style.display='none';
 }
-// Live-filter prints and show dropdown
-function filterOrderPrintSearch(){
-  const inp=document.getElementById('eo-print-search');
-  const hid=document.getElementById('eo-print-selected-id');
-  const res=document.getElementById('eo-print-results');
-  if(!inp||!res)return;
-  // Clear selection when typing
-  hid.value='';
-  inp.style.borderColor='var(--bdr2)';
-  const q=(inp.value||'').toLowerCase().trim();
+// Open the shared picker modal to select a print to link
+function openOrderPrintPicker(){
   const pool=[...prints].sort(function(a,b){return(b.timestamp||0)-(a.timestamp||0);});
-  const matches=q?pool.filter(function(p){return(p.name+' '+(p.printer||'')+(p.category||'')).toLowerCase().includes(q);}):pool.slice(0,30);
-  if(!matches.length){res.style.display='none';return;}
-  res.style.display='block';
-  res.innerHTML=matches.map(function(p){
+  const items=pool.map(function(p){
     const sub=(p.printer||'')+(p.hrs?' · '+formatHms(p.hrs):'');
-    return'<div data-pid="'+p.id+'" onclick="selectOrderPrint(\''+p.id+'\',\''+esc(p.name).replace(/'/g,'\\\'')+'\')" style="padding:9px 12px;cursor:pointer;border-bottom:1px solid var(--bdr);transition:background .1s;font-family:\'Plus Jakarta Sans\',sans-serif" onmouseover="this.style.background=\'rgba(255,255,255,.06)\'" onmouseout="this.style.background=\'\'">'+
-      '<div style="font-size:11px;color:var(--txt-b);font-weight:600">'+esc(p.name)+'</div>'+
-      (sub?'<div style="font-size:9px;color:var(--txt-d);margin-top:2px">'+esc(sub)+'</div>':'')+
-    '</div>';
-  }).join('');
-}
-function selectOrderPrint(id,name){
-  const inp=document.getElementById('eo-print-search');
-  const hid=document.getElementById('eo-print-selected-id');
-  const res=document.getElementById('eo-print-results');
-  if(inp)inp.value=name;
-  if(hid)hid.value=id;
-  if(res)res.style.display='none';
-  if(inp)inp.style.borderColor='var(--gold-dim)';
+    const statusMeta=p.status==='printing'?'▶ Printing':p.status==='done'?'✓ Done':p.status==='failed'?'✕ Failed':'';
+    return{id:p.id,label:p.name||'Untitled',sublabel:sub,meta:statusMeta,imageIcon:'🖨'};
+  });
+  openPicker({
+    title:'Select Print to Link',
+    mode:'list',
+    items:items,
+    selectedId:'',
+    onSelect:function(id){
+      if(!id)return;
+      if(_linkedPrintIds.includes(id)){toast('Already Added','This print is already linked to this order','info');return;}
+      _linkedPrintIds.push(id);
+      renderLinkedPrintsList();
+      updateOrderCostFields();
+    }
+  });
 }
 // Render the linked-prints chip list inside the modal
 function renderLinkedPrintsList(){
@@ -4130,20 +4112,6 @@ function renderLinkedPrintsList(){
       +'<button type="button" onclick="removeLinkedPrint(\''+id+'\')" style="background:transparent;border:none;color:var(--txt-d);font-size:14px;cursor:pointer;padding:0 2px;line-height:1;flex-shrink:0">&times;</button>'
     +'</div>';
   }).join('');
-}
-// Add the currently selected print to the linked list
-function addLinkedPrint(){
-  const hid=document.getElementById('eo-print-selected-id');
-  const inp=document.getElementById('eo-print-search');
-  if(!hid||!hid.value){toast('No Print Selected','Type to search and tap a print first','info');return;}
-  const pid=hid.value;
-  if(_linkedPrintIds.includes(pid)){toast('Already Added','This print is already linked to this order','info');return;}
-  _linkedPrintIds.push(pid);
-  if(hid)hid.value='';
-  if(inp){inp.value='';inp.style.borderColor='var(--bdr2)';}
-  document.getElementById('eo-print-results').style.display='none';
-  renderLinkedPrintsList();
-  updateOrderCostFields();
 }
 // Remove a print from the linked list
 function removeLinkedPrint(pid){
