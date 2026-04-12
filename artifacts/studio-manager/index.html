@@ -7407,10 +7407,7 @@ function addOrderItemRow(type,item,cid){
   if(type==='catalog'){
     const prefillName=item&&item.name?esc(item.name):'';
     const prefillCatId=item&&item._catalogId?item._catalogId:'';
-    row.innerHTML='<div class="oi-cat-wrap">'
-      +'<input type="text" class="oir-name oir-cat-inp" placeholder="Search catalog…" value="'+prefillName+'" data-cat-id="'+prefillCatId+'" oninput="filterCatSearch(\''+id+'\')" onfocus="filterCatSearch(\''+id+'\')" autocomplete="off">'
-      +'<div class="oi-cat-results" id="oi-res-'+id+'" style="display:none"></div>'
-      +'</div>'
+    row.innerHTML='<input type="text" class="oir-name oir-cat-inp srch" placeholder="🔍 Tap to search catalog…" value="'+prefillName+'" data-cat-id="'+prefillCatId+'" readonly onclick="openCatalogPicker(\''+id+'\')" onfocus="this.blur();openCatalogPicker(\''+id+'\')" style="cursor:pointer;min-width:0;flex:1">'
       +'<input class="oir-qty" type="number" min="1" value="'+qty+'" oninput="'+updCall+'">'
       +'<input class="oir-price" type="number" min="0" step="0.01" value="'+priceVal+'" placeholder="0.00" oninput="'+updCall+'">'
       +'<button class="oi-rm" onclick="removeOrderItemRow(\''+id+'\',\''+cid+'\')">✕</button>';
@@ -7458,10 +7455,18 @@ function selectCatResult(rowId,catalogId){
   inp.value=cat.name;
   inp.dataset.catId=catalogId;
   if(priceInp)priceInp.value=parseFloat(cat.price||0).toFixed(2);
-  const res=document.getElementById('oi-res-'+rowId);
-  if(res)res.style.display='none';
   const cid=row.parentElement?row.parentElement.id:'eo-item-rows';
   updateOrderItemsTotal(cid);
+}
+function openCatalogPicker(rowId){
+  const row=document.getElementById('oir-'+rowId);
+  const currentCatId=row?row.querySelector('.oir-cat-inp')?.dataset.catId||'':'';
+  const tmfMap={};tmfLib.forEach(function(t){tmfMap[t.id]=t;});
+  const items=catalogItems.map(function(c){
+    const tmfName=c.tmfId&&tmfMap[c.tmfId]?(tmfMap[c.tmfId].name||''):'';
+    return{id:c.id,label:c.name||'Untitled',sublabel:c.category||'',meta:'$'+parseFloat(c.price||0).toFixed(2),tags:tmfName};
+  });
+  openPicker({title:'Select Catalog Item',mode:'list',items:items,selectedId:currentCatId,onSelect:function(id){if(id)selectCatResult(rowId,id);}});
 }
 function removeOrderItemRow(rowId,cid){
   const row=document.getElementById('oir-'+rowId);
