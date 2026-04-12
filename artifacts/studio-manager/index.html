@@ -2910,7 +2910,7 @@ header{
     <div class="evt-section" id="esec-packlist">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
         <div style="font-size:9px;color:var(--txt-b);font-weight:bold">In-Person Catalog</div>
-        <button class="btn btn-pur btn-sm" onclick="openCatalogPicker()">+ From Catalog</button>
+        <button class="btn btn-pur btn-sm" onclick="openEventCatalogPicker()">+ From Catalog</button>
         <button class="btn btn-ghost btn-sm" onclick="toggleManualAdd()">+ Manual Add</button>
         <span style="margin-left:auto;font-size:7px;color:var(--txt-d)" id="em-pack-value"></span>
       </div>
@@ -2930,9 +2930,9 @@ header{
       <div id="em-pack-picker" style="display:none;background:var(--surf);border:1px solid var(--bdr);border-radius:6px;padding:12px;margin-bottom:12px">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
           <div style="font-size:8px;font-weight:bold;color:var(--txt-b)">Select products to bring</div>
-          <button class="btn btn-ghost btn-sm" style="margin-left:auto" onclick="closeCatalogPicker()">Done</button>
+          <button class="btn btn-ghost btn-sm" style="margin-left:auto" onclick="closeEventCatalogPicker()">Done</button>
         </div>
-        <input class="srch" id="em-picker-search" placeholder="Search catalog…" oninput="renderCatalogPicker()" style="margin-bottom:8px"/>
+        <input class="srch" id="em-picker-search" placeholder="Search catalog…" oninput="renderEventCatalogPicker()" style="margin-bottom:8px"/>
         <div class="catalog-picker-grid" id="em-picker-grid"></div>
       </div>
       <div class="pack-grid" id="em-pack-grid"></div>
@@ -7405,12 +7405,19 @@ function addOrderItemRow(type,item,cid){
   const priceVal=rawPrice!==''?parseFloat(rawPrice).toFixed(2):'';
   const updCall='updateOrderItemsTotal(\''+cid+'\')';
   if(type==='catalog'){
-    const prefillName=item&&item.name?esc(item.name):'';
+    const prefillName=item&&item.name?item.name:'';
     const prefillCatId=item&&item._catalogId?item._catalogId:'';
-    row.innerHTML='<input type="text" class="oir-name oir-cat-inp srch" placeholder="🔍 Tap to search catalog…" value="'+prefillName+'" data-cat-id="'+prefillCatId+'" readonly onclick="openCatalogPicker(\''+id+'\')" style="cursor:pointer;min-width:0;flex:1">'
+    row.innerHTML='<input type="text" class="oir-name oir-cat-inp" placeholder="🔍 Tap to search catalog…" readonly style="flex:1;min-width:0;width:100%;background:var(--bg);border:1px solid var(--bdr2);color:var(--txt);padding:4px 8px;font-family:\'Share Tech Mono\',monospace;font-size:9px;border-radius:3px;box-sizing:border-box;cursor:pointer">'
       +'<input class="oir-qty" type="number" min="1" value="'+qty+'" oninput="'+updCall+'">'
       +'<input class="oir-price" type="number" min="0" step="0.01" value="'+priceVal+'" placeholder="0.00" oninput="'+updCall+'">'
       +'<button class="oi-rm" onclick="removeOrderItemRow(\''+id+'\',\''+cid+'\')">✕</button>';
+    const catInp=row.querySelector('.oir-cat-inp');
+    if(catInp){
+      catInp.value=prefillName;
+      catInp.dataset.catId=prefillCatId;
+      catInp.addEventListener('click',function(){openCatalogPicker(id);});
+      catInp.addEventListener('focus',function(){this.blur();openCatalogPicker(id);});
+    }
   }else{
     row.innerHTML='<input class="oir-name" type="text" placeholder="Item name…" value="'+esc(item?item.name:'')+'">'
       +'<input class="oir-qty" type="number" min="1" value="'+qty+'" oninput="'+updCall+'">'
@@ -14510,14 +14517,14 @@ function renderPackList(){
   }).join('');
 }
 
-function openCatalogPicker(){
+function openEventCatalogPicker(){
   document.getElementById('em-pack-picker').style.display='';
   document.getElementById('em-manual-add').style.display='none';
   document.getElementById('em-picker-search').value='';
-  renderCatalogPicker();
+  renderEventCatalogPicker();
 }
-function closeCatalogPicker(){document.getElementById('em-pack-picker').style.display='none';}
-function renderCatalogPicker(){
+function closeEventCatalogPicker(){document.getElementById('em-pack-picker').style.display='none';}
+function renderEventCatalogPicker(){
   const q=(document.getElementById('em-picker-search')?.value||'').toLowerCase();
   const c=getEvt();
   const alreadyIn=new Set((c.inPersonCatalog||[]).map(function(i){return i.catalogItemId;}));
@@ -14545,7 +14552,7 @@ function addToPackList(catalogItemId){
   if(!c.inPersonCatalog) c.inPersonCatalog=[];
   c.inPersonCatalog.push({catalogItemId,name:catItem.name,photo:catItem.photo||'',price:catItem.price||0,shopifyHandle:catItem.shopifyHandle||'',qtyBring:1});
   saveEvt();
-  renderCatalogPicker();
+  renderEventCatalogPicker();
   renderPackList();
   populateSaleDropdown();
 }
@@ -14553,7 +14560,7 @@ function removeFromPackList(catalogItemId){
   const c=getEvt();if(!c)return;
   c.inPersonCatalog=(c.inPersonCatalog||[]).filter(function(i){return i.catalogItemId!==catalogItemId;});
   saveEvt();
-  renderCatalogPicker();
+  renderEventCatalogPicker();
   renderPackList();
   populateSaleDropdown();
 }
