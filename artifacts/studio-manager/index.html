@@ -3497,11 +3497,15 @@ header{
     <div style="font-size:7px;color:var(--txt-d);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:5px">Linked Print Jobs <span style="color:var(--txt-d);font-weight:400;text-transform:none;letter-spacing:0">(one per plate)</span></div>
     <div id="eo-linked-prints-list" style="display:flex;flex-direction:column;gap:4px;margin-bottom:7px"></div>
     <!-- Add print row -->
-    <div style="display:flex;gap:5px;align-items:center;margin-bottom:5px">
-      <select id="eo-add-print-select" style="flex:1;background:var(--surf);border:1px solid var(--bdr2);color:var(--txt);padding:6px 8px;font-family:'Share Tech Mono',monospace;font-size:9px;border-radius:6px;outline:none;min-width:0">
-        <option value="">— Select a print to add —</option>
-      </select>
-      <button type="button" onclick="addLinkedPrint()" style="flex-shrink:0;background:var(--surf);border:1px solid var(--gold);color:var(--gold);padding:6px 10px;font-size:9px;font-weight:700;border-radius:6px;cursor:pointer;white-space:nowrap">+ Add</button>
+    <div style="position:relative;margin-bottom:5px">
+      <div style="display:flex;gap:5px;align-items:center">
+        <input type="text" id="eo-print-search" placeholder="🔍 Search prints…" autocomplete="off"
+          oninput="filterOrderPrintSearch()" onfocus="filterOrderPrintSearch()"
+          style="flex:1;background:var(--surf);border:1px solid var(--bdr2);color:var(--txt);padding:6px 9px;font-family:'Share Tech Mono',monospace;font-size:9px;border-radius:6px;outline:none;min-width:0"/>
+        <input type="hidden" id="eo-print-selected-id"/>
+        <button type="button" onclick="addLinkedPrint()" style="flex-shrink:0;background:var(--surf);border:1px solid var(--gold);color:var(--gold);padding:6px 10px;font-size:9px;font-weight:700;border-radius:6px;cursor:pointer;white-space:nowrap">+ Add</button>
+      </div>
+      <div id="eo-print-results" style="display:none;position:absolute;left:0;right:44px;top:100%;z-index:999;background:var(--surf3);border:1px solid var(--bdr2);border-top:none;border-radius:0 0 7px 7px;max-height:180px;overflow-y:auto;box-shadow:0 8px 20px rgba(0,0,0,.5)"></div>
     </div>
     <div style="margin-bottom:10px">
       <button type="button" onclick="openOrderGroupPicker()" style="width:100%;background:rgba(100,100,200,0.08);border:1px dashed rgba(130,80,255,0.4);color:var(--pur);padding:6px 10px;font-size:8px;font-weight:600;border-radius:6px;cursor:pointer;text-align:left">📁 Attach Print Group — bulk-add all prints from a group</button>
@@ -4062,18 +4066,45 @@ function calcOrderCost(o){
 }
 // ── Working state for the order modal's linked prints list ──
 let _linkedPrintIds=[];
-// Populate the "Add Print" dropdown with all prints (most recent first)
+// Reset the print search when opening the modal
 function populateOrderPrintDropdown(){
-  const sel=document.getElementById('eo-add-print-select');
-  if(!sel)return;
-  sel.innerHTML='<option value="">— Select a print to add —</option>';
-  [...prints].sort(function(a,b){return(b.timestamp||0)-(a.timestamp||0);}).forEach(function(p){
-    const label=p.name+(p.printer?' · '+p.printer:'')+(p.hrs?' · '+p.hrs+'h':'');
-    const opt=document.createElement('option');
-    opt.value=p.id;
-    opt.textContent=label;
-    sel.appendChild(opt);
-  });
+  const inp=document.getElementById('eo-print-search');
+  const hid=document.getElementById('eo-print-selected-id');
+  const res=document.getElementById('eo-print-results');
+  if(inp)inp.value='';
+  if(hid)hid.value='';
+  if(res)res.style.display='none';
+}
+// Live-filter prints and show dropdown
+function filterOrderPrintSearch(){
+  const inp=document.getElementById('eo-print-search');
+  const hid=document.getElementById('eo-print-selected-id');
+  const res=document.getElementById('eo-print-results');
+  if(!inp||!res)return;
+  // Clear selection when typing
+  hid.value='';
+  inp.style.borderColor='var(--bdr2)';
+  const q=(inp.value||'').toLowerCase().trim();
+  const pool=[...prints].sort(function(a,b){return(b.timestamp||0)-(a.timestamp||0);});
+  const matches=q?pool.filter(function(p){return(p.name+' '+(p.printer||'')+(p.category||'')).toLowerCase().includes(q);}):pool.slice(0,30);
+  if(!matches.length){res.style.display='none';return;}
+  res.style.display='block';
+  res.innerHTML=matches.map(function(p){
+    const sub=(p.printer||'')+(p.hrs?' · '+formatHms(p.hrs):'');
+    return'<div data-pid="'+p.id+'" onclick="selectOrderPrint(\''+p.id+'\',\''+esc(p.name).replace(/'/g,'\\\'')+'\')" style="padding:7px 10px;cursor:pointer;border-bottom:1px solid var(--bdr);transition:background .1s" onmouseover="this.style.background=\'rgba(255,255,255,.06)\'" onmouseout="this.style.background=\'\'">'+
+      '<div style="font-size:9px;color:var(--txt-b);font-weight:600">'+esc(p.name)+'</div>'+
+      (sub?'<div style="font-size:7px;color:var(--txt-d);margin-top:1px">'+esc(sub)+'</div>':'')+
+    '</div>';
+  }).join('');
+}
+function selectOrderPrint(id,name){
+  const inp=document.getElementById('eo-print-search');
+  const hid=document.getElementById('eo-print-selected-id');
+  const res=document.getElementById('eo-print-results');
+  if(inp)inp.value=name;
+  if(hid)hid.value=id;
+  if(res)res.style.display='none';
+  if(inp)inp.style.borderColor='var(--gold-dim)';
 }
 // Render the linked-prints chip list inside the modal
 function renderLinkedPrintsList(){
@@ -4102,12 +4133,15 @@ function renderLinkedPrintsList(){
 }
 // Add the currently selected print to the linked list
 function addLinkedPrint(){
-  const sel=document.getElementById('eo-add-print-select');
-  if(!sel||!sel.value)return;
-  const pid=sel.value;
+  const hid=document.getElementById('eo-print-selected-id');
+  const inp=document.getElementById('eo-print-search');
+  if(!hid||!hid.value){toast('No Print Selected','Type to search and tap a print first','info');return;}
+  const pid=hid.value;
   if(_linkedPrintIds.includes(pid)){toast('Already Added','This print is already linked to this order','info');return;}
   _linkedPrintIds.push(pid);
-  sel.value='';
+  if(hid)hid.value='';
+  if(inp){inp.value='';inp.style.borderColor='var(--bdr2)';}
+  document.getElementById('eo-print-results').style.display='none';
   renderLinkedPrintsList();
   updateOrderCostFields();
 }
