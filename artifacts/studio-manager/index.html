@@ -2501,7 +2501,7 @@ header{
     <div id="cc-error" style="display:none;background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);color:var(--red);padding:10px 14px;border-radius:6px;font-size:8px;margin-bottom:8px"></div>
 
     <!-- Analyze button -->
-    <button id="cc-analyze-btn" disabled onclick="ccAnalyze()" class="btn btn-pur" style="width:100%;padding:12px;font-family:'Orbitron',monospace;font-size:9px;letter-spacing:2px;opacity:.45;cursor:not-allowed">🎨 ANALYZE IMAGE &amp; BUILD CHROMA CANVAS STACK</button>
+    <button id="cc-analyze-btn" disabled onclick="ccAnalyze()" class="btn btn-pur" style="width:100%;padding:12px;font-family:'Orbitron',monospace;font-size:9px;letter-spacing:2px;opacity:.45;cursor:not-allowed">Analyze</button>
 
   </div>
 
@@ -23802,7 +23802,7 @@ function posShowReceipt(sale){
     var err  = document.getElementById('cc-error');
     if(err)  err.style.display  = 'none';
     try {
-      var resp = await fetch(getApiUrl('chroma-canvas/analyze'),{
+      var resp = await fetch('/api/chroma-canvas/analyze',{
         method:'POST',
         headers:{'Content-Type':'application/json'},
         body:JSON.stringify({
