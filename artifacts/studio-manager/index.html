@@ -5038,6 +5038,7 @@ function renderQueue(){
           (prevStage?'<button class="k-move-btn" onclick="event.stopPropagation();moveQueue(\''+q.id+'\',\''+prevStage+'\')">← Back</button>':'')+
           (nextStage?'<button class="k-move-btn" style="color:'+(st.key==='queued'?'var(--cyn)':'var(--grn)')+';border-color:'+(st.key==='queued'?'var(--cyn-d)':'var(--grn-d)')+'" onclick="event.stopPropagation();moveQueue(\''+q.id+'\',\''+nextStage+'\')">'+(st.key==='queued'?'Start →':'✓ Done')+'</button>':'')+
           (st.key==='done'?'<button class="k-move-btn" style="color:var(--pur);border-color:var(--pur-d)" onclick="event.stopPropagation();openSocialFromQueue(\''+q.id+'\')" title="Draft Instagram post for this item">📱</button>':'')+
+          '<button class="k-move-btn k-prio-btn" style="max-width:72px;color:'+(q.priority==='high'?'var(--red-b)':q.priority==='low'?'var(--cyn)':'var(--txt-d)')+';border-color:'+(q.priority==='high'?'var(--red-d)':q.priority==='low'?'var(--cyn-d)':'var(--bdr2)')+'" onclick="event.stopPropagation();showPrioMenu(event,\''+q.id+'\',\''+( q.priority||'normal')+'\')" title="Set priority">'+(q.priority==='high'?'⚡ High':q.priority==='low'?'🔵 Low':'· Normal')+'</button>'+
           '<button class="k-move-btn" style="color:var(--red);border-color:var(--red-d)" onclick="event.stopPropagation();delQueue(\''+q.id+'\')">✕</button>'+
         '</div>'+
       '</div>';
@@ -5289,6 +5290,33 @@ function saveQueueReorder(reorderedQueued){
   renderQueue();
 }
 
+function setQueuePriority(id,prio){
+  var q=queueItems.find(function(x){return x.id===id;});
+  if(!q)return;
+  q.priority=prio;
+  saveQueue();render();
+}
+function showPrioMenu(e,id,current){
+  e.stopPropagation();
+  document.querySelectorAll('.prio-popover').forEach(function(el){el.remove();});
+  var opts=[{v:'high',label:'⚡ High',color:'var(--red-b)'},{v:'normal',label:'· Normal',color:'var(--txt-d)'},{v:'low',label:'🔵 Low',color:'var(--cyn)'}];
+  var pop=document.createElement('div');
+  pop.className='prio-popover';
+  pop.style.cssText='position:fixed;z-index:9999;background:var(--surf3);border:1px solid var(--bdr2);border-radius:8px;padding:4px;box-shadow:0 8px 24px rgba(0,0,0,.6);min-width:110px;';
+  opts.forEach(function(o){
+    var btn=document.createElement('button');
+    btn.style.cssText='display:block;width:100%;text-align:left;background:'+(o.v===current?'rgba(255,255,255,.07)':'none')+';border:none;color:'+o.color+';font-size:11px;font-family:\'Plus Jakarta Sans\',sans-serif;font-weight:'+(o.v===current?'700':'400')+';padding:6px 10px;border-radius:5px;cursor:pointer;';
+    btn.textContent=o.label+(o.v===current?' ✓':'');
+    btn.onclick=function(ev){ev.stopPropagation();setQueuePriority(id,o.v);pop.remove();};
+    pop.appendChild(btn);
+  });
+  var rect=e.currentTarget.getBoundingClientRect();
+  pop.style.left=Math.min(rect.left,window.innerWidth-130)+'px';
+  pop.style.top=(rect.bottom+4)+'px';
+  document.body.appendChild(pop);
+  var close=function(ev){if(!pop.contains(ev.target)){pop.remove();document.removeEventListener('click',close);}};
+  setTimeout(function(){document.addEventListener('click',close);},50);
+}
 function moveQueue(id,stage){
   // Moving to Done with a linked print → open finish modal (handles outcome, filament, timestamp)
   if(stage==='done'){
