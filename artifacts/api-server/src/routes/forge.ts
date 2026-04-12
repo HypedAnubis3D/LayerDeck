@@ -184,9 +184,10 @@ router.post("/export", async (req, res) => {
   const sb = getSupabase();
   if (!sb) return res.status(500).json({ error: "Supabase not configured" });
 
-  const { stlBase64, filename, palette, layerInstructions, layerHeight, printSize, slotCount } =
+  const { fileBase64, stlBase64, filename, palette, layerInstructions, layerHeight, printSize, slotCount } =
     req.body as {
-      stlBase64: string;
+      fileBase64?: string;
+      stlBase64?: string;
       filename: string;
       palette: unknown;
       layerInstructions: unknown;
@@ -195,17 +196,19 @@ router.post("/export", async (req, res) => {
       slotCount: number;
     };
 
-  if (!stlBase64 || !filename) {
-    return res.status(400).json({ error: "stlBase64 and filename required" });
+  const rawBase64 = fileBase64 || stlBase64;
+  if (!rawBase64 || !filename) {
+    return res.status(400).json({ error: "fileBase64 and filename required" });
   }
 
   try {
-    const stlBuffer = Buffer.from(stlBase64, "base64");
-    const storageKey = `${Date.now()}-${filename.replace(/[^a-zA-Z0-9._-]/g, "_")}.stl`;
+    const fileBuffer = Buffer.from(rawBase64, "base64");
+    const safeBase  = filename.replace(/\.[^.]+$/, "").replace(/[^a-zA-Z0-9._-]/g, "_");
+    const storageKey = `${Date.now()}-${safeBase}.3mf`;
 
     const { error: uploadError } = await sb.storage
       .from(FORGE_BUCKET)
-      .upload(storageKey, stlBuffer, { contentType: "model/stl", upsert: false });
+      .upload(storageKey, fileBuffer, { contentType: "application/zip", upsert: false });
 
     if (uploadError) throw new Error(`Storage upload failed: ${uploadError.message}`);
 

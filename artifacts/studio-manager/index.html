@@ -2570,6 +2570,22 @@ header{
       <button class="btn btn-ghost" style="font-size:8px" onclick="forgeReset()">↩ Analyze Another Image</button>
     </div>
 
+    <!-- H. Export Success Panel (hidden until export completes) -->
+    <div id="forge-success-panel" style="display:none;border-radius:12px;border:1.5px solid #22c55e;background:rgba(34,197,94,.07);padding:16px;margin-bottom:16px">
+      <div style="font-family:'Orbitron',monospace;font-size:10px;font-weight:900;color:#22c55e;letter-spacing:2px;margin-bottom:8px">✅ EXPORT READY</div>
+      <div id="forge-success-palette" style="display:flex;border-radius:6px;overflow:hidden;height:12px;margin-bottom:10px"></div>
+      <div id="forge-success-meta" style="font-size:10px;color:var(--txt-b);margin-bottom:10px"></div>
+      <div style="background:rgba(255,255,255,.04);border-radius:8px;padding:10px;margin-bottom:12px;display:flex;align-items:flex-start;gap:8px">
+        <div style="font-size:14px;flex-shrink:0">📥</div>
+        <div>
+          <div style="font-size:10px;font-weight:700;color:var(--txt-b);margin-bottom:2px">Synced to Desktop Companion</div>
+          <div style="font-size:9px;color:var(--txt-d)">Open the Forge tab on your PC to download and open directly in Bambu Studio.</div>
+        </div>
+      </div>
+      <button id="forge-success-dl" onclick="forgeSuccessDownload()" style="width:100%;padding:10px;font-size:9px;font-weight:700;font-family:'Orbitron',monospace;letter-spacing:1px;border:none;border-radius:6px;cursor:pointer;background:var(--grn);color:#fff;margin-bottom:6px">⬇ Download 3MF on this device</button>
+      <button onclick="forgeReset()" style="width:100%;padding:10px;font-size:9px;font-weight:600;border:1px solid var(--bdr);border-radius:6px;cursor:pointer;background:transparent;color:var(--txt-d)">Export Another Image</button>
+    </div>
+
   </div><!-- /forge-preview-state -->
 
   <!-- SLOT SWAP MODAL -->
@@ -23748,6 +23764,7 @@ function posShowReceipt(sale){
   var _spools = [];
   var _renderToken = 0;
   var _3dRenderer = null, _3dAnimId = null;
+  var _lastExportBlobUrl = null, _lastExportFilename = null;
   var _curPreviewTab = '2d';
   var _swapSlotIdx = null;
 
@@ -24472,15 +24489,57 @@ function posShowReceipt(sale){
       var safeName = ((_stack.imageSummary||'forge_model').replace(/[^a-zA-Z0-9]+/g,'_')||'forge_model').slice(0,40);
       var filename  = 'LayerDeck_Forge_' + safeName + '_' + slots.length + 'color.3mf';
 
-      var url = URL.createObjectURL(blob);
+      // Revoke previous blob URL if any
+      if (_lastExportBlobUrl) { try { URL.revokeObjectURL(_lastExportBlobUrl); } catch(e){} }
+
+      _lastExportBlobUrl = URL.createObjectURL(blob);
+      _lastExportFilename = filename;
+
+      // Trigger download
       var a = document.createElement('a');
-      a.href = url; a.download = filename;
+      a.href = _lastExportBlobUrl; a.download = filename;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
-      setTimeout(function(){ URL.revokeObjectURL(url); }, 15000);
 
-      toast('3MF Downloaded', 'Open in Bambu Studio — assign each colored object to an AMS slot', 'ok', 5000);
+      // ── Upload to server in background (enables Companion sync) ──────────
+      (async function() {
+        try {
+          var reader = new FileReader();
+          var b64 = await new Promise(function(resolve, reject) {
+            reader.onload = function(e) {
+              var result = e.target.result;
+              resolve(result.split(',')[1]);
+            };
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+          });
+
+          var imageName = (_stack.imageSummary || 'forge_model').replace(/[^a-zA-Z0-9 ]/g,'').trim().slice(0,50) || 'forge_model';
+          var resp = await fetch('/api/forge/export', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              fileBase64: b64,
+              filename: imageName,
+              palette: (_stack.slots || []).map(function(s){ return { hex: s.hex, colorName: s.colorName, slot: s.slot }; }),
+              layerInstructions: _stack.layerInstructions || [],
+              layerHeight: _stack.layerHeight || '0.10',
+              printSize: _stack.recommendedPrintSize || '120mm',
+              slotCount: (_stack.slots || []).length,
+            }),
+          });
+          if (!resp.ok) throw new Error('Server returned ' + resp.status);
+          var result = await resp.json();
+          if (result.error) throw new Error(result.error);
+
+          // Show success panel
+          forgeShowSuccess(result.downloadUrl);
+        } catch(uploadErr) {
+          console.warn('[Forge] Server upload failed (local file still saved):', uploadErr);
+          forgeShowSuccess(null); // still show panel, just without companion sync note
+        }
+      })();
 
     } catch(e) {
       toast('Export Failed', e.message || 'Unknown error', 'error', 3000);
@@ -24491,9 +24550,55 @@ function posShowReceipt(sale){
     }
   };
 
+  // ── Show Export Success Panel ───────────────────────────────────────────────
+  function forgeShowSuccess(serverDownloadUrl) {
+    var panel = document.getElementById('forge-success-panel');
+    var palEl = document.getElementById('forge-success-palette');
+    var metaEl = document.getElementById('forge-success-meta');
+    var syncEl = panel ? panel.querySelector('[style*="rgba(255,255,255"]') : null;
+    if (!panel) return;
+
+    // Palette strip
+    if (palEl && _stack && _stack.slots) {
+      palEl.innerHTML = _stack.slots.map(function(s) {
+        return '<div style="flex:1;background:' + (s.hex||'#888') + '" title="' + (s.colorName||'') + '"></div>';
+      }).join('');
+    }
+
+    // Meta line
+    if (metaEl && _stack) {
+      var name = (_lastExportFilename || 'export').replace(/_/g,' ').replace(/\.3mf$/i,'');
+      var slots = (_stack.slots || []).length;
+      var size  = _stack.recommendedPrintSize || '120mm';
+      var date  = new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+      metaEl.textContent = name + ' · ' + size + ' · ' + slots + ' colors · ' + date;
+    }
+
+    // Hide companion sync section if server upload failed
+    if (syncEl) syncEl.style.display = serverDownloadUrl ? 'flex' : 'none';
+
+    panel.style.display = 'block';
+    panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  // ── Re-download from success panel ─────────────────────────────────────────
+  window.forgeSuccessDownload = function() {
+    if (!_lastExportBlobUrl || !_lastExportFilename) {
+      toast('No Export', 'Run export first', 'warn', 2000);
+      return;
+    }
+    var a = document.createElement('a');
+    a.href = _lastExportBlobUrl;
+    a.download = _lastExportFilename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
+
   // ── Reset ──────────────────────────────────────────────────────────────────
   window.forgeReset = function() {
     _img64 = null; _imgType = null; _stack = null;
+    _lastExportBlobUrl = null; _lastExportFilename = null;
     _renderToken++;
     if (_3dRenderer) { try { _3dRenderer.dispose(); } catch(e){} cancelAnimationFrame(_3dAnimId); _3dRenderer = null; }
 
@@ -24505,6 +24610,7 @@ function posShowReceipt(sale){
     var btn     = document.getElementById('forge-btn');
     var err     = document.getElementById('forge-error');
     var thumb   = document.getElementById('forge-thumb');
+    var success = document.getElementById('forge-success-panel');
 
     if (zone)    zone.style.display    = 'block';
     if (row)     row.style.display     = 'none';
@@ -24513,6 +24619,7 @@ function posShowReceipt(sale){
     if (load)    load.style.display    = 'none';
     if (err)     err.style.display     = 'none';
     if (thumb)   thumb.src             = '';
+    if (success) success.style.display = 'none';
     if (btn)     { btn.disabled = true; btn.style.opacity = '.45'; btn.style.cursor = 'not-allowed'; }
   };
 
