@@ -5984,7 +5984,7 @@ function ingestEtsyOrder(o){
         category:catalogItem?catalogItem.category:'Other',
         printer:printerRecords[0]?.name||'X1C',
         hrs:matchTmf?matchTmf.hrs||0:0,
-        qty:it.qty,priority:'high',
+        qty:it.qty,priority:'normal',
         orderId:orderId,stage:'queued',
         fromEtsy:true,noTmf:!matchTmf,
         tmfId:matchTmf?matchTmf.id:null,
@@ -6204,7 +6204,7 @@ function ingestShopifyOrder(o){
     queueItems.push({
       id:uid(),name:it.name,category:'Other',printer:'X1C',
       hrs:matchTmf?matchTmf.hrs||0:0,qty:it.qty,
-      priority:'high',orderId,stage:'queued',
+      priority:'normal',orderId,stage:'queued',
       fromShopify:true,noTmf:!matchTmf,
       tmfId:matchTmf?matchTmf.id:null,
       notes:matchTmf?'3MF matched: '+matchTmf.name:'⚠ No 3MF — update print info before starting',
@@ -7480,7 +7480,7 @@ function autoQueueOrderItems(order){
     const tmf=tmfLib.find(function(t){return t.id===cat.tmfId;});
     queueItems.push({id:uid(),name:item.name,category:cat.category||'Other',
       printer:printerRecords.length?printerRecords[0].name:'X1C',
-      hrs:tmf?(tmf.hrs||0):0,qty:item.qty||1,priority:'high',
+      hrs:tmf?(tmf.hrs||0):0,qty:item.qty||1,priority:'normal',
       orderId:order.orderId,stage:'queued',tmfId:cat.tmfId,
       notes:tmf?'3MF: '+tmf.name:'3MF linked',timestamp:Date.now()});
     queued++;
@@ -7497,7 +7497,7 @@ function queueOrderItem(oid,itemIdx){
   if(already){toast('Already Queued',qLbl+' is already in the print queue','info');return;}
   const cat=catalogItems.find(function(c){return c.name&&(c.name.toLowerCase()===it.name.toLowerCase()||it.name.toLowerCase().includes(c.name.toLowerCase())||c.name.toLowerCase().includes(it.name.toLowerCase()));});
   const tmf=cat&&cat.tmfId?tmfLib.find(function(t){return t.id===cat.tmfId;}):null;
-  queueItems.push({id:uid(),name:qLbl,category:cat?cat.category:'Other',printer:printerRecords[0]?.name||'X1C',hrs:tmf?tmf.hrs||0:0,qty:it.qty||1,priority:'high',orderId:o.orderId,stage:'queued',tmfId:tmf?tmf.id:null,notes:tmf?'3MF: '+tmf.name+(it.variantTitle?' ['+it.variantTitle+']':''):'',fromOrder:oid,timestamp:Date.now()});
+  queueItems.push({id:uid(),name:qLbl,category:cat?cat.category:'Other',printer:printerRecords[0]?.name||'X1C',hrs:tmf?tmf.hrs||0:0,qty:it.qty||1,priority:'normal',orderId:o.orderId,stage:'queued',tmfId:tmf?tmf.id:null,notes:tmf?'3MF: '+tmf.name+(it.variantTitle?' ['+it.variantTitle+']':''):'',fromOrder:oid,timestamp:Date.now()});
   saveQueue();render();
   toast('→ Queued',qLbl+' added to print queue','success');
 }
@@ -8601,7 +8601,7 @@ function previewShopifyDemo(){
   demoOrder.discountCode='WELCOME20';
   const demoMystery=(typeof checkMysteryTrigger==='function')?checkMysteryTrigger(demoOrder,{silent:true}):null;
   // Add to queue
-  queueItems.push({id:uid(),name:'Anubis Figurine Standard',category:'Figurines',printer:printerRecords[0]?.name||'X1C',hrs:3.5,qty:1,priority:'high',orderId:demoId,stage:'queued',fromShopify:true,timestamp:Date.now()});
+  queueItems.push({id:uid(),name:'Anubis Figurine Standard',category:'Figurines',printer:printerRecords[0]?.name||'X1C',hrs:3.5,qty:1,priority:'normal',orderId:demoId,stage:'queued',fromShopify:true,timestamp:Date.now()});
   saveQueue();
   render();
   setTimeout(()=>{
@@ -9406,7 +9406,7 @@ function ingestShopifyOrder(o){
     // Dedup: skip if queue/print already exists for this order + product (prevents duplication on re-poll)
     const alreadyQueued=queueItems.some(q=>q.fromShopifyOrder===orderId&&q.name===queueLabel);
     if(!alreadyQueued){
-      queueItems.push({id:uid(),name:queueLabel,category:catalogItem?catalogItem.category:'Other',printer:printerRecords[0]?.name||'X1C',hrs:matchTmf?matchTmf.hrs||0:0,qty:it.qty,priority:'high',orderId,stage:'queued',fromShopify:true,noTmf:!matchTmf,tmfId:matchTmf?matchTmf.id:null,printId:newPrintId,fromShopifyOrder:orderId,notes:matchTmf?'3MF: '+matchTmf.name+(it.variantTitle?' ['+it.variantTitle+']':''):'⚠ No 3MF on file',timestamp:Date.now()});
+      queueItems.push({id:uid(),name:queueLabel,category:catalogItem?catalogItem.category:'Other',printer:printerRecords[0]?.name||'X1C',hrs:matchTmf?matchTmf.hrs||0:0,qty:it.qty,priority:'normal',orderId,stage:'queued',fromShopify:true,noTmf:!matchTmf,tmfId:matchTmf?matchTmf.id:null,printId:newPrintId,fromShopifyOrder:orderId,notes:matchTmf?'3MF: '+matchTmf.name+(it.variantTitle?' ['+it.variantTitle+']':''):'⚠ No 3MF on file',timestamp:Date.now()});
       if(matchTmf){
         const alreadyPrinted=prints.some(p=>p.fromShopifyOrder===orderId&&p.name===queueLabel);
         const _qfg=matchTmf.filamentGramsPerColor||matchTmf.filamentGrams||[];
