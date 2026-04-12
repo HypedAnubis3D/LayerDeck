@@ -138,7 +138,7 @@ Return ONLY valid JSON, no markdown:
       },
       body: JSON.stringify({
         model: "claude-sonnet-4-5",
-        max_tokens: 1500,
+        max_tokens: 4096,
         messages: [
           {
             role: "user",
@@ -167,8 +167,12 @@ Return ONLY valid JSON, no markdown:
     if (!data.content) return res.status(500).json({ error: "No content in API response" });
 
     const raw = data.content.map((b) => b.text || "").join("");
-    const cleaned = raw.replace(/```json|```/g, "").trim();
-    const stack = JSON.parse(cleaned);
+    const firstBrace = raw.indexOf("{");
+    const lastBrace  = raw.lastIndexOf("}");
+    if (firstBrace === -1 || lastBrace <= firstBrace) {
+      return res.status(500).json({ error: "AI response did not contain valid JSON" });
+    }
+    const stack = JSON.parse(raw.slice(firstBrace, lastBrace + 1));
     return res.json({ stack });
   } catch (err) {
     return res.status(500).json({ error: err instanceof Error ? err.message : "Unknown error" });

@@ -23753,16 +23753,27 @@ function posShowReceipt(sale){
 
   // ── Spool loading ──────────────────────────────────────────────────────────
   async function loadSpools() {
-    var countEl = document.getElementById('forge-spool-count');
-    if (countEl) countEl.textContent = 'Loading spools…';
+    // 1. Show in-memory spools immediately (no async wait needed)
+    var inmem = (typeof spools !== 'undefined' ? spools : [])
+      .filter(function(s){ return (s.remaining || 0) > 50; })
+      .sort(function(a,b){ return (b.remaining||0) - (a.remaining||0); });
 
+    if (inmem.length > 0) {
+      _spools = inmem;
+      renderSwatches();
+    }
+
+    // 2. Refresh from Supabase in background (5s timeout)
     try {
       if (typeof supabaseClient !== 'undefined' && supabaseClient) {
-        var result = await supabaseClient
-          .from('ha3d_spools')
-          .select('id,name,color,material,brand,amsSlot,remaining,total')
-          .gt('remaining', 50)
-          .order('remaining', { ascending: false });
+        var result = await Promise.race([
+          supabaseClient
+            .from('ha3d_spools')
+            .select('id,name,color,material,brand,amsSlot,remaining,total')
+            .gt('remaining', 50)
+            .order('remaining', { ascending: false }),
+          new Promise(function(_, rej){ setTimeout(function(){ rej(new Error('timeout')); }, 5000); })
+        ]);
         if (!result.error && result.data && result.data.length > 0) {
           _spools = result.data;
           renderSwatches();
@@ -23771,11 +23782,11 @@ function posShowReceipt(sale){
       }
     } catch(e) {}
 
-    // Fallback: in-memory spools array
-    _spools = (typeof spools !== 'undefined' ? spools : [])
-      .filter(function(s){ return (s.remaining || 0) > 50; })
-      .sort(function(a,b){ return (b.remaining||0) - (a.remaining||0); });
-    renderSwatches();
+    // 3. If Supabase gave nothing and in-memory was also empty
+    if (_spools.length === 0) {
+      _spools = inmem;
+      renderSwatches();
+    }
   }
 
   function renderSwatches() {
