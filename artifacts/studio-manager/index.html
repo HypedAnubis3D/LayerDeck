@@ -241,7 +241,7 @@ input.srch::placeholder{color:var(--txt-d);}
 .cv-empty{font-size:8px;color:var(--bdr2);padding:4px 0;font-style:italic;}
 .k-move-btn{flex:1;padding:4px;background:none;border:1px solid var(--bdr2);color:var(--txt-d);font-family:'Plus Jakarta Sans',sans-serif;font-size:9px;font-weight:500;border-radius:6px;cursor:pointer;transition:all .15s;}
 .k-move-btn:hover{color:var(--txt);border-color:var(--bdr2);background:rgba(255,255,255,.05);}
-.k-priority{position:absolute;top:7px;right:7px;font-size:9px;}
+.k-priority{font-size:6px;letter-spacing:1px;margin-bottom:3px;}
 .empty-col{text-align:center;color:var(--bdr2);padding:28px 8px;font-size:10px;letter-spacing:.5px;}
 
 /* ORDERS */
@@ -4986,7 +4986,7 @@ function renderQueue(){
       var isMystery=q.fromMystery;
       var isWarn=q.noTmf;
       var isSel=selectedIds.includes(q.id);
-      var prioIcon=q.priority==='high'?'🔴':q.priority==='low'?'🔵':'';
+      var prioIcon=q.priority==='high'?'<span style="color:var(--red-b)">⚡ HIGH PRIORITY</span>':q.priority==='low'?'<span style="color:var(--cyn)">🔵 LOW PRIORITY</span>':'';
       var prevStage=st.key==='inprogress'?'queued':st.key==='done'?'inprogress':null;
       var nextStage=st.key==='queued'?'inprogress':st.key==='inprogress'?'done':null;
       var isQueued=st.key==='queued';
