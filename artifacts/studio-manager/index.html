@@ -3501,11 +3501,11 @@ header{
       <div style="display:flex;gap:5px;align-items:center">
         <input type="text" id="eo-print-search" placeholder="🔍 Search prints…" autocomplete="off"
           oninput="filterOrderPrintSearch()" onfocus="filterOrderPrintSearch()"
-          style="flex:1;background:var(--surf);border:1px solid var(--bdr2);color:var(--txt);padding:6px 9px;font-family:'Share Tech Mono',monospace;font-size:9px;border-radius:6px;outline:none;min-width:0"/>
+          class="srch" style="flex:1;outline:none;min-width:0"/>
         <input type="hidden" id="eo-print-selected-id"/>
         <button type="button" onclick="addLinkedPrint()" style="flex-shrink:0;background:var(--surf);border:1px solid var(--gold);color:var(--gold);padding:6px 10px;font-size:9px;font-weight:700;border-radius:6px;cursor:pointer;white-space:nowrap">+ Add</button>
       </div>
-      <div id="eo-print-results" style="display:none;position:absolute;left:0;right:44px;top:100%;z-index:999;background:var(--surf3);border:1px solid var(--bdr2);border-top:none;border-radius:0 0 7px 7px;max-height:180px;overflow-y:auto;box-shadow:0 8px 20px rgba(0,0,0,.5)"></div>
+      <div id="eo-print-results" style="display:none;position:absolute;left:0;right:52px;top:calc(100% + 2px);z-index:999;background:var(--surf2);border:1px solid var(--bdr2);border-radius:8px;max-height:200px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,.6)"></div>
     </div>
     <div style="margin-bottom:10px">
       <button type="button" onclick="openOrderGroupPicker()" style="width:100%;background:rgba(100,100,200,0.08);border:1px dashed rgba(130,80,255,0.4);color:var(--pur);padding:6px 10px;font-size:8px;font-weight:600;border-radius:6px;cursor:pointer;text-align:left">📁 Attach Print Group — bulk-add all prints from a group</button>
@@ -4091,9 +4091,9 @@ function filterOrderPrintSearch(){
   res.style.display='block';
   res.innerHTML=matches.map(function(p){
     const sub=(p.printer||'')+(p.hrs?' · '+formatHms(p.hrs):'');
-    return'<div data-pid="'+p.id+'" onclick="selectOrderPrint(\''+p.id+'\',\''+esc(p.name).replace(/'/g,'\\\'')+'\')" style="padding:7px 10px;cursor:pointer;border-bottom:1px solid var(--bdr);transition:background .1s" onmouseover="this.style.background=\'rgba(255,255,255,.06)\'" onmouseout="this.style.background=\'\'">'+
-      '<div style="font-size:9px;color:var(--txt-b);font-weight:600">'+esc(p.name)+'</div>'+
-      (sub?'<div style="font-size:7px;color:var(--txt-d);margin-top:1px">'+esc(sub)+'</div>':'')+
+    return'<div data-pid="'+p.id+'" onclick="selectOrderPrint(\''+p.id+'\',\''+esc(p.name).replace(/'/g,'\\\'')+'\')" style="padding:9px 12px;cursor:pointer;border-bottom:1px solid var(--bdr);transition:background .1s;font-family:\'Plus Jakarta Sans\',sans-serif" onmouseover="this.style.background=\'rgba(255,255,255,.06)\'" onmouseout="this.style.background=\'\'">'+
+      '<div style="font-size:11px;color:var(--txt-b);font-weight:600">'+esc(p.name)+'</div>'+
+      (sub?'<div style="font-size:9px;color:var(--txt-d);margin-top:2px">'+esc(sub)+'</div>':'')+
     '</div>';
   }).join('');
 }
