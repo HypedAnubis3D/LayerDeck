@@ -82,7 +82,24 @@ function escXml(s: string) {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-async function sampleImagePixels(base64: string, type: string, res: number): Promise<Uint8ClampedArray> {
+// Color utilities and greedy meshing adapted from Kromacut by vycdev (MIT license)
+// https://github.com/vycdev/Kromacut
+
+function pixelToLab(r: number, g: number, b: number): [number, number, number] {
+  const lin = (v: number) => v > 0.04045 ? Math.pow((v + 0.055) / 1.055, 2.4) : v / 12.92;
+  const rl = lin(r / 255), gl = lin(g / 255), bl = lin(b / 255);
+  const X = (rl * 0.4124 + gl * 0.3576 + bl * 0.1805) / 0.95047;
+  const Y =  rl * 0.2126 + gl * 0.7152 + bl * 0.0722;
+  const Z = (rl * 0.0193 + gl * 0.1192 + bl * 0.9505) / 1.08883;
+  const f = (v: number) => v > 0.008856 ? Math.cbrt(v) : 7.787 * v + 16 / 116;
+  return [116 * f(Y) - 16, 500 * (f(X) - f(Y)), 200 * (f(Y) - f(Z))];
+}
+
+function hexToLab(hex: string): [number, number, number] {
+  return pixelToLab(parseInt(hex.slice(1, 3), 16), parseInt(hex.slice(3, 5), 16), parseInt(hex.slice(5, 7), 16));
+}
+
+function sampleImagePixels(base64: string, type: string, res: number): Promise<Uint8ClampedArray> {
   return new Promise(resolve => {
     const img = new Image();
     img.onload = () => {
@@ -96,7 +113,40 @@ async function sampleImagePixels(base64: string, type: string, res: number): Pro
   });
 }
 
-const TFACE = [[0,2,1],[0,3,2],[5,7,4],[5,6,7],[4,3,0],[4,7,3],[1,2,6],[1,6,5],[0,1,5],[0,5,4],[3,7,6],[3,6,2]] as const;
+// Maximal-rectangle greedy meshing — merges adjacent active pixels into minimal rectangles
+// Adapted from Kromacut (MIT license) https://github.com/vycdev/Kromacut
+function greedyMerge(active: Uint8Array, W: number, H: number): Array<{ x: number; y: number; w: number; h: number }> {
+  const visited = new Uint8Array(W * H);
+  const rects: Array<{ x: number; y: number; w: number; h: number }> = [];
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      const idx = y * W + x;
+      if (!active[idx] || visited[idx]) continue;
+      let w = 1;
+      while (x + w < W && active[y * W + (x + w)] && !visited[y * W + (x + w)]) w++;
+      let h = 1, canExpand = true;
+      while (y + h < H && canExpand) {
+        for (let dx = 0; dx < w; dx++) {
+          if (!active[(y + h) * W + (x + dx)] || visited[(y + h) * W + (x + dx)]) {
+            canExpand = false; break;
+          }
+        }
+        if (canExpand) h++;
+      }
+      for (let dy = 0; dy < h; dy++)
+        for (let dx = 0; dx < w; dx++)
+          visited[(y + dy) * W + (x + dx)] = 1;
+      rects.push({ x, y, w, h });
+    }
+  }
+  return rects;
+}
+
+const TFACE = [
+  [0,2,1],[0,3,2], [5,7,4],[5,6,7],
+  [4,3,0],[4,7,3], [1,2,6],[1,6,5],
+  [0,1,5],[0,5,4], [3,7,6],[3,6,2],
+] as const;
 
 async function build3MF(
   slots: Slot[], printMM: number, lh: number,
@@ -108,61 +158,76 @@ async function build3MF(
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
   <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
   <Default Extension="model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/>
+  <Default Extension="config" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/>
 </Types>`;
 
   const rels = `<?xml version="1.0" encoding="UTF-8"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
   <Relationship Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel" Target="/3D/3dmodel.model" Id="rel0"/>
+  <Relationship Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel" Target="/Metadata/model_settings.config" Id="rel1"/>
 </Relationships>`;
 
-  // ── Z ranges per slot ───────────────────────────────────────────────────────
+  // ── Z ranges per slot ─────────────────────────────────────────────────────
   const slabThicks = slots.map(s => Math.max(1, (s.layerEnd || 1) - (s.layerStart || 0)) * lh);
   const zBots: number[] = [], zTops: number[] = [];
   let zA = 0;
   slabThicks.forEach(t => { zBots.push(zA); zA += t; zTops.push(zA); });
-  const totalH = zA;
-  const baseThick = slabThicks[0];
 
-  // ── Sample image at print resolution ────────────────────────────────────────
+  // ── Per-pixel slot assignment via LAB color distance ──────────────────────
+  const slotLabs = slots.map(s => hexToLab(s.hex || '#888888'));
   const imgRes = Math.min(Math.round(printMM), 150);
-  const pixelData = imageBase64 ? await sampleImagePixels(imageBase64, imageType || 'image/jpeg', imgRes) : null;
   const stepMM = printMM / imgRes;
+  let topSlotIdx: Int32Array | null = null;
 
-  // ── Fix 2: m:colorgroup per slot ────────────────────────────────────────────
-  const colorGroupXml = slots.map((s, i) =>
-    `    <m:colorgroup id="${i + 1}">\n      <m:color color="${s.hex || '#888888'}"/>\n    </m:colorgroup>`
+  if (imageBase64) {
+    const pixelData = await sampleImagePixels(imageBase64, imageType || 'image/jpeg', imgRes);
+    topSlotIdx = new Int32Array(imgRes * imgRes);
+    for (let py = 0; py < imgRes; py++) {
+      for (let px = 0; px < imgRes; px++) {
+        const di = (py * imgRes + px) * 4;
+        const lab = pixelToLab(pixelData[di], pixelData[di + 1], pixelData[di + 2]);
+        let best = 0, bestDist = Infinity;
+        slotLabs.forEach((sl, si) => {
+          const d = (lab[0]-sl[0])**2 + (lab[1]-sl[1])**2 + (lab[2]-sl[2])**2;
+          if (d < bestDist) { bestDist = d; best = si; }
+        });
+        topSlotIdx[py * imgRes + px] = best;
+      }
+    }
+  }
+
+  // ── basematerials for 3MF color reference ────────────────────────────────
+  const baseMats = slots.map((s, i) =>
+    `      <base name="${escXml(s.colorName || 'Slot' + (i + 1))}" displaycolor="${s.hex || '#888888'}"/>`
   ).join('\n');
 
-  // ── Fix 3: Heightmap mesh per slot ──────────────────────────────────────────
+  // ── Greedy heightmap mesh per slot ────────────────────────────────────────
+  // Slot K is active for a pixel when topSlotIdx[pixel] >= K, meaning
+  // filament K appears somewhere in the vertical stack at that pixel.
   let objectsXml = '', buildItems = '';
   slots.forEach((slot, i) => {
     const zBot = zBots[i], zTop = zTops[i];
     const objId = i + 10;
+
+    const active = new Uint8Array(imgRes * imgRes);
+    if (topSlotIdx) {
+      for (let p = 0; p < active.length; p++) active[p] = topSlotIdx[p] >= i ? 1 : 0;
+    } else {
+      active.fill(1);
+    }
+
+    const rects = greedyMerge(active, imgRes, imgRes);
+
     const verts: number[] = [], tris: number[] = [];
-
-    for (let py = 0; py < imgRes; py++) {
-      for (let px = 0; px < imgRes; px++) {
-        let colTop: number;
-        if (pixelData) {
-          const di = (py * imgRes + px) * 4;
-          const br = (pixelData[di] * 0.299 + pixelData[di + 1] * 0.587 + pixelData[di + 2] * 0.114) / 255;
-          const pixH = baseThick + br * (totalH - baseThick);
-          if (pixH <= zBot + 0.0001) continue;
-          colTop = Math.min(pixH, zTop);
-        } else {
-          colTop = zTop;
-        }
-        if (colTop - zBot < 0.0001) continue;
-
-        const ox = px * stepMM - half, oy = py * stepMM - half;
-        const ox2 = ox + stepMM, oy2 = oy + stepMM;
-        const vBase = verts.length / 3;
-        verts.push(
-          ox,  oy,  zBot,  ox2, oy,  zBot,  ox2, oy2, zBot,  ox,  oy2, zBot,
-          ox,  oy,  colTop, ox2, oy,  colTop, ox2, oy2, colTop, ox,  oy2, colTop
-        );
-        TFACE.forEach(t => tris.push(vBase + t[0], vBase + t[1], vBase + t[2]));
-      }
+    for (const { x, y, w, h } of rects) {
+      const ox = x * stepMM - half, oy = y * stepMM - half;
+      const ox2 = ox + w * stepMM, oy2 = oy + h * stepMM;
+      const vBase = verts.length / 3;
+      verts.push(
+        ox,  oy,  zBot,  ox2, oy,  zBot,  ox2, oy2, zBot,  ox,  oy2, zBot,
+        ox,  oy,  zTop,  ox2, oy,  zTop,  ox2, oy2, zTop,  ox,  oy2, zTop
+      );
+      TFACE.forEach(t => tris.push(vBase + t[0], vBase + t[1], vBase + t[2]));
     }
 
     const vLines: string[] = [], tLines: string[] = [];
@@ -171,28 +236,47 @@ async function build3MF(
     for (let ti = 0; ti < tris.length; ti += 3)
       tLines.push(`<triangle v1="${tris[ti]}" v2="${tris[ti+1]}" v3="${tris[ti+2]}"/>`);
 
-    // Fix 1 + 2: BambuStudio:FilamentId metadata + colorgroup reference
-    objectsXml += `    <object id="${objId}" type="model" colorgroup="${i + 1}" name="${escXml(slot.colorName || 'Slot' + (i + 1))}">\n` +
-      `      <metadata name="BambuStudio:FilamentId">${i + 1}</metadata>\n` +
+    objectsXml +=
+      `    <object id="${objId}" type="model" pid="1" pindex="${i}" name="${escXml(slot.colorName || 'Slot' + (i + 1))}">\n` +
       `      <mesh>\n        <vertices>${vLines.join('')}</vertices>\n        <triangles>${tLines.join('')}</triangles>\n      </mesh>\n    </object>\n`;
     buildItems += `    <item objectid="${objId}"/>\n`;
   });
 
   const model = `<?xml version="1.0" encoding="UTF-8"?>
 <model unit="millimeter" xml:lang="en-US"
-  xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02"
-  xmlns:m="http://schemas.microsoft.com/3dmanufacturing/material/2015/02">
+  xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
   <resources>
-${colorGroupXml}
+    <basematerials id="1">
+${baseMats}
+    </basematerials>
 ${objectsXml}  </resources>
   <build>
 ${buildItems}  </build>
 </model>`;
 
+  // ── model_settings.config — Bambu Studio extruder assignment ─────────────
+  // Format adapted from Kromacut (MIT) https://github.com/vycdev/Kromacut
+  let cfgObjects = '';
+  slots.forEach((slot, i) => {
+    cfgObjects += ` <object id="${i + 10}">\n  <metadata key="name" value="${escXml(slot.colorName || 'Slot' + (i + 1))}"/>\n  <metadata key="extruder" value="${i + 1}"/>\n </object>\n`;
+  });
+  let cfgInstances = '';
+  slots.forEach((_s, i) => {
+    cfgInstances += `  <model_instance>\n   <metadata key="object_id" value="${i + 10}"/>\n   <metadata key="instance_id" value="0"/>\n  </model_instance>\n`;
+  });
+  const modelConfig = `<?xml version="1.0" encoding="UTF-8"?>
+<config>
+${cfgObjects} <plate>
+  <metadata key="plater_id" value="1"/>
+  <metadata key="locked" value="false"/>
+${cfgInstances} </plate>
+</config>`;
+
   const zip = new JSZip();
   zip.file('[Content_Types].xml', contentTypes);
   zip.folder('_rels')!.file('.rels', rels);
   zip.folder('3D')!.file('3dmodel.model', model);
+  zip.folder('Metadata')!.file('model_settings.config', modelConfig);
   return zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } });
 }
 
