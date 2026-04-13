@@ -18836,10 +18836,19 @@ async function onPiPrintFinished(name,data){
     prints=prints.filter(function(p){return p.id===printRecord.id||!(p.status==='printing'&&p.printer===name&&_piMatchesJob(p));});
   } else {
     const _tapoWSnap2=_getTapoWattsForPrinter(name);
+    // Find the auto-added inprogress queue item for this printer so we can link it.
+    // This prevents reconcileMissingPiPrints from creating a second print record when
+    // the Bambu project name (e.g. "Swing_to_the_Moon_Sculpture") differs from the
+    // local 3MF/queue-item name (e.g. "Girl on Swing") — the fromQueueItemId direct
+    // link is checked first in reconcile and skips the name-match entirely.
+    // Also prefer the queue item's display name (already matched to the 3MF library)
+    // over the raw Bambu project name, so the record shows the friendly name.
+    var _autoQItem=queueItems.find(function(q){return q.stage==='inprogress'&&q.printer===name&&q.autoFromPi;});
+    var _recName=(_autoQItem&&_autoQItem.name)||jobName;
     printRecord={
       id:uid(),
-      name:jobName,
-      category:'Other',
+      name:_recName,
+      category:(_autoQItem&&_autoQItem.category)||'Other',
       printer:name,
       hrs:actualHrs,
       estimatedHrs:_finTmf&&_finTmf.hrs?_finTmf.hrs:undefined,
@@ -18851,7 +18860,8 @@ async function onPiPrintFinished(name,data){
       notes:'Auto-logged by LayerDeck Pi Hub',
       autoFromPi:true,
       tmfName:_finTmf?_finTmf.name:undefined,
-      tapoWatts:_tapoWSnap2||undefined
+      tapoWatts:_tapoWSnap2||undefined,
+      fromQueueItemId:_autoQItem?_autoQItem.id:undefined
     };
     prints.push(printRecord);
   }
