@@ -8,7 +8,7 @@ import { useDashboardMetrics, useLibrary } from '@/hooks/use-collections';
 import { parse3MFFile, Parsed3MF } from '@/lib/3mf-parser';
 import {
   Database, PackageOpen, Printer, Disc, Calendar,
-  Library, LayoutDashboard, ListOrdered, ShoppingCart, Cpu, X, Flame,
+  Library, LayoutDashboard, ListOrdered, ShoppingCart, Cpu, X,
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
@@ -18,11 +18,10 @@ import { QueueTab } from '@/components/tabs/QueueTab';
 import { EventsTab } from '@/components/tabs/EventsTab';
 import { OrdersTab } from '@/components/tabs/OrdersTab';
 import { PrintersTab } from '@/components/tabs/PrintersTab';
-import { ForgeTab } from '@/components/tabs/ForgeTab';
 
 const PARSED_STORAGE_KEY = 'layerstack_companion_parsed_files';
 
-type TabId = 'home' | 'library' | 'queue' | 'events' | 'orders' | 'printers' | 'forge';
+type TabId = 'home' | 'library' | 'queue' | 'events' | 'orders' | 'printers';
 
 const TABS: { id: TabId; label: string; Icon: React.ComponentType<{ className?: string }> }[] = [
   { id: 'home',     label: 'Home',     Icon: LayoutDashboard },
@@ -31,7 +30,6 @@ const TABS: { id: TabId; label: string; Icon: React.ComponentType<{ className?: 
   { id: 'events',   label: 'Events',   Icon: Calendar },
   { id: 'orders',   label: 'Orders',   Icon: ShoppingCart },
   { id: 'printers', label: 'Printers', Icon: Cpu },
-  { id: 'forge',    label: 'Forge',    Icon: Flame },
 ];
 
 function saveParsedToStorage(files: Parsed3MF[]) {
@@ -54,8 +52,6 @@ export default function Dashboard() {
   const { data: metrics, isLoading } = useDashboardMetrics();
   const { data: libraryItems = [] } = useLibrary();
   const { toast } = useToast();
-
-  const [forgeNewCount, setForgeNewCount] = useState(0);
 
   const [tab, setTab] = useState<TabId>(() => {
     try {
@@ -90,7 +86,6 @@ export default function Dashboard() {
   }, [libraryItems]);
 
   const handleFilesAccepted = useCallback(async (newFiles: File[], folderName?: string) => {
-    // Remove existing parsed entries with the same filename so re-uploads always re-parse
     const incomingNames = new Set(newFiles.map(f => f.name));
     setParsedFiles(prev => prev.filter(p => !incomingNames.has(p.filename)));
 
@@ -139,18 +134,13 @@ export default function Dashboard() {
           <nav className="flex gap-0.5 py-2 overflow-x-auto" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
             {TABS.map(({ id, label, Icon }) => (
               <button key={id}
-                onClick={() => { setTab(id); if (id === 'forge') setForgeNewCount(0); }}
+                onClick={() => setTab(id)}
                 className={`relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium whitespace-nowrap transition-all border
                   ${tab === id
                     ? 'bg-primary/15 text-primary border-primary/20'
                     : 'text-muted-foreground hover:text-foreground hover:bg-white/5 border-transparent'}`}>
-                <Icon className={`h-3.5 w-3.5 shrink-0 ${id === 'forge' ? 'text-orange-400' : ''}`} />
+                <Icon className="h-3.5 w-3.5 shrink-0" />
                 <span className="hidden sm:inline">{label}</span>
-                {id === 'forge' && forgeNewCount > 0 && (
-                  <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-orange-400 text-[9px] font-bold text-black">
-                    {forgeNewCount}
-                  </span>
-                )}
               </button>
             ))}
           </nav>
@@ -202,7 +192,6 @@ export default function Dashboard() {
         {tab === 'events'   && <EventsTab />}
         {tab === 'orders'   && <OrdersTab />}
         {tab === 'printers' && <PrintersTab />}
-        {tab === 'forge'    && <ForgeTab onNewExportCount={n => setForgeNewCount(prev => prev + n)} />}
       </main>
     </div>
   );
