@@ -11854,13 +11854,16 @@ function renderAmsMap(printerName,compact=false){
   // ── External/virtual spool (printer with no AMS e.g. P1S direct spool) ──
   // Detect by tray_type (not tray_color — Bambu reports 00000000 even when loaded)
   const hasExtData=!!(vtTray&&vtTray.tray_type);
-  if(!totalSlots&&!hasExtData) return '<div style="font-size:6px;color:var(--txt-d);padding:4px 0">No AMS configured</div>';
+  // No AMS + no Pi connected + no live data → nothing useful to show
+  if(!totalSlots&&!hasExtData&&!hasPi) return '<div style="font-size:6px;color:var(--txt-d);padding:4px 0">No AMS configured</div>';
 
-  if(!totalSlots&&hasExtData){
-    const rawCol=(vtTray.tray_color||'').replace(/^#/,'');
+  if(!totalSlots){
+    // Always render external spool section for no-AMS printers when Pi is connected
+    // (Bambu reports empty vt_tray while idle, so we can't gate Load/Unload on hasExtData)
+    const rawCol=hasExtData?(vtTray.tray_color||'').replace(/^#/,''):'';
     const extCol='#'+(rawCol&&rawCol!=='00000000'?rawCol.slice(0,6):'888888');
-    const extMat=vtTray.tray_sub_brands||vtTray.tray_type||'?';
-    const extRemain=vtTray.remain||0;
+    const extMat=hasExtData?(vtTray.tray_sub_brands||vtTray.tray_type||'?'):'Ext Spool';
+    const extRemain=hasExtData?(vtTray.remain||0):0;
     const bc=extRemain>0?barcol(extRemain):'var(--txt-d)';
     const extKey=_amsSlotKey(printerName,255,254);
     const assignedExtId=(amsMap[printerName]||{})['ext']||'';
