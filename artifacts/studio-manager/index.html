@@ -5427,45 +5427,65 @@ function closeLinkToOrderModal(){
 }
 function renderLinkOrderList(filter){
   var f=(filter||'').toLowerCase().trim();
-  var candidates=(typeof queueItems!=='undefined'?queueItems:[]).filter(function(q){
-    if(q.id===_linkOrderTargetId||q.autoFromPi)return false;
-    if(!(q.fromEtsyOrder||q.fromShopify||q.fromEtsy||q.fromShopifyOrder))return false;
+  // Source from the Orders array — shows every Etsy/Shopify order regardless of
+  // whether a queue item exists, so duplicate orders for the same product both appear.
+  var allOrders=(typeof orders!=='undefined'?orders:[]);
+  var candidates=allOrders.filter(function(o){
+    if(!(o.fromEtsy||o.platform==='Etsy'||o.platform==='Shopify'||o.shopifyOrderId))return false;
     if(!f)return true;
-    return (q.name||'').toLowerCase().includes(f)||(q.fromEtsyOrder||'').includes(f)||(q.orderId||'').toLowerCase().includes(f)||(q.fromShopifyOrder||'').toLowerCase().includes(f);
+    var itemNames=(o.items||[]).map(function(it){return(it.name||'').toLowerCase();}).join(' ');
+    return (o.customer||'').toLowerCase().includes(f)
+      ||(o.orderId||'').toLowerCase().includes(f)
+      ||(o.etsyOrderId||'').includes(f)
+      ||(o.shopifyOrderId||'').toLowerCase().includes(f)
+      ||itemNames.includes(f);
+  });
+  // Sort: pending/active first, then by date desc
+  candidates=candidates.slice().sort(function(a,b){
+    var aD=(a.status==='done'||a.status==='shipped')?1:0;
+    var bD=(b.status==='done'||b.status==='shipped')?1:0;
+    if(aD!==bD)return aD-bD;
+    return (b.timestamp||0)-(a.timestamp||0);
   });
   var list=document.getElementById('link-order-list');
   if(!list)return;
   if(!candidates.length){
-    list.innerHTML='<div style="padding:20px;text-align:center;color:var(--txt-d);font-size:11px">'+(f?'No orders match your search':'No open Etsy or Shopify orders in queue')+'</div>';
+    list.innerHTML='<div style="padding:20px;text-align:center;color:var(--txt-d);font-size:11px">'+(f?'No orders match your search':'No Etsy or Shopify orders found')+'</div>';
     return;
   }
-  list.innerHTML=candidates.map(function(order){
-    var shopIcon=order.fromEtsyOrder||order.fromEtsy?'🟠':'🛍';
-    var ordRef=order.fromEtsyOrder||order.fromShopifyOrder||order.orderId||'';
-    var stageLabel=order.stage==='inprogress'?'<span style="font-size:8px;color:var(--cyn);margin-left:4px">In Progress</span>':order.stage==='done'?'<span style="font-size:8px;color:var(--txt-d);margin-left:4px">Done</span>':'<span style="font-size:8px;color:var(--txt-d);margin-left:4px">Queued</span>';
-    return '<button onclick="applyOrderLink(\''+esc(order.id)+'\')" style="display:flex;flex-direction:column;gap:2px;width:100%;text-align:left;background:var(--surf2);border:1px solid var(--bdr2);color:var(--txt);font-size:11px;font-family:\'Plus Jakarta Sans\',sans-serif;padding:10px 12px;border-radius:8px;cursor:pointer;">'+
-      '<div style="display:flex;align-items:center;gap:5px;">'+shopIcon+' <strong>'+esc(order.name)+'</strong>'+stageLabel+'</div>'+
-      (ordRef?'<div style="font-size:9px;color:var(--txt-d)">#'+esc(ordRef)+(order.printer?' · '+esc(order.printer):'')+'</div>':'')+
+  list.innerHTML=candidates.map(function(o){
+    var isEtsyO=o.fromEtsy||o.platform==='Etsy';
+    var shopIcon=isEtsyO?'🟠':'🛍';
+    var shopBadge=o.shop==='dioscuri'?'<span style="font-size:8px;color:#c084fc;margin-left:4px">Dioscuri&Co</span>':'';
+    var ordRef=o.etsyOrderId||o.shopifyOrderId||o.orderId||'';
+    var statusBadge=o.status==='shipped'?'<span style="font-size:8px;color:var(--grn);margin-left:4px">Shipped</span>':o.status==='done'?'<span style="font-size:8px;color:var(--txt-d);margin-left:4px">Done</span>':'<span style="font-size:8px;color:var(--cyn);margin-left:4px">Pending</span>';
+    var itemSummary=(o.items||[]).map(function(it){return it.name+(it.qty>1?' ×'+it.qty:'');}).join(', ');
+    return '<button onclick="applyOrderLink(\''+esc(o.id)+'\')" style="display:flex;flex-direction:column;gap:3px;width:100%;text-align:left;background:var(--surf2);border:1px solid var(--bdr2);color:var(--txt);font-size:11px;font-family:\'Plus Jakarta Sans\',sans-serif;padding:10px 12px;border-radius:8px;cursor:pointer;">'+
+      '<div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;">'+shopIcon+shopBadge+' <strong>'+esc(o.customer||'Customer')+'</strong>'+statusBadge+'</div>'+
+      (itemSummary?'<div style="font-size:9px;color:var(--txt)">'+esc(itemSummary)+'</div>':'')+
+      (ordRef?'<div style="font-size:9px;color:var(--txt-d)">#'+esc(ordRef)+(o.date?' · '+esc(o.date):'')+'</div>':'')+
     '</button>';
   }).join('');
 }
-function applyOrderLink(orderQueueItemId){
+function applyOrderLink(orderId){
   if(!_linkOrderTargetId)return;
-  var order=queueItems.find(function(q){return q.id===orderQueueItemId;});
+  // Find the order in the Orders array
+  var order=(typeof orders!=='undefined'?orders:[]).find(function(o){return o.id===orderId;});
   if(!order)return;
-  var orderEtsyId=order.fromEtsyOrder||null;
-  var orderShopifyId=order.fromShopifyOrder||null;
+  var etsyId=order.etsyOrderId||order.orderId||null;
+  var shopifyId=order.shopifyOrderId||null;
+  var isEtsyO=order.fromEtsy||order.platform==='Etsy';
   queueItems=queueItems.map(function(q){
     if(q.id!==_linkOrderTargetId)return q;
     return Object.assign({},q,{
-      fromEtsyOrder:orderEtsyId||undefined,
-      fromShopifyOrder:orderShopifyId||undefined,
-      linkedToOrderItem:order.id
+      fromEtsyOrder:isEtsyO?(etsyId||undefined):q.fromEtsyOrder,
+      fromShopifyOrder:!isEtsyO?(shopifyId||undefined):q.fromShopifyOrder,
+      linkedOrderId:order.id
     });
   });
   saveQueue();render();
   closeLinkToOrderModal();
-  toast('Linked','Pi print grouped with: '+order.name,'success',3000);
+  toast('Linked','Pi print grouped with order for: '+esc(order.customer),'success',3000);
 }
 function unlinkFromOrder(autoItemId){
   if(!autoItemId)return;
