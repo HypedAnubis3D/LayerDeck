@@ -651,6 +651,11 @@ input.srch::placeholder{color:var(--txt-d);}
 .up-shopify{background:var(--shopify-d);color:var(--shopify);border:1px solid rgba(150,191,72,.2);}
 .up-etsy{background:rgba(61,24,8,.8);color:#f09a3e;border:1px solid rgba(224,120,40,.2);}
 .up-dioscuri{background:rgba(88,28,135,.3);color:#c084fc;border:1px solid rgba(192,132,252,.35);font-size:8px;padding:2px 7px;border-radius:20px;font-weight:600;}
+.kcard-group{background:rgba(240,154,62,.04);border:1px solid rgba(240,154,62,.22);border-radius:8px;padding:6px 6px 2px;margin-bottom:8px;display:flex;flex-direction:column;gap:6px;}
+.kcard-group .kcard{margin-bottom:0;border-radius:5px;}
+.kcard-group-hdr{font-size:7px;color:#f09a3e;letter-spacing:.7px;font-weight:700;padding:1px 2px 5px;border-bottom:1px solid rgba(240,154,62,.2);margin-bottom:2px;display:flex;align-items:center;gap:5px;}
+.seg-btn.seg-dioscuri.seg-active{color:#c084fc;background:rgba(192,132,252,.15);}
+.seg-btn.seg-dioscuri{color:#a78bfa;border-color:rgba(167,139,250,.3);}
 
 /* ── EXPORT/IMPORT ── */
 .export-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
@@ -2002,6 +2007,7 @@ header{
       <button id="orf-square"     class="seg-btn"                       onclick="setOrderFilter('square')" style="color:#3e9bd4;border-color:rgba(62,155,212,.3)">💳 Square</button>
       <button id="orf-catalog"    class="seg-btn"                       onclick="setOrderFilter('catalog')" style="color:#bb86fc;border-color:rgba(155,89,182,.3)">📦 Catalog</button>
       <button id="orf-pending"    class="seg-btn"                       onclick="setOrderFilter('pending')" style="color:var(--amb);border-color:rgba(255,165,0,.3)">📦 Ship Later</button>
+      <button id="orf-dioscuri"   class="seg-btn seg-dioscuri"          onclick="setOrderFilter('dioscuri')" title="Dioscuri&amp;Co orders only">🔮 Dioscuri</button>
       <button id="orf-manual"     class="seg-btn seg-manual"            onclick="setOrderFilter('manual')">✏ Manual</button>
     </div>
   </div>
@@ -5032,7 +5038,7 @@ function renderQueue(){
     if(st.key==='queued'){
       items=items.slice().sort(function(a,b){return (a.sortOrder==null?9999:a.sortOrder)-(b.sortOrder==null?9999:b.sortOrder);});
     }
-    var cards=items.map(function(q){
+    var rawCards=items.map(function(q){
       var isShopify=q.fromShopify;
       var isEtsyQ=q.fromEtsy;
       var isMystery=q.fromMystery;
@@ -5051,7 +5057,7 @@ function renderQueue(){
         if(doneByStr)doneByHtml='<div style="font-size:7px;color:var(--cyn);margin-top:3px">Done by '+doneByStr+'</div>';
       }
       var dragAttrs=isQueued?' draggable="true" ondragstart="qDragStart(event,\''+q.id+'\')" ondragover="event.preventDefault()" ondrop="qDrop(event)"':'';
-      return '<div class="kcard'+(isShopify?' kc-shopify':'')+(isEtsyQ?' kc-etsy':'')+(isSel?' selected':'')+'" data-selid="'+q.id+'" data-qid="'+q.id+'"'+dragAttrs+' onclick="if(selectMode===\'queue\'){event.stopPropagation();toggleSelect(\''+q.id+'\');}">'+
+      var cardHtml='<div class="kcard'+(isShopify?' kc-shopify':'')+(isEtsyQ?' kc-etsy':'')+(isSel?' selected':'')+'" data-selid="'+q.id+'" data-qid="'+q.id+'"'+dragAttrs+' onclick="if(selectMode===\'queue\'){event.stopPropagation();toggleSelect(\''+q.id+'\');}">'+
         '<input type="checkbox" class="sel-checkbox"'+(isSel?' checked':'')+' onclick="event.stopPropagation();toggleSelect(\''+q.id+'\')"/>'+
         (prioIcon?'<div class="k-priority">'+prioIcon+'</div>':'')+
         (isMystery?'<div style="font-size:6px;color:var(--pur-b);letter-spacing:1px;margin-bottom:3px">🎁 MYSTERY GIFT</div>':'')+
@@ -5094,7 +5100,20 @@ function renderQueue(){
           '<button class="k-move-btn" style="color:var(--red);border-color:var(--red-d)" onclick="event.stopPropagation();delQueue(\''+q.id+'\')">✕</button>'+
         '</div>'+
       '</div>';
-    }).join('');
+      return {oid:q.fromEtsyOrder||null,html:cardHtml};
+    });
+    // Group items that share an Etsy order together under a visual wrapper
+    var _pOids={};var _pts=[];
+    rawCards.forEach(function(c){
+      if(!c.oid){_pts.push(c.html);return;}
+      if(_pOids[c.oid])return;
+      _pOids[c.oid]=true;
+      var grp=rawCards.filter(function(x){return x.oid===c.oid;});
+      if(grp.length===1){_pts.push(grp[0].html);return;}
+      var _ordRef=items.find(function(x){return x.fromEtsyOrder===c.oid&&x.orderId;})||{orderId:''};
+      _pts.push('<div class="kcard-group"><div class="kcard-group-hdr">🟠 Etsy Order '+esc(_ordRef.orderId||'')+'<span style="font-size:6px;opacity:.55;margin-left:6px">'+grp.length+' items</span></div>'+grp.map(function(x){return x.html;}).join('')+'</div>');
+    });
+    var cards=_pts.join('');
     return '<div class="kanban-col" id="kanban-col-'+st.key+'" ondragover="event.preventDefault()" ondrop="qDropCol(event,\''+st.key+'\')">'+
       '<div class="kanban-hdr">'+
         '<div class="kanban-title" style="color:'+st.color+'">'+st.label+'</div>'+
@@ -5480,6 +5499,7 @@ function renderOrders(){
   const hasPendingShip=function(o){return !!(o.hasPendingShipments||(o.items||[]).some(function(it){return it.shipLater&&!it.shipped;}));};
   if(orderFilter==='shopify')    list=list.filter(isShopify);
   else if(orderFilter==='etsy')  list=list.filter(isEtsy);
+  else if(orderFilter==='dioscuri') list=list.filter(function(o){return isEtsy(o)&&o.shop==='dioscuri';});
   else if(orderFilter==='convention') list=list.filter(isConvention);
   else if(orderFilter==='square') list=list.filter(isSquare);
   else if(orderFilter==='catalog') list=list.filter(isCatalog);
@@ -12592,7 +12612,7 @@ document.addEventListener('click',function(e){
 let orderFilter='all';
 function setOrderFilter(f){
   orderFilter=f;
-  ['all','shopify','etsy','convention','square','catalog','pending','manual'].forEach(function(k){
+  ['all','shopify','etsy','dioscuri','convention','square','catalog','pending','manual'].forEach(function(k){
     const btn=document.getElementById('orf-'+k);
     if(!btn)return;
     btn.classList.remove('seg-active');
