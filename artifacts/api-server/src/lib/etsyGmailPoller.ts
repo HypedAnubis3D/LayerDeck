@@ -645,9 +645,10 @@ async function loadDiscordNotifiedOrders(): Promise<void> {
     );
     for (const row of res.rows) {
       if (!row.order_number) continue;
-      // Determine shopId from stored order_json; default to 'ha3d' for legacy records
-      const shopId = row.order_json?.shop ?? "ha3d";
-      _discordNotifiedOrders.add(`${shopId}:${row.order_number}`);
+      // Add both shop prefixes so any shop field mismatch (e.g. from legacy records
+      // where order_json?.shop is null) never causes a duplicate Discord alert on restart.
+      _discordNotifiedOrders.add(`ha3d:${row.order_number}`);
+      _discordNotifiedOrders.add(`dioscuri:${row.order_number}`);
     }
     logger.info({ count: _discordNotifiedOrders.size }, "Loaded Discord-notified order numbers from DB");
   } catch (err) {

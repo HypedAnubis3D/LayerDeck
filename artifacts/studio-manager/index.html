@@ -5515,6 +5515,21 @@ function moveQueue(id,stage){
       }
     }
   }
+  // Moving back to Queued from In Progress → delete the auto-created 'printing' print record
+  // (it will be re-created fresh the next time the item is moved to In Progress)
+  if(stage==='queued'){
+    const qi=queueItems.find(q=>q.id===id);
+    if(qi&&(qi.printId||qi.linkedPrintId)){
+      const _linkedIds=new Set([qi.printId,qi.linkedPrintId].filter(Boolean));
+      const _linkedPrint=prints.find(p=>_linkedIds.has(p.id)&&p.status==='printing');
+      if(_linkedPrint){
+        prints=prints.filter(p=>p.id!==_linkedPrint.id);
+        savePrints();
+      }
+      // Clear both link fields so a fresh record is created on next move-to-inprogress
+      queueItems=queueItems.map(q=>q.id===id?{...q,printId:undefined,linkedPrintId:undefined,startedAt:undefined}:q);
+    }
+  }
   // Record startedAt when moving to In Progress
   if(stage==='inprogress'){
     const qi=queueItems.find(q=>q.id===id);
@@ -18115,6 +18130,7 @@ try{var _s=localStorage.getItem('piPrevStateKeys');if(_s){var _r=JSON.parse(_s)|
 try{var _ha=localStorage.getItem('hmsLastAlerted');window._hmsLastAlerted=_ha?JSON.parse(_ha):{};}catch(e){window._hmsLastAlerted={};}
 let piPollTimer=null;
 let piPrintStartTimes={}; // {printerName: timestamp}
+const _piDiscordedPrints={}; // {printer:normJobName → sentAt ms} — prevents duplicate print_complete Discord alerts
 let piAmsStartRemain={};  // {printerName: {"ui_ti": pct, "ext": pct}} — AMS remain% at print start
 let piTmfObjData={};      // {printerName: {objectList,totalObjects,fromTmf,plateName}} — fallback from 3MF library
 let piPollInFlight=false;  // in-flight lock — never send 2 requests at once
@@ -18872,8 +18888,14 @@ async function onPiPrintFinished(name,data){
   piPrintStartTimes[name]=null;
   piAmsStartRemain[name]={};
   piTmfObjData[name]=null;
-  postToDiscord('print_complete',
-    '✅ Print Complete — '+name+'\nJob: '+jobName+'\nDuration: '+fmtMins(durationMins)+'\nFilament: ~'+(filamentSlots.reduce(function(a,s){return a+s.grams;},0)||gramsUsed)+'g '+material);
+  // Dedup: skip if we already posted a print_complete Discord for this printer+job within 30 minutes
+  const _discordKey=name+':'+_jNormFin;
+  const _lastSent=_piDiscordedPrints[_discordKey]||0;
+  if(Date.now()-_lastSent>30*60*1000){
+    _piDiscordedPrints[_discordKey]=Date.now();
+    postToDiscord('print_complete',
+      '✅ Print Complete — '+name+'\nJob: '+jobName+'\nDuration: '+fmtMins(durationMins)+'\nFilament: ~'+(filamentSlots.reduce(function(a,s){return a+s.grams;},0)||gramsUsed)+'g '+material);
+  }
 
   // ── Tapo auto power-off (10-min countdown with Keep ON option) ─────────────
   const _tapoDeviceId=_tapoPrinterPlugs[name];
