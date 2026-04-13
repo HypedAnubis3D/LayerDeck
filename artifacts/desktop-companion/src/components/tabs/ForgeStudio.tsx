@@ -89,101 +89,48 @@ async function build3MF(
   slots: Slot[], printMM: number, lh: number,
   imageBase64?: string, imageType?: string
 ): Promise<Blob> {
-  const IMG_RES = 120;
-  const scale = printMM / IMG_RES;
-  const half = printMM / 2;
-  const plateThickness = 1.2;
-  const totalColorHeight = 1.6;
+  // ── Flat tile with layer range metadata (Chroma Canvas style) ───────────
+  const plateThickness = 2.2;
+  const hw = printMM / 2;
+  const nSlots = slots.length;
+  const zoneH = plateThickness / nSlots;
 
-  // ── Sample image at 120×120 ───────────────────────────────────────────────
-  let rawPixels: Uint8ClampedArray | null = null;
-  if (imageBase64) {
-    rawPixels = await new Promise(resolve => {
-      const img = new Image();
-      img.onload = () => {
-        const c = document.createElement('canvas');
-        c.width = IMG_RES; c.height = IMG_RES;
-        const ctx = c.getContext('2d')!;
-        ctx.drawImage(img, 0, 0, IMG_RES, IMG_RES);
-        resolve(ctx.getImageData(0, 0, IMG_RES, IMG_RES).data);
-      };
-      img.src = `data:${imageType || 'image/jpeg'};base64,${imageBase64}`;
-    });
-  }
-
-  // Fix 1: extract brightness then box-blur (radius=4) to smooth jagged spikes
-  const bright = new Float32Array(IMG_RES * IMG_RES);
-  for (let i = 0; i < bright.length; i++) {
-    if (rawPixels) {
-      const di = i * 4;
-      bright[i] = (rawPixels[di] * 0.299 + rawPixels[di+1] * 0.587 + rawPixels[di+2] * 0.114) / 255;
-    } else {
-      bright[i] = 0.5;
-    }
-  }
-  const R = 4;
-  const blurred = new Float32Array(IMG_RES * IMG_RES);
-  for (let y = 0; y < IMG_RES; y++) {
-    for (let x = 0; x < IMG_RES; x++) {
-      let sum = 0, cnt = 0;
-      for (let dy = -R; dy <= R; dy++) {
-        for (let dx = -R; dx <= R; dx++) {
-          const nx = x + dx, ny = y + dy;
-          if (nx >= 0 && nx < IMG_RES && ny >= 0 && ny < IMG_RES) { sum += bright[ny * IMG_RES + nx]; cnt++; }
-        }
-      }
-      blurred[y * IMG_RES + x] = sum / cnt;
-    }
-  }
-
-  // ── Build single heightmap mesh (Fix 2: exact slot color; Fix 3: centered mm coords)
-  const vLines: string[] = [];
-  for (let row = 0; row < IMG_RES; row++) {
-    for (let col = 0; col < IMG_RES; col++) {
-      const lum = blurred[row * IMG_RES + col];
-      const z = plateThickness + lum * totalColorHeight;
-      const x = col * scale - half;
-      const y = row * scale - half;
-      vLines.push(`<vertex x="${x.toFixed(3)}" y="${y.toFixed(3)}" z="${z.toFixed(3)}"/>`);
-    }
-  }
-
-  const tLines: string[] = [];
-  for (let row = 0; row < IMG_RES - 1; row++) {
-    for (let col = 0; col < IMG_RES - 1; col++) {
-      const a = row * IMG_RES + col;
-      const b = row * IMG_RES + col + 1;
-      const c = (row + 1) * IMG_RES + col;
-      const d = (row + 1) * IMG_RES + col + 1;
-      const lum = blurred[row * IMG_RES + col];
-      const si = Math.min(Math.floor(lum * slots.length), slots.length - 1);
-      tLines.push(`<triangle v1="${a}" v2="${c}" v3="${b}" p1="${si}"/>`);
-      tLines.push(`<triangle v1="${b}" v2="${c}" v3="${d}" p1="${si}"/>`);
-    }
-  }
-
-  // ── m:colorgroup — one entry per slot ─────────────────────────────────────
-  const colorGroup = slots.map(s =>
-    `      <m:color color="${s.hex || '#888888'}"/>`
-  ).join('\n');
+  const metaLines = slots.map((s, i) => [
+    `  <metadata name="BambuStudio:FilamentColor${i+1}">${s.hex || '#888888'}</metadata>`,
+    `  <metadata name="BambuStudio:LayerRange${i+1}_start">${(i * zoneH).toFixed(2)}</metadata>`,
+    `  <metadata name="BambuStudio:LayerRange${i+1}_end">${((i+1) * zoneH).toFixed(2)}</metadata>`,
+  ].join('\n')).join('\n');
 
   const model = `<?xml version="1.0" encoding="UTF-8"?>
 <model unit="millimeter" xml:lang="en-US"
-  xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02"
-  xmlns:m="http://schemas.microsoft.com/3dmanufacturing/material/2015/02">
+  xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
+${metaLines}
   <resources>
-    <m:colorgroup id="1">
-${colorGroup}
-    </m:colorgroup>
-    <object id="10" type="model" pid="1" pindex="0" name="LayerDeck_Forge">
+    <object id="1" type="model" name="LayerDeck_Forge">
       <mesh>
-        <vertices>${vLines.join('')}</vertices>
-        <triangles>${tLines.join('')}</triangles>
+        <vertices>
+          <vertex x="${(-hw).toFixed(3)}" y="${(-hw).toFixed(3)}" z="0.000"/>
+          <vertex x="${hw.toFixed(3)}" y="${(-hw).toFixed(3)}" z="0.000"/>
+          <vertex x="${hw.toFixed(3)}" y="${hw.toFixed(3)}" z="0.000"/>
+          <vertex x="${(-hw).toFixed(3)}" y="${hw.toFixed(3)}" z="0.000"/>
+          <vertex x="${(-hw).toFixed(3)}" y="${(-hw).toFixed(3)}" z="${plateThickness.toFixed(3)}"/>
+          <vertex x="${hw.toFixed(3)}" y="${(-hw).toFixed(3)}" z="${plateThickness.toFixed(3)}"/>
+          <vertex x="${hw.toFixed(3)}" y="${hw.toFixed(3)}" z="${plateThickness.toFixed(3)}"/>
+          <vertex x="${(-hw).toFixed(3)}" y="${hw.toFixed(3)}" z="${plateThickness.toFixed(3)}"/>
+        </vertices>
+        <triangles>
+          <triangle v1="0" v2="2" v3="1"/><triangle v1="0" v2="3" v3="2"/>
+          <triangle v1="4" v2="5" v3="6"/><triangle v1="4" v2="6" v3="7"/>
+          <triangle v1="0" v2="1" v3="5"/><triangle v1="0" v2="5" v3="4"/>
+          <triangle v1="2" v2="3" v3="7"/><triangle v1="2" v2="7" v3="6"/>
+          <triangle v1="0" v2="4" v3="7"/><triangle v1="0" v2="7" v3="3"/>
+          <triangle v1="1" v2="2" v3="6"/><triangle v1="1" v2="6" v3="5"/>
+        </triangles>
       </mesh>
     </object>
   </resources>
   <build>
-    <item objectid="10"/>
+    <item objectid="1"/>
   </build>
 </model>`;
 
@@ -382,14 +329,11 @@ export function ForgeStudio() {
     if (threeCleanup.current) { threeCleanup.current(); threeCleanup.current = null; }
 
     const printMM = parseFloat((stack.recommendedPrintSize || '120mm').replace(/[^0-9.]/g, '')) || 120;
-    const lh = parseFloat(stack.layerHeight || '0.10') || 0.10;
-    const IMG_RES = 120;
-    const scale = printMM / IMG_RES;
-    const half = printMM / 2;
-    const plateThickness = 1.2;
-    const totalColorHeight = 1.6;
+    // Flat tile: N equal-height slabs stacked, one per slot
+    const plateThickness3d = 2.2;
+    const slabH = plateThickness3d / liveSlots.length;
 
-    function initScene(pixelData: Uint8ClampedArray | null) {
+    function initScene() {
       const w = container!.clientWidth || 480;
       const h = container!.clientHeight || 480;
       const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
@@ -404,79 +348,22 @@ export function ForgeStudio() {
       const dl = new THREE.DirectionalLight(0xffffff, 0.8);
       dl.position.set(1, 2, 1); scene.add(dl);
 
-      if (pixelData) {
-        // Fix 1: extract brightness + box blur (radius=4) for smooth terrain
-        const bright3d = new Float32Array(IMG_RES * IMG_RES);
-        for (let i = 0; i < bright3d.length; i++) {
-          const di = i * 4;
-          bright3d[i] = (pixelData[di] * 0.299 + pixelData[di+1] * 0.587 + pixelData[di+2] * 0.114) / 255;
-        }
-        const R3d = 4;
-        const blur3d = new Float32Array(IMG_RES * IMG_RES);
-        for (let y = 0; y < IMG_RES; y++) {
-          for (let x = 0; x < IMG_RES; x++) {
-            let sum = 0, cnt = 0;
-            for (let dy = -R3d; dy <= R3d; dy++) {
-              for (let dx = -R3d; dx <= R3d; dx++) {
-                const nx = x + dx, ny = y + dy;
-                if (nx >= 0 && nx < IMG_RES && ny >= 0 && ny < IMG_RES) { sum += bright3d[ny * IMG_RES + nx]; cnt++; }
-              }
-            }
-            blur3d[y * IMG_RES + x] = sum / cnt;
-          }
-        }
+      // One BoxGeometry slab per slot, stacked along Y
+      let zCursor = 0;
+      liveSlots.forEach(slot => {
+        const geo = new THREE.BoxGeometry(printMM, slabH, printMM);
+        const mat = new THREE.MeshLambertMaterial({ color: new THREE.Color(slot.hex || '#888888') });
+        const mesh = new THREE.Mesh(geo, mat);
+        mesh.position.set(0, zCursor + slabH / 2, 0);
+        scene.add(mesh);
+        zCursor += slabH;
+      });
 
-        // Build with raw pixel coords; center() + scale() applied after
-        const verts: number[] = [], colors: number[] = [], indices: number[] = [];
-        for (let row = 0; row < IMG_RES; row++) {
-          for (let col = 0; col < IMG_RES; col++) {
-            const lum = blur3d[row * IMG_RES + col];
-            const colH = plateThickness + lum * totalColorHeight;
-            // Fix 2: snap to exact slot color (no blending between slots)
-            const si = Math.min(Math.floor(lum * liveSlots.length), liveSlots.length - 1);
-            const hex = liveSlots[si].hex || '#888888';
-            verts.push(col, colH, row);
-            colors.push(parseInt(hex.slice(1,3),16)/255, parseInt(hex.slice(3,5),16)/255, parseInt(hex.slice(5,7),16)/255);
-          }
-        }
-        for (let row = 0; row < IMG_RES - 1; row++) {
-          for (let col = 0; col < IMG_RES - 1; col++) {
-            const a = row * IMG_RES + col;
-            const b = row * IMG_RES + col + 1;
-            const c = (row + 1) * IMG_RES + col;
-            const d = (row + 1) * IMG_RES + col + 1;
-            indices.push(a, c, b, b, c, d);
-          }
-        }
-        const geo = new THREE.BufferGeometry();
-        geo.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
-        geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
-        geo.setIndex(indices);
-        geo.computeVertexNormals();
-        // Fix 3: center at origin, scale X/Z to exact print size in mm, sit on plate
-        geo.center();
-        geo.scale(printMM / IMG_RES, 1, printMM / IMG_RES);
-        geo.translate(0, plateThickness / 2, 0);
-        scene.add(new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ vertexColors: true })));
-      } else {
-        // Fallback: flat slab per slot (no image)
-        let zCursor = 0;
-        liveSlots.forEach(slot => {
-          const layerCount = Math.max(1, (slot.layerEnd || 1) - (slot.layerStart || 0));
-          const slabZ = layerCount * lh;
-          const geo = new THREE.BoxGeometry(printMM, slabZ, printMM);
-          const mat = new THREE.MeshLambertMaterial({ color: new THREE.Color(slot.hex || '#888') });
-          const mesh = new THREE.Mesh(geo, mat);
-          mesh.position.set(0, zCursor + slabZ / 2, 0);
-          scene.add(mesh); zCursor += slabZ;
-        });
-      }
-
-      // After geo.center() the mesh is centered at origin in all axes
-      const camDist = Math.max(printMM * 1.4, 80);
-      camera.position.set(camDist, camDist * 0.8, camDist);
+      const midH = plateThickness3d / 2;
+      const camDist = Math.max(printMM * 1.5, 80);
+      camera.position.set(camDist * 0.8, camDist * 0.6, camDist);
       const controls = new OrbitControls(camera, renderer.domElement);
-      controls.target.set(0, 0, 0);
+      controls.target.set(0, midH, 0);
       controls.enableDamping = true; controls.dampingFactor = 0.1;
       controls.update();
 
@@ -496,19 +383,7 @@ export function ForgeStudio() {
       };
     }
 
-    if (imgData) {
-      const img = new Image();
-      img.onload = () => {
-        const off = document.createElement('canvas');
-        off.width = IMG_RES; off.height = IMG_RES;
-        const ctx = off.getContext('2d')!;
-        ctx.drawImage(img, 0, 0, IMG_RES, IMG_RES);
-        initScene(ctx.getImageData(0, 0, IMG_RES, IMG_RES).data);
-      };
-      img.src = `data:${imgData.type};base64,${imgData.base64}`;
-    } else {
-      initScene(null);
-    }
+    initScene();
 
     return () => { if (threeCleanup.current) { threeCleanup.current(); threeCleanup.current = null; } };
   }, [stage, previewTab, liveSlots, stack, imgData]);
