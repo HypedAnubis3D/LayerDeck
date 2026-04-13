@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
-import { Flame, RefreshCw, Download, ExternalLink, PackageOpen, Cpu } from 'lucide-react';
+import { Flame, RefreshCw, Download, ExternalLink, PackageOpen, Cpu, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ForgeStudio } from './ForgeStudio';
 
@@ -39,7 +39,8 @@ function PaletteStrip({ palette }: { palette: ForgeExport['palette'] }) {
   );
 }
 
-function ExportCard({ exp }: { exp: ForgeExport }) {
+function ExportCard({ exp, onDelete }: { exp: ForgeExport; onDelete: (id: string) => void }) {
+  const [deleting, setDeleting] = useState(false);
   const downloadUrl = exp.download_url || exp.stl_url || '';
   const date = exp.created_at
     ? new Date(exp.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
@@ -48,6 +49,14 @@ function ExportCard({ exp }: { exp: ForgeExport }) {
   function handleOpen() {
     if (!downloadUrl) return;
     window.open(downloadUrl, '_blank', 'noopener');
+  }
+
+  async function handleDelete() {
+    setDeleting(true);
+    const { error } = await supabase.from('forge_exports').delete().eq('id', exp.id);
+    if (error) console.error('Delete failed', error);
+    else onDelete(exp.id);
+    setDeleting(false);
   }
 
   return (
@@ -79,6 +88,10 @@ function ExportCard({ exp }: { exp: ForgeExport }) {
           onClick={handleOpen} disabled={!downloadUrl} title="Save 3MF file">
           <Download className="h-3.5 w-3.5" /> Save 3MF
         </Button>
+        <Button size="sm" variant="outline" className="gap-1 text-xs border-red-500/20 hover:border-red-500/50 hover:bg-red-500/10 text-red-400"
+          onClick={handleDelete} disabled={deleting} title="Delete export">
+          <Trash2 className="h-3.5 w-3.5" />
+        </Button>
       </div>
     </div>
   );
@@ -93,6 +106,11 @@ interface ForgeTabProps {
 export function ForgeTab({ onNewExportCount }: ForgeTabProps) {
   const [subTab, setSubTab] = useState<SubTab>('queue');
   const lastKnownCount = useRef<number | null>(null);
+  const queryClient = useQueryClient();
+
+  function handleDelete(id: string) {
+    queryClient.setQueryData<ForgeExport[]>(['forge-exports'], old => (old ?? []).filter(e => e.id !== id));
+  }
 
   const { data: exports = [], isLoading, refetch, isFetching } = useQuery({
     queryKey: ['forge-exports'],
@@ -161,7 +179,7 @@ export function ForgeTab({ onNewExportCount }: ForgeTabProps) {
             </div>
           ) : (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {exports.map(exp => <ExportCard key={exp.id} exp={exp} />)}
+              {exports.map(exp => <ExportCard key={exp.id} exp={exp} onDelete={handleDelete} />)}
             </div>
           )}
         </div>

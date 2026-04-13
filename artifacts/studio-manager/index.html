@@ -24571,13 +24571,6 @@ function posShowReceipt(sale){
       _lastExportBlobUrl = URL.createObjectURL(blob);
       _lastExportFilename = filename;
 
-      // Trigger download
-      var a = document.createElement('a');
-      a.href = _lastExportBlobUrl; a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-
       // ── Upload to server in background (enables Companion sync) ──────────
       (async function() {
         try {
