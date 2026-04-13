@@ -26,9 +26,17 @@ router.get("/orders/recent", async (_req: Request, res: Response): Promise<void>
 });
 
 router.get("/status", (_req: Request, res: Response): void => {
+  const accounts: { shopId: string; shopLabel: string; gmailAddress: string }[] = [];
+  if (process.env.ETSY_GMAIL_ADDRESS) {
+    accounts.push({ shopId: "ha3d", shopLabel: "HypedAnubis3D", gmailAddress: process.env.ETSY_GMAIL_ADDRESS });
+  }
+  if (process.env.ETSY_GMAIL_ADDRESS_2) {
+    accounts.push({ shopId: "dioscuri", shopLabel: "Dioscuri&Co", gmailAddress: process.env.ETSY_GMAIL_ADDRESS_2 });
+  }
   res.json({
-    configured: !!(process.env.ETSY_GMAIL_ADDRESS && process.env.ETSY_GMAIL_APP_PASSWORD),
+    configured: accounts.length > 0,
     gmailAddress: process.env.ETSY_GMAIL_ADDRESS ?? null,
+    accounts,
     lastSyncAt,
     lastSyncError,
     isPolling,

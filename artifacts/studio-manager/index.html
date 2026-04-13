@@ -650,6 +650,7 @@ input.srch::placeholder{color:var(--txt-d);}
 .uorder-platform{font-size:9px;padding:3px 9px;border-radius:20px;font-weight:600;}
 .up-shopify{background:var(--shopify-d);color:var(--shopify);border:1px solid rgba(150,191,72,.2);}
 .up-etsy{background:rgba(61,24,8,.8);color:#f09a3e;border:1px solid rgba(224,120,40,.2);}
+.up-dioscuri{background:rgba(88,28,135,.3);color:#c084fc;border:1px solid rgba(192,132,252,.35);font-size:8px;padding:2px 7px;border-radius:20px;font-weight:600;}
 
 /* ── EXPORT/IMPORT ── */
 .export-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
@@ -5521,7 +5522,7 @@ function renderOrders(){
       :shopify
         ?'<span class="uorder-platform up-shopify">🛍 Shopify</span>'
         :etsy
-          ?'<span class="uorder-platform up-etsy">🟠 Etsy</span>'
+          ?('<span class="uorder-platform up-etsy">🟠 Etsy</span>'+(o.shop==='dioscuri'?'<span class="up-dioscuri">Dioscuri&amp;Co</span>':''))
           :(catalog&&o.conventionName)
             ?(_convBadge+_catBadge)
             :catalog
@@ -5963,9 +5964,9 @@ function renderEtsyTab(){
       +'</div>'
     +'</div>'
     +'<div style="background:var(--surf);border:1px solid rgba(241,112,34,.2);border-radius:5px;padding:12px;margin-bottom:12px;font-size:7px;color:var(--txt-d);line-height:1.8">'
-      +'Polls <b style="color:#f09a3e">hypedbodega@gmail.com</b> every 5 minutes for emails from <b>transaction@etsy.com</b>.<br>'
-      +'Each order is deduplicated by Gmail message ID — no email is ever imported twice.<br>'
-      +'Orders automatically appear in the Orders tab and Queue with a <b>🟠 ETSY ORDER</b> badge.'
+      +'Polls <b style="color:#f09a3e">hypedbodega@gmail.com</b> (HypedAnubis3D) and <b style="color:#c084fc">dioscuriandco@gmail.com</b> (Dioscuri&amp;Co) every 5 minutes for emails from <b>transaction@etsy.com</b>.<br>'
+      +'Each order is deduplicated by Gmail message ID per account — no email is ever imported twice.<br>'
+      +'Orders automatically appear in the Orders tab with a <b>🟠 ETSY</b> badge. Dioscuri&amp;Co orders also show a <b style="color:#c084fc">Dioscuri&amp;Co</b> label.'
     +'</div>'
     +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">'
       +'<div style="background:var(--surf);border:1px solid var(--bdr);border-radius:5px;padding:12px;text-align:center">'
