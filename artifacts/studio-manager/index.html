@@ -6081,6 +6081,7 @@ async function pollEtsyOrders(silent){
     var rawOrders=data.orders||[];
     if(!rawOrders.length)return;
     var newCount=0;
+    var patchedShop=0;
     rawOrders.forEach(function(o){
       var existing=orders.find(function(ex){
         return ex.orderId===o.orderId||ex.etsyOrderId===o.orderNumber||ex.gmailMessageId===o.gmailMessageId;
@@ -6088,12 +6089,21 @@ async function pollEtsyOrders(silent){
       if(!existing){
         ingestEtsyOrder(o);
         newCount++;
+      } else if(o.shop&&!existing.shop){
+        // Patch missing shop field on orders already in local storage
+        existing.shop=o.shop;
+        queueItems=queueItems.map(function(q){
+          if(q.fromEtsy&&q.fromEtsyOrder===existing.orderId&&!q.shop)
+            return Object.assign({},q,{shop:o.shop});
+          return q;
+        });
+        patchedShop++;
       }
     });
-    if(newCount>0){
+    if(newCount>0||patchedShop>0){
       saveOrders();saveQueue();
       render();
-      toast('🟠 New Etsy Order'+(newCount>1?'s':''),newCount+' order'+(newCount!==1?'s':'')+' imported from Etsy','success',6000);
+      if(newCount>0)toast('🟠 New Etsy Order'+(newCount>1?'s':''),newCount+' order'+(newCount!==1?'s':'')+' imported from Etsy','success',6000);
     }
   }catch(e){
     if(!silent)console.warn('[Etsy] poll failed:',e.message);
@@ -6116,6 +6126,7 @@ function ingestEtsyOrder(o){
     shippingAddress:o.shippingAddress||'',
     platform:'Etsy',
     fromEtsy:true,
+    shop:o.shop||'ha3d',
     date:o.date||new Date().toISOString().split('T')[0],
     items:items,
     status:o.status||'pending',
@@ -6146,6 +6157,7 @@ function ingestEtsyOrder(o){
         fromEtsy:true,noTmf:!matchTmf,
         tmfId:matchTmf?matchTmf.id:null,
         fromEtsyOrder:orderId,
+        shop:o.shop||'ha3d',
         notes:matchTmf?'3MF: '+matchTmf.name:'⚠ No 3MF on file',
         timestamp:Date.now()
       });
