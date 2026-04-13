@@ -7345,8 +7345,9 @@ function confirmFinish(){
       fetch('/api/push/watch-print/'+qi.id,{method:'DELETE'}).catch(()=>{});
     }
   }
+  const _savedOutcome=finOutcome;
   savePrints();closeFinish();
-  toast(finOutcome==='done'?'✓ Print Complete':'✕ Print Failed',finishedPrint?.name||'',finOutcome==='done'?'success':'error');
+  toast(_savedOutcome==='done'?'✓ Print Complete':'✕ Print Failed',finishedPrint?.name||'',_savedOutcome==='done'?'success':'error');
   render();
 }
 function closeFinish(){document.getElementById('mod-finish').style.display='none';finOutcome=null;}
