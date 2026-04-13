@@ -379,6 +379,9 @@ input.srch::placeholder{color:var(--txt-d);}
 .modal.wide{width:540px;}
 .modal.narrow{width:340px;}
 .mtitle{font-family:'Orbitron',monospace;font-size:11px;color:var(--txt-b);letter-spacing:2px;text-transform:uppercase;margin-bottom:16px;}
+.mhead{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}
+.mhead .mtitle{margin-bottom:0;}
+.mbtn{background:transparent;border:none;color:var(--txt-d);font-size:18px;cursor:pointer;padding:0 2px;line-height:1;flex-shrink:0;}
 .field{margin-bottom:12px;}
 .fl{font-size:10px;color:var(--txt-d);font-weight:500;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px;}
 .field input,.field select,.field textarea{width:100%;background:var(--bg);border:1px solid var(--bdr2);color:var(--txt);padding:8px 10px;font-family:'Plus Jakarta Sans',sans-serif;font-size:11px;border-radius:8px;}
@@ -3268,6 +3271,20 @@ header{
 </div>
 </div>
 
+<!-- LINK TO ORDER -->
+<div class="overlay" id="mod-link-order" style="display:none" onclick="if(event.target.id==='mod-link-order')closeLinkToOrderModal()">
+<div class="modal" style="max-width:480px;max-height:82vh;display:flex;flex-direction:column">
+  <div class="mhead"><span class="mtitle">🔗 Link Print to Order</span><button class="mbtn" onclick="closeLinkToOrderModal()">✕</button></div>
+  <p style="margin:0 0 10px;font-size:11px;color:var(--text-dim)">Select the Etsy or Shopify order this Pi Hub print belongs to. It will be grouped with that order in the queue.</p>
+  <input id="link-order-search" type="text" class="inp" placeholder="Search order name, order number…" oninput="renderLinkOrderList(this.value)" style="margin-bottom:10px"/>
+  <div id="link-order-list" style="flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:6px;min-height:120px"></div>
+  <div class="macts" style="margin-top:12px">
+    <button class="btn btn-ghost" id="link-order-unlink-btn" style="display:none;color:var(--red);border-color:var(--red-d)" onclick="unlinkFromOrder(_linkOrderTargetId)">✕ Remove Link</button>
+    <button class="btn btn-ghost" onclick="closeLinkToOrderModal()">Cancel</button>
+  </div>
+</div>
+</div>
+
 <!-- PRINT -->
 <div class="overlay" id="mod-print" style="display:none" onclick="if(event.target.id==='mod-print')closePrint()">
 <div class="modal wide">
@@ -5096,7 +5113,7 @@ function renderQueue(){
         '<div class="kcard-actions">'+
           (prevStage?'<button class="k-move-btn" onclick="event.stopPropagation();moveQueue(\''+q.id+'\',\''+prevStage+'\')">← Back</button>':'')+
           (nextStage?'<button class="k-move-btn" style="color:'+(st.key==='queued'?'var(--cyn)':'var(--grn)')+';border-color:'+(st.key==='queued'?'var(--cyn-d)':'var(--grn-d)')+'" onclick="event.stopPropagation();moveQueue(\''+q.id+'\',\''+nextStage+'\')">'+(st.key==='queued'?'Start →':'✓ Done')+'</button>':'')+
-          (q.autoFromPi&&!q.fromEtsyOrder&&!q.fromShopifyOrder?'<button class="k-move-btn" style="color:var(--cyn);border-color:var(--cyn-d);font-size:7px" onclick="event.stopPropagation();showLinkToOrderMenu(event,\''+q.id+'\')" title="Link to an Etsy or Shopify order">🔗 Link</button>':'')+
+          (q.autoFromPi?'<button class="k-move-btn" style="color:var(--cyn);border-color:var(--cyn-d);font-size:7px" onclick="event.stopPropagation();showLinkToOrderMenu(event,\''+q.id+'\')" title="'+(q.fromEtsyOrder||q.fromShopifyOrder?'Change or remove order link':'Link to an Etsy or Shopify order')+'">'+(q.fromEtsyOrder||q.fromShopifyOrder?'🔗 Change':'🔗 Link')+'</button>':'')+
           (st.key==='done'?'<button class="k-move-btn" style="color:var(--pur);border-color:var(--pur-d)" onclick="event.stopPropagation();openSocialFromQueue(\''+q.id+'\')" title="Draft Instagram post for this item">📱</button>':'')+
           '<button class="k-move-btn k-prio-btn" style="max-width:72px;color:'+(q.priority==='high'?'var(--red-b)':q.priority==='low'?'var(--cyn)':'var(--txt-d)')+';border-color:'+(q.priority==='high'?'var(--red-d)':q.priority==='low'?'var(--cyn-d)':'var(--bdr2)')+'" onclick="event.stopPropagation();showPrioMenu(event,\''+q.id+'\',\''+( q.priority||'normal')+'\')" title="Set priority">'+(q.priority==='high'?'⚡ High':q.priority==='low'?'🔵 Low':'· Normal')+'</button>'+
           '<button class="k-move-btn" style="color:var(--red);border-color:var(--red-d)" onclick="event.stopPropagation();delQueue(\''+q.id+'\')">✕</button>'+
@@ -5390,60 +5407,79 @@ function showPrioMenu(e,id,current){
   var close=function(ev){if(!pop.contains(ev.target)){pop.remove();document.removeEventListener('click',close);}};
   setTimeout(function(){document.addEventListener('click',close);},50);
 }
+var _linkOrderTargetId=null;
 function showLinkToOrderMenu(e,autoItemId){
   e.stopPropagation();
-  document.querySelectorAll('.link-order-popover').forEach(function(el){el.remove();});
-  // Gather candidate order queue items (Etsy or Shopify, any stage except done)
+  _linkOrderTargetId=autoItemId;
+  var qi=queueItems.find(function(q){return q.id===autoItemId;});
+  var alreadyLinked=qi&&(qi.fromEtsyOrder||qi.fromShopifyOrder);
+  var unlinkBtn=document.getElementById('link-order-unlink-btn');
+  if(unlinkBtn)unlinkBtn.style.display=alreadyLinked?'':'none';
+  var searchEl=document.getElementById('link-order-search');
+  if(searchEl)searchEl.value='';
+  renderLinkOrderList('');
+  document.getElementById('mod-link-order').style.display='flex';
+  setTimeout(function(){if(searchEl)searchEl.focus();},120);
+}
+function closeLinkToOrderModal(){
+  document.getElementById('mod-link-order').style.display='none';
+  _linkOrderTargetId=null;
+}
+function renderLinkOrderList(filter){
+  var f=(filter||'').toLowerCase().trim();
   var candidates=(typeof queueItems!=='undefined'?queueItems:[]).filter(function(q){
-    return q.id!==autoItemId&&q.stage!=='done'&&!q.autoFromPi&&(q.fromEtsyOrder||q.fromShopify||q.fromEtsy||q.fromShopifyOrder);
+    if(q.id===_linkOrderTargetId||q.autoFromPi)return false;
+    if(!(q.fromEtsyOrder||q.fromShopify||q.fromEtsy||q.fromShopifyOrder))return false;
+    if(!f)return true;
+    return (q.name||'').toLowerCase().includes(f)||(q.fromEtsyOrder||'').includes(f)||(q.orderId||'').toLowerCase().includes(f)||(q.fromShopifyOrder||'').toLowerCase().includes(f);
   });
+  var list=document.getElementById('link-order-list');
+  if(!list)return;
   if(!candidates.length){
-    toast('No open orders','No Etsy/Shopify orders in queue to link to','info',3000);
+    list.innerHTML='<div style="padding:20px;text-align:center;color:var(--txt-d);font-size:11px">'+(f?'No orders match your search':'No open Etsy or Shopify orders in queue')+'</div>';
     return;
   }
-  var pop=document.createElement('div');
-  pop.className='link-order-popover';
-  pop.style.cssText='position:fixed;z-index:9999;background:var(--surf3);border:1px solid var(--bdr2);border-radius:8px;padding:6px;box-shadow:0 8px 24px rgba(0,0,0,.6);min-width:160px;max-width:220px;max-height:240px;overflow-y:auto;';
-  var hdr=document.createElement('div');
-  hdr.style.cssText='font-size:7px;color:var(--txt-d);letter-spacing:.8px;font-weight:700;padding:2px 4px 6px;border-bottom:1px solid var(--bdr2);margin-bottom:4px;';
-  hdr.textContent='LINK TO ORDER';
-  pop.appendChild(hdr);
-  candidates.forEach(function(order){
-    var btn=document.createElement('button');
+  list.innerHTML=candidates.map(function(order){
     var shopIcon=order.fromEtsyOrder||order.fromEtsy?'🟠':'🛍';
-    var ordRef=order.fromEtsyOrder||order.fromShopifyOrder||'';
-    btn.style.cssText='display:block;width:100%;text-align:left;background:none;border:none;color:var(--txt);font-size:10px;font-family:\'Plus Jakarta Sans\',sans-serif;padding:6px 8px;border-radius:5px;cursor:pointer;';
-    btn.innerHTML='<span style="font-size:8px">'+shopIcon+'</span> '+esc(order.name)+(ordRef?'<div style="font-size:7px;color:var(--txt-d);margin-top:1px">#'+esc(ordRef)+'</div>':'');
-    btn.onmouseover=function(){btn.style.background='rgba(255,255,255,.06)';};
-    btn.onmouseout=function(){btn.style.background='none';};
-    btn.onclick=function(ev){
-      ev.stopPropagation();
-      pop.remove();
-      // Merge: set fromEtsyOrder on the auto item and absorb it into the order grouping
-      var orderEtsyId=order.fromEtsyOrder||null;
-      var orderShopifyId=order.fromShopifyOrder||null;
-      queueItems=queueItems.map(function(q){
-        if(q.id!==autoItemId)return q;
-        return Object.assign({},q,{
-          fromEtsyOrder:orderEtsyId||q.fromEtsyOrder,
-          fromShopifyOrder:orderShopifyId||q.fromShopifyOrder,
-          linkedToOrderItem:order.id
-        });
-      });
-      saveQueue();render();
-      toast('Linked','Pi print grouped with order: '+order.name,'success',3000);
-    };
-    pop.appendChild(btn);
+    var ordRef=order.fromEtsyOrder||order.fromShopifyOrder||order.orderId||'';
+    var stageLabel=order.stage==='inprogress'?'<span style="font-size:8px;color:var(--cyn);margin-left:4px">In Progress</span>':order.stage==='done'?'<span style="font-size:8px;color:var(--txt-d);margin-left:4px">Done</span>':'<span style="font-size:8px;color:var(--txt-d);margin-left:4px">Queued</span>';
+    return '<button onclick="applyOrderLink(\''+esc(order.id)+'\')" style="display:flex;flex-direction:column;gap:2px;width:100%;text-align:left;background:var(--surf2);border:1px solid var(--bdr2);color:var(--txt);font-size:11px;font-family:\'Plus Jakarta Sans\',sans-serif;padding:10px 12px;border-radius:8px;cursor:pointer;">'+
+      '<div style="display:flex;align-items:center;gap:5px;">'+shopIcon+' <strong>'+esc(order.name)+'</strong>'+stageLabel+'</div>'+
+      (ordRef?'<div style="font-size:9px;color:var(--txt-d)">#'+esc(ordRef)+(order.printer?' · '+esc(order.printer):'')+'</div>':'')+
+    '</button>';
+  }).join('');
+}
+function applyOrderLink(orderQueueItemId){
+  if(!_linkOrderTargetId)return;
+  var order=queueItems.find(function(q){return q.id===orderQueueItemId;});
+  if(!order)return;
+  var orderEtsyId=order.fromEtsyOrder||null;
+  var orderShopifyId=order.fromShopifyOrder||null;
+  queueItems=queueItems.map(function(q){
+    if(q.id!==_linkOrderTargetId)return q;
+    return Object.assign({},q,{
+      fromEtsyOrder:orderEtsyId||undefined,
+      fromShopifyOrder:orderShopifyId||undefined,
+      linkedToOrderItem:order.id
+    });
   });
-  var rect=e.currentTarget.getBoundingClientRect();
-  var popLeft=Math.min(rect.left,window.innerWidth-230);
-  var popTop=rect.bottom+4;
-  if(popTop+240>window.innerHeight)popTop=rect.top-244;
-  pop.style.left=popLeft+'px';
-  pop.style.top=popTop+'px';
-  document.body.appendChild(pop);
-  var close=function(ev){if(!pop.contains(ev.target)){pop.remove();document.removeEventListener('click',close);}};
-  setTimeout(function(){document.addEventListener('click',close);},50);
+  saveQueue();render();
+  closeLinkToOrderModal();
+  toast('Linked','Pi print grouped with: '+order.name,'success',3000);
+}
+function unlinkFromOrder(autoItemId){
+  if(!autoItemId)return;
+  queueItems=queueItems.map(function(q){
+    if(q.id!==autoItemId)return q;
+    var updated=Object.assign({},q);
+    delete updated.fromEtsyOrder;
+    delete updated.fromShopifyOrder;
+    delete updated.linkedToOrderItem;
+    return updated;
+  });
+  saveQueue();render();
+  closeLinkToOrderModal();
+  toast('Unlinked','Pi print removed from order group','info',2500);
 }
 function moveQueue(id,stage){
   // Moving to Done with a linked print → open finish modal (handles outcome, filament, timestamp)
