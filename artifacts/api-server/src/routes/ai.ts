@@ -150,4 +150,48 @@ router.post("/chat", async (req, res) => {
   }
 });
 
+router.post("/price", async (req, res) => {
+  const { products, cfg } = req.body as {
+    products: unknown[];
+    cfg: { kwh: number; watts: number; labor: number; markup: number };
+  };
+
+  if (!Array.isArray(products) || !products.length) {
+    return res.status(400).json({ error: "products array required" });
+  }
+
+  const prompt = `You are a pricing analyst for LayerDeck, a 3D printing business selling collector figures, themed balls, ducks, and cosplay items.
+
+Here is their product data:
+${JSON.stringify(products, null, 2)}
+
+Cost settings: electricity $${cfg?.kwh ?? 0.12}/kWh, ${cfg?.watts ?? 200}W printer, $${cfg?.labor ?? 0}/hr labor, current markup: ${cfg?.markup ?? 30}%
+
+For each product, recommend an optimal selling price. Consider:
+- Their actual production costs
+- Historical sale prices if available
+- 3D printed collectibles market (typically $15-60 for small figures)
+- The shiny variant mechanic (premium pricing opportunity)
+- Profit margins that are sustainable for a small business
+
+Respond ONLY with a JSON array. No markdown, no explanation outside the JSON:
+[{"name":"product name","currentCost":0.00,"recommendedPrice":0.00,"minPrice":0.00,"maxPrice":0.00,"reasoning":"brief 1-sentence reason","confidence":"high|medium|low"}]`;
+
+  try {
+    const client = getClient();
+    const message = await client.messages.create({
+      model: "claude-haiku-4-5",
+      max_tokens: 1500,
+      messages: [{ role: "user", content: prompt }],
+    });
+    const text = (message.content || [])
+      .map((c) => ("text" in c ? c.text : ""))
+      .join("");
+    res.json({ text });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "AI error";
+    res.status(500).json({ error: message });
+  }
+});
+
 export default router;

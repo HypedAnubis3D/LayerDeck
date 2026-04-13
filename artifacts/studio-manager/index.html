@@ -8978,30 +8978,15 @@ async function runPriceAnalysis(){
   });
   const products=Object.values(productCosts).filter(p=>p.costs.length>0||p.sales.length>0).slice(0,10);
   if(!products.length){el.innerHTML='<div class="empty">No print or sales data yet — log some prints and sales first to get recommendations</div>';return;}
-  const prompt=`You are a pricing analyst for LayerDeck, a 3D printing business selling collector figures, themed balls, ducks, and cosplay items.
-
-Here is their product data:
-${JSON.stringify(products,null,2)}
-
-Cost settings: electricity $${cfg.kwh}/kWh, ${cfg.watts}W printer, $${cfg.labor}/hr labor, current markup: ${cfg.markup}%
-
-For each product, recommend an optimal selling price. Consider:
-- Their actual production costs
-- Historical sale prices if available  
-- 3D printed collectibles market (typically $15-60 for small figures)
-- The shiny variant mechanic (premium pricing opportunity)
-- Profit margins that are sustainable for a small business
-
-Respond ONLY with a JSON array. No markdown, no explanation outside the JSON:
-[{"name":"product name","currentCost":0.00,"recommendedPrice":0.00,"minPrice":0.00,"maxPrice":0.00,"reasoning":"brief 1-sentence reason","confidence":"high|medium|low"}]`;
   try{
-    const resp=await fetch('https://api.anthropic.com/v1/messages',{
+    const resp=await fetch('/api/ai/price',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,messages:[{role:'user',content:prompt}]})
+      body:JSON.stringify({products,cfg})
     });
     const data=await resp.json();
-    const text=(data.content||[]).map(c=>c.text||'').join('');
+    if(!resp.ok||data.error){el.innerHTML='<div class="empty">Price analysis failed: '+(data.error||resp.statusText)+'</div>';return;}
+    const text=data.text||'';
     let recs=[];
     try{recs=JSON.parse(text.replace(/```json|```/g,'').trim());}catch(e){recs=[];}
     if(!recs.length){el.innerHTML='<div class="empty">Could not parse recommendations — try again</div>';return;}
@@ -9019,7 +9004,7 @@ Respond ONLY with a JSON array. No markdown, no explanation outside the JSON:
           <span style="font-size:6px;color:${{high:'var(--grn)',medium:'var(--amb)',low:'var(--red)'}[r.confidence]||'var(--txt-d)'}">${{high:'● HIGH',medium:'◐ MEDIUM',low:'○ LOW'}[r.confidence]||''} CONFIDENCE</span>
         </div>
       </div>`).join('')}</div>`;
-  }catch(e){el.innerHTML='<div class="empty">Price analysis requires an active connection — make sure you\'re using Claude.ai</div>';}
+  }catch(e){el.innerHTML='<div class="empty">Price analysis failed — check API server connection</div>';}
 }
 
 // ════════ BACKUP / EXPORT ════════
