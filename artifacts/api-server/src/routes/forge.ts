@@ -185,17 +185,15 @@ router.post("/export", async (req, res) => {
   const sb = getSupabase();
   if (!sb) return res.status(500).json({ error: "Supabase not configured" });
 
-  const { objData, mtlData, guideData, filename, palette, layerInstructions, layerHeight, printSize, slotCount } =
+  const { objData, mtlData, guideData, filename, slots, layerHeight, printSize } =
     req.body as {
       objData: string;
       mtlData?: string;
       guideData?: string;
       filename: string;
-      palette: unknown;
-      layerInstructions: unknown;
+      slots: Array<{ hex: string; colorName: string; slot: number }>;
       layerHeight: string;
       printSize: string;
-      slotCount: number;
     };
 
   if (!objData || !filename) {
@@ -203,48 +201,37 @@ router.post("/export", async (req, res) => {
   }
 
   try {
-    // Build ZIP server-side using Node's Buffer — no Blob needed
+    // Generate the ZIP as a Node Buffer (NOT Blob)
     const zip = new JSZip();
     zip.file("model.obj", objData);
     zip.file("model.mtl", mtlData ?? "");
     zip.file("print_guide.txt", guideData ?? "");
-    const zipBuffer = await zip.generateAsync({
-      type: "nodebuffer",
-      compression: "DEFLATE",
-      compressionOptions: { level: 6 },
-    });
+    const zipBuffer = await zip.generateAsync({ type: "nodebuffer" });
 
-    const safeBase = filename.replace(/[^a-zA-Z0-9._-]/g, "_");
-    const storageKey = `${Date.now()}-${safeBase}.zip`;
-
+    // Upload to Supabase storage
+    const fileName = `forge-${Date.now()}.zip`;
     const { error: uploadError } = await sb.storage
       .from(FORGE_BUCKET)
-      .upload(storageKey, zipBuffer, { contentType: "application/zip", upsert: false });
+      .upload(fileName, zipBuffer, { contentType: "application/zip", upsert: true });
 
-    if (uploadError) throw new Error(`Storage upload failed: ${uploadError.message}`);
+    if (uploadError) throw uploadError;
 
-    const { data: urlData } = sb.storage.from(FORGE_BUCKET).getPublicUrl(storageKey);
-    const downloadUrl = urlData?.publicUrl ?? "";
+    // Get the public URL
+    const { data: urlData } = sb.storage.from(FORGE_BUCKET).getPublicUrl(fileName);
 
-    const { data: row, error: dbError } = await sb
-      .from("forge_exports")
-      .insert({
-        image_name: filename + ".zip",
-        stl_url: downloadUrl,
-        download_url: downloadUrl,
-        slot_count: slotCount,
-        layer_height: layerHeight,
-        print_size: printSize,
-        palette,
-        layer_instructions: layerInstructions,
-        status: "ready",
-      })
-      .select()
-      .single();
+    // Save record to forge_exports table
+    await sb.from("forge_exports").insert({
+      image_name: filename,
+      stl_url: urlData.publicUrl,
+      download_url: urlData.publicUrl,
+      slot_count: (slots ?? []).length,
+      layer_height: layerHeight,
+      print_size: printSize,
+      palette: slots,
+      status: "ready",
+    });
 
-    if (dbError) throw new Error(`DB insert failed: ${dbError.message}`);
-
-    return res.json({ exportId: row.id, downloadUrl });
+    return res.json({ downloadUrl: urlData.publicUrl });
   } catch (err) {
     return res.status(500).json({ error: err instanceof Error ? err.message : "Export failed" });
   }
