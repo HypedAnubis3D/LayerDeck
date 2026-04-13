@@ -1,7 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useDropzone } from 'react-dropzone';
-import JSZip from 'jszip';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { supabase } from '@/lib/supabase';
@@ -62,10 +61,106 @@ function nearestHex(r: number, g: number, b: number, labs: [number, number, numb
   return hexes[best];
 }
 
-// ── 3MF builder ───────────────────────────────────────────────────────────────
+// ── Heightmap helpers (shared by 3D view and OBJ export) ─────────────────────
 
-function escXml(s: string) {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+const FORGE_IMG_RES = 120;
+const FORGE_PLATE_THICKNESS = 1.2;
+const FORGE_COLOR_HEIGHT = 1.6;
+const FORGE_BLUR_RADIUS = 4;
+
+async function computeBrightness(imageBase64: string, imageType: string): Promise<Float32Array> {
+  const R = FORGE_IMG_RES;
+  const pixelData = await new Promise<Uint8ClampedArray>((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = R; canvas.height = R;
+      const ctx = canvas.getContext('2d')!;
+      ctx.drawImage(img, 0, 0, R, R);
+      resolve(ctx.getImageData(0, 0, R, R).data);
+    };
+    img.onerror = () => resolve(new Uint8ClampedArray(R * R * 4).fill(128));
+    img.src = `data:${imageType};base64,${imageBase64}`;
+  });
+  const bright = new Float32Array(R * R);
+  for (let i = 0; i < bright.length; i++) {
+    const bi = i * 4;
+    bright[i] = (pixelData[bi] * 0.299 + pixelData[bi + 1] * 0.587 + pixelData[bi + 2] * 0.114) / 255;
+  }
+  const BLR = FORGE_BLUR_RADIUS;
+  const blurred = new Float32Array(R * R);
+  for (let y = 0; y < R; y++) {
+    for (let x = 0; x < R; x++) {
+      let sum = 0, cnt = 0;
+      for (let dy = -BLR; dy <= BLR; dy++) {
+        for (let dx = -BLR; dx <= BLR; dx++) {
+          const nx = x + dx, ny = y + dy;
+          if (nx >= 0 && nx < R && ny >= 0 && ny < R) { sum += bright[ny * R + nx]; cnt++; }
+        }
+      }
+      blurred[y * R + x] = sum / cnt;
+    }
+  }
+  return blurred;
+}
+
+function buildObjFiles(blurred: Float32Array, slots: Slot[], printMM: number): { obj: string; mtl: string; guide: string } {
+  const R = FORGE_IMG_RES;
+  const scale = printMM / R;
+  const half = printMM / 2;
+  const pt = FORGE_PLATE_THICKNESS;
+  const ch = FORGE_COLOR_HEIGHT;
+
+  // Vertices
+  type Vertex = { x: number; y: number; z: number };
+  const vertices: Vertex[] = [];
+  for (let row = 0; row < R; row++) {
+    for (let col = 0; col < R; col++) {
+      const lum = blurred[row * R + col];
+      vertices.push({ x: col * scale - half, y: row * scale - half, z: pt + lum * ch });
+    }
+  }
+
+  // Faces grouped by slot
+  type Face = { a: number; b: number; c: number; slotIndex: number };
+  const faces: Face[] = [];
+  for (let row = 0; row < R - 1; row++) {
+    for (let col = 0; col < R - 1; col++) {
+      const va = row * R + col, vb = row * R + col + 1;
+      const vc = (row + 1) * R + col, vd = (row + 1) * R + col + 1;
+      const lum = blurred[row * R + col];
+      const si = Math.min(Math.floor(lum * slots.length), slots.length - 1);
+      faces.push({ a: va, b: vc, c: vb, slotIndex: si });
+      faces.push({ a: vb, b: vc, c: vd, slotIndex: si });
+    }
+  }
+
+  // MTL
+  let mtl = '# LayerDeck Forge — Filament Painting\n\n';
+  slots.forEach((slot, i) => {
+    const r = parseInt(slot.hex.slice(1, 3), 16) / 255;
+    const g = parseInt(slot.hex.slice(3, 5), 16) / 255;
+    const b = parseInt(slot.hex.slice(5, 7), 16) / 255;
+    mtl += `newmtl slot_${i + 1}\nKd ${r.toFixed(4)} ${g.toFixed(4)} ${b.toFixed(4)}\nKa 0.1 0.1 0.1\nKs 0.0 0.0 0.0\n\n`;
+  });
+
+  // OBJ
+  let obj = '# LayerDeck Forge — Filament Painting\nmtllib model.mtl\n\n';
+  vertices.forEach(v => { obj += `v ${v.x.toFixed(4)} ${v.y.toFixed(4)} ${v.z.toFixed(4)}\n`; });
+  obj += '\n';
+  let currentMat = -1;
+  faces.forEach(face => {
+    if (face.slotIndex !== currentMat) { obj += `\nusemtl slot_${face.slotIndex + 1}\n`; currentMat = face.slotIndex; }
+    obj += `f ${face.a + 1} ${face.b + 1} ${face.c + 1}\n`;
+  });
+
+  // Print guide
+  const slabH = ch / slots.length;
+  const guide = slots.map((s, i) => `Filament ${i + 1}: ${s.colorName} (${s.hex}) — AMS Slot ${i + 1}`).join('\n') +
+    '\n\nSwap filaments at these layer heights:\n' +
+    slots.map((_s, i) => `  Slot ${i + 1} starts at: ${(pt + i * slabH).toFixed(2)}mm`).join('\n');
+
+  return { obj, mtl, guide };
 }
 
 // Color utilities and greedy meshing adapted from Kromacut by vycdev (MIT license)
@@ -83,131 +178,6 @@ function pixelToLab(r: number, g: number, b: number): [number, number, number] {
 
 function hexToLab(hex: string): [number, number, number] {
   return pixelToLab(parseInt(hex.slice(1, 3), 16), parseInt(hex.slice(3, 5), 16), parseInt(hex.slice(5, 7), 16));
-}
-
-async function buildExportZip(
-  slots: Slot[], printMM: number, _lh: number,
-  imageBase64?: string, imageType?: string
-): Promise<Blob> {
-  // ── Heightmap geometry ──────────────────────────────────────────────────────
-  const IMG_RES = 120;
-  const scale = printMM / IMG_RES;
-  const half = printMM / 2;
-  const plateThickness = 1.2;
-  const totalColorHeight = 1.6;
-
-  // Load image and extract pixel brightness
-  let pixelData: Uint8ClampedArray | null = null;
-  if (imageBase64 && imageType) {
-    pixelData = await new Promise<Uint8ClampedArray>((resolve) => {
-      const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        canvas.width = IMG_RES; canvas.height = IMG_RES;
-        const ctx = canvas.getContext('2d')!;
-        ctx.drawImage(img, 0, 0, IMG_RES, IMG_RES);
-        resolve(ctx.getImageData(0, 0, IMG_RES, IMG_RES).data);
-      };
-      img.onerror = () => resolve(new Uint8ClampedArray(IMG_RES * IMG_RES * 4).fill(128));
-      img.src = `data:${imageType};base64,${imageBase64}`;
-    });
-  }
-
-  // Extract brightness
-  const bright = new Float32Array(IMG_RES * IMG_RES);
-  for (let i = 0; i < bright.length; i++) {
-    if (pixelData) {
-      const bi = i * 4;
-      bright[i] = (pixelData[bi] * 0.299 + pixelData[bi + 1] * 0.587 + pixelData[bi + 2] * 0.114) / 255;
-    } else {
-      bright[i] = 0.5;
-    }
-  }
-
-  // Box blur (radius=4)
-  const BLR = 4;
-  const blurred = new Float32Array(IMG_RES * IMG_RES);
-  for (let y = 0; y < IMG_RES; y++) {
-    for (let x = 0; x < IMG_RES; x++) {
-      let sum = 0, cnt = 0;
-      for (let dy = -BLR; dy <= BLR; dy++) {
-        for (let dx = -BLR; dx <= BLR; dx++) {
-          const nx = x + dx, ny = y + dy;
-          if (nx >= 0 && nx < IMG_RES && ny >= 0 && ny < IMG_RES) {
-            sum += bright[ny * IMG_RES + nx]; cnt++;
-          }
-        }
-      }
-      blurred[y * IMG_RES + x] = sum / cnt;
-    }
-  }
-
-  // Build vertices
-  type Vertex = { x: number; y: number; z: number };
-  const vertices: Vertex[] = [];
-  for (let row = 0; row < IMG_RES; row++) {
-    for (let col = 0; col < IMG_RES; col++) {
-      const lum = blurred[row * IMG_RES + col];
-      vertices.push({ x: col * scale - half, y: row * scale - half, z: plateThickness + lum * totalColorHeight });
-    }
-  }
-
-  // Build faces grouped by slot
-  type Face = { a: number; b: number; c: number; slotIndex: number };
-  const faces: Face[] = [];
-  for (let row = 0; row < IMG_RES - 1; row++) {
-    for (let col = 0; col < IMG_RES - 1; col++) {
-      const va = row * IMG_RES + col;
-      const vb = row * IMG_RES + col + 1;
-      const vc = (row + 1) * IMG_RES + col;
-      const vd = (row + 1) * IMG_RES + col + 1;
-      const lum = blurred[row * IMG_RES + col];
-      const slotIndex = Math.min(Math.floor(lum * slots.length), slots.length - 1);
-      faces.push({ a: va, b: vc, c: vb, slotIndex });
-      faces.push({ a: vb, b: vc, c: vd, slotIndex });
-    }
-  }
-
-  // ── MTL ─────────────────────────────────────────────────────────────────────
-  let mtl = '# LayerDeck Forge — Filament Painting\n\n';
-  slots.forEach((slot, i) => {
-    const r = parseInt(slot.hex.slice(1, 3), 16) / 255;
-    const g = parseInt(slot.hex.slice(3, 5), 16) / 255;
-    const b = parseInt(slot.hex.slice(5, 7), 16) / 255;
-    mtl += `newmtl slot_${i + 1}\n`;
-    mtl += `Kd ${r.toFixed(4)} ${g.toFixed(4)} ${b.toFixed(4)}\n`;
-    mtl += `Ka 0.1 0.1 0.1\n`;
-    mtl += `Ks 0.0 0.0 0.0\n\n`;
-  });
-
-  // ── OBJ ─────────────────────────────────────────────────────────────────────
-  let obj = '# LayerDeck Forge — Filament Painting\n';
-  obj += 'mtllib model.mtl\n\n';
-  vertices.forEach(v => { obj += `v ${v.x.toFixed(4)} ${v.y.toFixed(4)} ${v.z.toFixed(4)}\n`; });
-  obj += '\n';
-  let currentMat = -1;
-  faces.forEach(face => {
-    if (face.slotIndex !== currentMat) {
-      obj += `\nusemtl slot_${face.slotIndex + 1}\n`;
-      currentMat = face.slotIndex;
-    }
-    obj += `f ${face.a + 1} ${face.b + 1} ${face.c + 1}\n`;
-  });
-
-  // ── Print guide ──────────────────────────────────────────────────────────────
-  const slabH = totalColorHeight / slots.length;
-  const guide = slots.map((s, i) =>
-    `Filament ${i + 1}: ${s.colorName} (${s.hex}) — AMS Slot ${i + 1}`
-  ).join('\n') +
-    '\n\nSwap filaments at these layer heights:\n' +
-    slots.map((_s, i) => `  Slot ${i + 1} starts at: ${(plateThickness + i * slabH).toFixed(2)}mm`).join('\n');
-
-  // ── ZIP ──────────────────────────────────────────────────────────────────────
-  const zip = new JSZip();
-  zip.file('model.obj', obj);
-  zip.file('model.mtl', mtl);
-  zip.file('print_guide.txt', guide);
-  return zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } });
 }
 
 // ── SlotCard ──────────────────────────────────────────────────────────────────
@@ -259,12 +229,13 @@ export function ForgeStudio() {
   const [analyzeError, setAnalyzeError] = useState<string | null>(null);
   const [swapIdx, setSwapIdx] = useState<number | null>(null);
   const [exporting, setExporting] = useState(false);
-  const [exportedBlob, setExportedBlob] = useState<{ blob: Blob; filename: string } | null>(null);
+  const [lastExportUrl, setLastExportUrl] = useState<{ url: string; filename: string } | null>(null);
 
   const canvas2dRef = useRef<HTMLCanvasElement>(null);
   const container3dRef = useRef<HTMLDivElement>(null);
   const renderToken = useRef(0);
   const threeCleanup = useRef<(() => void) | null>(null);
+  const brightnessRef = useRef<Float32Array | null>(null);
 
   // ── Spools ──────────────────────────────────────────────────────────────────
   const { data: spools = [] } = useQuery<Spool[]>({
@@ -299,7 +270,8 @@ export function ForgeStudio() {
     if (!imgData) return;
     setStage('loading');
     setAnalyzeError(null);
-    setExportedBlob(null);
+    setLastExportUrl(null);
+    brightnessRef.current = null;
     try {
       const resp = await fetch('/api/forge/analyze', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -326,10 +298,11 @@ export function ForgeStudio() {
   function resetForge() {
     renderToken.current++;
     if (threeCleanup.current) { threeCleanup.current(); threeCleanup.current = null; }
+    brightnessRef.current = null;
     setStage('setup');
     setStack(null);
     setLiveSlots([]);
-    setExportedBlob(null);
+    setLastExportUrl(null);
     setSwapIdx(null);
   }
 
@@ -387,37 +360,81 @@ export function ForgeStudio() {
     if (threeCleanup.current) { threeCleanup.current(); threeCleanup.current = null; }
 
     const printMM = parseFloat((stack.recommendedPrintSize || '120mm').replace(/[^0-9.]/g, '')) || 120;
-    // Flat tile: N equal-height slabs stacked, one per slot
-    const plateThickness3d = 2.2;
-    const slabH = plateThickness3d / liveSlots.length;
+    const R = FORGE_IMG_RES;
+    const scale = printMM / R;
+    const half = printMM / 2;
+    const pt = FORGE_PLATE_THICKNESS;
+    const ch = FORGE_COLOR_HEIGHT;
+    const slotsSnap = liveSlots;
 
-    function initScene() {
+    async function initScene() {
+      // Compute brightness (or reuse cached)
+      let blurred = brightnessRef.current;
+      if (!blurred) {
+        blurred = imgData
+          ? await computeBrightness(imgData.base64, imgData.type)
+          : new Float32Array(R * R).fill(0.5);
+        brightnessRef.current = blurred;
+      }
+
+      // Build vertex positions: Three.js uses Y-up, so height maps to Y
+      // OBJ coords: x=col, y=row, z=height → Three.js: x=col, y=height, z=row
+      const positions = new Float32Array(R * R * 3);
+      for (let row = 0; row < R; row++) {
+        for (let col = 0; col < R; col++) {
+          const idx = row * R + col;
+          const lum = blurred[idx];
+          positions[idx * 3]     = col * scale - half;           // X
+          positions[idx * 3 + 1] = pt + lum * ch;               // Y (height)
+          positions[idx * 3 + 2] = row * scale - half;           // Z (depth)
+        }
+      }
+
+      // Build face groups per slot material
+      const groupFaces: number[][] = slotsSnap.map(() => []);
+      for (let row = 0; row < R - 1; row++) {
+        for (let col = 0; col < R - 1; col++) {
+          const va = row * R + col, vb = row * R + col + 1;
+          const vc = (row + 1) * R + col, vd = (row + 1) * R + col + 1;
+          const lum = blurred[row * R + col];
+          const si = Math.min(Math.floor(lum * slotsSnap.length), slotsSnap.length - 1);
+          groupFaces[si].push(va, vc, vb, vb, vc, vd);
+        }
+      }
+
+      const allIndices: number[] = [];
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+      slotsSnap.forEach((_s, i) => {
+        const start = allIndices.length;
+        allIndices.push(...groupFaces[i]);
+        geometry.addGroup(start, groupFaces[i].length, i);
+      });
+      geometry.setIndex(allIndices);
+      geometry.computeVertexNormals();
+
+      const materials = slotsSnap.map(s =>
+        new THREE.MeshLambertMaterial({ color: new THREE.Color(s.hex || '#888888'), side: THREE.DoubleSide })
+      );
+
       const w = container!.clientWidth || 480;
-      const h = container!.clientHeight || 480;
+      const hh = container!.clientHeight || 480;
       const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
       renderer.setPixelRatio(window.devicePixelRatio);
-      renderer.setSize(w, h);
+      renderer.setSize(w, hh);
       renderer.setClearColor(0x000000, 0);
       container!.appendChild(renderer.domElement);
 
       const scene = new THREE.Scene();
-      const camera = new THREE.PerspectiveCamera(40, w / h, 0.1, 2000);
+      const camera = new THREE.PerspectiveCamera(40, w / hh, 0.1, 2000);
       scene.add(new THREE.AmbientLight(0xffffff, 0.6));
       const dl = new THREE.DirectionalLight(0xffffff, 0.8);
       dl.position.set(1, 2, 1); scene.add(dl);
 
-      // One BoxGeometry slab per slot, stacked along Y
-      let zCursor = 0;
-      liveSlots.forEach(slot => {
-        const geo = new THREE.BoxGeometry(printMM, slabH, printMM);
-        const mat = new THREE.MeshLambertMaterial({ color: new THREE.Color(slot.hex || '#888888') });
-        const mesh = new THREE.Mesh(geo, mat);
-        mesh.position.set(0, zCursor + slabH / 2, 0);
-        scene.add(mesh);
-        zCursor += slabH;
-      });
+      const mesh = new THREE.Mesh(geometry, materials);
+      scene.add(mesh);
 
-      const midH = plateThickness3d / 2;
+      const midH = pt + ch / 2;
       const camDist = Math.max(printMM * 1.5, 80);
       camera.position.set(camDist * 0.8, camDist * 0.6, camDist);
       const controls = new OrbitControls(camera, renderer.domElement);
@@ -467,37 +484,39 @@ export function ForgeStudio() {
     setExporting(true);
     try {
       const printMM = parseFloat((stack.recommendedPrintSize || '120mm').replace(/[^0-9.]/g, '')) || 120;
-      const lh = parseFloat(stack.layerHeight || '0.10') || 0.10;
-      const blob = await buildExportZip(liveSlots, printMM, lh, imgData?.base64, imgData?.type);
       const safeName = (stack.imageSummary || 'forge').replace(/[^a-zA-Z0-9]+/g, '_').slice(0, 40);
-      const filename = `LayerDeck_Forge_${safeName}_${liveSlots.length}color.zip`;
-      setExportedBlob({ blob, filename });
+      const filename = `LayerDeck_Forge_${safeName}_${liveSlots.length}color`;
 
-      const url = URL.createObjectURL(blob);
+      // Compute brightness (reuse cached from 3D view if available)
+      let blurred = brightnessRef.current;
+      if (!blurred) {
+        blurred = imgData
+          ? await computeBrightness(imgData.base64, imgData.type)
+          : new Float32Array(FORGE_IMG_RES * FORGE_IMG_RES).fill(0.5);
+        brightnessRef.current = blurred;
+      }
+
+      // Build OBJ/MTL/guide strings client-side, then send to server
+      // The server builds the ZIP with Node's Buffer (no Blob needed)
+      const { obj, mtl, guide } = buildObjFiles(blurred, liveSlots, printMM);
+
+      const resp = await fetch('/api/forge/export', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          objData: obj, mtlData: mtl, guideData: guide, filename,
+          palette: liveSlots.map(s => ({ hex: s.hex, colorName: s.colorName, slot: s.slot })),
+          layerInstructions: stack.layerInstructions ?? [],
+          layerHeight: stack.layerHeight, printSize: stack.recommendedPrintSize, slotCount: liveSlots.length,
+        }),
+      });
+      if (!resp.ok) throw new Error('Server error: ' + (await resp.text()));
+      const { downloadUrl } = await resp.json() as { downloadUrl: string };
+
+      setLastExportUrl({ url: downloadUrl, filename: filename + '.zip' });
+
       const a = document.createElement('a');
-      a.href = url; a.download = filename;
+      a.href = downloadUrl; a.download = filename + '.zip';
       document.body.appendChild(a); a.click(); document.body.removeChild(a);
-      setTimeout(() => URL.revokeObjectURL(url), 15000);
-
-      // Background server upload
-      (async () => {
-        try {
-          const reader = new FileReader();
-          const b64: string = await new Promise((res, rej) => {
-            reader.onload = e => res((e.target!.result as string).split(',')[1]);
-            reader.onerror = rej; reader.readAsDataURL(blob);
-          });
-          await fetch('/api/forge/export', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              fileBase64: b64, filename: stack.imageSummary || 'forge_model',
-              palette: liveSlots.map(s => ({ hex: s.hex, colorName: s.colorName, slot: s.slot })),
-              layerInstructions: stack.layerInstructions ?? [],
-              layerHeight: stack.layerHeight, printSize: stack.recommendedPrintSize, slotCount: liveSlots.length,
-            }),
-          });
-        } catch { /* silent — local file already saved */ }
-      })();
 
       toast({ title: 'Export Downloaded', description: 'Extract the ZIP, then drag model.obj into Bambu Studio. Keep model.mtl in the same folder.' });
     } catch (e) {
@@ -729,16 +748,14 @@ export function ForgeStudio() {
               <Button size="lg" className="w-full gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold"
                 onClick={handleExport} disabled={exporting}>
                 {exporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-                {exporting ? 'Generating…' : 'Export 3MF'}
+                {exporting ? 'Building ZIP…' : 'Export ZIP'}
               </Button>
 
-              {exportedBlob && (
+              {lastExportUrl && (
                 <Button variant="outline" size="sm" className="w-full gap-1.5 text-xs border-white/10" onClick={() => {
-                  const url = URL.createObjectURL(exportedBlob.blob);
                   const a = document.createElement('a');
-                  a.href = url; a.download = exportedBlob.filename;
+                  a.href = lastExportUrl.url; a.download = lastExportUrl.filename;
                   document.body.appendChild(a); a.click(); document.body.removeChild(a);
-                  setTimeout(() => URL.revokeObjectURL(url), 5000);
                 }}>
                   <Download className="h-3.5 w-3.5" /> Download Again
                 </Button>
