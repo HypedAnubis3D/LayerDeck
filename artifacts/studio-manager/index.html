@@ -5068,6 +5068,7 @@ function renderQueue(){
           (isQueued?'<span style="color:var(--txt-d);font-size:13px;line-height:1;cursor:grab;margin-left:auto;user-select:none">⠿</span>':'')+
         '</div>'+
         '<div class="kcard-name">'+esc(q.name)+(q.qty>1?' ×'+q.qty:'')+'</div>'+
+        (q.piJobName?'<div style="font-size:6px;color:var(--txt-d);margin-top:2px;display:flex;align-items:center;gap:3px"><span style="opacity:.5">🖨</span>'+esc(q.piJobName)+'</div>':'')+
         '<div class="kcard-meta">'+esc(q.printer||'?')+' · '+(function(){
           // In-progress: always prefer live Pi remaining time over stale stored hrs
           if(st.key==='inprogress'&&q.printer&&piPrevStates[q.printer]){
@@ -5095,6 +5096,7 @@ function renderQueue(){
         '<div class="kcard-actions">'+
           (prevStage?'<button class="k-move-btn" onclick="event.stopPropagation();moveQueue(\''+q.id+'\',\''+prevStage+'\')">← Back</button>':'')+
           (nextStage?'<button class="k-move-btn" style="color:'+(st.key==='queued'?'var(--cyn)':'var(--grn)')+';border-color:'+(st.key==='queued'?'var(--cyn-d)':'var(--grn-d)')+'" onclick="event.stopPropagation();moveQueue(\''+q.id+'\',\''+nextStage+'\')">'+(st.key==='queued'?'Start →':'✓ Done')+'</button>':'')+
+          (q.autoFromPi&&!q.fromEtsyOrder&&!q.fromShopifyOrder?'<button class="k-move-btn" style="color:var(--cyn);border-color:var(--cyn-d);font-size:7px" onclick="event.stopPropagation();showLinkToOrderMenu(event,\''+q.id+'\')" title="Link to an Etsy or Shopify order">🔗 Link</button>':'')+
           (st.key==='done'?'<button class="k-move-btn" style="color:var(--pur);border-color:var(--pur-d)" onclick="event.stopPropagation();openSocialFromQueue(\''+q.id+'\')" title="Draft Instagram post for this item">📱</button>':'')+
           '<button class="k-move-btn k-prio-btn" style="max-width:72px;color:'+(q.priority==='high'?'var(--red-b)':q.priority==='low'?'var(--cyn)':'var(--txt-d)')+';border-color:'+(q.priority==='high'?'var(--red-d)':q.priority==='low'?'var(--cyn-d)':'var(--bdr2)')+'" onclick="event.stopPropagation();showPrioMenu(event,\''+q.id+'\',\''+( q.priority||'normal')+'\')" title="Set priority">'+(q.priority==='high'?'⚡ High':q.priority==='low'?'🔵 Low':'· Normal')+'</button>'+
           '<button class="k-move-btn" style="color:var(--red);border-color:var(--red-d)" onclick="event.stopPropagation();delQueue(\''+q.id+'\')">✕</button>'+
@@ -5384,6 +5386,61 @@ function showPrioMenu(e,id,current){
   var rect=e.currentTarget.getBoundingClientRect();
   pop.style.left=Math.min(rect.left,window.innerWidth-130)+'px';
   pop.style.top=(rect.bottom+4)+'px';
+  document.body.appendChild(pop);
+  var close=function(ev){if(!pop.contains(ev.target)){pop.remove();document.removeEventListener('click',close);}};
+  setTimeout(function(){document.addEventListener('click',close);},50);
+}
+function showLinkToOrderMenu(e,autoItemId){
+  e.stopPropagation();
+  document.querySelectorAll('.link-order-popover').forEach(function(el){el.remove();});
+  // Gather candidate order queue items (Etsy or Shopify, any stage except done)
+  var candidates=(typeof queueItems!=='undefined'?queueItems:[]).filter(function(q){
+    return q.id!==autoItemId&&q.stage!=='done'&&!q.autoFromPi&&(q.fromEtsyOrder||q.fromShopify||q.fromEtsy||q.fromShopifyOrder);
+  });
+  if(!candidates.length){
+    toast('No open orders','No Etsy/Shopify orders in queue to link to','info',3000);
+    return;
+  }
+  var pop=document.createElement('div');
+  pop.className='link-order-popover';
+  pop.style.cssText='position:fixed;z-index:9999;background:var(--surf3);border:1px solid var(--bdr2);border-radius:8px;padding:6px;box-shadow:0 8px 24px rgba(0,0,0,.6);min-width:160px;max-width:220px;max-height:240px;overflow-y:auto;';
+  var hdr=document.createElement('div');
+  hdr.style.cssText='font-size:7px;color:var(--txt-d);letter-spacing:.8px;font-weight:700;padding:2px 4px 6px;border-bottom:1px solid var(--bdr2);margin-bottom:4px;';
+  hdr.textContent='LINK TO ORDER';
+  pop.appendChild(hdr);
+  candidates.forEach(function(order){
+    var btn=document.createElement('button');
+    var shopIcon=order.fromEtsyOrder||order.fromEtsy?'🟠':'🛍';
+    var ordRef=order.fromEtsyOrder||order.fromShopifyOrder||'';
+    btn.style.cssText='display:block;width:100%;text-align:left;background:none;border:none;color:var(--txt);font-size:10px;font-family:\'Plus Jakarta Sans\',sans-serif;padding:6px 8px;border-radius:5px;cursor:pointer;';
+    btn.innerHTML='<span style="font-size:8px">'+shopIcon+'</span> '+esc(order.name)+(ordRef?'<div style="font-size:7px;color:var(--txt-d);margin-top:1px">#'+esc(ordRef)+'</div>':'');
+    btn.onmouseover=function(){btn.style.background='rgba(255,255,255,.06)';};
+    btn.onmouseout=function(){btn.style.background='none';};
+    btn.onclick=function(ev){
+      ev.stopPropagation();
+      pop.remove();
+      // Merge: set fromEtsyOrder on the auto item and absorb it into the order grouping
+      var orderEtsyId=order.fromEtsyOrder||null;
+      var orderShopifyId=order.fromShopifyOrder||null;
+      queueItems=queueItems.map(function(q){
+        if(q.id!==autoItemId)return q;
+        return Object.assign({},q,{
+          fromEtsyOrder:orderEtsyId||q.fromEtsyOrder,
+          fromShopifyOrder:orderShopifyId||q.fromShopifyOrder,
+          linkedToOrderItem:order.id
+        });
+      });
+      saveQueue();render();
+      toast('Linked','Pi print grouped with order: '+order.name,'success',3000);
+    };
+    pop.appendChild(btn);
+  });
+  var rect=e.currentTarget.getBoundingClientRect();
+  var popLeft=Math.min(rect.left,window.innerWidth-230);
+  var popTop=rect.bottom+4;
+  if(popTop+240>window.innerHeight)popTop=rect.top-244;
+  pop.style.left=popLeft+'px';
+  pop.style.top=popTop+'px';
   document.body.appendChild(pop);
   var close=function(ev){if(!pop.contains(ev.target)){pop.remove();document.removeEventListener('click',close);}};
   setTimeout(function(){document.addEventListener('click',close);},50);
@@ -18316,9 +18373,8 @@ async function onPiPrintStarted(name,data){
   var changed=false;
   if(jobName){
     queueItems=queueItems.map(function(q){
-      // Only match by job name — do NOT fall back to printer-only match which
-      // would accidentally promote calibration or unrelated queued items
-      if(q.stage==='queued'&&!changed&&q.name.toLowerCase()===jobName.toLowerCase()){
+      // Use _normName so "Girl_on_Swing.gcode" matches "Girl on Swing" queue item
+      if(q.stage==='queued'&&!changed&&_normName(q.name)===_normName(jobName)){
         changed=true;return Object.assign({},q,{stage:'inprogress',startedAt:Date.now()});
       }
       return q;
@@ -18346,7 +18402,56 @@ async function onPiPrintStarted(name,data){
     });
     if(!alreadyInProgress){
       var autoHrs=data.mc_remaining_time?Math.round((data.mc_remaining_time/60)*10)/10:0;
-      var autoItem={id:uid(),name:matchedTmf?matchedTmf.name:displayName,category:'Other',printer:name,hrs:autoHrs,qty:1,priority:'normal',stage:'inprogress',startedAt:Date.now(),timestamp:Date.now(),notes:'Auto-added from Pi Hub',autoFromPi:true,noTmf:!matchedTmf,tmfId:matchedTmf?matchedTmf.id:null};
+
+      // ── Same-printer order merge ────────────────────────────────────────────
+      // When a Pi print starts on a printer that already has a manually-started
+      // order item in progress, absorb the Pi data into that item rather than
+      // creating a duplicate card. This handles copyright-renamed files where
+      // "Pikachu Keychain" will never match "generic_charm_v3.gcode".
+      var _samePrinterOrder=queueItems.find(function(q){
+        return q.stage==='inprogress'
+          && q.printer===name
+          && !q.autoFromPi
+          && (q.fromEtsyOrder||q.fromShopify||q.fromEtsy||q.fromShopifyOrder);
+      });
+      if(_samePrinterOrder){
+        var _mergedHrs=autoHrs>0?autoHrs:_samePrinterOrder.hrs;
+        queueItems=queueItems.map(function(q){
+          if(q.id!==_samePrinterOrder.id)return q;
+          return Object.assign({},q,{
+            piJobName:displayName,
+            hrs:_mergedHrs,
+            noTmf:(!matchedTmf)&&q.noTmf,
+            tmfId:matchedTmf?matchedTmf.id:q.tmfId
+          });
+        });
+        // Patch the linked print record with the real Pi time estimate
+        var _lpid=_samePrinterOrder.printId||_samePrinterOrder.linkedPrintId;
+        if(_lpid){
+          prints=prints.map(function(p){
+            if(p.id!==_lpid)return p;
+            return Object.assign({},p,{hrs:_mergedHrs,piJobName:displayName});
+          });
+          savePrints();
+        }
+        saveQueue();render();
+        if(hadStale){/* stale already cleaned up above */}
+        return; // skip auto-create — order card is the canonical card
+      }
+
+      // ── Cross-printer grouping ───────────────────────────────────────────
+      // If there's no same-printer order match, check whether any in-progress
+      // order item (on another printer) was started recently. If so, inherit
+      // its fromEtsyOrder so the new Pi auto-card groups with that order in
+      // the kanban — useful for multi-item orders printing simultaneously.
+      var _crossOrder=queueItems.find(function(q){
+        return q.stage==='inprogress'
+          && !q.autoFromPi
+          && q.fromEtsyOrder
+          && q.startedAt&&(Date.now()-q.startedAt<2*60*60*1000);
+      });
+
+      var autoItem={id:uid(),name:matchedTmf?matchedTmf.name:displayName,category:'Other',printer:name,hrs:autoHrs,qty:1,priority:'normal',stage:'inprogress',startedAt:Date.now(),timestamp:Date.now(),notes:'Auto-added from Pi Hub',autoFromPi:true,noTmf:!matchedTmf,tmfId:matchedTmf?matchedTmf.id:null,fromEtsyOrder:_crossOrder?_crossOrder.fromEtsyOrder:undefined};
       queueItems.push(autoItem);
       saveQueue();render();
       toast('Auto-added to In Progress',displayName,'info',3000);
