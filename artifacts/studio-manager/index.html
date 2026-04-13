@@ -18652,7 +18652,6 @@ async function onPiPrintFinished(name,data){
     return;
   }
   // Normalise the incoming job name once for all comparisons below
-  const _todayStart=new Date();_todayStart.setHours(0,0,0,0);
   const _jNormFin=_normName(jobNameCheck);
   // Helper: does print record r match this job?
   // Matches by display name OR by the filename of any 3MF linked to the record.
@@ -18668,10 +18667,13 @@ async function onPiPrintFinished(name,data){
       return fNorm&&fNorm===_jNormFin;
     });
   };
-  // Dedup: any print already logged today on this printer that matches — auto OR manual.
-  // Previously required autoFromPi which missed manually-promoted queue items on reload.
+  // Dedup: any print already logged in the last 24 hours on this printer that matches.
+  // Window is 24h (not just "today") so that overnight prints completed yesterday are
+  // still recognised when the printer turns back on next morning in FINISH state,
+  // which triggers OFFLINE→FINISH and would otherwise create a duplicate record.
+  const _dedupCutoff=Date.now()-24*60*60*1000;
   const recentDup=prints.find(function(r){
-    return r.printer===name&&(r.finishedAt||r.timestamp||0)>=_todayStart.getTime()&&_piMatchesJob(r);
+    return r.printer===name&&(r.finishedAt||r.timestamp||0)>=_dedupCutoff&&_piMatchesJob(r);
   });
   // 'printing' placeholder → promote to done. Already-done/failed record → skip entirely.
   if(recentDup&&recentDup.status!=='printing'){return;}
