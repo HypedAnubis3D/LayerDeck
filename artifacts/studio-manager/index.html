@@ -5553,6 +5553,7 @@ function moveQueue(id,stage){
           hrs:qi.hrs||profile?.hrs||0,qty:qi.qty||1,
           filaments:profile?.filaments||[],notes:qi.notes||'',
           tmfName:profile?.tmfName||null,timestamp:Date.now(),status:'printing',
+          tmfId:qi.tmfId||null,
           fromQueueItemId:id
         };
         prints.push(newPrint);savePrints();
@@ -18664,7 +18665,17 @@ async function onPiPrintFinished(name,data){
     if(!candidates.length)return null;
     return candidates.reduce(function(a,b){return (b.timestamp||0)>(a.timestamp||0)?b:a;});
   })();
-  const _promotePlaceholder=_anyPrintingPlaceholder||(recentDup&&recentDup.status==='printing'?recentDup:null);
+  // Fallback: find the printing record via the inprogress queue item's direct link.
+  // Handles the case where the queue item name is the 3MF display name ("Tentacool")
+  // but the Bambu job is the raw gcode file ("Tentacool Main"), so name-match fails
+  // and the record has no tmfId to fall back on (old records pre-fix).
+  const _promotePlaceholder=_anyPrintingPlaceholder||(recentDup&&recentDup.status==='printing'?recentDup:null)||(function(){
+    var _inprogQ=queueItems.find(function(q){return q.stage==='inprogress'&&q.printer===name;});
+    if(!_inprogQ)return null;
+    var _lid=_inprogQ.linkedPrintId||_inprogQ.printId;
+    if(!_lid)return null;
+    return prints.find(function(p){return p.id===_lid&&p.status==='printing';})||null;
+  })();
   // If a placeholder already has user-assigned filaments, DON'T deplete spools again
   // here — the user's savePrint() call already deducted them. Only deplete when the
   // print was auto-detected with no prior manual filament assignment.
