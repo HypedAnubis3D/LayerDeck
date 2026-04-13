@@ -2565,24 +2565,30 @@ header{
     </div>
 
     <!-- G. Export + Reset -->
-    <button id="forge-export-btn" onclick="forgeExport()" style="width:100%;padding:13px;font-family:'Orbitron',monospace;font-size:9px;font-weight:700;letter-spacing:2px;margin-bottom:6px;border:none;border-radius:6px;cursor:pointer;background:var(--grn);color:#fff">⬇ Export 3MF — Open in Bambu Studio</button>
+    <button id="forge-export-btn" onclick="forgeExport()" style="width:100%;padding:13px;font-family:'Orbitron',monospace;font-size:9px;font-weight:700;letter-spacing:2px;margin-bottom:6px;border:none;border-radius:6px;cursor:pointer;background:var(--grn);color:#fff">⬇ Export OBJ+MTL — Open in Bambu Studio</button>
     <div style="text-align:center;padding-bottom:16px">
       <button class="btn btn-ghost" style="font-size:8px" onclick="forgeReset()">↩ Analyze Another Image</button>
     </div>
 
     <!-- H. Export Success Panel (hidden until export completes) -->
     <div id="forge-success-panel" style="display:none;border-radius:12px;border:1.5px solid #22c55e;background:rgba(34,197,94,.07);padding:16px;margin-bottom:16px">
-      <div style="font-family:'Orbitron',monospace;font-size:10px;font-weight:900;color:#22c55e;letter-spacing:2px;margin-bottom:8px">✅ EXPORT READY</div>
-      <div id="forge-success-palette" style="display:flex;border-radius:6px;overflow:hidden;height:12px;margin-bottom:10px"></div>
+      <div style="font-family:'Orbitron',monospace;font-size:10px;font-weight:900;color:#22c55e;letter-spacing:2px;margin-bottom:4px">✅ EXPORT READY — model.zip</div>
+      <div id="forge-success-palette" style="display:flex;border-radius:6px;overflow:hidden;height:12px;margin:8px 0"></div>
       <div id="forge-success-meta" style="font-size:10px;color:var(--txt-b);margin-bottom:10px"></div>
-      <div style="background:rgba(255,255,255,.04);border-radius:8px;padding:10px;margin-bottom:12px;display:flex;align-items:flex-start;gap:8px">
+      <div style="background:rgba(255,255,255,.04);border-radius:8px;padding:10px;margin-bottom:12px;font-size:9px;color:var(--txt-d);line-height:1.7;font-family:'Share Tech Mono',monospace">
+        <div style="color:var(--txt-b);font-weight:700;margin-bottom:4px">Contains:</div>
+        <div>📄 <b>model.obj</b> — drag into Bambu Studio</div>
+        <div>🎨 <b>model.mtl</b> — color definitions (keep in same folder)</div>
+        <div>📋 <b>print_guide.txt</b> — filament swap instructions</div>
+      </div>
+      <div id="forge-success-sync" style="background:rgba(255,255,255,.04);border-radius:8px;padding:10px;margin-bottom:12px;display:flex;align-items:flex-start;gap:8px">
         <div style="font-size:14px;flex-shrink:0">📥</div>
         <div>
           <div style="font-size:10px;font-weight:700;color:var(--txt-b);margin-bottom:2px">Synced to Desktop Companion</div>
           <div style="font-size:9px;color:var(--txt-d)">Open the Forge tab on your PC to download and open directly in Bambu Studio.</div>
         </div>
       </div>
-      <button id="forge-success-dl" onclick="forgeSuccessDownload()" style="width:100%;padding:10px;font-size:9px;font-weight:700;font-family:'Orbitron',monospace;letter-spacing:1px;border:none;border-radius:6px;cursor:pointer;background:var(--grn);color:#fff;margin-bottom:6px">⬇ Download 3MF on this device</button>
+      <button id="forge-success-dl" onclick="forgeSuccessDownload()" style="width:100%;padding:10px;font-size:9px;font-weight:700;font-family:'Orbitron',monospace;letter-spacing:1px;border:none;border-radius:6px;cursor:pointer;background:var(--grn);color:#fff;margin-bottom:6px">⬇ Download model.zip on this device</button>
       <button onclick="forgeReset()" style="width:100%;padding:10px;font-size:9px;font-weight:600;border:1px solid var(--bdr);border-radius:6px;cursor:pointer;background:transparent;color:var(--txt-d)">Export Another Image</button>
     </div>
 
@@ -24359,7 +24365,7 @@ function posShowReceipt(sale){
     }
 
     var btn = document.getElementById('forge-export-btn');
-    if (btn) { btn.textContent = '⏳ Generating 3MF…'; btn.disabled = true; }
+    if (btn) { btn.textContent = '⏳ Generating…'; btn.disabled = true; }
 
     try {
       // Lazy-load JSZip
@@ -24377,78 +24383,116 @@ function posShowReceipt(sale){
       var lh      = parseFloat(_stack.layerHeight || '0.10') || 0.10;
       var half    = printMM / 2;
 
-      // ── [Content_Types].xml ────────────────────────────────────────────────
-      var contentTypes =
-        '<?xml version="1.0" encoding="UTF-8"?>\n' +
-        '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">\n' +
-        '  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>\n' +
-        '  <Default Extension="model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/>\n' +
-        '</Types>';
+      // ── Heightmap geometry → OBJ + MTL ──────────────────────────────────────
+        var IMG_RES_OBJ = 120;
+        var scaleObj = printMM / IMG_RES_OBJ;
+        var halfObj  = printMM / 2;
+        var plateTh  = 1.2;
+        var colorH   = 1.6;
 
-      // ── _rels/.rels ────────────────────────────────────────────────────────
-      var rels =
-        '<?xml version="1.0" encoding="UTF-8"?>\n' +
-        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">\n' +
-        '  <Relationship Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel" Target="/3D/3dmodel.model" Id="rel0"/>\n' +
-        '</Relationships>';
+        // Load image pixels
+        var pixDataObj = null;
+        if (_img64) {
+          pixDataObj = await new Promise(function(resolve) {
+            var iObj = new Image();
+            iObj.onload = function() {
+              var cObj = document.createElement('canvas');
+              cObj.width = IMG_RES_OBJ; cObj.height = IMG_RES_OBJ;
+              var xObj = cObj.getContext('2d');
+              xObj.drawImage(iObj, 0, 0, IMG_RES_OBJ, IMG_RES_OBJ);
+              resolve(xObj.getImageData(0, 0, IMG_RES_OBJ, IMG_RES_OBJ).data);
+            };
+            iObj.onerror = function() { resolve(null); };
+            iObj.src = 'data:' + (_imgType||'image/jpeg') + ';base64,' + _img64;
+          });
+        }
 
-      // ── Flat tile with layer range metadata (Chroma Canvas style) ─────────
-      var plateThickness3mf = 2.2;
+        // Brightness extraction
+        var brightObj = new Float32Array(IMG_RES_OBJ * IMG_RES_OBJ);
+        for (var biO = 0; biO < brightObj.length; biO++) {
+          if (pixDataObj) {
+            var bdiO = biO * 4;
+            brightObj[biO] = (pixDataObj[bdiO]*0.299 + pixDataObj[bdiO+1]*0.587 + pixDataObj[bdiO+2]*0.114) / 255;
+          } else { brightObj[biO] = 0.5; }
+        }
 
-      var hw3mf = printMM / 2;
-        var nSlots3mf = slots.length;
-        var zoneH3mf = plateThickness3mf / nSlots3mf;
+        // Box blur (radius=4)
+        var BLR_O = 4;
+        var blurObj = new Float32Array(IMG_RES_OBJ * IMG_RES_OBJ);
+        for (var byO = 0; byO < IMG_RES_OBJ; byO++) {
+          for (var bxO = 0; bxO < IMG_RES_OBJ; bxO++) {
+            var bsO = 0, bcO = 0;
+            for (var bdyO = -BLR_O; bdyO <= BLR_O; bdyO++) {
+              for (var bdxO = -BLR_O; bdxO <= BLR_O; bdxO++) {
+                var bnxO = bxO+bdxO, bnyO = byO+bdyO;
+                if (bnxO >= 0 && bnxO < IMG_RES_OBJ && bnyO >= 0 && bnyO < IMG_RES_OBJ) { bsO += brightObj[bnyO*IMG_RES_OBJ+bnxO]; bcO++; }
+              }
+            }
+            blurObj[byO*IMG_RES_OBJ+bxO] = bsO/bcO;
+          }
+        }
 
-        var metaLines3mf = slots.map(function(s, i) {
-          return [
-            '  <metadata name="BambuStudio:FilamentColor' + (i+1) + '">' + (s.hex||'#888888') + '</metadata>',
-            '  <metadata name="BambuStudio:LayerRange' + (i+1) + '_start">' + (i * zoneH3mf).toFixed(2) + '</metadata>',
-            '  <metadata name="BambuStudio:LayerRange' + (i+1) + '_end">' + ((i+1) * zoneH3mf).toFixed(2) + '</metadata>',
-          ].join('\n');
-        }).join('\n');
+        // Build vertex list
+        var vertsObj = [];
+        for (var rowO = 0; rowO < IMG_RES_OBJ; rowO++) {
+          for (var colO = 0; colO < IMG_RES_OBJ; colO++) {
+            var lumO = blurObj[rowO * IMG_RES_OBJ + colO];
+            vertsObj.push({ x: colO * scaleObj - halfObj, y: rowO * scaleObj - halfObj, z: plateTh + lumO * colorH });
+          }
+        }
 
-        var model =
-          '<?xml version="1.0" encoding="UTF-8"?>\n' +
-          '<model unit="millimeter" xml:lang="en-US"\n' +
-          '  xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">\n' +
-          metaLines3mf + '\n' +
-          '  <resources>\n' +
-          '    <object id="1" type="model" name="LayerDeck_Forge">\n' +
-          '      <mesh>\n' +
-          '        <vertices>\n' +
-          '          <vertex x="' + (-hw3mf).toFixed(3) + '" y="' + (-hw3mf).toFixed(3) + '" z="0.000"/>\n' +
-          '          <vertex x="' + hw3mf.toFixed(3) + '" y="' + (-hw3mf).toFixed(3) + '" z="0.000"/>\n' +
-          '          <vertex x="' + hw3mf.toFixed(3) + '" y="' + hw3mf.toFixed(3) + '" z="0.000"/>\n' +
-          '          <vertex x="' + (-hw3mf).toFixed(3) + '" y="' + hw3mf.toFixed(3) + '" z="0.000"/>\n' +
-          '          <vertex x="' + (-hw3mf).toFixed(3) + '" y="' + (-hw3mf).toFixed(3) + '" z="' + plateThickness3mf.toFixed(3) + '"/>\n' +
-          '          <vertex x="' + hw3mf.toFixed(3) + '" y="' + (-hw3mf).toFixed(3) + '" z="' + plateThickness3mf.toFixed(3) + '"/>\n' +
-          '          <vertex x="' + hw3mf.toFixed(3) + '" y="' + hw3mf.toFixed(3) + '" z="' + plateThickness3mf.toFixed(3) + '"/>\n' +
-          '          <vertex x="' + (-hw3mf).toFixed(3) + '" y="' + hw3mf.toFixed(3) + '" z="' + plateThickness3mf.toFixed(3) + '"/>\n' +
-          '        </vertices>\n' +
-          '        <triangles>\n' +
-          '          <triangle v1="0" v2="2" v3="1"/><triangle v1="0" v2="3" v3="2"/>\n' +
-          '          <triangle v1="4" v2="5" v3="6"/><triangle v1="4" v2="6" v3="7"/>\n' +
-          '          <triangle v1="0" v2="1" v3="5"/><triangle v1="0" v2="5" v3="4"/>\n' +
-          '          <triangle v1="2" v2="3" v3="7"/><triangle v1="2" v2="7" v3="6"/>\n' +
-          '          <triangle v1="0" v2="4" v3="7"/><triangle v1="0" v2="7" v3="3"/>\n' +
-          '          <triangle v1="1" v2="2" v3="6"/><triangle v1="1" v2="6" v3="5"/>\n' +
-          '        </triangles>\n' +
-          '      </mesh>\n' +
-          '    </object>\n' +
-          '  </resources>\n' +
-          '  <build>\n    <item objectid="1"/>\n  </build>\n' +
-          '</model>';
+        // Build face list with slot assignment
+        var facesObj = [];
+        for (var rfO = 0; rfO < IMG_RES_OBJ - 1; rfO++) {
+          for (var cfO = 0; cfO < IMG_RES_OBJ - 1; cfO++) {
+            var vaO = rfO * IMG_RES_OBJ + cfO;
+            var vbO = rfO * IMG_RES_OBJ + cfO + 1;
+            var vcO = (rfO+1) * IMG_RES_OBJ + cfO;
+            var vdO = (rfO+1) * IMG_RES_OBJ + cfO + 1;
+            var lumFO = blurObj[rfO * IMG_RES_OBJ + cfO];
+            var siO = Math.min(Math.floor(lumFO * slots.length), slots.length - 1);
+            facesObj.push({ a: vaO, b: vcO, c: vbO, slotIndex: siO });
+            facesObj.push({ a: vbO, b: vcO, c: vdO, slotIndex: siO });
+          }
+        }
 
-      // Pack into ZIP and trigger download
-      var zip = new JSZip();
-      zip.file('[Content_Types].xml', contentTypes);
-      zip.folder('_rels').file('.rels', rels);
-      zip.folder('3D').file('3dmodel.model', model);
+        // ── MTL ──────────────────────────────────────────────────────────────────
+        var mtl = '# LayerDeck Forge — Filament Painting\n\n';
+        slots.forEach(function(s, i) {
+          var r = parseInt((s.hex||'#888888').slice(1,3),16)/255;
+          var g = parseInt((s.hex||'#888888').slice(3,5),16)/255;
+          var b = parseInt((s.hex||'#888888').slice(5,7),16)/255;
+          mtl += 'newmtl slot_' + (i+1) + '\n';
+          mtl += 'Kd ' + r.toFixed(4) + ' ' + g.toFixed(4) + ' ' + b.toFixed(4) + '\n';
+          mtl += 'Ka 0.1 0.1 0.1\n';
+          mtl += 'Ks 0.0 0.0 0.0\n\n';
+        });
 
-      var blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } });
+        // ── OBJ ──────────────────────────────────────────────────────────────────
+        var obj = '# LayerDeck Forge — Filament Painting\n';
+        obj += 'mtllib model.mtl\n\n';
+        vertsObj.forEach(function(v) { obj += 'v ' + v.x.toFixed(4) + ' ' + v.y.toFixed(4) + ' ' + v.z.toFixed(4) + '\n'; });
+        obj += '\n';
+        var curMat = -1;
+        facesObj.forEach(function(face) {
+          if (face.slotIndex !== curMat) { obj += '\nusemtl slot_' + (face.slotIndex+1) + '\n'; curMat = face.slotIndex; }
+          obj += 'f ' + (face.a+1) + ' ' + (face.b+1) + ' ' + (face.c+1) + '\n';
+        });
 
+        // ── Print guide ───────────────────────────────────────────────────────────
+        var slabHmm = colorH / slots.length;
+        var guide = slots.map(function(s, i) {
+          return 'Filament ' + (i+1) + ': ' + (s.colorName||'Slot '+(i+1)) + ' (' + (s.hex||'') + ') — AMS Slot ' + (i+1);
+        }).join('\n') + '\n\nSwap filaments at these layer heights:\n' +
+          slots.map(function(s, i) { return '  Slot ' + (i+1) + ' starts at: ' + (plateTh + i * slabHmm).toFixed(2) + 'mm'; }).join('\n');
+
+        // ── ZIP ───────────────────────────────────────────────────────────────────
+        var zip = new JSZip();
+        zip.file('model.obj', obj);
+        zip.file('model.mtl', mtl);
+        zip.file('print_guide.txt', guide);
       var safeName = ((_stack.imageSummary||'forge_model').replace(/[^a-zA-Z0-9]+/g,'_')||'forge_model').slice(0,40);
-      var filename  = 'LayerDeck_Forge_' + safeName + '_' + slots.length + 'color.3mf';
+      var filename  = 'LayerDeck_Forge_' + safeName + '_' + slots.length + 'color.zip';
 
       // Revoke previous blob URL if any
       if (_lastExportBlobUrl) { try { URL.revokeObjectURL(_lastExportBlobUrl); } catch(e){} }
@@ -24500,7 +24544,7 @@ function posShowReceipt(sale){
       console.error('[Forge export]', e);
     } finally {
       var btn2 = document.getElementById('forge-export-btn');
-      if (btn2) { btn2.textContent = '⬇ Export 3MF — Open in Bambu Studio'; btn2.disabled = false; }
+      if (btn2) { btn2.textContent = '⬇ Export OBJ+MTL — Open in Bambu Studio'; btn2.disabled = false; }
     }
   };
 
@@ -24509,7 +24553,7 @@ function posShowReceipt(sale){
     var panel = document.getElementById('forge-success-panel');
     var palEl = document.getElementById('forge-success-palette');
     var metaEl = document.getElementById('forge-success-meta');
-    var syncEl = panel ? panel.querySelector('[style*="rgba(255,255,255"]') : null;
+    var syncEl = document.getElementById('forge-success-sync');
     if (!panel) return;
 
     // Palette strip
@@ -24521,7 +24565,7 @@ function posShowReceipt(sale){
 
     // Meta line
     if (metaEl && _stack) {
-      var name = (_lastExportFilename || 'export').replace(/_/g,' ').replace(/\.3mf$/i,'');
+      var name = (_lastExportFilename || 'export').replace(/_/g,' ').replace(/\.zip$/i,'');
       var slots = (_stack.slots || []).length;
       var size  = _stack.recommendedPrintSize || '120mm';
       var date  = new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});

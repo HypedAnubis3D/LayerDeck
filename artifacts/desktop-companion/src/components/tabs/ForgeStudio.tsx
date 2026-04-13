@@ -85,70 +85,128 @@ function hexToLab(hex: string): [number, number, number] {
   return pixelToLab(parseInt(hex.slice(1, 3), 16), parseInt(hex.slice(3, 5), 16), parseInt(hex.slice(5, 7), 16));
 }
 
-async function build3MF(
-  slots: Slot[], printMM: number, lh: number,
+async function buildExportZip(
+  slots: Slot[], printMM: number, _lh: number,
   imageBase64?: string, imageType?: string
 ): Promise<Blob> {
-  // ── Flat tile with layer range metadata (Chroma Canvas style) ───────────
-  const plateThickness = 2.2;
-  const hw = printMM / 2;
-  const nSlots = slots.length;
-  const zoneH = plateThickness / nSlots;
+  // ── Heightmap geometry ──────────────────────────────────────────────────────
+  const IMG_RES = 120;
+  const scale = printMM / IMG_RES;
+  const half = printMM / 2;
+  const plateThickness = 1.2;
+  const totalColorHeight = 1.6;
 
-  const metaLines = slots.map((s, i) => [
-    `  <metadata name="BambuStudio:FilamentColor${i+1}">${s.hex || '#888888'}</metadata>`,
-    `  <metadata name="BambuStudio:LayerRange${i+1}_start">${(i * zoneH).toFixed(2)}</metadata>`,
-    `  <metadata name="BambuStudio:LayerRange${i+1}_end">${((i+1) * zoneH).toFixed(2)}</metadata>`,
-  ].join('\n')).join('\n');
+  // Load image and extract pixel brightness
+  let pixelData: Uint8ClampedArray | null = null;
+  if (imageBase64 && imageType) {
+    pixelData = await new Promise<Uint8ClampedArray>((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = IMG_RES; canvas.height = IMG_RES;
+        const ctx = canvas.getContext('2d')!;
+        ctx.drawImage(img, 0, 0, IMG_RES, IMG_RES);
+        resolve(ctx.getImageData(0, 0, IMG_RES, IMG_RES).data);
+      };
+      img.onerror = () => resolve(new Uint8ClampedArray(IMG_RES * IMG_RES * 4).fill(128));
+      img.src = `data:${imageType};base64,${imageBase64}`;
+    });
+  }
 
-  const model = `<?xml version="1.0" encoding="UTF-8"?>
-<model unit="millimeter" xml:lang="en-US"
-  xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">
-${metaLines}
-  <resources>
-    <object id="1" type="model" name="LayerDeck_Forge">
-      <mesh>
-        <vertices>
-          <vertex x="${(-hw).toFixed(3)}" y="${(-hw).toFixed(3)}" z="0.000"/>
-          <vertex x="${hw.toFixed(3)}" y="${(-hw).toFixed(3)}" z="0.000"/>
-          <vertex x="${hw.toFixed(3)}" y="${hw.toFixed(3)}" z="0.000"/>
-          <vertex x="${(-hw).toFixed(3)}" y="${hw.toFixed(3)}" z="0.000"/>
-          <vertex x="${(-hw).toFixed(3)}" y="${(-hw).toFixed(3)}" z="${plateThickness.toFixed(3)}"/>
-          <vertex x="${hw.toFixed(3)}" y="${(-hw).toFixed(3)}" z="${plateThickness.toFixed(3)}"/>
-          <vertex x="${hw.toFixed(3)}" y="${hw.toFixed(3)}" z="${plateThickness.toFixed(3)}"/>
-          <vertex x="${(-hw).toFixed(3)}" y="${hw.toFixed(3)}" z="${plateThickness.toFixed(3)}"/>
-        </vertices>
-        <triangles>
-          <triangle v1="0" v2="2" v3="1"/><triangle v1="0" v2="3" v3="2"/>
-          <triangle v1="4" v2="5" v3="6"/><triangle v1="4" v2="6" v3="7"/>
-          <triangle v1="0" v2="1" v3="5"/><triangle v1="0" v2="5" v3="4"/>
-          <triangle v1="2" v2="3" v3="7"/><triangle v1="2" v2="7" v3="6"/>
-          <triangle v1="0" v2="4" v3="7"/><triangle v1="0" v2="7" v3="3"/>
-          <triangle v1="1" v2="2" v3="6"/><triangle v1="1" v2="6" v3="5"/>
-        </triangles>
-      </mesh>
-    </object>
-  </resources>
-  <build>
-    <item objectid="1"/>
-  </build>
-</model>`;
+  // Extract brightness
+  const bright = new Float32Array(IMG_RES * IMG_RES);
+  for (let i = 0; i < bright.length; i++) {
+    if (pixelData) {
+      const bi = i * 4;
+      bright[i] = (pixelData[bi] * 0.299 + pixelData[bi + 1] * 0.587 + pixelData[bi + 2] * 0.114) / 255;
+    } else {
+      bright[i] = 0.5;
+    }
+  }
 
-  const contentTypes = `<?xml version="1.0" encoding="UTF-8"?>
-<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
-  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
-  <Default Extension="model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/>
-</Types>`;
+  // Box blur (radius=4)
+  const BLR = 4;
+  const blurred = new Float32Array(IMG_RES * IMG_RES);
+  for (let y = 0; y < IMG_RES; y++) {
+    for (let x = 0; x < IMG_RES; x++) {
+      let sum = 0, cnt = 0;
+      for (let dy = -BLR; dy <= BLR; dy++) {
+        for (let dx = -BLR; dx <= BLR; dx++) {
+          const nx = x + dx, ny = y + dy;
+          if (nx >= 0 && nx < IMG_RES && ny >= 0 && ny < IMG_RES) {
+            sum += bright[ny * IMG_RES + nx]; cnt++;
+          }
+        }
+      }
+      blurred[y * IMG_RES + x] = sum / cnt;
+    }
+  }
 
-  const rels = `<?xml version="1.0" encoding="UTF-8"?>
-<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-  <Relationship Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel" Target="/3D/3dmodel.model" Id="rel0"/>
-</Relationships>`;
+  // Build vertices
+  type Vertex = { x: number; y: number; z: number };
+  const vertices: Vertex[] = [];
+  for (let row = 0; row < IMG_RES; row++) {
+    for (let col = 0; col < IMG_RES; col++) {
+      const lum = blurred[row * IMG_RES + col];
+      vertices.push({ x: col * scale - half, y: row * scale - half, z: plateThickness + lum * totalColorHeight });
+    }
+  }
 
+  // Build faces grouped by slot
+  type Face = { a: number; b: number; c: number; slotIndex: number };
+  const faces: Face[] = [];
+  for (let row = 0; row < IMG_RES - 1; row++) {
+    for (let col = 0; col < IMG_RES - 1; col++) {
+      const va = row * IMG_RES + col;
+      const vb = row * IMG_RES + col + 1;
+      const vc = (row + 1) * IMG_RES + col;
+      const vd = (row + 1) * IMG_RES + col + 1;
+      const lum = blurred[row * IMG_RES + col];
+      const slotIndex = Math.min(Math.floor(lum * slots.length), slots.length - 1);
+      faces.push({ a: va, b: vc, c: vb, slotIndex });
+      faces.push({ a: vb, b: vc, c: vd, slotIndex });
+    }
+  }
+
+  // ── MTL ─────────────────────────────────────────────────────────────────────
+  let mtl = '# LayerDeck Forge — Filament Painting\n\n';
+  slots.forEach((slot, i) => {
+    const r = parseInt(slot.hex.slice(1, 3), 16) / 255;
+    const g = parseInt(slot.hex.slice(3, 5), 16) / 255;
+    const b = parseInt(slot.hex.slice(5, 7), 16) / 255;
+    mtl += `newmtl slot_${i + 1}\n`;
+    mtl += `Kd ${r.toFixed(4)} ${g.toFixed(4)} ${b.toFixed(4)}\n`;
+    mtl += `Ka 0.1 0.1 0.1\n`;
+    mtl += `Ks 0.0 0.0 0.0\n\n`;
+  });
+
+  // ── OBJ ─────────────────────────────────────────────────────────────────────
+  let obj = '# LayerDeck Forge — Filament Painting\n';
+  obj += 'mtllib model.mtl\n\n';
+  vertices.forEach(v => { obj += `v ${v.x.toFixed(4)} ${v.y.toFixed(4)} ${v.z.toFixed(4)}\n`; });
+  obj += '\n';
+  let currentMat = -1;
+  faces.forEach(face => {
+    if (face.slotIndex !== currentMat) {
+      obj += `\nusemtl slot_${face.slotIndex + 1}\n`;
+      currentMat = face.slotIndex;
+    }
+    obj += `f ${face.a + 1} ${face.b + 1} ${face.c + 1}\n`;
+  });
+
+  // ── Print guide ──────────────────────────────────────────────────────────────
+  const slabH = totalColorHeight / slots.length;
+  const guide = slots.map((s, i) =>
+    `Filament ${i + 1}: ${s.colorName} (${s.hex}) — AMS Slot ${i + 1}`
+  ).join('\n') +
+    '\n\nSwap filaments at these layer heights:\n' +
+    slots.map((_s, i) => `  Slot ${i + 1} starts at: ${(plateThickness + i * slabH).toFixed(2)}mm`).join('\n');
+
+  // ── ZIP ──────────────────────────────────────────────────────────────────────
   const zip = new JSZip();
-  zip.file('[Content_Types].xml', contentTypes);
-  zip.folder('_rels')!.file('.rels', rels);
-  zip.folder('3D')!.file('3dmodel.model', model);
+  zip.file('model.obj', obj);
+  zip.file('model.mtl', mtl);
+  zip.file('print_guide.txt', guide);
   return zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } });
 }
 
@@ -410,9 +468,9 @@ export function ForgeStudio() {
     try {
       const printMM = parseFloat((stack.recommendedPrintSize || '120mm').replace(/[^0-9.]/g, '')) || 120;
       const lh = parseFloat(stack.layerHeight || '0.10') || 0.10;
-      const blob = await build3MF(liveSlots, printMM, lh, imgData?.base64, imgData?.type);
+      const blob = await buildExportZip(liveSlots, printMM, lh, imgData?.base64, imgData?.type);
       const safeName = (stack.imageSummary || 'forge').replace(/[^a-zA-Z0-9]+/g, '_').slice(0, 40);
-      const filename = `LayerDeck_Forge_${safeName}_${liveSlots.length}color.3mf`;
+      const filename = `LayerDeck_Forge_${safeName}_${liveSlots.length}color.zip`;
       setExportedBlob({ blob, filename });
 
       const url = URL.createObjectURL(blob);
@@ -441,7 +499,7 @@ export function ForgeStudio() {
         } catch { /* silent — local file already saved */ }
       })();
 
-      toast({ title: '3MF Downloaded', description: 'Import into Bambu Studio and assign each object to an AMS slot.' });
+      toast({ title: 'Export Downloaded', description: 'Extract the ZIP, then drag model.obj into Bambu Studio. Keep model.mtl in the same folder.' });
     } catch (e) {
       toast({ title: 'Export Failed', description: e instanceof Error ? e.message : 'Unknown error', variant: 'destructive' });
     } finally {
