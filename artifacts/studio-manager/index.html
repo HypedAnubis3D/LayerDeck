@@ -1791,7 +1791,6 @@ header{
   </div>
   <span class="header-tab-name" id="header-tab-name">Dashboard</span>
   <div class="header-right">
-    <button onclick="window.location.reload()" title="Refresh" style="background:var(--surf);border:1px solid var(--bdr2);color:var(--txt-d);padding:4px 9px;font-size:13px;border-radius:6px;cursor:pointer;display:flex;align-items:center;line-height:1">↺</button>
     <div style="position:relative" id="settings-wrap">
       <button class="btn btn-sm" id="settings-btn" onclick="toggleSettingsPanel()" title="Settings &amp; Sync" style="background:var(--surf);border:1px solid var(--bdr2);color:var(--txt-d);padding:4px 10px;font-size:7px;gap:6px;display:flex;align-items:center">
         <div class="sync-dot disconnected" id="sync-dot" style="width:8px;height:8px;flex-shrink:0"></div>
@@ -11600,10 +11599,12 @@ function updateSettingsPanel(){
      +'<button class="btn btn-sm" style="width:100%;text-align:left;padding:6px 8px;font-size:8px;margin-bottom:3px" onclick="navTo(\'sync\',document.getElementById(\'nav-sync\'));closeSettingsPanel()">⚙ Settings &amp; Sync</button>'
      +'<button class="btn btn-sm" style="width:100%;background:var(--grn-d);border:1px solid var(--grn);color:var(--grn-b);padding:5px 8px;font-size:7px;text-align:left;margin-bottom:3px" onclick="syncAll();closeSettingsPanel()">⬆ Push to Cloud</button>'
      +'<button class="btn btn-sm" style="width:100%;background:rgba(34,170,204,.1);border:1px solid var(--cyn);color:var(--cyn);padding:5px 8px;font-size:7px;text-align:left;margin-bottom:6px" onclick="pullAll();closeSettingsPanel()">⬇ Pull from Cloud</button>'
-     +'<button class="btn btn-sm" style="width:100%;background:rgba(220,50,50,.12);border:1px solid var(--red);color:var(--red-b);padding:5px 8px;font-size:7px;text-align:left" onclick="signOutUser();closeSettingsPanel()">⏏ Sign Out</button>'
+     +'<button class="btn btn-sm" style="width:100%;background:rgba(220,50,50,.12);border:1px solid var(--red);color:var(--red-b);padding:5px 8px;font-size:7px;text-align:left;margin-bottom:3px" onclick="signOutUser();closeSettingsPanel()">⏏ Sign Out</button>'
+     +'<button class="btn btn-sm" style="width:100%;background:var(--surf);border:1px solid var(--bdr2);color:var(--txt-d);padding:5px 8px;font-size:7px;text-align:left" onclick="window.location.reload()">↺ Refresh App</button>'
     :'<div style="font-size:7px;color:var(--txt-d);padding:2px 4px 7px;border-bottom:1px solid var(--bdr);margin-bottom:6px">Not signed in</div>'
      +'<button class="btn btn-sm" style="width:100%;text-align:left;padding:6px 8px;font-size:8px;margin-bottom:6px" onclick="navTo(\'sync\',document.getElementById(\'nav-sync\'));closeSettingsPanel()">⚙ Settings &amp; Sync</button>'
-     +'<button class="btn btn-sm" style="width:100%;background:var(--gold-d);border:1px solid var(--gold);color:var(--gold-b);padding:5px 8px;font-size:7px;text-align:left" onclick="showAuthScreen();closeSettingsPanel()">🔐 Sign In</button>');
+     +'<button class="btn btn-sm" style="width:100%;background:var(--gold-d);border:1px solid var(--gold);color:var(--gold-b);padding:5px 8px;font-size:7px;text-align:left;margin-bottom:3px" onclick="showAuthScreen();closeSettingsPanel()">🔐 Sign In</button>'
+     +'<button class="btn btn-sm" style="width:100%;background:var(--surf);border:1px solid var(--bdr2);color:var(--txt-d);padding:5px 8px;font-size:7px;text-align:left" onclick="window.location.reload()">↺ Refresh App</button>');
 }
 function toggleSettingsPanel(){
   const p=document.getElementById('settings-panel');
