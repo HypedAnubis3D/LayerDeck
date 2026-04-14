@@ -5101,6 +5101,21 @@ function renderQueue(){
           return'?h';
         }())+(q.orderId?' · '+esc(q.orderId):'')+' </div>'+
         doneByHtml+
+        (function(){
+          // Show linked order buyer + order number on all linked queue cards
+          var _lo=null;
+          if(q.linkedOrderId)_lo=orders.find(function(o){return o.id===q.linkedOrderId;});
+          if(!_lo&&q.fromEtsyOrder)_lo=orders.find(function(o){return o.etsyOrderId===q.fromEtsyOrder||o.orderId===q.fromEtsyOrder;});
+          if(!_lo&&q.fromShopifyOrder)_lo=orders.find(function(o){return o.shopifyOrderId===q.fromShopifyOrder||o.orderId===q.fromShopifyOrder;});
+          if(!_lo)return '';
+          var _num=_lo.etsyOrderId||_lo.shopifyOrderId||_lo.orderId||'';
+          var _icon=(_lo.fromEtsy||_lo.platform==='Etsy')?'🟠':(_lo.fromShopify||_lo.platform==='Shopify')?'🛍':'📦';
+          return '<div style="display:inline-flex;align-items:center;gap:3px;margin-top:3px;background:rgba(240,154,62,.08);border:1px solid rgba(240,154,62,.2);border-radius:8px;padding:2px 7px">'
+            +'<span style="font-size:7px">'+_icon+'</span>'
+            +'<span style="font-size:7px;color:var(--txt);font-weight:600">'+esc(_lo.customer||'Customer')+'</span>'
+            +(_num?'<span style="font-size:6px;color:var(--txt-d)"> · #'+esc(_num)+'</span>':'')
+            +'</div>';
+        }())+
         (q.notes?'<div style="font-size:6px;color:var(--txt-d);margin-top:3px">'+esc(q.notes)+'</div>':'')+
         (q.stage==='done'&&q.outcome?'<div style="font-size:6px;font-weight:bold;letter-spacing:1px;margin-top:4px;color:'+(q.outcome==='failed'?'var(--red)':'var(--grn)')+'\">'+(q.outcome==='failed'?'✕ FAILED':'✓ SUCCEEDED')+'</div>':'')+
         (function(){
