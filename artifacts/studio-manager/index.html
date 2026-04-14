@@ -5086,7 +5086,7 @@ function renderQueue(){
         '</div>'+
         '<div class="kcard-name">'+esc(q.name)+(q.qty>1?' ×'+q.qty:'')+'</div>'+
         (q.piJobName?'<div style="font-size:6px;color:var(--txt-d);margin-top:2px;display:flex;align-items:center;gap:3px"><span style="opacity:.5">🖨</span>'+esc(q.piJobName)+'</div>':'')+
-        '<div class="kcard-meta">'+esc(q.printer||'?')+' · '+(function(){
+        '<div class="kcard-meta">'+(q.printer?esc(q.printer):'<span style="color:var(--txt-d);font-style:italic">Unassigned</span>')+' · '+(function(){
           // In-progress: always prefer live Pi remaining time over stale stored hrs
           if(st.key==='inprogress'&&q.printer&&piPrevStates[q.printer]){
             var remMin=Math.round(piPrevStates[q.printer].mc_remaining_time||0);
@@ -5618,8 +5618,10 @@ function moveQueue(id,stage){
           fromQueueItemId:id
         };
         prints.push(newPrint);savePrints();
-        // Set BOTH link fields to the same record so openEditInProgressPrint never creates a second one
-        queueItems=queueItems.map(q=>q.id===id?{...q,printId:newPrint.id,linkedPrintId:newPrint.id}:q);
+        // Set BOTH link fields to the same record so openEditInProgressPrint never creates a second one.
+        // Also sync the resolved printer back onto the queue item so _samePrinterOrder can find it
+        // when Pi Hub later reports the job starting under a different/copyright-renamed filename.
+        queueItems=queueItems.map(q=>q.id===id?{...q,printId:newPrint.id,linkedPrintId:newPrint.id,printer:newPrint.printer}:q);
         saveQueue();
         toast('Print Started',qi.name+' → Prints tab','success');
         if(profile?.filaments?.length)setTimeout(()=>checkMultiSpoolAlert(newPrint.id),300);
@@ -6268,7 +6270,7 @@ function ingestEtsyOrder(o){
       queueItems.push({
         id:uid(),name:queueLabel,
         category:catalogItem?catalogItem.category:'Other',
-        printer:printerRecords[0]?.name||'X1C',
+        printer:'',
         hrs:matchTmf?matchTmf.hrs||0:0,
         qty:it.qty,priority:'normal',
         orderId:orderId,stage:'queued',
@@ -7797,7 +7799,7 @@ function queueOrderItem(oid,itemIdx){
   if(already){toast('Already Queued',qLbl+' is already in the print queue','info');return;}
   const cat=catalogItems.find(function(c){return c.name&&(c.name.toLowerCase()===it.name.toLowerCase()||it.name.toLowerCase().includes(c.name.toLowerCase())||c.name.toLowerCase().includes(it.name.toLowerCase()));});
   const tmf=cat&&cat.tmfId?tmfLib.find(function(t){return t.id===cat.tmfId;}):null;
-  queueItems.push({id:uid(),name:qLbl,category:cat?cat.category:'Other',printer:printerRecords[0]?.name||'X1C',hrs:tmf?tmf.hrs||0:0,qty:it.qty||1,priority:'normal',orderId:o.orderId,stage:'queued',tmfId:tmf?tmf.id:null,notes:tmf?'3MF: '+tmf.name+(it.variantTitle?' ['+it.variantTitle+']':''):'',fromOrder:oid,timestamp:Date.now()});
+  queueItems.push({id:uid(),name:qLbl,category:cat?cat.category:'Other',printer:'',hrs:tmf?tmf.hrs||0:0,qty:it.qty||1,priority:'normal',orderId:o.orderId,stage:'queued',tmfId:tmf?tmf.id:null,notes:tmf?'3MF: '+tmf.name+(it.variantTitle?' ['+it.variantTitle+']':''):'',fromOrder:oid,timestamp:Date.now()});
   saveQueue();render();
   toast('→ Queued',qLbl+' added to print queue','success');
 }
@@ -9708,7 +9710,7 @@ function ingestShopifyOrder(o){
     // Dedup: skip if queue/print already exists for this order + product (prevents duplication on re-poll)
     const alreadyQueued=queueItems.some(q=>q.fromShopifyOrder===orderId&&q.name===queueLabel);
     if(!alreadyQueued){
-      queueItems.push({id:uid(),name:queueLabel,category:catalogItem?catalogItem.category:'Other',printer:printerRecords[0]?.name||'X1C',hrs:matchTmf?matchTmf.hrs||0:0,qty:it.qty,priority:'normal',orderId,stage:'queued',fromShopify:true,noTmf:!matchTmf,tmfId:matchTmf?matchTmf.id:null,printId:newPrintId,fromShopifyOrder:orderId,notes:matchTmf?'3MF: '+matchTmf.name+(it.variantTitle?' ['+it.variantTitle+']':''):'⚠ No 3MF on file',timestamp:Date.now()});
+      queueItems.push({id:uid(),name:queueLabel,category:catalogItem?catalogItem.category:'Other',printer:'',hrs:matchTmf?matchTmf.hrs||0:0,qty:it.qty,priority:'normal',orderId,stage:'queued',fromShopify:true,noTmf:!matchTmf,tmfId:matchTmf?matchTmf.id:null,printId:newPrintId,fromShopifyOrder:orderId,notes:matchTmf?'3MF: '+matchTmf.name+(it.variantTitle?' ['+it.variantTitle+']':''):'⚠ No 3MF on file',timestamp:Date.now()});
       if(matchTmf){
         const alreadyPrinted=prints.some(p=>p.fromShopifyOrder===orderId&&p.name===queueLabel);
         const _qfg=matchTmf.filamentGramsPerColor||matchTmf.filamentGrams||[];
@@ -10292,7 +10294,7 @@ function renderRestock(){
 }
 
 function quickQueueFromRestock(name,qty){
-  queueItems.push({id:uid(),name,category:'Other',printer:printerRecords[0]?.name||'X1C',hrs:0,qty,priority:'normal',stage:'queued',timestamp:Date.now(),notes:'Auto-queued from restock suggestion'});
+  queueItems.push({id:uid(),name,category:'Other',printer:'',hrs:0,qty,priority:'normal',stage:'queued',timestamp:Date.now(),notes:'Auto-queued from restock suggestion'});
   saveQueue();toast('Added to Queue',`${qty}x ${name} queued for printing`,'success');render();
 }
 
@@ -13503,7 +13505,7 @@ function handlePhotoUpload(id,input){
 function quickQueueFromCatalog(id){
   const item=catalogItems.find(x=>x.id===id);if(!item)return;
   const tmf=item.tmfId?tmfLib.find(t=>t.id===item.tmfId):null;
-  queueItems.push({id:uid(),name:item.name,category:item.category,printer:printerRecords[0]?.name||'X1C',hrs:tmf?tmf.hrs||0:0,qty:1,priority:'normal',stage:'queued',timestamp:Date.now(),tmfId:item.tmfId||null,notes:tmf?'3MF: '+tmf.name:'From catalog'});
+  queueItems.push({id:uid(),name:item.name,category:item.category,printer:'',hrs:tmf?tmf.hrs||0:0,qty:1,priority:'normal',stage:'queued',timestamp:Date.now(),tmfId:item.tmfId||null,notes:tmf?'3MF: '+tmf.name:'From catalog'});
   saveQueue();toast('Added to Queue',item.name,'success');
   navTo('queue',document.getElementById('nav-queue'));
 }
@@ -16067,7 +16069,7 @@ function _catPlaceOrder(payMethod,formOverride){
       id:qid,
       name:it.name,
       category:'Convention Catalog',
-      printer:printerRecords[0]?.name||'X1C',
+      printer:'',
       hrs:0,qty:it.qty,
       priority:'normal',
       stage:'queued',
@@ -16964,7 +16966,7 @@ function advanceMystery(id){
           id:uid(),
           name:m.print+' 🎁',
           category:'Mystery',
-          printer:printerRecords[0]?.name||'X1C',
+          printer:'',
           hrs:0,
           qty:1,
           priority:'normal',
@@ -17086,7 +17088,7 @@ function saveMystery(){
   if(obj.status==='queued'&&obj.print){
     const already=queueItems.some(q=>q.mysteryId===obj.id);
     if(!already){
-      queueItems.push({id:uid(),name:obj.print+' 🎁',category:'Mystery',printer:printerRecords[0]?.name||'X1C',hrs:0,qty:1,priority:'normal',orderId:obj.orderId,stage:'queued',notes:'Mystery gift · '+obj.customer+' · '+obj.code,fromMystery:true,mysteryId:obj.id,timestamp:Date.now()});
+      queueItems.push({id:uid(),name:obj.print+' 🎁',category:'Mystery',printer:'',hrs:0,qty:1,priority:'normal',orderId:obj.orderId,stage:'queued',notes:'Mystery gift · '+obj.customer+' · '+obj.code,fromMystery:true,mysteryId:obj.id,timestamp:Date.now()});
       saveQueue();
       queueCreated=true;
     }
@@ -18505,7 +18507,7 @@ async function onPiPrintStarted(name,data){
     queueItems=queueItems.map(function(q){
       // Use _normName so "Girl_on_Swing.gcode" matches "Girl on Swing" queue item
       if(q.stage==='queued'&&!changed&&_normName(q.name)===_normName(jobName)){
-        changed=true;return Object.assign({},q,{stage:'inprogress',startedAt:Date.now()});
+        changed=true;return Object.assign({},q,{stage:'inprogress',startedAt:Date.now(),printer:name});
       }
       return q;
     });
