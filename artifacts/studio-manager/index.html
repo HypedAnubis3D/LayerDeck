@@ -4392,7 +4392,9 @@ function renderPrints(){
       if((ps.gcode_state||'').toUpperCase()!=='RUNNING')return;
       const hasQ=inProgressQ.some(function(qi){return qi.printer===prName;});
       const hasP=f.some(function(p){return (p.status||'printing')==='printing'&&p.printer===prName;});
-      if(!hasQ&&!hasP)piLive.push({printer:prName,state:ps});
+      const _fileName=ps.subtask_name||ps.task_name||'';
+      const _dismissed=_piLiveDismissed.has(prName+':'+_fileName);
+      if(!hasQ&&!hasP&&!_dismissed)piLive.push({printer:prName,state:ps});
     });
   }
   document.getElementById('pr-cnt').textContent=(f.length+inProgressQ.length+piLive.length)+' prints';
@@ -4411,8 +4413,10 @@ function renderPrints(){
         (pct?' · <span style="color:var(--grn-b)">'+pct+'%</span>':'')+
         (remMin?' · <span class="print-time-display" style="display:inline-flex;font-size:8px;padding:2px 6px">'+formatHms(remMin/60)+' left</span>':'')+
       '</div>'+
-      '<div style="font-size:7px;color:var(--cyn);margin-top:4px;background:rgba(0,200,255,.06);border:1px solid rgba(0,200,255,.15);border-radius:3px;padding:4px 7px">'+
-        'Live from Pi Hub — not yet logged in Studio Manager. <button class="btn btn-ghost btn-xs" style="margin-left:6px;font-size:6px" onclick="openAddPrint()">Log this print</button>'+
+      '<div style="font-size:7px;color:var(--cyn);margin-top:4px;background:rgba(0,200,255,.06);border:1px solid rgba(0,200,255,.15);border-radius:3px;padding:4px 7px;display:flex;align-items:center;flex-wrap:wrap;gap:4px">'+
+        '<span>Live from Pi Hub — not yet logged in Studio Manager.</span>'+
+        '<button class="btn btn-ghost btn-xs" style="font-size:6px" onclick="openAddPrint()">Log this print</button>'+
+        '<button class="btn btn-ghost btn-xs" style="font-size:6px;color:var(--txt-d)" onclick="dismissPiLiveBanner(\''+esc(item.printer)+'\',\''+esc(fileName)+'\')">Print exists, dismiss</button>'+
       '</div>'+
     '</div>';
   }).join('');
@@ -18182,6 +18186,8 @@ try{var _ha=localStorage.getItem('hmsLastAlerted');window._hmsLastAlerted=_ha?JS
 let piPollTimer=null;
 let piPrintStartTimes={}; // {printerName: timestamp}
 const _piDiscordedPrints={}; // {printer:normJobName → sentAt ms} — prevents duplicate print_complete Discord alerts
+const _piLiveDismissed=new Set(); // {printer:filename} — banners dismissed by user ("print exists")
+function dismissPiLiveBanner(printer,fileName){_piLiveDismissed.add(printer+':'+fileName);render();}
 let piAmsStartRemain={};  // {printerName: {"ui_ti": pct, "ext": pct}} — AMS remain% at print start
 let piTmfObjData={};      // {printerName: {objectList,totalObjects,fromTmf,plateName}} — fallback from 3MF library
 let piPollInFlight=false;  // in-flight lock — never send 2 requests at once
