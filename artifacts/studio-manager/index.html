@@ -18767,6 +18767,14 @@ async function onPiPrintFinished(name,data){
     var _lid=_inprogQ.linkedPrintId||_inprogQ.printId;
     if(!_lid)return null;
     return prints.find(function(p){return p.id===_lid&&p.status==='printing';})||null;
+  })()||(function(){
+    // Last-resort: promote any 'printing' record on this printer even when the name
+    // doesn't match the Pi job. Covers manually-created/renamed reprints where the
+    // user names the record differently from the Bambu gcode file
+    // (e.g. "Glaceon reprint" vs "Glaceon_v2.gcode"). Take the most recent one.
+    var _fallbackCandidates=prints.filter(function(p){return p.status==='printing'&&p.printer===name;});
+    if(!_fallbackCandidates.length)return null;
+    return _fallbackCandidates.reduce(function(a,b){return(b.timestamp||0)>(a.timestamp||0)?b:a;});
   })();
   // If a placeholder already has user-assigned filaments, DON'T deplete spools again
   // here — the user's savePrint() call already deducted them. Only deplete when the
