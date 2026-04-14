@@ -5475,14 +5475,45 @@ function applyOrderLink(orderId){
   var etsyId=order.etsyOrderId||order.orderId||null;
   var shopifyId=order.shopifyOrderId||null;
   var isEtsyO=order.fromEtsy||order.platform==='Etsy';
+
+  // Use the EXACT same fromEtsyOrder value that existing queue items for this order
+  // already have — exact string match is required for kanban grouping.
+  var _canonFromEtsy=etsyId;
+  if(isEtsyO){
+    var _existingOrdItem=queueItems.find(function(q){
+      return q.fromEtsyOrder&&(q.linkedOrderId===orderId||q.fromEtsyOrder===etsyId||q.orderId===etsyId||q.fromEtsyOrder===order.orderId);
+    });
+    if(_existingOrdItem)_canonFromEtsy=_existingOrdItem.fromEtsyOrder;
+  }
+
   queueItems=queueItems.map(function(q){
     if(q.id!==_linkOrderTargetId)return q;
     return Object.assign({},q,{
-      fromEtsyOrder:isEtsyO?(etsyId||undefined):q.fromEtsyOrder,
+      fromEtsyOrder:isEtsyO?(_canonFromEtsy||undefined):q.fromEtsyOrder,
       fromShopifyOrder:!isEtsyO?(shopifyId||undefined):q.fromShopifyOrder,
       linkedOrderId:order.id
     });
   });
+
+  // Also update the linked print record + order's linkedPrintIds so Orders tab reflects link
+  var _qi=queueItems.find(function(q){return q.id===_linkOrderTargetId;});
+  var _lpid=_qi&&(_qi.printId||_qi.linkedPrintId);
+  if(_lpid){
+    prints=prints.map(function(p){
+      if(p.id!==_lpid)return p;
+      return Object.assign({},p,{linkedOrderId:order.id});
+    });
+    orders=orders.map(function(o){
+      if(o.id!==orderId)return o;
+      var _ids=o.linkedPrintIds&&o.linkedPrintIds.length?o.linkedPrintIds:
+               (o.linkedPrintId?[o.linkedPrintId]:[]);
+      if(_ids.includes(_lpid))return o;
+      return Object.assign({},o,{linkedPrintIds:[].concat(_ids,[_lpid])});
+    });
+    savePrints();
+    saveOrders();
+  }
+
   saveQueue();render();
   closeLinkToOrderModal();
   toast('Linked','Pi print grouped with order for: '+esc(order.customer),'success',3000);
@@ -18489,20 +18520,26 @@ async function onPiPrintStarted(name,data){
 
       // ── Same-printer order merge ────────────────────────────────────────────
       // When a Pi print starts on a printer that already has a manually-started
-      // order item in progress, absorb the Pi data into that item rather than
-      // creating a duplicate card. This handles copyright-renamed files where
-      // "Pikachu Keychain" will never match "generic_charm_v3.gcode".
+      // order item (in progress OR still queued), absorb the Pi data into that
+      // item rather than creating a duplicate card. This handles copyright-renamed
+      // files where "Pikachu Keychain" will never match "generic_charm_v3.gcode".
+      // Checking queued items too handles the race where Pi detects the start
+      // before the user manually moves the card to In Progress.
       var _samePrinterOrder=queueItems.find(function(q){
-        return q.stage==='inprogress'
+        return (q.stage==='inprogress'||q.stage==='queued')
           && q.printer===name
           && !q.autoFromPi
-          && (q.fromEtsyOrder||q.fromShopify||q.fromEtsy||q.fromShopifyOrder);
+          && (q.fromEtsyOrder||q.fromShopify||q.fromEtsy||q.fromShopifyOrder||q.fromOrder);
       });
       if(_samePrinterOrder){
         var _mergedHrs=autoHrs>0?autoHrs:_samePrinterOrder.hrs;
+        // Promote queued → inprogress if Pi already started the print
+        var _newStage=_samePrinterOrder.stage==='queued'?'inprogress':_samePrinterOrder.stage;
         queueItems=queueItems.map(function(q){
           if(q.id!==_samePrinterOrder.id)return q;
           return Object.assign({},q,{
+            stage:_newStage,
+            startedAt:_newStage==='inprogress'?(q.startedAt||Date.now()):q.startedAt,
             piJobName:displayName,
             hrs:_mergedHrs,
             noTmf:(!matchedTmf)&&q.noTmf,
