@@ -18661,6 +18661,10 @@ function reconcileMissingPiPrints(){
     // requires autoFromPi since records promoted by onPiPrintFinished may not have it.
     const _exists=prints.find(function(r){
       if(r.fromQueueItemId===q.id)return true;
+      // Also match by direct link — covers auto-Pi items linked to a promoted placeholder
+      // (e.g. "Glaceon_v2" Pi queue item linked to the promoted "Glaceon" print record)
+      if(q.linkedPrintId&&r.id===q.linkedPrintId)return true;
+      if(q.printId&&r.id===q.printId)return true;
       return r.printer===q.printer&&_normName(r.name)===_qNorm&&(r.finishedAt||r.timestamp||0)>=_todayMs;
     });
     if(_exists){
@@ -18751,7 +18755,12 @@ async function onPiPrintFinished(name,data){
   // but the Bambu job is the raw gcode file ("Tentacool Main"), so name-match fails
   // and the record has no tmfId to fall back on (old records pre-fix).
   const _promotePlaceholder=_anyPrintingPlaceholder||(recentDup&&recentDup.status==='printing'?recentDup:null)||(function(){
-    var _inprogQ=queueItems.find(function(q){return q.stage==='inprogress'&&q.printer===name;});
+    // Prefer non-auto-from-Pi items first since they are more likely to have a real
+    // linkedPrintId pointing to the 'printing' placeholder. Auto-items created by Pi
+    // in onPiPrintStarted never have a linked print record, so they always yield null.
+    var _inprogQ=queueItems.find(function(q){return q.stage==='inprogress'&&q.printer===name&&!q.autoFromPi&&(q.linkedPrintId||q.printId);})
+      ||queueItems.find(function(q){return q.stage==='inprogress'&&q.printer===name&&!q.autoFromPi;})
+      ||queueItems.find(function(q){return q.stage==='inprogress'&&q.printer===name;});
     if(!_inprogQ)return null;
     var _lid=_inprogQ.linkedPrintId||_inprogQ.printId;
     if(!_lid)return null;
@@ -18905,6 +18914,19 @@ async function onPiPrintFinished(name,data){
     // These can exist from the old bug where two link fields (printId vs linkedPrintId)
     // each created their own print record. Only the promoted one should survive.
     prints=prints.filter(function(p){return p.id===printRecord.id||!(p.status==='printing'&&p.printer===name&&_piMatchesJob(p));});
+    // Link any auto-Pi queue items that have no linked print record to this promoted
+    // record so reconcileMissingPiPrints doesn't create a duplicate for them.
+    // This covers the name-mismatch case (e.g. queue item "Glaceon" vs Pi job
+    // "Glaceon_v2.gcode") where a separate auto-Pi queue item was created.
+    var _hadAutoLink=false;
+    queueItems=queueItems.map(function(q){
+      if(q.stage==='inprogress'&&q.printer===name&&q.autoFromPi&&!q.linkedPrintId&&!q.printId){
+        _hadAutoLink=true;
+        return Object.assign({},q,{linkedPrintId:printRecord.id,printId:printRecord.id});
+      }
+      return q;
+    });
+    if(_hadAutoLink)saveQueue();
   } else {
     const _tapoWSnap2=_getTapoWattsForPrinter(name);
     // Find the auto-added inprogress queue item for this printer so we can link it.
