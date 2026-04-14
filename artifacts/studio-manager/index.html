@@ -18347,20 +18347,30 @@ function getPiAMSMaterial(printerData){
 function renderAmsSwatches(amsData,vtTray,printerName,trayNow){
   const hasAms=amsData&&amsData.ams&&amsData.ams.length;
   const hasExt=!!(vtTray&&vtTray.tray_type);
-  if(!hasAms&&!hasExt)return'<span style="font-size:7px;color:var(--txt-d)">No AMS data</span>';
+  // Check if this printer has a spool assigned or is explicitly configured as no-AMS
+  const assignedExtId=printerName?((amsMap[printerName]||{})['ext']||''):'';
+  const prCfg=printerName?printerRecords.find(function(r){return r.name===printerName;}):null;
+  // amsUnits===0 means explicitly set to no-AMS; also check amsSlots===0 for legacy records
+  const isNoAmsPrinter=!!(prCfg&&((prCfg.amsUnits===0)||(prCfg.amsSlots===0)));
+  // Show ext spool section if: live data OR assigned spool OR printer configured with no AMS
+  const showExtSection=!hasAms&&(hasExt||!!assignedExtId||isNoAmsPrinter);
+  if(!hasAms&&!showExtSection)return'<span style="font-size:7px;color:var(--txt-d)">No AMS data</span>';
 
   // ── External / direct spool (no AMS) ─────────────────────────────────
-  if(!hasAms&&hasExt){
-    const rawCol=(vtTray.tray_color||'').replace(/^#/,'');
+  if(showExtSection){
+    // Use live data if available, otherwise fall back to neutral/assigned info
+    const rawCol=hasExt?(vtTray.tray_color||'').replace(/^#/,''):'';
     const col='#'+(rawCol&&rawCol!=='00000000'?rawCol.slice(0,6):'888888');
-    const mat=vtTray.tray_sub_brands||vtTray.tray_type||'?';
-    const rem=vtTray.remain>0?vtTray.remain+'% left':'';
-    const mappedSpool=printerName?(spools.find(s=>s.id===((amsMap[printerName]||{})['ext']||''))||null):null;
+    const mat=hasExt?(vtTray.tray_sub_brands||vtTray.tray_type||'?'):'Ext Spool';
+    const rem=hasExt&&vtTray.remain>0?vtTray.remain+'% left':'';
+    const mappedSpool=assignedExtId?spools.find(function(s){return s.id===assignedExtId;})||null:null;
+    // Color/name from assigned spool when no live data
+    const dispCol=mappedSpool&&!hasExt?(mappedSpool.color||col):col;
     return'<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">'
-      +'<div style="width:13px;height:13px;border-radius:50%;background:'+col+';border:2px solid rgba(255,255,255,0.3);flex-shrink:0"></div>'
-      +'<span style="font-size:7px;color:var(--txt)">Ext: '+esc(mat)+(rem?' ('+rem+')':'')+'</span>'
+      +'<div style="width:13px;height:13px;border-radius:50%;background:'+dispCol+';border:2px solid rgba(255,255,255,0.3);flex-shrink:0"></div>'
+      +'<span style="font-size:7px;color:var(--txt)">'+(hasExt?'Ext: '+esc(mat)+(rem?' ('+rem+')':''):mappedSpool?esc(mappedSpool.name||mat):'Ext Spool')+'</span>'
       +(printerName?'<button class="btn btn-xs" style="font-size:5px;padding:2px 6px;background:var(--gold-d);color:var(--gold-b);border-color:var(--gold-dim)" onclick="openExtSpoolModal(\''+esc(printerName)+'\')">Assign Spool</button>':'')
-      +(mappedSpool?'<span style="font-size:6px;color:var(--grn)">→ '+esc(mappedSpool.name||mappedSpool.material)+'</span>':'<span style="font-size:6px;color:var(--txt-d)">no spool set</span>')
+      +(mappedSpool?'<span style="font-size:6px;color:var(--grn)">✓ '+esc(mappedSpool.name||mappedSpool.material)+'</span>':'<span style="font-size:6px;color:var(--txt-d)">no spool set</span>')
       +'</div>';
   }
 
