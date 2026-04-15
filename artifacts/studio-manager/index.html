@@ -3438,6 +3438,7 @@ header{
 <div class="modal">
   <div class="mtitle" id="queue-modal-title">Add to Queue</div>
   <input type="hidden" id="eq-id"/>
+  <input type="hidden" id="eq-printer" value=""/>
   <div class="fr2">
     <div class="field"><div class="fl">Print Name</div><input type="text" id="eq-name" placeholder="Anubis Figurine"/></div>
     <div class="field"><div class="fl">Category</div>
@@ -3445,16 +3446,14 @@ header{
     </div>
   </div>
   <div class="fr2">
-    <div class="field"><div class="fl">Printer</div>
-      <select id="eq-printer"></select>
-    </div>
     <div class="field"><div class="fl">Est. Time (hrs)</div><input type="number" id="eq-hrs" min="0" step="0.25" placeholder="3.5"/></div>
+    <div class="field"><div class="fl">Quantity</div><input type="number" id="eq-qty" min="1" value="1"/></div>
   </div>
   <div class="fr2">
-    <div class="field"><div class="fl">Quantity</div><input type="number" id="eq-qty" min="1" value="1"/></div>
     <div class="field"><div class="fl">Priority</div>
       <select id="eq-priority"><option value="normal">Normal</option><option value="high">🔴 High</option><option value="low">🔵 Low</option></select>
     </div>
+    <div class="field"></div>
   </div>
   <div class="field"><div class="fl">Linked Order ID (optional)</div><input type="text" id="eq-order" placeholder="ORD-001"/></div>
   <div class="field"><div class="fl">Notes</div><textarea id="eq-notes" rows="2"></textarea></div>
@@ -5577,8 +5576,10 @@ function moveQueue(id,stage){
         prints=prints.filter(p=>p.id!==_linkedPrint.id);
         savePrints();
       }
-      // Clear both link fields so a fresh record is created on next move-to-inprogress
-      queueItems=queueItems.map(q=>q.id===id?{...q,printId:undefined,linkedPrintId:undefined,startedAt:undefined}:q);
+      // Clear both link fields, printer, and startedAt so a fresh record is created
+      // on next move-to-inprogress. Printer is only assigned when Pi starts a matching
+      // job or when the item is explicitly moved to In Progress.
+      queueItems=queueItems.map(q=>q.id===id?{...q,printId:undefined,linkedPrintId:undefined,startedAt:undefined,printer:''}:q);
     }
   }
   // Record startedAt when moving to In Progress
@@ -7644,20 +7645,12 @@ function openAddQueue(){
   document.getElementById('eq-cat').value='Themed Balls';
   document.getElementById('eq-hrs').value='';document.getElementById('eq-qty').value='1';
   document.getElementById('eq-priority').value='normal';
-  // Populate printer dropdown from printerRecords + any Pi Hub printers seen in status
-  var piPrinterNames=[];
-  if(window.piStatus&&piStatus.printers){piPrinterNames=Object.keys(piStatus.printers);}
-  var allPrinters=[...new Set([...(printerRecords||[]).map(function(p){return p.name;}), ...piPrinterNames])].filter(Boolean);
-  if(!allPrinters.length){allPrinters=['X1C','X1E','P1S','P1P','A1','A1 Mini','H2D'];}
-  var sel=document.getElementById('eq-printer');
-  sel.innerHTML=allPrinters.map(function(p){return '<option>'+esc(p)+'</option>';}).join('');
-  if(allPrinters.length){sel.value=allPrinters[0];}
   document.getElementById('mod-queue').style.display='flex';
 }
 function openEditQueueItem(id){
   var q=queueItems.find(function(x){return x.id===id;});
   if(!q)return;
-  document.getElementById('queue-modal-title').textContent='Edit In Progress Print';
+  document.getElementById('queue-modal-title').textContent=q.stage==='inprogress'?'Edit In Progress Print':'Edit Queue Item';
   document.getElementById('eq-id').value=q.id;
   document.getElementById('eq-name').value=q.name||'';
   document.getElementById('eq-cat').value=q.category||'Other';
@@ -7666,13 +7659,6 @@ function openEditQueueItem(id){
   document.getElementById('eq-priority').value=q.priority||'normal';
   document.getElementById('eq-order').value=q.orderId||'';
   document.getElementById('eq-notes').value=q.notes||'';
-  var piPrinterNames=[];
-  if(window.piStatus&&piStatus.printers){piPrinterNames=Object.keys(piStatus.printers);}
-  var allPrinters=[...new Set([...(printerRecords||[]).map(function(p){return p.name;}), ...piPrinterNames])].filter(Boolean);
-  if(!allPrinters.length){allPrinters=['X1C','X1E','P1S','P1P','A1','A1 Mini','H2D'];}
-  var sel=document.getElementById('eq-printer');
-  sel.innerHTML=allPrinters.map(function(p){return '<option>'+esc(p)+'</option>';}).join('');
-  if(q.printer){sel.value=q.printer;}
   document.getElementById('mod-queue').style.display='flex';
 }
 function openEditInProgressPrint(queueItemId){
@@ -7712,7 +7698,10 @@ function saveQueueItem(){
   const id=document.getElementById('eq-id').value;
   const existing=id?(queueItems.find(q=>q.id===id)||{}):null;
   // Spread existing first so autoFromPi, noTmf, tmfId, startedAt etc. are preserved
-  const item=Object.assign({},existing||{},{id:id||uid(),name,category:document.getElementById('eq-cat').value,printer:document.getElementById('eq-printer').value,hrs:parseFloat(document.getElementById('eq-hrs').value)||0,qty:parseInt(document.getElementById('eq-qty').value)||1,priority:document.getElementById('eq-priority').value,orderId:document.getElementById('eq-order').value.trim(),notes:document.getElementById('eq-notes').value.trim(),stage:existing?existing.stage||'queued':'queued',timestamp:existing?existing.timestamp||Date.now():Date.now()});
+  // Printer is never set from this form — it's assigned automatically when Pi detects a
+  // matching print start or when the item is moved to In Progress. Preserve whatever the
+  // item already has (inprogress items keep their printer; new/queued items stay blank).
+  const item=Object.assign({},existing||{},{id:id||uid(),name,category:document.getElementById('eq-cat').value,printer:existing?existing.printer||'':'',hrs:parseFloat(document.getElementById('eq-hrs').value)||0,qty:parseInt(document.getElementById('eq-qty').value)||1,priority:document.getElementById('eq-priority').value,orderId:document.getElementById('eq-order').value.trim(),notes:document.getElementById('eq-notes').value.trim(),stage:existing?existing.stage||'queued':'queued',timestamp:existing?existing.timestamp||Date.now():Date.now()});
   if(id){queueItems=queueItems.map(q=>q.id===id?item:q);}else{queueItems.push(item);}
   saveQueue();closeQueue();render();
 }
@@ -8459,8 +8448,10 @@ function renderDashboard(){
       <div class="dw-title">Printer Status</div>
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:7px">
         ${printers.slice(0,6).map(pr=>{
-          const active=activeQueues.find(q=>q.printer===pr||q.printer===pr);
-          const nextUp=queueItems.filter(q=>q.stage==='queued'&&(q.printer===pr)).slice(0,1)[0];
+          const active=activeQueues.find(q=>q.printer===pr);
+          // Queued items are never pre-assigned to a printer — show the next item from the
+          // global queue so idle printers always display what could run next.
+          const nextUp=active?null:queueItems.filter(q=>q.stage==='queued').slice(0,1)[0];
           return `<div class="dash-printer-card">
             <div class="dpc-name">${pr}</div>
             ${active?`<div class="dpc-status" style="color:var(--grn)">⟳ ${esc(active.name.slice(0,18))}</div>
@@ -9488,7 +9479,7 @@ function renderDashboard(){
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:7px;margin-top:4px">
         ${printers.length ? printers.map(pr=>{
           const active=activeQueues.find(q=>q.printer===pr);
-          const next=queueItems.filter(q=>q.stage==='queued'&&q.printer===pr)[0];
+          const next=active?null:queueItems.filter(q=>q.stage==='queued').slice(0,1)[0];
           return `<div class="dash-printer-card">
             <div class="dpc-name">${pr}</div>
             ${active
@@ -11122,7 +11113,7 @@ function renderDashboard(){
       +'<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:7px;margin-top:6px">'
         +printers.slice(0,6).map(function(pr){
           const active=activeQueues.find(q=>q.printer===pr);
-          const next=queueItems.filter(q=>q.stage==='queued'&&q.printer===pr)[0];
+          const next=active?null:queueItems.filter(q=>q.stage==='queued').slice(0,1)[0];
           return '<div class="dash-printer-card">'
             +'<div class="dpc-name">'+esc(pr)+'</div>'
             +(active
