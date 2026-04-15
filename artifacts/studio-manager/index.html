@@ -3644,7 +3644,7 @@ header{
   <div class="qr-wrap"><div id="qr-box"></div></div>
   <div style="font-size:6px;color:var(--txt-d);letter-spacing:1px;margin-bottom:10px">Scan with app to log usage</div>
   <div style="display:flex;gap:5px">
-    <button class="btn btn-ghost" style="flex:1" onclick="window.print()">🖨 Print</button>
+    <button class="btn btn-ghost" style="flex:1" id="qr-dl-btn" onclick="downloadSpoolLabelPDF()">⬇ Download</button>
     <button class="btn btn-ghost" style="flex:1" onclick="closeQR()">Close</button>
   </div>
 </div>
@@ -8038,15 +8038,57 @@ function closeMaint(){document.getElementById('mod-maint').style.display='none';
 // ════════════════════════════════════════
 // QR + SCANNERS
 // ════════════════════════════════════════
+var _qrModalSpoolId=null;
 function showQR(id){
   const s=spools.find(x=>x.id===id);if(!s)return;
+  _qrModalSpoolId=id;
   document.getElementById('qr-name').textContent=s.name;
   document.getElementById('qr-sub').textContent=s.material+(s.brand?' · '+s.brand:'');
   const box=document.getElementById('qr-box');box.innerHTML='';
   try{new QRCode(box,{text:'HA3D_SPOOL:'+id,width:150,height:150,colorDark:'#000',colorLight:'#fff',correctLevel:QRCode.CorrectLevel.M});}catch(e){}
   document.getElementById('mod-qr').style.display='flex';
 }
-function closeQR(){document.getElementById('mod-qr').style.display='none';}
+function closeQR(){document.getElementById('mod-qr').style.display='none';_qrModalSpoolId=null;}
+async function downloadSpoolLabelPDF(){
+  const id=_qrModalSpoolId;
+  const s=spools.find(x=>x.id===id);
+  if(!s){alert('No spool selected.');return;}
+  const btn=document.getElementById('qr-dl-btn');
+  if(btn){btn.disabled=true;btn.textContent='⟳ Building…';}
+  try{
+    const jspdfLib=await _loadJsPDF();
+    const jsPDF=jspdfLib.jsPDF;
+    // Reuse the already-rendered QR canvas in the modal
+    const box=document.getElementById('qr-box');
+    const canvas=box?box.querySelector('canvas'):null;
+    const qrUrl=canvas?canvas.toDataURL('image/png'):await _getQRDataUrl(id,'HA3D_SPOOL:'+id);
+    const doc=new jsPDF({unit:'in',format:[2,2],orientation:'portrait'});
+    const pad=0.05;
+    const captionH=0.14;
+    const subH=0.11;
+    const qrTop=pad;
+    const qrSize=2-pad*2;
+    const qrH=2-pad*2-captionH-subH;
+    if(qrUrl){doc.addImage(qrUrl,'PNG',pad,qrTop,qrSize,qrH);}
+    // Name
+    doc.setFont('helvetica','bold');
+    doc.setFontSize(7);
+    doc.setTextColor(0,0,0);
+    doc.text(s.name,1,2-subH-pad*0.5,{align:'center',maxWidth:1.9});
+    // Sub (material · brand)
+    const sub=s.material+(s.brand?' · '+s.brand:'');
+    doc.setFont('helvetica','normal');
+    doc.setFontSize(5.5);
+    doc.setTextColor(80,80,80);
+    doc.text(sub,1,2-pad*0.5,{align:'center',maxWidth:1.9});
+    const safeName=(s.name||'spool').replace(/[^a-zA-Z0-9_-]/g,'_');
+    doc.save('Label-'+safeName+'.pdf');
+  }catch(e){
+    alert('PDF generation failed: '+e.message);
+  }finally{
+    if(btn){btn.disabled=false;btn.textContent='⬇ Download';}
+  }
+}
 function openScanner(){
   scannerMode='use';
   document.getElementById('scan-status').textContent='Starting camera…';
