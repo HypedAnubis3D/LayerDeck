@@ -18841,6 +18841,11 @@ async function onPiPrintFinished(name,data){
   }
   // Normalise the incoming job name once for all comparisons below
   const _jNormFin=_normName(jobNameCheck);
+  // Raw filename from Pi Hub (before extension-stripping) — used for dismiss key matching
+  const _rawFileName=data.subtask_name||'';
+  // Did the user explicitly click "Print exists, dismiss" for this printer+file?
+  // Keyed by both raw and cleaned name so it matches regardless of which form was used.
+  const _userDismissed=_piLiveDismissed.has(name+':'+_rawFileName)||_piLiveDismissed.has(name+':'+jobNameCheck);
   // Helper: does print record r match this job?
   // Matches by display name OR by the filename of any 3MF linked to the record.
   // This handles the common case where a queue item is named "Houndoom Parts"
@@ -18865,6 +18870,24 @@ async function onPiPrintFinished(name,data){
   });
   // 'printing' placeholder → promote to done. Already-done/failed record → skip entirely.
   if(recentDup&&recentDup.status!=='printing'){return;}
+  // If the user explicitly dismissed the "Live from Pi Hub" banner for this printer+file,
+  // treat the print as already existing — skip creating a new record even when the name
+  // doesn't match any existing record (manual prints, friendly-name vs raw-gcode mismatch).
+  // A 4-hour window catches manual prints that were logged differently from the Pi job name.
+  if(_userDismissed){
+    const _recentDoneOnPrinter=prints.find(function(r){
+      return r.printer===name&&(r.finishedAt||r.timestamp||0)>=(Date.now()-4*60*60*1000)&&(r.status==='done'||r.status==='failed');
+    });
+    if(_recentDoneOnPrinter){
+      // Clean up inprogress queue items for this printer and bail — no new record needed
+      var _changed=false;
+      queueItems=queueItems.map(function(q){if(q.stage==='inprogress'&&q.printer===name){_changed=true;return Object.assign({},q,{stage:'done',completedAt:Date.now()});}return q;});
+      if(_changed)saveQueue();
+      piPrintStartTimes[name]=null;piAmsStartRemain[name]={};piTmfObjData[name]=null;
+      render();toast('✅ '+name+' finished (existing record kept)',jobName,'success',5000);
+      return;
+    }
+  }
   // Find the most-recent 'printing' placeholder matching by name OR linked 3MF filename.
   // Use reduce (not find) to get the newest — prints.find() returns the oldest entry
   // which could be a stale orphan from a previous bug.
@@ -19087,7 +19110,11 @@ async function onPiPrintFinished(name,data){
       tapoWatts:_tapoWSnap2||undefined,
       fromQueueItemId:_autoQItem?_autoQItem.id:undefined
     };
-    prints.push(printRecord);
+    // Skip creating a new record when the user dismissed the "Print exists" banner,
+    // indicating they already have this print tracked under a different name. The
+    // 4-hour same-printer check above already handled the common case; this catches
+    // the remaining edge case where no recent done record exists on this printer.
+    if(!_userDismissed){prints.push(printRecord);}else{printRecord=null;}
   }
   savePrints();
 
