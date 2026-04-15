@@ -2123,7 +2123,7 @@ header{
 <!-- LABELS -->
 <div id="tab-labels" style="display:none">
   <div class="ctrl" style="flex-wrap:wrap;gap:6px">
-    <button class="btn btn-ghost btn-sm" onclick="triggerLabelPrint()">🖨 Print Labels</button>
+    <button class="btn btn-ghost btn-sm" id="lbl-dl-btn" onclick="downloadLabelsPDF()">⬇ Download PDF</button>
     <select id="label-size-select" onchange="applyLabelSize(this.value)" style="background:var(--surf);border:1px solid var(--bdr2);color:var(--txt-b);font-family:'Share Tech Mono',monospace;font-size:9px;padding:4px 8px;border-radius:3px;cursor:pointer">
       <option value="thermal-2x2">Thermal 2×2 (1 col)</option>
       <option value="standard">Standard 4×4 (4 cols)</option>
@@ -6588,36 +6588,87 @@ function renderStats(){
     return `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--bdr)"><div style="display:flex;align-items:center;gap:7px"><div style="width:8px;height:8px;border-radius:50%;background:${s.color};flex-shrink:0"></div><div><div style="font-size:9px;color:var(--txt-b)">${esc(s.name)}</div><div style="font-size:6px;color:var(--txt-d)">${esc(s.material)} · ${s.remaining}g</div></div></div><div style="font-family:'Orbitron',monospace;font-size:11px;font-weight:700;color:${u?'var(--red)':'var(--amb)'}">${p}%</div></div>`;
   }).join(''):'<div style="color:var(--txt-d);font-size:9px;padding:7px 0">All healthy ✓</div>';
 }
-function _setLabelPageStyle(size){
-  var pageRules={
-    'thermal-2x2':'@page{size:2in 2in;margin:0;}',
-    'thermal-4x6':'@page{size:4in 6in;margin:0;}',
-    'sheet-a4':'@page{size:A4;margin:10mm;}',
-    'sheet-letter':'@page{size:letter;margin:10mm;}',
-    'avery-2x4':'@page{size:letter;margin:6mm;}',
-    'standard':'@page{size:letter;margin:10mm;}'
-  };
-  var rule=pageRules[size]||pageRules['standard'];
-  var el=document.getElementById('lbl-print-page-style');
-  if(!el){el=document.createElement('style');el.id='lbl-print-page-style';document.head.appendChild(el);}
-  el.textContent=rule;
+function _loadJsPDF(){
+  if(window.jspdf)return Promise.resolve(window.jspdf);
+  return new Promise(function(resolve,reject){
+    var s=document.createElement('script');
+    s.src='https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+    s.onload=function(){resolve(window.jspdf);};
+    s.onerror=reject;
+    document.head.appendChild(s);
+  });
 }
-function triggerLabelPrint(){
-  var size=localStorage.getItem('ha3d_label_size')||'standard';
-  _setLabelPageStyle(size);
-  // Hide bottom nav (fixed position on mobile — @media print alone may not cover it)
-  var nav=document.getElementById('bottom-nav');
-  var hdr=document.querySelector('header');
-  if(nav)nav.style.setProperty('display','none','important');
-  if(hdr)hdr.style.setProperty('display','none','important');
-  setTimeout(function(){
-    window.print();
-    // Restore after print dialog closes (short delay for mobile browsers)
+function _getQRDataUrl(spoolId,qrText){
+  // Reuse already-rendered canvas if the labels tab has rendered them
+  var el=document.getElementById('lbl-qr-'+spoolId);
+  var canvas=el?el.querySelector('canvas'):null;
+  if(canvas)return Promise.resolve(canvas.toDataURL('image/png'));
+  // Generate fresh off-screen
+  return new Promise(function(resolve){
+    var wrapper=document.createElement('div');
+    wrapper.style.cssText='position:fixed;left:-9999px;top:-9999px;pointer-events:none;width:200px;height:200px';
+    document.body.appendChild(wrapper);
+    try{new QRCode(wrapper,{text:qrText,width:200,height:200,colorDark:'#000',colorLight:'#fff',correctLevel:QRCode.CorrectLevel.M});}
+    catch(e){document.body.removeChild(wrapper);resolve(null);return;}
     setTimeout(function(){
-      if(nav)nav.style.removeProperty('display');
-      if(hdr)hdr.style.removeProperty('display');
-    },800);
-  },50);
+      var c=wrapper.querySelector('canvas');
+      resolve(c?c.toDataURL('image/png'):null);
+      document.body.removeChild(wrapper);
+    },200);
+  });
+}
+async function downloadLabelsPDF(){
+  if(!spools||!spools.length){alert('No spools to export.');return;}
+  var btn=document.getElementById('lbl-dl-btn');
+  if(btn){btn.disabled=true;btn.textContent='⟳ Building PDF…';}
+  try{
+    var jspdfLib=await _loadJsPDF();
+    var jsPDF=jspdfLib.jsPDF;
+    var size=localStorage.getItem('ha3d_label_size')||'standard';
+    // Page config: pw/ph in inches, cols, margin
+    var cfgs={
+      'thermal-2x2':{pw:2,   ph:2,    cols:1,margin:0.05},
+      'thermal-4x6':{pw:4,   ph:6,    cols:1,margin:0.1},
+      'avery-2x4':  {pw:8.5, ph:11,   cols:3,margin:0.25},
+      'standard':   {pw:8.5, ph:11,   cols:4,margin:0.25},
+      'sheet-a4':   {pw:8.27,ph:11.69,cols:5,margin:0.25},
+      'sheet-letter':{pw:8.5,ph:11,   cols:4,margin:0.25}
+    };
+    var cfg=cfgs[size]||cfgs['standard'];
+    var pw=cfg.pw,ph=cfg.ph,cols=cfg.cols,margin=cfg.margin;
+    var cellW=(pw-2*margin)/cols;
+    var cellH=cellW; // square labels
+    var rowsPerPage=Math.floor((ph-2*margin)/cellH);
+    var perPage=cols*rowsPerPage;
+    // Fetch all QR data URLs in parallel
+    var qrUrls=await Promise.all(spools.map(function(s){return _getQRDataUrl(s.id,'HA3D_SPOOL:'+s.id);}));
+    var doc=new jsPDF({unit:'in',format:[pw,ph],orientation:'portrait'});
+    for(var i=0;i<spools.length;i++){
+      var s=spools[i];
+      if(i>0&&(perPage===1||i%perPage===0))doc.addPage([pw,ph]);
+      var slot=perPage===1?0:(i%perPage);
+      var col=slot%cols;
+      var row=Math.floor(slot/cols);
+      var x=margin+col*cellW;
+      var y=margin+row*cellH;
+      var pad=cellW*0.04;
+      var captionH=Math.min(0.14,cellH*0.1);
+      var qrSize=cellW-pad*2;
+      var qrH=cellH-captionH-pad*2;
+      if(qrUrls[i]){doc.addImage(qrUrls[i],'PNG',x+pad,y+pad,qrSize,qrH);}
+      var name=s.name||'Unknown';
+      var ptSize=Math.max(5,Math.round(captionH*52));
+      doc.setFontSize(ptSize);
+      doc.setFont('helvetica','bold');
+      doc.setTextColor(0,0,0);
+      doc.text(name,x+cellW/2,y+cellH-pad*0.5,{align:'center',maxWidth:cellW-pad*2});
+    }
+    doc.save('LayerDeck-Labels.pdf');
+  }catch(e){
+    alert('PDF generation failed: '+e.message);
+  }finally{
+    if(btn){btn.disabled=false;btn.textContent='⬇ Download PDF';}
+  }
 }
 function renderLabels(){
   const g=document.getElementById('labels-grid');
