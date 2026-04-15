@@ -9502,14 +9502,14 @@ function renderDashboard(){
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:7px;margin-top:4px">
         ${printers.length ? printers.map(pr=>{
           const active=activeQueues.find(q=>q.printer===pr);
-          const next=active?null:queueItems.filter(q=>q.stage==='queued').slice(0,1)[0];
+          const _qCount=active?0:queueItems.filter(q=>q.stage==='queued').length;
           return `<div class="dash-printer-card">
             <div class="dpc-name">${pr}</div>
             ${active
               ?`<div style="font-size:7px;color:var(--grn-b);display:flex;align-items:center;gap:4px"><span style="width:6px;height:6px;border-radius:50%;background:var(--grn);display:inline-block;animation:pulse-dot 1.5s ease-in-out infinite"></span>${esc(active.name.slice(0,16))}</div>
                 <div class="dpc-bar"><div class="dpc-fill" style="width:45%"></div></div>`
               :`<div style="font-size:7px;color:var(--txt-d)">— Idle</div>
-                ${next?`<div style="font-size:6px;color:var(--txt-d);margin-top:2px">Next: ${esc(next.name.slice(0,14))}</div>`:'<div style="font-size:6px;color:var(--bdr2);margin-top:2px">Nothing queued</div>'}`}
+                ${_qCount?`<div style="font-size:6px;color:var(--txt-d);margin-top:2px">${_qCount} in queue</div>`:'<div style="font-size:6px;color:var(--bdr2);margin-top:2px">Queue empty</div>'}`}
           </div>`;
         }).join('') : '<div style="font-size:8px;color:var(--txt-d);padding:10px 0;text-align:center;grid-column:1/-1">No printers added yet — <span style="color:var(--gold-b);cursor:pointer" onclick="navTo(\'printers\')">Add a printer</span> to see status here</div>'}
       </div>
@@ -11136,12 +11136,12 @@ function renderDashboard(){
       +'<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:7px;margin-top:6px">'
         +printers.slice(0,6).map(function(pr){
           const active=activeQueues.find(q=>q.printer===pr);
-          const next=active?null:queueItems.filter(q=>q.stage==='queued').slice(0,1)[0];
+          const _qCount=active?0:queueItems.filter(q=>q.stage==='queued').length;
           return '<div class="dash-printer-card">'
             +'<div class="dpc-name">'+esc(pr)+'</div>'
             +(active
               ?'<div style="font-size:10px;color:var(--grn-b);display:flex;align-items:center;gap:5px"><span style="width:7px;height:7px;border-radius:50%;background:var(--grn);display:inline-block;flex-shrink:0;animation:pulse-dot 1.5s ease-in-out infinite"></span>'+esc(active.name.slice(0,20))+'</div><div class="dpc-bar"><div class="dpc-fill" style="width:'+(active.startedAt&&active.hrs?Math.min(100,((Date.now()-active.startedAt)/(active.hrs*3600000))*100).toFixed(1):35)+'%"></div></div>'+formatFinishBadge(active)
-              :'<div style="font-size:10px;color:var(--txt-d)">— Idle</div>'+(next?'<div style="font-size:9px;color:var(--txt-d);margin-top:2px">Next: '+esc(next.name.slice(0,18))+'</div>':'<div style="font-size:9px;color:var(--bdr2);margin-top:2px">Queue empty</div>'))
+              :'<div style="font-size:10px;color:var(--txt-d)">— Idle</div>'+(_qCount?'<div style="font-size:9px;color:var(--txt-d);margin-top:2px">'+_qCount+' in queue</div>':'<div style="font-size:9px;color:var(--bdr2);margin-top:2px">Queue empty</div>'))
             +'<div id="dash-ams-'+piId(pr)+'">'+renderAmsMapDash(pr)+'</div>'
             +'</div>';
         }).join('')
