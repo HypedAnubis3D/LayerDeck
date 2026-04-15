@@ -585,6 +585,20 @@ async function pollGmailAccount(config: ShopConfig): Promise<void> {
         continue;
       }
 
+      // Check if this order number already exists in the DB BEFORE inserting the new message.
+      // This is our belt-and-suspenders Discord dedup: survives server restarts, in-memory
+      // set loss, and duplicate Etsy emails (same order, different messageId).
+      let orderAlreadyInDb = false;
+      if (order.orderNumber) {
+        try {
+          const r = await pool.query(
+            `SELECT 1 FROM etsy_gmail_imports WHERE order_number = $1 LIMIT 1`,
+            [order.orderNumber]
+          );
+          orderAlreadyInDb = r.rows.length > 0;
+        } catch (_) {}
+      }
+
       await markMessageImported(shopId, messageId, order.orderNumber, order);
 
       if (!alreadyDone) {
@@ -597,14 +611,15 @@ async function pollGmailAccount(config: ShopConfig): Promise<void> {
       imported++;
 
       logger.info(
-        { shopId, orderNumber: order.orderNumber, customer: order.customer, total: order.total },
+        { shopId, orderNumber: order.orderNumber, customer: order.customer, total: order.total, orderAlreadyInDb },
         "Etsy Gmail: order imported"
       );
 
-      // Only notify Discord for genuinely new orders
+      // Only notify Discord for genuinely new orders.
+      // Triple guard: new messageId + not in in-memory set + order number not previously in DB.
       const discordUrl = process.env.DISCORD_WEBHOOK_ORDERS;
       const discordKey = `${shopId}:${order.orderNumber}`;
-      if (discordUrl && !alreadyDone && !_discordNotifiedOrders.has(discordKey)) {
+      if (discordUrl && !alreadyDone && !_discordNotifiedOrders.has(discordKey) && !orderAlreadyInDb) {
         _discordNotifiedOrders.add(discordKey);
         try {
           const itemLines = order.items
@@ -618,6 +633,10 @@ async function pollGmailAccount(config: ShopConfig): Promise<void> {
             }),
           });
         } catch (_) {}
+      } else if (orderAlreadyInDb && !alreadyDone) {
+        // Different email, same order — populate the in-memory set to keep it warm
+        _discordNotifiedOrders.add(discordKey);
+        logger.info({ shopId, orderNumber: order.orderNumber }, "Etsy Gmail: skipped Discord — order already notified (duplicate email)");
       }
     }
 
