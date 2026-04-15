@@ -3,6 +3,7 @@ import { logger } from "./lib/logger";
 import { startNotificationScheduler } from "./lib/notificationScheduler";
 import { startEtsyGmailPoller } from "./lib/etsyGmailPoller";
 import { startSocialScheduler } from "./lib/socialScheduler";
+import { checkRlsOnStartup } from "./lib/rlsCheck";
 
 const rawPort = process.env["PORT"];
 
@@ -25,6 +26,7 @@ app.listen(port, (err) => {
   }
 
   logger.info({ port }, "Server listening");
+  checkRlsOnStartup().catch(() => {}); // Non-critical security audit
   startNotificationScheduler();
   startEtsyGmailPoller().catch((err) => {
     logger.warn({ err }, "Etsy Gmail poller failed to start");

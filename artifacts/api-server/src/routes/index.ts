@@ -16,6 +16,7 @@ import emailRouter from "./email";
 import catalogRouter from "./catalog";
 import etsyGmailRouter from "./etsy-gmail";
 import aiRouter from "./ai";
+import adminRouter from "./admin";
 const router: IRouter = Router();
 
 router.use(healthRouter);
@@ -35,5 +36,6 @@ router.use("/email", emailRouter);
 router.use("/catalog", catalogRouter);
 router.use("/etsy", etsyGmailRouter);
 router.use("/ai", aiRouter);
+router.use("/admin", adminRouter);
 
 export default router;
