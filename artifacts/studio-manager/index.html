@@ -6624,7 +6624,8 @@ async function downloadLabelsPDF(){
   try{
     var jspdfLib=await _loadJsPDF();
     var jsPDF=jspdfLib.jsPDF;
-    var size=localStorage.getItem('ha3d_label_size')||'standard';
+    var sel=document.getElementById('label-size-select');
+    var size=(sel&&sel.value?sel.value:null)||localStorage.getItem('ha3d_label_size')||'thermal-2x2';
     // Page config: pw/ph in inches, cols, margin
     var cfgs={
       'thermal-2x2':{pw:2,   ph:2,    cols:1,margin:0.05},
@@ -6673,7 +6674,8 @@ async function downloadLabelsPDF(){
 function renderLabels(){
   const g=document.getElementById('labels-grid');
   if(!spools.length){g.innerHTML='<div class="empty">No spools</div>';return;}
-  const size=localStorage.getItem('ha3d_label_size')||'standard';
+  const _szSel=document.getElementById('label-size-select');
+  const size=(_szSel&&_szSel.value?_szSel.value:null)||localStorage.getItem('ha3d_label_size')||'thermal-2x2';
   const is2x2=size==='thermal-2x2';
   // For 2x2 thermal: large QR fills card with just the name as a caption
   if(is2x2){
@@ -17942,12 +17944,10 @@ function applyLabelSize(size){
   if(document.getElementById('labels-grid')&&spools.length) renderLabels();
 }
 (function(){
-  const saved=localStorage.getItem('ha3d_label_size');
-  if(saved){
-    const sel=document.getElementById('label-size-select');
-    if(sel)sel.value=saved;
-    applyLabelSize(saved);
-  }
+  const saved=localStorage.getItem('ha3d_label_size')||'thermal-2x2';
+  const sel=document.getElementById('label-size-select');
+  if(sel)sel.value=saved;
+  applyLabelSize(saved);
 })();
 
 // ── CONVENTION EVENT FINDER ──
