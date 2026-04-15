@@ -19340,6 +19340,8 @@ async function onPiHmsAlert(name,data,newEntries){
   if(!newEntries||newEntries.length===0)return;
   var jobName=(data.subtask_name||'').replace('.gcode.3mf','').replace('.3mf','')||'Unknown';
   var descriptions=newEntries.map(hmsCodeToString);
+  var curState=(data.gcode_state||'').toUpperCase();
+  var isPaused=curState==='PAUSE'||curState==='PAUSED';
 
   // Deduplicate: only fire if this exact description hasn't been alerted in the last 5 minutes
   var alertKey='hms_'+name+'_'+descriptions.join(',');
@@ -19348,6 +19350,14 @@ async function onPiHmsAlert(name,data,newEntries){
   if(!window._hmsLastAlerted)window._hmsLastAlerted={};
   window._hmsLastAlerted[alertKey]=now;
   try{localStorage.setItem('hmsLastAlerted',JSON.stringify(window._hmsLastAlerted));}catch(e){}
+
+  // Always show an in-app toast so the user is aware of the HMS event
+  var hmsEl=toast('⚠️ '+name,descriptions[0]+(isPaused?'':' (print continuing)'),'warning',12000);
+  addHmsWikiLink(hmsEl,hmsEntryToCodeStr(newEntries[0]));
+
+  // Only fire Discord alert if the printer actually paused — HMS codes that appear
+  // while still RUNNING are informational and don't need a Discord notification.
+  if(!isPaused)return;
 
   var lines=['⚠️ Printer Alert — '+name];
   if(jobName&&jobName!=='Unknown')lines.push('Job: '+jobName);
@@ -19358,9 +19368,6 @@ async function onPiHmsAlert(name,data,newEntries){
     lines.push('  🔗 https://wiki.bambulab.com/en/x1/troubleshooting/hmscode/'+codeStr.replace(/-/g,'_'));
   });
   lines.push('Printer paused — check for filament or hardware issue');
-
-  var hmsEl=toast('⚠️ '+name,descriptions[0],'warning',12000);
-  addHmsWikiLink(hmsEl,hmsEntryToCodeStr(newEntries[0]));
   postToDiscord('print_failed',lines.join('\n'));
 }
 
