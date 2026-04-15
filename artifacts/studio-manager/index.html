@@ -1559,9 +1559,10 @@ header{
   #tab-labels{display:block!important;}
   .labels-grid{grid-template-columns:var(--lbl-cols,repeat(4,1fr));}
   .lbl-card{break-inside:avoid;border:1px solid #ddd;}
-  /* Thermal 2×2: fixed 2in×2in labels, QR fills the card */
-  html[data-label-size="thermal-2x2"] .labels-grid{display:flex!important;flex-wrap:wrap;gap:4px;padding:4px;}
-  html[data-label-size="thermal-2x2"] .lbl-card{width:2in;height:2in;padding:2px!important;box-sizing:border-box;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden;}
+  /* Thermal 2×2: each label on its own 2in×2in page */
+  html[data-label-size="thermal-2x2"] .labels-grid{display:block!important;padding:0!important;margin:0!important;}
+  html[data-label-size="thermal-2x2"] .lbl-card{width:2in;height:2in;padding:2px!important;box-sizing:border-box;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden;break-after:page;margin:0!important;}
+  html[data-label-size="thermal-2x2"] .lbl-card:last-child{break-after:avoid;}
   html[data-label-size="thermal-2x2"] .lbl-card .lbl-qr-wrap{flex:1;display:flex;align-items:center;justify-content:center;width:100%;}
   html[data-label-size="thermal-2x2"] .lbl-card .lbl-qr-wrap canvas,
   html[data-label-size="thermal-2x2"] .lbl-card .lbl-qr-wrap img{width:1.8in!important;height:1.8in!important;}
@@ -6587,7 +6588,23 @@ function renderStats(){
     return `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid var(--bdr)"><div style="display:flex;align-items:center;gap:7px"><div style="width:8px;height:8px;border-radius:50%;background:${s.color};flex-shrink:0"></div><div><div style="font-size:9px;color:var(--txt-b)">${esc(s.name)}</div><div style="font-size:6px;color:var(--txt-d)">${esc(s.material)} · ${s.remaining}g</div></div></div><div style="font-family:'Orbitron',monospace;font-size:11px;font-weight:700;color:${u?'var(--red)':'var(--amb)'}">${p}%</div></div>`;
   }).join(''):'<div style="color:var(--txt-d);font-size:9px;padding:7px 0">All healthy ✓</div>';
 }
+function _setLabelPageStyle(size){
+  var pageRules={
+    'thermal-2x2':'@page{size:2in 2in;margin:0;}',
+    'thermal-4x6':'@page{size:4in 6in;margin:0;}',
+    'sheet-a4':'@page{size:A4;margin:10mm;}',
+    'sheet-letter':'@page{size:letter;margin:10mm;}',
+    'avery-2x4':'@page{size:letter;margin:6mm;}',
+    'standard':'@page{size:letter;margin:10mm;}'
+  };
+  var rule=pageRules[size]||pageRules['standard'];
+  var el=document.getElementById('lbl-print-page-style');
+  if(!el){el=document.createElement('style');el.id='lbl-print-page-style';document.head.appendChild(el);}
+  el.textContent=rule;
+}
 function triggerLabelPrint(){
+  var size=localStorage.getItem('ha3d_label_size')||'standard';
+  _setLabelPageStyle(size);
   // Hide bottom nav (fixed position on mobile — @media print alone may not cover it)
   var nav=document.getElementById('bottom-nav');
   var hdr=document.querySelector('header');
