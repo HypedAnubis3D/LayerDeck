@@ -18655,16 +18655,28 @@ async function onPiPrintStarted(name,data){
 
       // ── Same-printer order merge ────────────────────────────────────────────
       // When a Pi print starts on a printer that already has a manually-started
-      // order item (in progress OR still queued), absorb the Pi data into that
-      // item rather than creating a duplicate card. This handles copyright-renamed
-      // files where "Pikachu Keychain" will never match "generic_charm_v3.gcode".
-      // Checking queued items too handles the race where Pi detects the start
-      // before the user manually moves the card to In Progress.
+      // order item, absorb the Pi data into that item rather than creating a
+      // duplicate card. This handles copyright-renamed files where "Pikachu Keychain"
+      // will never match "generic_charm_v3.gcode".
+      //
+      // Absorption rules:
+      //   • inprogress items — always absorb: user explicitly started this, Pi is
+      //     just adding timing/TMF data to the right card.
+      //   • queued items — ONLY absorb when name or TMF matches: prevents blindly
+      //     promoting an unrelated queued item when user starts a different print
+      //     on the same printer.
       var _samePrinterOrder=queueItems.find(function(q){
-        return (q.stage==='inprogress'||q.stage==='queued')
-          && q.printer===name
-          && !q.autoFromPi
-          && (q.fromEtsyOrder||q.fromShopify||q.fromEtsy||q.fromShopifyOrder||q.fromOrder);
+        if(q.printer!==name||q.autoFromPi)return false;
+        if(!(q.fromEtsyOrder||q.fromShopify||q.fromEtsy||q.fromShopifyOrder||q.fromOrder))return false;
+        if(q.stage==='inprogress')return true; // already started — safe to absorb
+        if(q.stage==='queued'){
+          // Only absorb queued items when there's a clear name/TMF match
+          if(matchedTmf&&q.tmfId===matchedTmf.id)return true;
+          if(jobName&&_normName(q.name)===_normName(jobName))return true;
+          if(matchedTmf&&_normName(q.name)===_normName(matchedTmf.name))return true;
+          return false; // no match — don't absorb a queued item
+        }
+        return false;
       });
       if(_samePrinterOrder){
         var _mergedHrs=autoHrs>0?autoHrs:_samePrinterOrder.hrs;
