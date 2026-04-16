@@ -195,6 +195,81 @@ router.post('/power', async (req, res) => {
   }
 });
 
+// ── POST /api/tapo/schedule-off ──────────────────────────────────────────────
+// Schedules a server-side power-off after a delay (delayMs, default 10 min).
+// Called by the client when a print finishes, so the plug turns off even if
+// the browser tab is closed before the countdown expires.
+// DELETE /api/tapo/schedule-off/:deviceId cancels a pending timer ("Keep ON").
+const _pendingOff: Map<string, ReturnType<typeof setTimeout>> = new Map();
+
+router.post('/schedule-off', async (req, res) => {
+  const { deviceId, alias, delayMs = 10 * 60 * 1000, hubUrl } = req.body as {
+    deviceId?: string; alias?: string; delayMs?: number; hubUrl?: string;
+  };
+  if (!deviceId && !alias) return res.status(400).json({ ok: false, error: 'deviceId or alias required' });
+
+  const key = deviceId ?? alias!;
+
+  // Cancel any existing timer for this device before scheduling a fresh one
+  const existing = _pendingOff.get(key);
+  if (existing) { clearTimeout(existing); _pendingOff.delete(key); }
+
+  const delay = Math.max(0, Math.min(Number(delayMs) || 10 * 60 * 1000, 120 * 60 * 1000));
+  logger.info({ key, delayMs: delay, via: 'server-schedule' }, '[Tapo] Scheduling server-side power-off');
+
+  const timer = setTimeout(async () => {
+    _pendingOff.delete(key);
+    try {
+      const token   = await tapoLogin();
+      const devices = await tapoGetDevices(token);
+      let target = deviceId
+        ? devices.find(d => d.deviceId === deviceId)
+        : devices.find(d => d.alias?.toLowerCase() === alias!.toLowerCase().trim());
+      if (!target) {
+        const fresh = await tapoGetDevices(token, true);
+        target = deviceId
+          ? fresh.find(d => d.deviceId === deviceId)
+          : fresh.find(d => d.alias?.toLowerCase() === alias!.toLowerCase().trim());
+      }
+      if (!target) { logger.warn({ key }, '[Tapo] schedule-off: device not found'); return; }
+
+      try {
+        await tapoPass(token, target.deviceId, target.appServerUrl, 'set_device_info', { device_on: false });
+        logger.info({ alias: target.alias, via: 'cloud' }, '[Tapo] Server-scheduled power-off sent');
+      } catch (cloudErr) {
+        if (hubUrl && ((cloudErr as Error).message?.includes('-20571') || (cloudErr as Error).message?.toLowerCase().includes('offline'))) {
+          await fetch(`${hubUrl}/tapo/power`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ alias: target.alias, on: false }),
+            signal: AbortSignal.timeout(8000),
+          });
+          logger.info({ alias: target.alias, via: 'pihub' }, '[Tapo] Server-scheduled power-off sent via Pi Hub');
+        } else {
+          throw cloudErr;
+        }
+      }
+    } catch (e) {
+      logger.warn({ err: (e as Error).message, key }, '[Tapo] Server-scheduled power-off failed');
+    }
+  }, delay);
+
+  _pendingOff.set(key, timer);
+  return res.json({ ok: true, key, delayMs: delay, firesAt: Date.now() + delay });
+});
+
+router.delete('/schedule-off/:key', (req, res) => {
+  const key = decodeURIComponent(req.params.key);
+  const timer = _pendingOff.get(key);
+  if (timer) {
+    clearTimeout(timer);
+    _pendingOff.delete(key);
+    logger.info({ key }, '[Tapo] Server-scheduled power-off cancelled (Keep ON)');
+    return res.json({ ok: true, cancelled: true, key });
+  }
+  return res.json({ ok: true, cancelled: false, key, note: 'No pending timer found' });
+});
+
 // ── GET /api/tapo/status ─────────────────────────────────────────────────────
 router.get('/status', async (req, res) => {
   const { deviceId, alias } = req.query as { deviceId?: string; alias?: string };

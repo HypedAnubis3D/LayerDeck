@@ -3971,6 +3971,7 @@ function matWear(m){return WEAR_FACTOR[m]||1.0;}
 
 var spools=[],usageHist=[],prints=[],tmfLib=[],queueItems=[],orders=[],sales=[],maintLog=[],inPersonInventory=[];
 let printGroups=[],tmfFolders=[],_tmfCollapsed=new Set(),_printGrpCollapsed=new Set(),_printOrderExpanded=new Set();
+var _openAddPrintCtx=null; // Set by openAddPrint() when called from Pi Hub live banner
 let dashHidden=[];
 let notifIds=new Set();
 let shopifyCfg={domain:'',connected:false,lastOrderId:null,lastPoll:null};
@@ -4421,7 +4422,7 @@ function renderPrints(){
       '</div>'+
       '<div style="font-size:7px;color:var(--cyn);margin-top:4px;background:rgba(0,200,255,.06);border:1px solid rgba(0,200,255,.15);border-radius:3px;padding:4px 7px;display:flex;align-items:center;flex-wrap:wrap;gap:4px">'+
         '<span>Live from Pi Hub — not yet logged in Studio Manager.</span>'+
-        '<button class="btn btn-ghost btn-xs" style="font-size:6px" onclick="openAddPrint()">Log this print</button>'+
+        '<button class="btn btn-ghost btn-xs" style="font-size:6px" onclick="openAddPrint({printer:\''+item.printer.replace(/\\/g,'\\\\').replace(/\'/g,'\\\'')+'\',name:\''+fileName.replace(/\\/g,'\\\\').replace(/\'/g,'\\\'').replace(/\.gcode\.3mf$/i,'').replace(/\.3mf$/i,'').replace(/\.gcode$/i,'').replace(/\.bgcode$/i,'')+'\',status:\'printing\'})">Log this print</button>'+
         '<button class="btn btn-ghost btn-xs" style="font-size:6px;color:var(--txt-d)" onclick="dismissPiLiveBanner(\''+esc(item.printer)+'\',\''+esc(fileName)+'\')">Print exists, dismiss</button>'+
       '</div>'+
     '</div>';
@@ -7272,13 +7273,14 @@ function addContinuationSpool(deficit){
 // ════════════════════════════════════════
 // PRINT CRUD
 // ════════════════════════════════════════
-function openAddPrint(){
+function openAddPrint(ctx){
+  _openAddPrintCtx=ctx||null;
   document.getElementById('print-modal-title').textContent='Log Print';
   document.getElementById('ep-id').value='';
   ['ep-name','ep-notes'].forEach(i=>document.getElementById(i).value='');
   document.getElementById('ep-cat').value='Themed Balls';
   document.getElementById('ep-printer').innerHTML=buildPrinterOpts();
-  document.getElementById('ep-printer').value=printerRecords[0]?.name||'';
+  document.getElementById('ep-printer').value=(ctx&&ctx.printer)||printerRecords[0]?.name||'';
   setHrsToForm(0);
   document.getElementById('ep-qty').value='1';
   document.getElementById('ep-sync').checked=true;
@@ -7288,6 +7290,20 @@ function openAddPrint(){
   filRows=[];filRowCount=0;
   populateTmfDropdown();
   document.getElementById('ep-tmf-select').value='';
+  // Pre-fill name from Pi Hub context (strip file extensions → friendly name)
+  if(ctx&&ctx.name){
+    const cleanName=(ctx.name||'').replace(/\.gcode\.3mf$/i,'').replace(/\.3mf$/i,'').replace(/\.gcode$/i,'').replace(/\.bgcode$/i,'');
+    document.getElementById('ep-name').value=cleanName;
+    // Auto-match 3MF from library so the record links cleanly on print finish
+    const _matchTmf=typeof tmfLib!=='undefined'&&tmfLib.find(function(t){
+      return _normName(t.name)===_normName(cleanName)||_normName((t.filename||'').replace(/\.gcode\.3mf$/i,'').replace(/\.3mf$/i,'').replace(/\.gcode$/i,'').replace(/\.bgcode$/i,''))===_normName(cleanName);
+    });
+    if(_matchTmf){
+      document.getElementById('ep-tmf-select').value=_matchTmf.id;
+      const _pfBadge=document.getElementById('tmf-prefill-badge');
+      if(_pfBadge){_pfBadge.style.display='inline-flex';_pfBadge.textContent='🔗 '+_matchTmf.name;}
+    }
+  }
   addFilRow();updateCostPreview();
   document.getElementById('mod-print').style.display='flex';
 }
@@ -10239,6 +10255,8 @@ function savePrint(){
   const selectedTmfId=document.getElementById('ep-tmf-select').value;
   const selectedTmf=tmfLib.find(t=>t.id===selectedTmfId);
   const existing=id?prints.find(p=>p.id===id):null;
+  // Consume Pi Hub context (set by openAddPrint({status:'printing',...})) and clear it
+  const _ctx=_openAddPrintCtx;_openAddPrintCtx=null;
   const print={
     ...(existing||{}),
     id:id||uid(),name,category:document.getElementById('ep-cat').value,
@@ -10247,6 +10265,8 @@ function savePrint(){
     tmfName:selectedTmf?selectedTmf.name:(existing?existing.tmfName:null),
     tmfId:selectedTmfId||null,
     timestamp:id?(existing||{}).timestamp||Date.now():Date.now(),
+    // Preserve status for edits; stamp 'printing' for new prints logged from Pi Hub banner
+    status:id?(existing?.status||undefined):(_ctx&&_ctx.status?_ctx.status:undefined),
   };
   if(id){
     prints=prints.map(p=>p.id===id?print:p);
@@ -18892,7 +18912,8 @@ async function onPiPrintFinished(name,data){
     return r.printer===name&&(r.finishedAt||r.timestamp||0)>=_dedupCutoff&&_piMatchesJob(r);
   });
   // 'printing' placeholder → promote to done. Already-done/failed record → skip entirely.
-  if(recentDup&&recentDup.status!=='printing'){return;}
+  // Treat status===undefined as 'printing' (manually-logged in-progress print via banner)
+  if(recentDup&&recentDup.status&&recentDup.status!=='printing'){return;}
   // If the user explicitly dismissed the "Live from Pi Hub" banner for this printer+file,
   // treat the print as already existing — skip creating a new record even when the name
   // doesn't match any existing record (manual prints, friendly-name vs raw-gcode mismatch).
@@ -18914,8 +18935,17 @@ async function onPiPrintFinished(name,data){
   // Find the most-recent 'printing' placeholder matching by name OR linked 3MF filename.
   // Use reduce (not find) to get the newest — prints.find() returns the oldest entry
   // which could be a stale orphan from a previous bug.
+  const _recentCutoff12h=Date.now()-12*60*60*1000;
   const _anyPrintingPlaceholder=(function(){
-    var candidates=prints.filter(function(r){return r.status==='printing'&&r.printer===name&&_piMatchesJob(r);});
+    // Match records with status='printing' OR status=undefined (manually logged via banner)
+    // Undefined-status records get a 12h recency filter to avoid matching old completed prints.
+    var candidates=prints.filter(function(r){
+      if(!r.printer||r.printer!==name)return false;
+      if(!_piMatchesJob(r))return false;
+      if(r.status==='printing')return true;
+      if(!r.status&&(r.timestamp||0)>=_recentCutoff12h)return true;
+      return false;
+    });
     if(!candidates.length)return null;
     return candidates.reduce(function(a,b){return (b.timestamp||0)>(a.timestamp||0)?b:a;});
   })();
@@ -18939,7 +18969,14 @@ async function onPiPrintFinished(name,data){
     // doesn't match the Pi job. Covers manually-created/renamed reprints where the
     // user names the record differently from the Bambu gcode file
     // (e.g. "Glaceon reprint" vs "Glaceon_v2.gcode"). Take the most recent one.
-    var _fallbackCandidates=prints.filter(function(p){return p.status==='printing'&&p.printer===name;});
+    // Also catches records with no status (manually logged via "Log this print" banner)
+    // within a 12h window so we don't accidentally grab old unrelated records.
+    var _fallbackCandidates=prints.filter(function(p){
+      if(!p.printer||p.printer!==name)return false;
+      if(p.status==='printing')return true;
+      if(!p.status&&(p.timestamp||0)>=_recentCutoff12h)return true;
+      return false;
+    });
     if(!_fallbackCandidates.length)return null;
     return _fallbackCandidates.reduce(function(a,b){return(b.timestamp||0)>(a.timestamp||0)?b:a;});
   })();
@@ -20880,6 +20917,11 @@ function _cancelTapoAutoOff(printerName){
     if(hubUrl){
       fetch('/api/pihub/proxy?hub='+encodeURIComponent(hubUrl)+'&path=/tapo/schedule-off/'+encodeURIComponent(t.alias),{method:'DELETE'}).catch(()=>{});
     }
+    // Also cancel the api-server scheduled off (keyed by deviceId then alias)
+    if(t.deviceId){
+      fetch('/api/tapo/schedule-off/'+encodeURIComponent(t.deviceId),{method:'DELETE'}).catch(()=>{});
+    }
+    fetch('/api/tapo/schedule-off/'+encodeURIComponent(t.alias),{method:'DELETE'}).catch(()=>{});
   }
   delete _tapoAutoOffTimers[printerName];
   if(curTab==='pihub') renderPiHub();
@@ -20888,14 +20930,20 @@ function _cancelTapoAutoOff(printerName){
 function _startTapoAutoOffCountdown(printerName,deviceId,alias){
   _cancelTapoAutoOff(printerName);
   const DELAY_MS=10*60*1000;
-  // Schedule server-side auto-off on Pi Hub — fires even if app is closed
   const hubUrl=getPiUrl();
+  // Schedule server-side auto-off on Pi Hub — fires even if app is closed
   if(hubUrl&&alias){
     fetch('/api/pihub/proxy?hub='+encodeURIComponent(hubUrl)+'&path=/tapo/schedule-off',{
       method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({alias,delayMs:DELAY_MS})
     }).catch(()=>{});
   }
+  // Also schedule on the api-server (Replit-side) so the plug turns off even if both
+  // the browser tab and the Pi Hub lose their timers (server process restart, etc.)
+  fetch('/api/tapo/schedule-off',{
+    method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({deviceId,alias,delayMs:DELAY_MS,hubUrl:hubUrl||null})
+  }).catch(()=>{});
   const bannerId='tapo-banner-'+printerName.replace(/\W+/g,'-');
   let secsLeft=DELAY_MS/1000;
 
@@ -20950,7 +20998,7 @@ function _startTapoAutoOffCountdown(printerName,deviceId,alias){
     }catch(e2){toast('⚠ Auto power-off failed',e2.message||'','error');}
   },DELAY_MS);
 
-  _tapoAutoOffTimers[printerName]={outerTimeout,countInterval,bannerId,alias};
+  _tapoAutoOffTimers[printerName]={outerTimeout,countInterval,bannerId,alias,deviceId};
 }
 
 function _renderPrinterTapoSection(printerName){
