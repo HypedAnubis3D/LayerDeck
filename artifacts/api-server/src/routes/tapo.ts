@@ -412,6 +412,26 @@ router.post('/printer-monitor-config', (req, res) => {
   return res.json({ ok: true, monitored: _monitorConfigs.size });
 });
 
+// Mirror of the client-side calibration job filter.  Avoids triggering auto-off
+// for calibration runs that complete via RUNNING→IDLE without a real FINISH.
+function _isCalibJob(name: string): boolean {
+  const l = name.toLowerCase();
+  return /^auto_cali/.test(l)
+    || /^flow_rate/.test(l)
+    || /calib/.test(l)
+    || /_cali[_.]/.test(l)
+    || /^pa_tower/.test(l)
+    || /^pa_calib/.test(l)
+    || /^temp_tower/.test(l)
+    || /^vibration_comp/.test(l)
+    || /^bambu_calib/.test(l)
+    || /^cht_calib/.test(l)
+    || /^nozzle_calib/.test(l)
+    || /^retraction_calib/.test(l)
+    || /^tolerance_test/.test(l)
+    || /^x1c_auto/.test(l);          // X1C auto-calibration sequences
+}
+
 // Schedule a power-off in the polling loop, deduplicating against pending timers.
 function _pollScheduleOff(cfg: PrinterMonitorConfig, reason: string): void {
   const schedKey = cfg.deviceId;
@@ -471,8 +491,12 @@ async function _pollPrinterStates(): Promise<void> {
         }
         // Missed-FINISH fallback — Bambu sometimes skips FINISH and goes RUNNING→IDLE
         // Mirror the same recovery the client does so the server catches it too.
+        // Only fire for real prints (subtask_name present and not a calibration job).
         else if (gcodeState === 'IDLE' && prevState === 'RUNNING') {
-          _pollScheduleOff(cfg, 'RUNNING→IDLE (missed FINISH)');
+          const subtaskName: string = state.subtask_name ?? '';
+          if (subtaskName && !_isCalibJob(subtaskName)) {
+            _pollScheduleOff(cfg, 'RUNNING→IDLE (missed FINISH)');
+          }
         }
       }
     } catch (e) {
