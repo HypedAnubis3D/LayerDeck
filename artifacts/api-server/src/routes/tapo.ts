@@ -1,5 +1,64 @@
 import { Router } from 'express';
+import pg from 'pg';
 import { logger } from '../lib/logger';
+
+// ── Persistence (tapo_monitor_configs table in Replit PostgreSQL) ─────────────
+const _pool = process.env.DATABASE_URL
+  ? new pg.Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } })
+  : null;
+
+async function _loadMonitorConfigsFromDb(): Promise<void> {
+  if (!_pool) {
+    logger.warn('[Tapo] DATABASE_URL not set — monitor config will not persist across restarts');
+    return;
+  }
+  try {
+    const { rows } = await _pool.query<{
+      hub_url: string; printer_name: string; device_id: string; auto_off_enabled: boolean;
+    }>('SELECT hub_url, printer_name, device_id, auto_off_enabled FROM tapo_monitor_configs');
+
+    _monitorConfigs.clear();
+    for (const r of rows) {
+      const key = `${r.hub_url}|${r.printer_name}`;
+      _monitorConfigs.set(key, {
+        piHubUrl:       r.hub_url,
+        printerName:    r.printer_name,
+        deviceId:       r.device_id,
+        autoOffEnabled: r.auto_off_enabled,
+      });
+    }
+    logger.info({ count: rows.length }, '[Tapo] Printer monitor config loaded from DB on startup');
+    if (rows.length > 0) {
+      setImmediate(() => _pollPrinterStates().catch(() => {}));
+    }
+  } catch (e) {
+    logger.warn({ err: (e as Error).message }, '[Tapo] Failed to load monitor config from DB');
+  }
+}
+
+async function _saveMonitorConfigsForHub(hubUrl: string): Promise<void> {
+  if (!_pool) return;
+  const configs = Array.from(_monitorConfigs.values()).filter(c => c.piHubUrl === hubUrl);
+  const client = await _pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query('DELETE FROM tapo_monitor_configs WHERE hub_url = $1', [hubUrl]);
+    for (const c of configs) {
+      await client.query(
+        `INSERT INTO tapo_monitor_configs (hub_url, printer_name, device_id, auto_off_enabled, updated_at)
+         VALUES ($1, $2, $3, $4, now())`,
+        [c.piHubUrl, c.printerName, c.deviceId, c.autoOffEnabled],
+      );
+    }
+    await client.query('COMMIT');
+    logger.info({ hubUrl, count: configs.length }, '[Tapo] Monitor config persisted to DB');
+  } catch (e) {
+    await client.query('ROLLBACK');
+    logger.warn({ err: (e as Error).message, hubUrl }, '[Tapo] Failed to persist monitor config to DB');
+  } finally {
+    client.release();
+  }
+}
 
 const router = Router();
 
@@ -345,6 +404,8 @@ router.post('/printer-monitor-config', (req, res) => {
   }
 
   logger.info({ piHubUrl: safeHubUrl, count: configs.length, total: _monitorConfigs.size }, '[Tapo] Printer monitor config updated');
+  // Persist updated config to DB so it survives server restarts
+  _saveMonitorConfigsForHub(safeHubUrl).catch(() => {});
   // Trigger an immediate poll so any in-progress FINISH state is caught right away
   // (rather than waiting up to 30 s for the next scheduled tick).
   setImmediate(() => _pollPrinterStates().catch(() => {}));
@@ -422,6 +483,10 @@ async function _pollPrinterStates(): Promise<void> {
 
 // Start background poll and repeat every 30 s
 setInterval(_pollPrinterStates, 30_000);
+
+// Load persisted monitor config from DB so polling resumes without needing
+// the client to reconnect after a server restart.
+_loadMonitorConfigsFromDb().catch(() => {});
 
 // ── GET /api/tapo/status ─────────────────────────────────────────────────────
 router.get('/status', async (req, res) => {
