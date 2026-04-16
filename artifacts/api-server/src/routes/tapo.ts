@@ -495,6 +495,8 @@ async function _pollPrinterStates(): Promise<void> {
           const subtaskName: string = state.subtask_name ?? '';
           if (!subtaskName || !_isCalibJob(subtaskName)) {
             _pollScheduleOff(cfg, 'FINISH');
+          } else {
+            logger.info({ printer: cfg.printerName, subtask_name: subtaskName }, '[Tapo] FINISH: calibration job detected — auto-off suppressed');
           }
         }
         // Missed-FINISH fallback — Bambu sometimes skips FINISH and goes RUNNING→IDLE
@@ -504,6 +506,10 @@ async function _pollPrinterStates(): Promise<void> {
           const subtaskName: string = state.subtask_name ?? '';
           if (subtaskName && !_isCalibJob(subtaskName)) {
             _pollScheduleOff(cfg, 'RUNNING→IDLE (missed FINISH)');
+          } else if (subtaskName) {
+            logger.info({ printer: cfg.printerName, subtask_name: subtaskName }, '[Tapo] RUNNING→IDLE: calibration job detected — auto-off suppressed');
+          } else {
+            logger.info({ printer: cfg.printerName, subtask_name: null }, '[Tapo] RUNNING→IDLE: no subtask_name present — auto-off suppressed');
           }
         }
       }
