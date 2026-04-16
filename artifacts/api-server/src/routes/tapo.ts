@@ -202,6 +202,48 @@ router.post('/power', async (req, res) => {
 // DELETE /api/tapo/schedule-off/:deviceId cancels a pending timer ("Keep ON").
 const _pendingOff: Map<string, ReturnType<typeof setTimeout>> = new Map();
 
+// Shared power-off executor — resolves deviceId → target device then powers off,
+// falling back to Pi Hub local control if the Tapo cloud reports the device offline.
+async function _execPowerOff(opts: {
+  deviceId?: string; alias?: string; hubUrl?: string; logCtx?: Record<string, unknown>;
+}): Promise<void> {
+  const { deviceId, alias, hubUrl, logCtx = {} } = opts;
+  const token   = await tapoLogin();
+  const devices = await tapoGetDevices(token);
+  let target = deviceId
+    ? devices.find(d => d.deviceId === deviceId)
+    : devices.find(d => d.alias?.toLowerCase() === alias?.toLowerCase().trim());
+  if (!target) {
+    const fresh = await tapoGetDevices(token, true);
+    target = deviceId
+      ? fresh.find(d => d.deviceId === deviceId)
+      : fresh.find(d => d.alias?.toLowerCase() === alias?.toLowerCase().trim());
+  }
+  if (!target) {
+    logger.warn({ ...logCtx, deviceId, alias }, '[Tapo] _execPowerOff: device not found');
+    return;
+  }
+  try {
+    await tapoPass(token, target.deviceId, target.appServerUrl, 'set_device_info', { device_on: false });
+    logger.info({ ...logCtx, alias: target.alias, via: 'cloud' }, '[Tapo] Power-off sent');
+  } catch (cloudErr) {
+    const cloudMsg = (cloudErr as Error).message ?? '';
+    if (hubUrl && (cloudMsg.includes('-20571') || cloudMsg.toLowerCase().includes('offline'))) {
+      const fbRes  = await fetch(`${hubUrl}/tapo/power`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ alias: target.alias, on: false }),
+        signal: AbortSignal.timeout(8000),
+      });
+      const fbJson = await fbRes.json() as any;
+      if (!fbJson?.ok) throw new Error(`Pi Hub Tapo power-off failed: ${fbJson?.error ?? JSON.stringify(fbJson)}`);
+      logger.info({ ...logCtx, alias: target.alias, via: 'pihub' }, '[Tapo] Power-off sent via Pi Hub');
+    } else {
+      throw cloudErr;
+    }
+  }
+}
+
 router.post('/schedule-off', async (req, res) => {
   const { deviceId, alias, delayMs = 10 * 60 * 1000, hubUrl } = req.body as {
     deviceId?: string; alias?: string; delayMs?: number; hubUrl?: string;
@@ -220,35 +262,7 @@ router.post('/schedule-off', async (req, res) => {
   const timer = setTimeout(async () => {
     _pendingOff.delete(key);
     try {
-      const token   = await tapoLogin();
-      const devices = await tapoGetDevices(token);
-      let target = deviceId
-        ? devices.find(d => d.deviceId === deviceId)
-        : devices.find(d => d.alias?.toLowerCase() === alias!.toLowerCase().trim());
-      if (!target) {
-        const fresh = await tapoGetDevices(token, true);
-        target = deviceId
-          ? fresh.find(d => d.deviceId === deviceId)
-          : fresh.find(d => d.alias?.toLowerCase() === alias!.toLowerCase().trim());
-      }
-      if (!target) { logger.warn({ key }, '[Tapo] schedule-off: device not found'); return; }
-
-      try {
-        await tapoPass(token, target.deviceId, target.appServerUrl, 'set_device_info', { device_on: false });
-        logger.info({ alias: target.alias, via: 'cloud' }, '[Tapo] Server-scheduled power-off sent');
-      } catch (cloudErr) {
-        if (hubUrl && ((cloudErr as Error).message?.includes('-20571') || (cloudErr as Error).message?.toLowerCase().includes('offline'))) {
-          await fetch(`${hubUrl}/tapo/power`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ alias: target.alias, on: false }),
-            signal: AbortSignal.timeout(8000),
-          });
-          logger.info({ alias: target.alias, via: 'pihub' }, '[Tapo] Server-scheduled power-off sent via Pi Hub');
-        } else {
-          throw cloudErr;
-        }
-      }
+      await _execPowerOff({ deviceId, alias, hubUrl, logCtx: { key, via: 'server-schedule' } });
     } catch (e) {
       logger.warn({ err: (e as Error).message, key }, '[Tapo] Server-scheduled power-off failed');
     }
@@ -269,6 +283,145 @@ router.delete('/schedule-off/:key', (req, res) => {
   }
   return res.json({ ok: true, cancelled: false, key, note: 'No pending timer found' });
 });
+
+// ── Printer monitor config + server-side polling ─────────────────────────────
+// Accepts printer-to-plug mappings from the client so the server can watch Pi Hub
+// printer states independently and schedule power-off even when the browser is closed.
+
+interface PrinterMonitorConfig {
+  piHubUrl: string;
+  printerName: string;  // key used by Pi Hub (hubName || display name)
+  deviceId: string;
+  autoOffEnabled: boolean;
+}
+
+// key: `${piHubUrl}|${printerName}`
+const _monitorConfigs: Map<string, PrinterMonitorConfig> = new Map();
+// Last known gcode_state per printer — key: `${piHubUrl}|${printerName}`
+const _monitorPrevStates: Map<string, string> = new Map();
+
+// Validate that a URL is safe to use as a Pi Hub address.
+// Must be http: or https: to prevent protocol-level SSRF.
+function _validateHubUrl(raw: string): string {
+  let parsed: URL;
+  try { parsed = new URL(raw); } catch { throw new Error(`Invalid piHubUrl: "${raw}"`); }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    throw new Error(`piHubUrl must use http or https, got "${parsed.protocol}"`);
+  }
+  return parsed.origin; // strip trailing path/query to get a clean base URL
+}
+
+router.post('/printer-monitor-config', (req, res) => {
+  const { piHubUrl, configs } = req.body as { piHubUrl: string; configs: PrinterMonitorConfig[] };
+  if (!piHubUrl || !Array.isArray(configs)) {
+    return res.status(400).json({ ok: false, error: 'piHubUrl and configs[] required' });
+  }
+
+  let safeHubUrl: string;
+  try { safeHubUrl = _validateHubUrl(piHubUrl); } catch (e) {
+    return res.status(400).json({ ok: false, error: (e as Error).message });
+  }
+
+  // Build a set of deviceIds that will be active after this update
+  const activeDeviceIds = new Set(configs.filter(c => c.autoOffEnabled && c.deviceId).map(c => c.deviceId));
+
+  // Cancel any pending poll-scheduled timers for deviceIds that are now disabled or removed
+  for (const [k, existing] of _monitorConfigs) {
+    if (!k.startsWith(safeHubUrl + '|')) continue;
+    if (!activeDeviceIds.has(existing.deviceId) && _pendingOff.has(existing.deviceId)) {
+      clearTimeout(_pendingOff.get(existing.deviceId)!);
+      _pendingOff.delete(existing.deviceId);
+      logger.info({ deviceId: existing.deviceId, printer: existing.printerName }, '[Tapo] Cancelled pending poll-scheduled timer (auto-off disabled or plug removed)');
+    }
+  }
+
+  // Replace all entries for this piHubUrl with fresh data from the client
+  for (const [k] of _monitorConfigs) {
+    if (k.startsWith(safeHubUrl + '|')) _monitorConfigs.delete(k);
+  }
+  for (const c of configs) {
+    if (!c.printerName || !c.deviceId) continue;
+    _monitorConfigs.set(`${safeHubUrl}|${c.printerName}`, { ...c, piHubUrl: safeHubUrl });
+  }
+
+  logger.info({ piHubUrl: safeHubUrl, count: configs.length, total: _monitorConfigs.size }, '[Tapo] Printer monitor config updated');
+  // Trigger an immediate poll so any in-progress FINISH state is caught right away
+  // (rather than waiting up to 30 s for the next scheduled tick).
+  setImmediate(() => _pollPrinterStates().catch(() => {}));
+  return res.json({ ok: true, monitored: _monitorConfigs.size });
+});
+
+// Schedule a power-off in the polling loop, deduplicating against pending timers.
+function _pollScheduleOff(cfg: PrinterMonitorConfig, reason: string): void {
+  const schedKey = cfg.deviceId;
+  if (_pendingOff.has(schedKey)) {
+    logger.info({ printer: cfg.printerName, deviceId: cfg.deviceId, reason }, '[Tapo] Poll: schedule-off already pending — skipping');
+    return;
+  }
+  logger.info({ printer: cfg.printerName, deviceId: cfg.deviceId, hubUrl: cfg.piHubUrl, reason }, '[Tapo] Poll: scheduling auto power-off (10 min)');
+  const DELAY_MS = 10 * 60 * 1000;
+  const timer = setTimeout(async () => {
+    _pendingOff.delete(schedKey);
+    try {
+      await _execPowerOff({ deviceId: cfg.deviceId, hubUrl: cfg.piHubUrl, logCtx: { printer: cfg.printerName, via: 'poll' } });
+    } catch (e) {
+      logger.warn({ err: (e as Error).message, printer: cfg.printerName }, '[Tapo] Poll auto-off: power-off failed');
+    }
+  }, DELAY_MS);
+  _pendingOff.set(schedKey, timer);
+}
+
+// Background polling — every 30 s, fetch Pi Hub printer states and schedule power-off
+// on FINISH or missed-FINISH (RUNNING→IDLE) transitions for printers with auto-off enabled.
+async function _pollPrinterStates(): Promise<void> {
+  if (_monitorConfigs.size === 0) return;
+
+  // Group configs by piHubUrl so we make one request per hub
+  const byHub = new Map<string, PrinterMonitorConfig[]>();
+  for (const c of _monitorConfigs.values()) {
+    const arr = byHub.get(c.piHubUrl) ?? [];
+    arr.push(c);
+    byHub.set(c.piHubUrl, arr);
+  }
+
+  for (const [hubUrl, printers] of byHub) {
+    try {
+      const res = await fetch(`${hubUrl}/status`, { signal: AbortSignal.timeout(10_000) });
+      if (!res.ok) {
+        logger.warn({ hubUrl, status: res.status }, '[Tapo] Poll: Pi Hub returned non-200');
+        continue;
+      }
+      const data = await res.json() as Record<string, any>;
+
+      for (const cfg of printers) {
+        if (!cfg.autoOffEnabled) continue;
+        const state = data[cfg.printerName];
+        if (!state) continue;
+
+        const gcodeState: string = state.online === false ? 'OFFLINE' : (state.gcode_state ?? 'IDLE');
+        const stateKey = `${hubUrl}|${cfg.printerName}`;
+        const prevState = _monitorPrevStates.get(stateKey) ?? 'OFFLINE';
+        _monitorPrevStates.set(stateKey, gcodeState);
+
+        const wasActive = prevState === 'RUNNING' || prevState === 'PAUSE' || prevState === 'PAUSED';
+        // FINISH transition — printer completed a job cleanly
+        if (gcodeState === 'FINISH' && wasActive) {
+          _pollScheduleOff(cfg, 'FINISH');
+        }
+        // Missed-FINISH fallback — Bambu sometimes skips FINISH and goes RUNNING→IDLE
+        // Mirror the same recovery the client does so the server catches it too.
+        else if (gcodeState === 'IDLE' && prevState === 'RUNNING') {
+          _pollScheduleOff(cfg, 'RUNNING→IDLE (missed FINISH)');
+        }
+      }
+    } catch (e) {
+      logger.warn({ err: (e as Error).message, hubUrl }, '[Tapo] Poll: failed to fetch Pi Hub status');
+    }
+  }
+}
+
+// Start background poll and repeat every 30 s
+setInterval(_pollPrinterStates, 30_000);
 
 // ── GET /api/tapo/status ─────────────────────────────────────────────────────
 router.get('/status', async (req, res) => {

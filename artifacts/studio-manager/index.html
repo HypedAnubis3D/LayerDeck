@@ -18362,6 +18362,27 @@ function _getTapoWattsForPrinter(printerName){
 let _tapoAutoOffEnabled={};
 try{var _taoe=localStorage.getItem('tapoAutoOffEnabled');if(_taoe)_tapoAutoOffEnabled=JSON.parse(_taoe);}catch(e){}
 function _saveTapoAutoOffEnabled(){try{localStorage.setItem('tapoAutoOffEnabled',JSON.stringify(_tapoAutoOffEnabled));}catch(e){}}
+// Sync printer-to-plug monitor config to api-server so it can watch Pi Hub states
+// independently and schedule auto power-off even when the browser is fully closed.
+function _syncTapoMonitorConfig(){
+  const hubUrl=getPiUrl();
+  if(!hubUrl||!(piHubConfig?.printers?.length))return;
+  const configs=(piHubConfig.printers||[])
+    .filter(function(p){return !!_tapoPrinterPlugs[p.name];})
+    .map(function(p){
+      return {
+        piHubUrl:hubUrl,
+        printerName:p.hubName||p.name,
+        deviceId:_tapoPrinterPlugs[p.name],
+        autoOffEnabled:!!_tapoAutoOffEnabled[p.name]
+      };
+    });
+  fetch('/api/tapo/printer-monitor-config',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({piHubUrl:hubUrl,configs:configs})
+  }).catch(function(){});
+}
 // Active countdown timers — { printerName: { outerTimeout, countInterval, bannerId } }
 let _tapoAutoOffTimers={};
 // Known outlet IP → printer name mapping (auto-assigns plugs on first load)
@@ -20765,6 +20786,7 @@ async function fetchTapoDevices(force){
       _tapoLastFetch=Date.now();
       _tapoLastError='';
       _tapoAutoAssignByIp();
+      _syncTapoMonitorConfig();
       // Merge live on/off + wattage from Pi Hub (cloud doesn't return state)
       const hubUrl=getPiUrl();
       if(hubUrl){
@@ -20895,6 +20917,7 @@ function tapoAssignPlug(printerName,deviceId){
     _cancelTapoAutoOff(printerName);
   }
   _saveTapoPrinterPlugs();
+  _syncTapoMonitorConfig();
   if(curTab==='pihub') renderPiHub();
 }
 
@@ -20902,6 +20925,7 @@ function tapoToggleAutoOffEnabled(printerName,enabled){
   _tapoAutoOffEnabled[printerName]=enabled;
   _saveTapoAutoOffEnabled();
   if(!enabled) _cancelTapoAutoOff(printerName);
+  _syncTapoMonitorConfig();
 }
 
 function _cancelTapoAutoOff(printerName){
@@ -23082,7 +23106,13 @@ function renderSocial(){
 (async function initPiHub(){
   try{
     const cfg=await loadPiHubConfig();
-    if(cfg){startPiPolling();}
+    if(cfg){
+      startPiPolling();
+      // Sync printer-to-plug config to the api-server immediately on startup
+      // so the server can watch Pi Hub states even when the browser stays closed.
+      // _tapoPrinterPlugs and _tapoAutoOffEnabled are already loaded from localStorage.
+      _syncTapoMonitorConfig();
+    }
   }catch(e){console.warn('[Pi Hub] Init failed:',e);}
 })();
 
