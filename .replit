@@ -42,6 +42,7 @@ ELECTRICITY_RATE = "0.13"
 PLUG_A1_IP = "192.168.1.165"
 PLUG_P1_ROOM_IP = "192.168.1.162"
 PLUG_P1_CLOSET_IP = "192.168.1.172"
+SUPABASE_URL = "https://rwbnivevzdazkfuxteng.supabase.co"
 
 [userenv.production]
 SHOPIFY_REDIRECT_URI = "https://layerdeck.replit.app/api/shopify/oauth/callback"

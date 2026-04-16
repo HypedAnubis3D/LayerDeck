@@ -2,6 +2,8 @@
 -- Enable Row Level Security on all public tables
 -- LayerDeck / HypedAnubis3D Studio Manager
 -- Applied: 2026-04-15
+-- Updated: 2026-04-16 — also revoke direct anon/authenticated
+--   grants on legacy tables (belt-and-suspenders hardening)
 -- ============================================================
 
 -- ── ha3d_user_data (primary cloud sync table) ──────────────
@@ -41,5 +43,20 @@ ALTER TABLE public.forge_exports    ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.ha3d_printers    ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.ha3d_spools      ENABLE ROW LEVEL SECURITY;
 
--- No permissive policies for these tables → service_role bypasses RLS,
--- but authenticated and anon users are denied entirely (default deny).
+-- Revoke all direct privileges from anon and authenticated on legacy tables.
+-- service_role bypasses RLS and retains full access regardless.
+-- This is belt-and-suspenders: RLS alone should block access, but revoking
+-- the grants ensures even a misconfigured policy cannot leak data.
+REVOKE ALL ON public.ha3d_queue       FROM anon, authenticated;
+REVOKE ALL ON public.ha3d_sales       FROM anon, authenticated;
+REVOKE ALL ON public.ha3d_maint       FROM anon, authenticated;
+REVOKE ALL ON public.ha3d_prints      FROM anon, authenticated;
+REVOKE ALL ON public.ha3d_tmf         FROM anon, authenticated;
+REVOKE ALL ON public.ha3d_waste       FROM anon, authenticated;
+REVOKE ALL ON public.ha3d_usage_hist  FROM anon, authenticated;
+REVOKE ALL ON public.ha3d_shiny       FROM anon, authenticated;
+REVOKE ALL ON public.ha3d_catalog     FROM anon, authenticated;
+REVOKE ALL ON public.ha3d_orders      FROM anon, authenticated;
+REVOKE ALL ON public.forge_exports    FROM anon, authenticated;
+REVOKE ALL ON public.ha3d_printers    FROM anon, authenticated;
+REVOKE ALL ON public.ha3d_spools      FROM anon, authenticated;
