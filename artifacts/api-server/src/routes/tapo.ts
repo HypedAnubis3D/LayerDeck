@@ -485,9 +485,17 @@ async function _pollPrinterStates(): Promise<void> {
         _monitorPrevStates.set(stateKey, gcodeState);
 
         const wasActive = prevState === 'RUNNING' || prevState === 'PAUSE' || prevState === 'PAUSED';
-        // FINISH transition — printer completed a job cleanly
+        // FINISH transition — printer completed a job cleanly.
+        // Skip calibration jobs so auto-off isn't triggered after a Bambu
+        // calibration run that reaches FINISH normally.
+        // Intentionally different from the RUNNING→IDLE guard: when subtask_name
+        // is absent we still schedule auto-off because FINISH without a name is
+        // almost always a real print completing, not a calibration sequence.
         if (gcodeState === 'FINISH' && wasActive) {
-          _pollScheduleOff(cfg, 'FINISH');
+          const subtaskName: string = state.subtask_name ?? '';
+          if (!subtaskName || !_isCalibJob(subtaskName)) {
+            _pollScheduleOff(cfg, 'FINISH');
+          }
         }
         // Missed-FINISH fallback — Bambu sometimes skips FINISH and goes RUNNING→IDLE
         // Mirror the same recovery the client does so the server catches it too.
