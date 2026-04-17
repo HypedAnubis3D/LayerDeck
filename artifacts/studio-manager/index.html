@@ -3815,11 +3815,14 @@ header{
 </div>
 
 <!-- QR ALERT MODAL (multi-spool) -->
-<div class="overlay" id="mod-qr-alert" style="display:none">
+<div class="overlay" id="mod-qr-alert" style="display:none" onclick="if(event.target.id==='mod-qr-alert')closeQaAlert()">
 <div class="qr-alert-modal">
-  <div class="qa-title">⬡ Multiple Spools Found</div>
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+    <div class="qa-title" style="margin-bottom:0">⬡ Multiple Spools Found</div>
+    <button onclick="closeQaAlert()" style="background:none;border:none;color:var(--txt-d);font-size:18px;cursor:pointer;padding:2px 6px;line-height:1" title="Close">×</button>
+  </div>
   <div class="qa-desc" id="qa-desc">Multiple open rolls of this filament color were found. Scan the QR code on the spool you want to use for this print to ensure the correct one gets tracked.</div>
-  <div class="qa-spool-list" id="qa-spool-list"></div>
+  <div class="qa-spool-list" id="qa-spool-list" style="max-height:220px;overflow-y:auto"></div>
   <div style="font-size:7px;color:var(--txt-d);margin-bottom:12px" id="qa-context"></div>
   <div id="qa-scanner-wrap" style="display:none;margin-bottom:12px">
     <div id="qr-alert-reader" style="border-radius:5px;overflow:hidden"></div>
@@ -10353,8 +10356,9 @@ function savePrint(){
   }
   savePrints();closePrint();render();
   toast('Print Logged',name+' — added to In Progress','success');
-  // Check multi-spool QR alert for new prints
-  if(!id){const np=prints[prints.length-1];if(np)setTimeout(()=>checkMultiSpoolAlert(np.id),300);}
+  // Note: checkMultiSpoolAlert is intentionally NOT called here — the user already
+  // manually selected their spool(s) in the form, so QR confirmation is redundant.
+  // The QR alert only fires for auto-assigned filaments (Shopify/Pi Hub flows).
 }
 
 // Load saved settings when product name changes
