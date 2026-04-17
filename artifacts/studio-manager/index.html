@@ -3975,6 +3975,7 @@ function matWear(m){return WEAR_FACTOR[m]||1.0;}
 var spools=[],usageHist=[],prints=[],tmfLib=[],queueItems=[],orders=[],sales=[],maintLog=[],inPersonInventory=[];
 let printGroups=[],tmfFolders=[],_tmfCollapsed=new Set(),_printGrpCollapsed=new Set(),_printOrderExpanded=new Set();
 var _openAddPrintCtx=null; // Set by openAddPrint() when called from Pi Hub live banner
+var _doneFolderOpen=false; // Whether the Done folder in the Prints tab is expanded
 let dashHidden=[];
 let notifIds=new Set();
 let shopifyCfg={domain:'',connected:false,lastOrderId:null,lastPoll:null};
@@ -4033,6 +4034,7 @@ function saveTmfFolders(){ss(KEYS.tmfFolders,tmfFolders);}
 function toggleTmfFolder(id){_tmfCollapsed.has(id)?_tmfCollapsed.delete(id):_tmfCollapsed.add(id);renderTmf();}
 function togglePrintGroup(id){_printGrpCollapsed.has(id)?_printGrpCollapsed.delete(id):_printGrpCollapsed.add(id);renderPrints();}
 function togglePrintOrder(ordId){_printOrderExpanded.has(ordId)?_printOrderExpanded.delete(ordId):_printOrderExpanded.add(ordId);renderPrints();}
+function toggleDoneFolder(){_doneFolderOpen=!_doneFolderOpen;renderPrints();}
 function _resolveOrderForPrint(p){
   if(p.fromEtsyOrder){const o=orders.find(function(o){return o.etsyOrderId===p.fromEtsyOrder||o.orderId===p.fromEtsyOrder;});if(o)return o;}
   if(p.fromShopifyOrder){const o=orders.find(function(o){return o.shopifyOrderId===p.fromShopifyOrder||o.orderId===p.fromShopifyOrder||o.shopifyId===p.fromShopifyOrder;});if(o)return o;}
@@ -4512,19 +4514,20 @@ function renderPrints(){
       _ungrouped.push(p);
     }
   });
-  if(!_orderGroupMap.size){
-    // No order-linked prints — just render flat list
-    g.innerHTML=piLiveHtml+inProgressHtml+_sorted.map(_pcHtml).join('');
-    return;
-  }
   // Sort order groups newest-first (by most recent print timestamp)
   const _orderGroups=[..._orderGroupMap.values()].sort(function(a,b){
     const aTs=Math.max.apply(null,a.prints.map(function(p){return p.timestamp||0;}));
     const bTs=Math.max.apply(null,b.prints.map(function(p){return p.timestamp||0;}));
     return bTs-aTs;
   });
-  let _gh='';
-  _orderGroups.forEach(function(grp){
+  // ── Split into active vs fully-done ──────────────────────────────────
+  const _isPrintDone=function(p){const st=p.status||(p.success===true?'done':'printing');return st==='done'||st==='failed';};
+  const _activeGroups=_orderGroups.filter(function(grp){return !grp.prints.every(_isPrintDone);});
+  const _doneGroups=_orderGroups.filter(function(grp){return grp.prints.every(_isPrintDone);});
+  const _ungroupedActive=_ungrouped.filter(function(p){return !_isPrintDone(p);});
+  const _ungroupedDone=_ungrouped.filter(_isPrintDone);
+  // ── Shared helper: render one order group header + (optionally) its prints ──
+  const _orderGrpHtml=function(grp,indented){
     const o=grp.order;
     const gPrints=grp.prints;
     const ordId=o.id;
@@ -4535,13 +4538,14 @@ function renderPrints(){
     const label=ordNum?(ordNum+(customer?' · '+esc(customer):'')):(esc(customer)||'Order');
     const _gcost=gPrints.reduce(function(a,p){const _h=p.hrs||(queueItems.find(function(q){return q.stage==='done'&&q.printer===p.printer&&_normName(q.name)===_normName(p.name)&&q.hrs>0;})||{}).hrs||0;return a+calcCost(p.filaments,_h||0,p.qty||1,p.tapoWatts||undefined).total;},0);
     const _gsell=gPrints.reduce(function(a,p){const _h=p.hrs||(queueItems.find(function(q){return q.stage==='done'&&q.printer===p.printer&&_normName(q.name)===_normName(p.name)&&q.hrs>0;})||{}).hrs||0;return a+calcCost(p.filaments,_h||0,p.qty||1,p.tapoWatts||undefined).sell;},0);
-    const allDone=gPrints.every(function(p){return(p.status||'printing')==='done';});
+    const allDone=gPrints.every(_isPrintDone);
     const anyFailed=gPrints.some(function(p){return(p.status||'printing')==='failed';});
     const hdrColor=allDone?'rgba(16,185,129,.06)':anyFailed?'rgba(239,68,68,.05)':'rgba(240,154,62,.04)';
     const bdrColor=allDone?'rgba(16,185,129,.25)':anyFailed?'rgba(239,68,68,.2)':'rgba(240,154,62,.2)';
     const txtColor=allDone?'var(--grn-b)':anyFailed?'var(--red)':'var(--gold-b)';
-    _gh+='<div style="grid-column:1/-1;display:flex;align-items:center;gap:7px;padding:7px 11px;background:'+hdrColor+';border:1px solid '+bdrColor+';border-radius:8px;margin-top:4px;cursor:pointer;user-select:none" onclick="togglePrintOrder(\''+ordId+'\')">'
-      +'<span style="font-size:9px;color:'+txtColor+';display:inline-block;transition:transform .15s;'+(isExpanded?'':'')+'">'+(!isExpanded?'▶':'▼')+'</span>'
+    const indent=indented?'margin-left:16px;border-left:2px solid rgba(16,185,129,.2);padding-left:10px;':'';
+    let html='<div style="grid-column:1/-1;'+indent+'display:flex;align-items:center;gap:7px;padding:7px 11px;background:'+hdrColor+';border:1px solid '+bdrColor+';border-radius:8px;margin-top:4px;cursor:pointer;user-select:none" onclick="togglePrintOrder(\''+ordId+'\')">'
+      +'<span style="font-size:9px;color:'+txtColor+'">'+(!isExpanded?'▶':'▼')+'</span>'
       +'<span>'+platform+'</span>'
       +'<span style="flex:1;font-size:10px;font-weight:700;color:'+txtColor+'">'+label+'</span>'
       +(allDone?'<span style="font-size:7px;color:var(--grn-b);background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.3);padding:1px 6px;border-radius:8px">✓ All Done</span>':'')
@@ -4549,10 +4553,32 @@ function renderPrints(){
       +'<span style="font-size:7px;margin-left:8px;color:var(--txt-d)">Cost <span style="color:var(--txt);font-weight:600">$'+_gcost.toFixed(2)+'</span></span>'
       +'<span style="font-size:7px;color:var(--txt-d)">Sell <span style="color:var(--org);font-weight:700">$'+_gsell.toFixed(2)+'</span></span>'
       +'</div>';
-    if(isExpanded)_gh+=gPrints.map(_pcHtml).join('');
-  });
-  // Ungrouped prints float at the end with no header
-  _gh+=_ungrouped.map(_pcHtml).join('');
+    if(isExpanded)html+=gPrints.map(_pcHtml).join('');
+    return html;
+  };
+  // ── Render ────────────────────────────────────────────────────────────
+  let _gh='';
+  // 1. Active order groups (at least one print not done)
+  _activeGroups.forEach(function(grp){_gh+=_orderGrpHtml(grp,false);});
+  // 2. Active ungrouped prints float here
+  _gh+=_ungroupedActive.map(_pcHtml).join('');
+  // 3. Done folder — contains all-done order groups + ungrouped done prints
+  const _totalDonePrints=_doneGroups.reduce(function(a,g){return a+g.prints.length;},0)+_ungroupedDone.length;
+  if(_totalDonePrints>0){
+    const _doneFolderLabel='Done';
+    const _doneGroupCount=_doneGroups.length;
+    const _doneSummary=(_doneGroupCount>0?_doneGroupCount+' order'+(  _doneGroupCount!==1?'s':'')+(_ungroupedDone.length>0?', ':' '):'')+(_ungroupedDone.length>0?_ungroupedDone.length+' print'+(_ungroupedDone.length!==1?'s':''):'')+' · '+_totalDonePrints+' total';
+    _gh+='<div style="grid-column:1/-1;display:flex;align-items:center;gap:7px;padding:8px 12px;background:rgba(16,185,129,.07);border:1px solid rgba(16,185,129,.28);border-radius:8px;margin-top:6px;cursor:pointer;user-select:none" onclick="toggleDoneFolder()">'
+      +'<span style="font-size:9px;color:var(--grn-b)">'+(_doneFolderOpen?'▼':'▶')+'</span>'
+      +'<span style="font-size:13px">✅</span>'
+      +'<span style="flex:1;font-size:10px;font-weight:700;color:var(--grn-b)">'+_doneFolderLabel+'</span>'
+      +'<span style="font-size:7px;color:var(--txt-d)">'+_doneSummary+'</span>'
+      +'</div>';
+    if(_doneFolderOpen){
+      _doneGroups.forEach(function(grp){_gh+=_orderGrpHtml(grp,true);});
+      if(_ungroupedDone.length)_gh+=_ungroupedDone.map(_pcHtml).join('');
+    }
+  }
   g.innerHTML=piLiveHtml+inProgressHtml+_gh;
 }
 
