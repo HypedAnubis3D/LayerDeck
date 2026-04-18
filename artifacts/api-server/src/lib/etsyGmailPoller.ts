@@ -79,6 +79,13 @@ async function initDb(): Promise<void> {
         updated_at TIMESTAMPTZ DEFAULT NOW()
       )
     `);
+    // Dedicated Discord-notified table — never cleared by resync, survives restarts
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS etsy_discord_notified (
+        discord_key TEXT PRIMARY KEY,
+        notified_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
     logger.info("Etsy Gmail DB tables ready");
   } catch (err) {
     logger.warn({ err }, "Etsy Gmail DB init failed — falling back to in-memory dedup");
@@ -621,6 +628,11 @@ async function pollGmailAccount(config: ShopConfig): Promise<void> {
       const discordKey = `${shopId}:${order.orderNumber}`;
       if (discordUrl && !alreadyDone && !_discordNotifiedOrders.has(discordKey) && !orderAlreadyInDb) {
         _discordNotifiedOrders.add(discordKey);
+        // Persist to dedicated table so server restarts + clearAndResync can't re-fire Discord
+        pool.query(
+          `INSERT INTO etsy_discord_notified (discord_key) VALUES ($1) ON CONFLICT DO NOTHING`,
+          [discordKey]
+        ).catch(() => {});
         try {
           const itemLines = order.items
             .map((i) => `  • ${i.name}${i.qty > 1 ? ` ×${i.qty}` : ""} — $${i.price.toFixed(2)}`)
@@ -636,6 +648,10 @@ async function pollGmailAccount(config: ShopConfig): Promise<void> {
       } else if (orderAlreadyInDb && !alreadyDone) {
         // Different email, same order — populate the in-memory set to keep it warm
         _discordNotifiedOrders.add(discordKey);
+        pool.query(
+          `INSERT INTO etsy_discord_notified (discord_key) VALUES ($1) ON CONFLICT DO NOTHING`,
+          [discordKey]
+        ).catch(() => {});
         logger.info({ shopId, orderNumber: order.orderNumber }, "Etsy Gmail: skipped Discord — order already notified (duplicate email)");
       }
     }
@@ -656,19 +672,32 @@ async function pollGmailAccount(config: ShopConfig): Promise<void> {
   }
 }
 
-// Pre-populate _discordNotifiedOrders from DB so server restarts don't re-fire alerts
+// Pre-populate _discordNotifiedOrders from DB so server restarts don't re-fire alerts.
+// Reads from the dedicated etsy_discord_notified table (survives clearAndResync) and
+// falls back to etsy_gmail_imports for backward-compatibility with orders notified before
+// this table existed.
 async function loadDiscordNotifiedOrders(): Promise<void> {
   try {
-    const res = await pool.query<{ order_number: string; order_json: EtsyOrder | null }>(
-      `SELECT order_number, order_json FROM etsy_gmail_imports WHERE order_number IS NOT NULL AND order_number != ''`
+    // Primary source: dedicated Discord-notified table (never cleared by resync)
+    const dedicated = await pool.query<{ discord_key: string }>(
+      `SELECT discord_key FROM etsy_discord_notified`
     );
-    for (const row of res.rows) {
+    for (const row of dedicated.rows) {
+      if (row.discord_key) _discordNotifiedOrders.add(row.discord_key);
+    }
+
+    // Backward-compat: also load from etsy_gmail_imports for orders notified before the
+    // dedicated table was introduced. Add both shop prefixes since legacy records may have
+    // a null shop field.
+    const legacy = await pool.query<{ order_number: string }>(
+      `SELECT order_number FROM etsy_gmail_imports WHERE order_number IS NOT NULL AND order_number != ''`
+    );
+    for (const row of legacy.rows) {
       if (!row.order_number) continue;
-      // Add both shop prefixes so any shop field mismatch (e.g. from legacy records
-      // where order_json?.shop is null) never causes a duplicate Discord alert on restart.
       _discordNotifiedOrders.add(`ha3d:${row.order_number}`);
       _discordNotifiedOrders.add(`dioscuri:${row.order_number}`);
     }
+
     logger.info({ count: _discordNotifiedOrders.size }, "Loaded Discord-notified order numbers from DB");
   } catch (err) {
     logger.warn({ err }, "Could not load Discord-notified orders from DB — restart dupes possible");
@@ -803,6 +832,8 @@ export async function clearAndResyncEtsy(): Promise<{ cleared: number; imported:
   const res = await pool.query(`SELECT COUNT(*) FROM etsy_gmail_imports`);
   const cleared = parseInt(res.rows[0].count ?? "0");
   await pool.query(`DELETE FROM etsy_gmail_imports`);
+  // NOTE: intentionally do NOT clear _discordNotifiedOrders or etsy_discord_notified.
+  // The Discord dedup set must survive resync so historical orders don't re-fire Discord alerts.
   pendingEtsyOrders.length = 0;
   _inMemoryMessageIds.clear();
   isPolling = false;
