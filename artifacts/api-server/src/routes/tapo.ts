@@ -2,7 +2,7 @@ import { Router } from 'express';
 import pg from 'pg';
 import { logger } from '../lib/logger';
 
-// ── Persistence (tapo_monitor_configs table in Replit PostgreSQL) ─────────────
+// ── Persistence (Replit PostgreSQL) ──────────────────────────────────────────
 const _pool = process.env.DATABASE_URL
   ? new pg.Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } })
   : null;
@@ -57,6 +57,82 @@ async function _saveMonitorConfigsForHub(hubUrl: string): Promise<void> {
     logger.warn({ err: (e as Error).message, hubUrl }, '[Tapo] Failed to persist monitor config to DB');
   } finally {
     client.release();
+  }
+}
+
+// ── Scheduled-off persistence ─────────────────────────────────────────────────
+// Persists pending power-off timers to the DB so they survive server restarts.
+
+async function _saveScheduledOff(key: string, opts: { deviceId?: string; alias?: string; hubUrl?: string; firesAt: number }): Promise<void> {
+  if (!_pool) return;
+  try {
+    await _pool.query(
+      `INSERT INTO tapo_scheduled_off (key, device_id, alias, hub_url, fires_at)
+       VALUES ($1, $2, $3, $4, to_timestamp($5 / 1000.0))
+       ON CONFLICT (key) DO UPDATE
+         SET device_id = EXCLUDED.device_id,
+             alias     = EXCLUDED.alias,
+             hub_url   = EXCLUDED.hub_url,
+             fires_at  = EXCLUDED.fires_at,
+             created_at = now()`,
+      [key, opts.deviceId ?? null, opts.alias ?? null, opts.hubUrl ?? null, opts.firesAt],
+    );
+  } catch (e) {
+    logger.warn({ err: (e as Error).message, key }, '[Tapo] Failed to persist scheduled-off to DB');
+  }
+}
+
+async function _deleteScheduledOff(key: string): Promise<void> {
+  if (!_pool) return;
+  try {
+    await _pool.query('DELETE FROM tapo_scheduled_off WHERE key = $1', [key]);
+  } catch (e) {
+    logger.warn({ err: (e as Error).message, key }, '[Tapo] Failed to delete scheduled-off from DB');
+  }
+}
+
+async function _loadScheduledOffFromDb(): Promise<void> {
+  if (!_pool) return;
+  try {
+    const { rows } = await _pool.query<{
+      key: string; device_id: string | null; alias: string | null; hub_url: string | null; fires_at: Date;
+    }>('SELECT key, device_id, alias, hub_url, fires_at FROM tapo_scheduled_off');
+
+    let restored = 0;
+    for (const r of rows) {
+      const firesAt = r.fires_at.getTime();
+      const delayMs = Math.max(0, firesAt - Date.now());
+
+      // Already fired or within 5 s — delete stale record
+      if (delayMs < 5_000) {
+        await _pool.query('DELETE FROM tapo_scheduled_off WHERE key = $1', [r.key]);
+        continue;
+      }
+
+      if (_pendingOff.has(r.key)) continue; // already registered (shouldn't happen on startup)
+
+      logger.info({ key: r.key, delayMs, firesAt }, '[Tapo] Restoring scheduled power-off from DB');
+      const timer = setTimeout(async () => {
+        _pendingOff.delete(r.key);
+        _deleteScheduledOff(r.key).catch(() => {});
+        try {
+          await _execPowerOff({
+            deviceId: r.device_id ?? undefined,
+            alias:    r.alias    ?? undefined,
+            hubUrl:   r.hub_url  ?? undefined,
+            logCtx:   { key: r.key, via: 'db-restore' },
+          });
+        } catch (e) {
+          logger.warn({ err: (e as Error).message, key: r.key }, '[Tapo] DB-restored power-off failed');
+        }
+      }, delayMs);
+
+      _pendingOff.set(r.key, timer);
+      restored++;
+    }
+    if (restored > 0) logger.info({ restored }, '[Tapo] Scheduled power-offs restored from DB');
+  } catch (e) {
+    logger.warn({ err: (e as Error).message }, '[Tapo] Failed to load scheduled-off from DB');
   }
 }
 
@@ -316,10 +392,12 @@ router.post('/schedule-off', async (req, res) => {
   if (existing) { clearTimeout(existing); _pendingOff.delete(key); }
 
   const delay = Math.max(0, Math.min(Number(delayMs) || 10 * 60 * 1000, 120 * 60 * 1000));
+  const firesAt = Date.now() + delay;
   logger.info({ key, delayMs: delay, via: 'server-schedule' }, '[Tapo] Scheduling server-side power-off');
 
   const timer = setTimeout(async () => {
     _pendingOff.delete(key);
+    _deleteScheduledOff(key).catch(() => {});
     try {
       await _execPowerOff({ deviceId, alias, hubUrl, logCtx: { key, via: 'server-schedule' } });
     } catch (e) {
@@ -328,12 +406,18 @@ router.post('/schedule-off', async (req, res) => {
   }, delay);
 
   _pendingOff.set(key, timer);
-  return res.json({ ok: true, key, delayMs: delay, firesAt: Date.now() + delay });
+  // Persist to DB so the timer survives a server restart
+  _saveScheduledOff(key, { deviceId, alias, hubUrl, firesAt }).catch(() => {});
+  return res.json({ ok: true, key, delayMs: delay, firesAt });
 });
 
 router.delete('/schedule-off/:key', (req, res) => {
   const key = decodeURIComponent(req.params.key);
   const timer = _pendingOff.get(key);
+  // Always remove from DB regardless of whether an in-memory timer exists
+  // (handles the case where the server restarted and the timer was restored from DB
+  //  but the client sends a cancel before the new in-memory timer fires)
+  _deleteScheduledOff(key).catch(() => {});
   if (timer) {
     clearTimeout(timer);
     _pendingOff.delete(key);
@@ -441,8 +525,10 @@ function _pollScheduleOff(cfg: PrinterMonitorConfig, reason: string): void {
   }
   logger.info({ printer: cfg.printerName, deviceId: cfg.deviceId, hubUrl: cfg.piHubUrl, reason }, '[Tapo] Poll: scheduling auto power-off (10 min)');
   const DELAY_MS = 10 * 60 * 1000;
+  const firesAt = Date.now() + DELAY_MS;
   const timer = setTimeout(async () => {
     _pendingOff.delete(schedKey);
+    _deleteScheduledOff(schedKey).catch(() => {});
     try {
       await _execPowerOff({ deviceId: cfg.deviceId, hubUrl: cfg.piHubUrl, logCtx: { printer: cfg.printerName, via: 'poll' } });
     } catch (e) {
@@ -450,6 +536,7 @@ function _pollScheduleOff(cfg: PrinterMonitorConfig, reason: string): void {
     }
   }, DELAY_MS);
   _pendingOff.set(schedKey, timer);
+  _saveScheduledOff(schedKey, { deviceId: cfg.deviceId, hubUrl: cfg.piHubUrl, firesAt }).catch(() => {});
 }
 
 // Background polling — every 30 s, fetch Pi Hub printer states and schedule power-off
@@ -525,6 +612,8 @@ setInterval(_pollPrinterStates, 30_000);
 // Load persisted monitor config from DB so polling resumes without needing
 // the client to reconnect after a server restart.
 _loadMonitorConfigsFromDb().catch(() => {});
+// Restore any pending power-off timers that survived a restart via the DB
+_loadScheduledOffFromDb().catch(() => {});
 
 // ── GET /api/tapo/status ─────────────────────────────────────────────────────
 router.get('/status', async (req, res) => {
