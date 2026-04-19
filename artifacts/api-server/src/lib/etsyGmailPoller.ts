@@ -623,36 +623,59 @@ async function pollGmailAccount(config: ShopConfig): Promise<void> {
       );
 
       // Only notify Discord for genuinely new orders.
-      // Triple guard: new messageId + not in in-memory set + order number not previously in DB.
+      // Atomic gate: INSERT into etsy_discord_notified first (AWAITED).
+      // rowCount=1 means we claimed the slot → fire Discord.
+      // rowCount=0 means another process/poll already claimed it → skip.
+      // This is safe across concurrent polls, server restarts, and multi-instance deployments.
       const discordUrl = process.env.DISCORD_WEBHOOK_ORDERS;
       const discordKey = `${shopId}:${order.orderNumber}`;
-      if (discordUrl && !alreadyDone && !_discordNotifiedOrders.has(discordKey) && !orderAlreadyInDb) {
-        _discordNotifiedOrders.add(discordKey);
-        // Persist to dedicated table so server restarts + clearAndResync can't re-fire Discord
-        pool.query(
-          `INSERT INTO etsy_discord_notified (discord_key) VALUES ($1) ON CONFLICT DO NOTHING`,
-          [discordKey]
-        ).catch(() => {});
+
+      // Pre-flight guards: skip the DB round-trip if we already know it's been notified.
+      const preBlocked = !discordUrl || alreadyDone || _discordNotifiedOrders.has(discordKey) || orderAlreadyInDb;
+
+      if (!preBlocked) {
+        let claimed = false;
         try {
-          const itemLines = order.items
-            .map((i) => `  • ${i.name}${i.qty > 1 ? ` ×${i.qty}` : ""} — $${i.price.toFixed(2)}`)
-            .join("\n");
-          await fetch(discordUrl, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              content: `🟠 **New Etsy Order** · ${shopLabel}\nOrder: **${order.orderNumber}**\nCustomer: ${order.customer}\nTotal: **$${order.total.toFixed(2)}**\n${itemLines}`,
-            }),
-          });
-        } catch (_) {}
-      } else if (orderAlreadyInDb && !alreadyDone) {
-        // Different email, same order — populate the in-memory set to keep it warm
+          const claimRes = await pool.query(
+            `INSERT INTO etsy_discord_notified (discord_key) VALUES ($1) ON CONFLICT DO NOTHING`,
+            [discordKey]
+          );
+          claimed = (claimRes.rowCount ?? 0) > 0;
+        } catch (dbErr) {
+          // DB unavailable — fall back to in-memory set only (small risk, logged)
+          logger.warn({ dbErr, shopId, orderNumber: order.orderNumber }, "Etsy Gmail: Discord DB claim failed — falling back to in-memory guard");
+          claimed = true; // Allow fire; in-memory set prevents same-process re-fire
+        }
+        // Warm in-memory set regardless so subsequent polls in this process skip the DB.
+        _discordNotifiedOrders.add(discordKey);
+
+        if (claimed) {
+          logger.info({ shopId, orderNumber: order.orderNumber }, "Etsy Gmail: firing Discord — new order claimed");
+          try {
+            const itemLines = order.items
+              .map((i) => `  • ${i.name}${i.qty > 1 ? ` ×${i.qty}` : ""} — $${i.price.toFixed(2)}`)
+              .join("\n");
+            await fetch(discordUrl!, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                content: `🟠 **New Etsy Order** · ${shopLabel}\nOrder: **${order.orderNumber}**\nCustomer: ${order.customer}\nTotal: **$${order.total.toFixed(2)}**\n${itemLines}`,
+              }),
+            });
+          } catch (_) {}
+        } else {
+          logger.info({ shopId, orderNumber: order.orderNumber }, "Etsy Gmail: Discord already claimed by another poll — skipping");
+        }
+      } else if (!alreadyDone) {
+        // Order already blocked (duplicate email or already notified) — keep in-memory set warm.
         _discordNotifiedOrders.add(discordKey);
         pool.query(
           `INSERT INTO etsy_discord_notified (discord_key) VALUES ($1) ON CONFLICT DO NOTHING`,
           [discordKey]
         ).catch(() => {});
-        logger.info({ shopId, orderNumber: order.orderNumber }, "Etsy Gmail: skipped Discord — order already notified (duplicate email)");
+        if (orderAlreadyInDb) {
+          logger.info({ shopId, orderNumber: order.orderNumber }, "Etsy Gmail: skipped Discord — order already notified (duplicate email)");
+        }
       }
     }
 
