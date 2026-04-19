@@ -19110,7 +19110,16 @@ async function onPiPrintFinished(name,data){
   });
   // 'printing' placeholder → promote to done. Already-done/failed record → skip entirely.
   // Treat status===undefined as 'printing' (manually-logged in-progress print via banner)
-  if(recentDup&&recentDup.status&&recentDup.status!=='printing'){return;}
+  // Exception: if the existing record finished BEFORE this print started (piPrintStartTimes
+  // tracks the current run's start), it's a second run of the same file in the same day —
+  // not a duplicate. Allow it through so same-day reprints are always captured.
+  if(recentDup&&recentDup.status&&recentDup.status!=='printing'){
+    const _thisStart=piPrintStartTimes[name]||0;
+    const _dupEnd=recentDup.finishedAt||recentDup.timestamp||0;
+    // Only suppress when we can't confirm a fresh start (no tracked start time) OR
+    // when the earlier record finished after this print allegedly started (true dup)
+    if(!(_thisStart>0&&_dupEnd<_thisStart))return;
+  }
   // If the user explicitly dismissed the "Live from Pi Hub" banner for this printer+file,
   // treat the print as already existing — skip creating a new record even when the name
   // doesn't match any existing record (manual prints, friendly-name vs raw-gcode mismatch).
