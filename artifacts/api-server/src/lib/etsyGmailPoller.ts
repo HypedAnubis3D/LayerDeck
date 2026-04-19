@@ -414,7 +414,7 @@ function parseFromHtml(html: string): {
       for (let ni = 0; ni < cells.length; ni++) {
         if (ni === ci) continue;
         const raw = cells[ni];
-        if (raw.match(/total|subtotal|shipping|tax|discount|handling|etsy|order|invoice/i)) continue;
+        if (raw.match(/total|subtotal|shipping|tax|discount|handling|etsy|order|invoice|delivery fee|retail delivery/i)) continue;
         if (/^\$/.test(raw) || /^\d+$/.test(raw)) continue;
         const qtyM = raw.match(/\bqty:?\s*(\d+)/i) || raw.match(/^(\d+)\s*[×x]\s/i);
         const qty = qtyM ? parseInt(qtyM[1]) : 1;
@@ -643,8 +643,8 @@ async function pollGmailAccount(config: ShopConfig): Promise<void> {
           claimed = (claimRes.rowCount ?? 0) > 0;
         } catch (dbErr) {
           // DB unavailable — fall back to in-memory set only (small risk, logged)
-          logger.warn({ dbErr, shopId, orderNumber: order.orderNumber }, "Etsy Gmail: Discord DB claim failed — falling back to in-memory guard");
-          claimed = true; // Allow fire; in-memory set prevents same-process re-fire
+          logger.warn({ dbErr, shopId, orderNumber: order.orderNumber }, "Etsy Gmail: Discord DB claim failed — skipping notification (will retry on next poll interval)");
+          claimed = false; // Never fire without DB confirmation — a brief delay is far better than duplicate spam
         }
         // Warm in-memory set regardless so subsequent polls in this process skip the DB.
         _discordNotifiedOrders.add(discordKey);
