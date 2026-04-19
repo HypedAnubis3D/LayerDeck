@@ -6268,21 +6268,50 @@ async function pollEtsyOrders(silent){
       if(!existing){
         ingestEtsyOrder(o);
         newCount++;
-      } else if(o.shop&&!existing.shop){
-        // Patch missing shop field on orders already in local storage
-        existing.shop=o.shop;
-        queueItems=queueItems.map(function(q){
-          if(q.fromEtsy&&q.fromEtsyOrder===existing.orderId&&!q.shop)
-            return Object.assign({},q,{shop:o.shop});
-          return q;
-        });
-        patchedShop++;
+      } else {
+        var _changed=false;
+        // Patch missing shop field
+        if(o.shop&&!existing.shop){
+          existing.shop=o.shop;
+          queueItems=queueItems.map(function(q){
+            if(q.fromEtsy&&q.fromEtsyOrder===existing.orderId&&!q.shop)
+              return Object.assign({},q,{shop:o.shop});
+            return q;
+          });
+          patchedShop++;_changed=true;
+        }
+        // Patch items when the API returns a corrected/improved parse
+        // (e.g. delivery fee was replaced with the real product after a parser fix)
+        if(o.items&&o.items.length>0){
+          var _apiNames=(o.items||[]).map(function(i){return i.name;}).join('|');
+          var _localNames=(existing.items||[]).map(function(i){return i.name;}).join('|');
+          if(_apiNames!==_localNames){
+            var _oldNames=(existing.items||[]).map(function(i){return i.name;});
+            existing.items=o.items.map(function(it){
+              return{name:it.name||'Item',qty:it.qty||1,price:parseFloat(it.price||0),variantTitle:it.variantTitle||''};
+            });
+            if(o.total)existing.total=parseFloat(o.total);
+            // Rename any queue items that were created from the old (wrong) item names
+            queueItems=queueItems.map(function(q){
+              if(!q.fromEtsyOrder||q.fromEtsyOrder!==existing.orderId)return q;
+              var _oldMatch=_oldNames.some(function(n){return _normName(n)===_normName(q.name);});
+              if(!_oldMatch)return q;
+              // Replace name with the corrected first item from the API
+              var _newIt=existing.items[0];
+              if(!_newIt)return q;
+              var _newLabel=_newIt.variantTitle?(_newIt.name+' — '+_newIt.variantTitle):_newIt.name;
+              return Object.assign({},q,{name:_newLabel,notes:q.notes});
+            });
+            _changed=true;
+          }
+        }
+        if(_changed){saveOrders();saveQueue();render();}
       }
     });
-    if(newCount>0||patchedShop>0){
+    if(newCount>0){
       saveOrders();saveQueue();
       render();
-      if(newCount>0)toast('🟠 New Etsy Order'+(newCount>1?'s':''),newCount+' order'+(newCount!==1?'s':'')+' imported from Etsy','success',6000);
+      toast('🟠 New Etsy Order'+(newCount>1?'s':''),newCount+' order'+(newCount!==1?'s':'')+' imported from Etsy','success',6000);
     }
   }catch(e){
     if(!silent)console.warn('[Etsy] poll failed:',e.message);
