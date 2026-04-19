@@ -18626,12 +18626,27 @@ async function loadPiHubConfig(){
   }
   // Merge top-level with defaults so new fields are always present
   piHubConfig={...PI_DEFAULTS,...(saved||{})};
-  // Deep-merge printers: ensure each saved printer inherits hubName from defaults if missing
-  if(saved?.printers){
-    piHubConfig.printers=(saved.printers||[]).map(sp=>{
-      const def=PI_DEFAULTS.printers.find(d=>d.name===sp.name);
-      return def?{...def,...sp}:{...sp};
+  // Deep-merge printers:
+  // 1. Start with all PI_DEFAULTS printers so built-in entries are never lost
+  // 2. Overlay saved config (ip/serial/accessCode etc) but NEVER let a falsy saved
+  //    hubName override a valid default — an empty hubName breaks Pi Hub name resolution
+  // 3. Append any custom printers from saved that aren't in PI_DEFAULTS
+  {
+    const savedPrinters=saved?.printers||[];
+    const merged=PI_DEFAULTS.printers.map(function(def){
+      const sp=savedPrinters.find(function(p){return p.name===def.name;});
+      if(!sp)return{...def};
+      const m={...def,...sp};
+      // Guard: if saved hubName is empty/falsy, restore the default mapping so the
+      // Pi Hub name-lookup in fetchPiStatus doesn't silently drop the printer
+      if(!m.hubName&&def.hubName)m.hubName=def.hubName;
+      return m;
     });
+    // Preserve any user-added custom printers not present in PI_DEFAULTS
+    savedPrinters.forEach(function(sp){
+      if(!PI_DEFAULTS.printers.find(function(d){return d.name===sp.name;}))merged.push({...sp});
+    });
+    piHubConfig.printers=merged;
   }
   localStorage.setItem('ha3d_pihub_local',JSON.stringify(piHubConfig));
   return piHubConfig;
