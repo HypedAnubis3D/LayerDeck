@@ -14779,6 +14779,136 @@ function delConvention(id){
 }
 function closeConvention(){document.getElementById('mod-convention').style.display='none';}
 
+function exportConventionCsv(convId){
+  var c=conventions.find(function(x){return x.id===convId;});
+  if(!c){toast('No event found','','error');return;}
+  var rows=[];
+  function r(){rows.push([]);}
+  function h(t){rows.push([t]);}
+
+  // ── Summary ──
+  var totalRev=(c.daySales||[]).reduce(function(a,s){return a+parseFloat(s.price||0)*parseInt(s.qty||1);},0);
+  var totalUnits=(c.daySales||[]).reduce(function(a,s){return a+parseInt(s.qty||1);},0);
+  var transactions=(c.daySales||[]).map(function(s){return s.id;}).filter(function(v,i,a){return a.indexOf(v)===i;}).length;
+  var cost=c.cost||0;
+  var profit=totalRev-cost;
+  h('=== CONVENTION SUMMARY ===');
+  rows.push(['Event',c.name||'']);
+  rows.push(['Location',c.loc||'']);
+  rows.push(['Dates',[c.start,c.end].filter(Boolean).join(' \u2192 ')]);
+  rows.push(['Booth Cost','$'+cost.toFixed(2)]);
+  rows.push(['Revenue Target','$'+(c.target||0).toFixed(2)]);
+  rows.push(['Total Revenue','$'+totalRev.toFixed(2)]);
+  rows.push(['Net Profit (after booth)','$'+profit.toFixed(2)]);
+  rows.push(['Units Sold',totalUnits]);
+  rows.push(['Line Items',c.daySales?c.daySales.length:0]);
+  if(c.notes)rows.push(['Notes',c.notes]);
+  r();
+
+  // ── Daily Breakdown ──
+  var dayMap={};
+  (c.daySales||[]).forEach(function(s){
+    var d=new Date(s.timestamp).toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'});
+    if(!dayMap[d])dayMap[d]={date:d,revenue:0,units:0,transactions:new Set()};
+    dayMap[d].revenue+=parseFloat(s.price||0)*parseInt(s.qty||1);
+    dayMap[d].units+=parseInt(s.qty||1);
+    dayMap[d].transactions.add(s.id);
+  });
+  var dayKeys=Object.keys(dayMap).sort(function(a,b){return new Date(a)-new Date(b);});
+  h('=== DAILY BREAKDOWN ===');
+  rows.push(['Date','Revenue','Units Sold','Transactions']);
+  dayKeys.forEach(function(d){
+    var day=dayMap[d];
+    rows.push([day.date,'$'+day.revenue.toFixed(2),day.units,day.transactions.size]);
+  });
+  r();
+
+  // ── Payment Breakdown ──
+  var methods={};
+  (c.daySales||[]).forEach(function(s){
+    var m=s.methodLabel||s.method||'Unknown';
+    if(!methods[m])methods[m]={revenue:0,units:0};
+    methods[m].revenue+=parseFloat(s.price||0)*parseInt(s.qty||1);
+    methods[m].units+=parseInt(s.qty||1);
+  });
+  h('=== PAYMENT BREAKDOWN ===');
+  rows.push(['Method','Revenue','Units']);
+  Object.keys(methods).forEach(function(m){
+    rows.push([m,'$'+methods[m].revenue.toFixed(2),methods[m].units]);
+  });
+  r();
+
+  // ── Inventory Sold ──
+  var soldMap={};
+  (c.daySales||[]).forEach(function(s){
+    var key=s.catalogItemId||s.itemName||'__unknown';
+    if(!soldMap[key])soldMap[key]={name:s.itemName||'Unknown',qty:0,revenue:0,catalogItemId:s.catalogItemId};
+    soldMap[key].qty+=parseInt(s.qty||1);
+    soldMap[key].revenue+=parseFloat(s.price||0)*parseInt(s.qty||1);
+  });
+  h('=== INVENTORY SOLD ===');
+  rows.push(['Item','Price Each','Qty Brought','Qty Sold','Revenue','Remaining','% Sold']);
+  (c.inPersonCatalog||[]).forEach(function(item){
+    var key=item.catalogItemId||item.name;
+    var sold=soldMap[key]||{qty:0,revenue:0};
+    var remaining=Math.max(0,(item.qtyBring||0)-sold.qty);
+    var pct=(item.qtyBring||0)>0?Math.round(sold.qty/(item.qtyBring||1)*100):0;
+    rows.push([item.name,'$'+parseFloat(item.price||0).toFixed(2),item.qtyBring||0,sold.qty,'$'+sold.revenue.toFixed(2),remaining,pct+'%']);
+    delete soldMap[key];
+  });
+  // Items sold not in pack list
+  Object.values(soldMap).forEach(function(item){
+    rows.push([item.name,'—','—',item.qty,'$'+item.revenue.toFixed(2),'—','—']);
+  });
+  r();
+
+  // ── Top Sellers ──
+  var allSoldItems=Object.values((c.daySales||[]).reduce(function(acc,s){
+    var k=s.itemName||'Unknown';
+    if(!acc[k])acc[k]={name:k,qty:0,revenue:0};
+    acc[k].qty+=parseInt(s.qty||1);
+    acc[k].revenue+=parseFloat(s.price||0)*parseInt(s.qty||1);
+    return acc;
+  },{})).sort(function(a,b){return b.qty-a.qty});
+  h('=== TOP SELLERS ===');
+  rows.push(['Rank','Item','Units Sold','Revenue']);
+  allSoldItems.forEach(function(item,i){
+    rows.push([i+1,item.name,item.qty,'$'+item.revenue.toFixed(2)]);
+  });
+  r();
+
+  // ── Full Sales Log ──
+  h('=== FULL SALES LOG ===');
+  rows.push(['Date','Time','Item','Qty','Price Each','Line Total','Method','Square Ref','Customer Name','Customer Email']);
+  (c.daySales||[]).slice().sort(function(a,b){return (a.timestamp||0)-(b.timestamp||0);}).forEach(function(s){
+    var d=new Date(s.timestamp||0);
+    rows.push([
+      d.toLocaleDateString(),
+      d.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}),
+      s.itemName||'',
+      s.qty||1,
+      '$'+parseFloat(s.price||0).toFixed(2),
+      '$'+(parseFloat(s.price||0)*parseInt(s.qty||1)).toFixed(2),
+      s.methodLabel||s.method||'',
+      s.squareRef||'',
+      s.customerName||'',
+      s.customerEmail||''
+    ]);
+  });
+
+  // Build CSV
+  var csv=rows.map(function(row){
+    return row.map(function(cell){return '"'+String(cell==null?'':cell).replace(/"/g,'""')+'"';}).join(',');
+  }).join('\n');
+  var blob=new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'});
+  var url=URL.createObjectURL(blob);
+  var a=document.createElement('a');
+  var fname=(c.name||'convention').replace(/[^a-z0-9]/gi,'_').replace(/_+/g,'_')+'_report.csv';
+  a.href=url;a.download=fname;document.body.appendChild(a);a.click();document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  toast('Export Ready',fname,'success',3000);
+}
+
 // ── Event Manager ──
 function openEventManage(id){
   currentEventId=id;
@@ -14888,6 +15018,7 @@ function renderEvtOverview(){
         <button class="btn btn-ghost btn-sm" onclick="setEvtSection('checklist')">✅ Checklist (${checkDone}/${checkTotal})</button>
         <button class="btn btn-grn btn-sm" onclick="setEvtSection('sales')">💰 Record Sale</button>
         <button class="btn btn-ghost btn-sm" onclick="setEvtSection('qr')">🏷 Price Tags</button>
+        <button class="btn btn-ghost btn-sm" style="grid-column:1/-1;border-color:rgba(56,189,248,.3);color:var(--cyn)" onclick="exportConventionCsv('${c.id}')">⬇ Export Report (CSV)</button>
       </div>
     </div>
     ${(function(){
