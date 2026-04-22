@@ -22918,6 +22918,12 @@ async function checkSocialApiStatus(){
 }
 
 // ── Scheduled post runner ──
+// NOTE: The SERVER-SIDE socialScheduler (60s interval) is the sole authority for
+// publishing scheduled posts. This function is intentionally NOT wired to any
+// interval or visibilitychange event — doing so caused duplicate posts when the
+// browser and server both fired at the same time (browser local state stale vs
+// server DB state). Only the server uses the DB-backed atomic "posting" lock.
+// Manual "POST NOW" button still calls postToInstagram() directly (fine — user intent).
 async function _runDueSocialPosts(){
   if(!socialQueue.length)return;
   const now=Date.now();
@@ -22928,11 +22934,6 @@ async function _runDueSocialPosts(){
     await postToInstagram(p.id);
   }
 }
-setInterval(_runDueSocialPosts,60000);
-// Also run when tab regains focus so posts scheduled while app was closed get sent
-document.addEventListener('visibilitychange',function(){
-  if(!document.hidden) _runDueSocialPosts();
-});
 
 // ── Calendar helpers ──
 function socialCalNav(dir){
