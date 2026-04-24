@@ -243,6 +243,45 @@ async function runScheduledPosts() {
   }
 }
 
+// On startup, any post that was left in status:"posting" with serverPosting:true means the
+// server restarted in the middle of a publish. Reset them to "failed" so the user can retry.
+async function cleanupStuckPosts() {
+  const sb = getSupabase();
+  if (!sb) return;
+  try {
+    const { data, error } = await sb
+      .from("ha3d_user_data")
+      .select("user_id,payload")
+      .eq("collection", "socialQueue");
+    if (error || !data?.length) return;
+
+    for (const row of data) {
+      let queue: SocialPost[];
+      try { queue = JSON.parse(row.payload as string); } catch { continue; }
+      if (!Array.isArray(queue)) continue;
+
+      let changed = false;
+      for (const post of queue) {
+        if (post.status === "posting" && post.serverPosting) {
+          logger.warn({ postId: post.id }, "[socialScheduler] Resetting stuck server-owned post to failed (server restarted mid-publish)");
+          post.status = "failed";
+          post.serverPosting = false;
+          post.error = "Server restarted while publishing — click Post to retry.";
+          changed = true;
+        }
+      }
+      if (changed) {
+        await sb.from("ha3d_user_data").upsert(
+          { user_id: row.user_id, collection: "socialQueue", payload: JSON.stringify(queue), updated_at: new Date().toISOString() },
+          { onConflict: "user_id,collection" }
+        );
+      }
+    }
+  } catch (err) {
+    logger.warn({ err }, "[socialScheduler] cleanupStuckPosts error (non-fatal)");
+  }
+}
+
 export function startSocialScheduler() {
   const tick = async () => {
     try {
@@ -251,6 +290,8 @@ export function startSocialScheduler() {
       logger.error({ err }, "[socialScheduler] Uncaught error in tick");
     }
   };
+  // Clean up any posts stuck in "posting" from a previous server run before starting
+  void cleanupStuckPosts();
   // Run immediately and then every 60 seconds
   void tick();
   setInterval(() => void tick(), 60_000);

@@ -11742,7 +11742,20 @@ async function pullFromCloud(silent=false,_lockRetry=false){
             const cloudIds=new Set(parsed.map(function(p){return p.id;}));
             const localOnly=socialQueue.filter(function(p){return !cloudIds.has(p.id);});
             socialQueue=parsed.concat(localOnly);
+            // Clean up stale browser-owned "posting" states pulled from Supabase.
+            // This happens when the page was closed/navigated mid-publish — the startup
+            // localStorage cleanup ran but queueSync then overwrites it from Supabase.
+            // serverPosting:true means the SERVER owns it (we must not touch those).
+            let _stalePosting=false;
+            socialQueue.forEach(function(p){
+              if(p.status==='posting'&&!p.serverPosting){
+                p.status='failed';
+                p.error='Post was interrupted (page reloaded mid-upload). Check Instagram — if it posted, click Mark Done; otherwise click Post to retry.';
+                _stalePosting=true;
+              }
+            });
             ss(KEYS.socialQueue,socialQueue);
+            if(_stalePosting)setTimeout(function(){if(typeof saveSocial==='function')saveSocial();},200);
             pulled++;
             continue;
           }
@@ -22767,9 +22780,16 @@ function socialMarkPosted(postId){
 async function socialRetryPost(postId){
   const p=socialQueue.find(x=>x.id===postId);
   if(!p)return;
-  if(p.status==='posted'||p.status==='posting'){
+  if(p.status==='posted'){
     toast('Already posted','This post has already been published','warning',3000);return;
   }
+  if(p.status==='posting'&&p.serverPosting){
+    toast('Server is publishing…','The scheduler is actively posting this — check back in a minute','info',4000);return;
+  }
+  // For browser-owned "posting" (stale/interrupted) — reset so postToInstagram can proceed.
+  // Clear serverPosting so the browser owns this attempt and startup cleanup works correctly.
+  if(p.status==='posting'){p.status='failed';}
+  if(p.serverPosting){p.serverPosting=false;}
   await postToInstagram(postId);
 }
 // Keep addSocialPost as alias for openShopifySocialAnnounce compat
