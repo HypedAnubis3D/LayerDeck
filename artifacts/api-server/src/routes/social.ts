@@ -315,6 +315,78 @@ router.post("/instagram/publish", async (req, res) => {
   }
 });
 
+function _sleep(ms: number) { return new Promise<void>(r => setTimeout(r, ms)); }
+
+function _sbClient() {
+  const url = process.env.SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_ANON_KEY;
+  if (!url || !key) return null;
+  return createClient(url, key, { auth: { persistSession: false } });
+}
+
+interface SocialQueuePost { id: string; status: string; serverPosting?: boolean; postedAt?: number; igId?: string; error?: string; [k: string]: unknown; }
+
+async function _updateSocialPostInDb(postId: string, updates: Partial<SocialQueuePost>) {
+  const sb = _sbClient();
+  if (!sb) return;
+  try {
+    const { data } = await sb.from("ha3d_user_data").select("user_id,payload").eq("collection", "socialQueue").maybeSingle();
+    if (!data?.payload) return;
+    const queue = JSON.parse(data.payload as string) as SocialQueuePost[];
+    const post = queue.find(p => p.id === postId);
+    if (!post) return;
+    Object.assign(post, updates);
+    await sb.from("ha3d_user_data").upsert(
+      { user_id: data.user_id, collection: "socialQueue", payload: JSON.stringify(queue), updated_at: new Date().toISOString() },
+      { onConflict: "user_id,collection" }
+    );
+  } catch { /* non-fatal */ }
+}
+
+// POST /api/social/instagram/delegate-video — hand off video polling+publish to the server so
+// the browser can navigate away. Returns immediately; server polls in background & updates Supabase.
+router.post("/instagram/delegate-video", async (req, res) => {
+  const token = process.env.META_ACCESS_TOKEN;
+  if (!token) return res.status(500).json({ error: "META_ACCESS_TOKEN not set" });
+  const { postId, containerId, igId } = req.body as { postId: string; containerId: string; igId: string };
+  if (!postId || !containerId || !igId) return res.status(400).json({ error: "postId, containerId and igId required" });
+
+  // Return immediately so the browser can navigate away
+  res.json({ ok: true, delegated: true });
+
+  // Background: poll until processed, then publish
+  void (async () => {
+    let published = false;
+    for (let i = 0; i < 30; i++) {
+      await _sleep(10_000);
+      try {
+        const sr = await fetch(`${IG_BASE}/${containerId}?fields=status_code,status&access_token=${encodeURIComponent(token)}`);
+        const sj = (await sr.json()) as { status_code?: string };
+        if (sj.status_code === "FINISHED") {
+          const pr = await fetch(`${IG_BASE}/${igId}/media_publish`, {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ creation_id: containerId, access_token: token }),
+          });
+          const pj = (await pr.json()) as { id?: string; error?: { message: string } };
+          if (pj.id) {
+            await _updateSocialPostInDb(postId, { status: "posted", serverPosting: false, postedAt: Date.now(), igId: pj.id, error: undefined });
+            published = true;
+          } else {
+            await _updateSocialPostInDb(postId, { status: "failed", serverPosting: false, error: pj.error?.message ?? "Publish failed" });
+          }
+          break;
+        } else if (sj.status_code === "ERROR") {
+          await _updateSocialPostInDb(postId, { status: "failed", serverPosting: false, error: "Video processing failed on Instagram — check format (needs H.264, AAC, 9:16 vertical MP4)" });
+          break;
+        }
+      } catch { /* keep polling */ }
+    }
+    if (!published) {
+      await _updateSocialPostInDb(postId, { status: "failed", serverPosting: false, error: "Video processing timed out on server. Check Instagram — it may have posted anyway." });
+    }
+  })();
+});
+
 // POST /api/social/facebook — post to the HypedAnubis3D Facebook Page
 router.post("/facebook", async (req, res) => {
   const token = process.env.META_ACCESS_TOKEN;

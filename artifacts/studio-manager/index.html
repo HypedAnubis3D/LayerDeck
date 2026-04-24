@@ -11737,18 +11737,28 @@ async function pullFromCloud(silent=false,_lockRetry=false){
           }
           else if(c==='conventions')conventions=parsed;
           else if(c==='socialQueue'){
-            // Merge: keep any local posts that are newer than what came from cloud
-            // so in-flight posts during a pull don't get clobbered
+            // Merge: keep any local posts that are newer than what came from cloud.
+            // CRITICAL: Never overwrite posts that are actively being published in this tab —
+            // postToInstagram holds a reference into socialQueue; replacing the array would
+            // orphan that reference and cause status writes to be lost → duplicate posts.
             const cloudIds=new Set(parsed.map(function(p){return p.id;}));
             const localOnly=socialQueue.filter(function(p){return !cloudIds.has(p.id);});
-            socialQueue=parsed.concat(localOnly);
+            socialQueue=parsed.map(function(cloudPost){
+              // Keep the live in-memory object for any actively-publishing post
+              if(_activeBrowserPublishes&&_activeBrowserPublishes.has(cloudPost.id)){
+                const local=socialQueue.find(function(x){return x.id===cloudPost.id;});
+                return local||cloudPost;
+              }
+              return cloudPost;
+            }).concat(localOnly);
             // Clean up stale browser-owned "posting" states pulled from Supabase.
             // This happens when the page was closed/navigated mid-publish — the startup
             // localStorage cleanup ran but queueSync then overwrites it from Supabase.
             // serverPosting:true means the SERVER owns it (we must not touch those).
+            // _activeBrowserPublishes: skip if this tab is actively publishing (not stale).
             let _stalePosting=false;
             socialQueue.forEach(function(p){
-              if(p.status==='posting'&&!p.serverPosting){
+              if(p.status==='posting'&&!p.serverPosting&&!(_activeBrowserPublishes&&_activeBrowserPublishes.has(p.id))){
                 p.status='failed';
                 p.error='Post was interrupted (page reloaded mid-upload). Check Instagram — if it posted, click Mark Done; otherwise click Post to retry.';
                 _stalePosting=true;
@@ -22121,6 +22131,9 @@ async function setHealthCronFrequency(freq){
 // ── Social data ──
 Object.assign(KEYS,{socialQueue:'ha3d_socialqueue_v2'});
 let socialQueue=[];
+// Tracks post IDs currently being published by this browser tab (not persisted).
+// Used to prevent double-publish and to protect queueSync from clobbering in-flight state.
+const _activeBrowserPublishes=new Set();
 function loadSocial(){
   socialQueue=gs(KEYS.socialQueue)||[];
   // If a post was in 'posting' when the page closed/refreshed, the polling loop
@@ -22646,13 +22659,20 @@ function scRenderTagPins(){
 
 // ── Post to Instagram ──
 async function postToInstagram(postId){
+  // Hard guard: never run two concurrent publishes for the same post
+  if(_activeBrowserPublishes.has(postId)){
+    toast('Already publishing…','Wait for the current attempt to finish','info',3000);return;
+  }
   const p=socialQueue.find(x=>x.id===postId);
   if(!p)return;
-  if(p.status==='posted'||p.status==='posting'){return;}
+  if(p.status==='posted'){toast('Already posted','This post is already live on Instagram','info',3000);return;}
+  // p is kept in socialQueue throughout — queueSync now preserves the live object reference
+  // for active publishes so p.status writes always land on the current array item.
   const media=p.mediaUrl||p.imageUrl;
   if(!media){toast('Add media first','Pick an image or video','error');return;}
   if(!p.caption&&p.postType!=='story'){toast('Add a caption first','','error');return;}
-  p.status='posting';p.error=null;
+  _activeBrowserPublishes.add(postId);
+  p.status='posting';p.serverPosting=false;p.error=null;
   saveSocial();renderSocial();
   async function _igSafeJson(r){const t=await r.text();try{return JSON.parse(t);}catch(_){return{error:t||'Unexpected server response'};}}
   try{
@@ -22667,12 +22687,26 @@ async function postToInstagram(postId){
       toast('Instagram post failed',p.error,'error');
       saveSocial();renderSocial();return;
     }
-    // Step 2: if video, poll until Instagram finishes processing then publish
+    // Step 2: if video, delegate polling+publish to the server so user can navigate away
     if(json.pending&&json.containerId){
-      p.status='posting';p.error=null;saveSocial();renderSocial();
+      const delegateRes=await fetch('/api/social/instagram/delegate-video',{
+        method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({postId,containerId:json.containerId,igId:json.igId})
+      }).catch(function(){return null;});
+      const delegateOk=delegateRes&&delegateRes.ok;
+      if(delegateOk){
+        // Server owns it now — mark serverPosting so startup cleanup won't clobber it
+        p.status='posting';p.serverPosting=true;p.error=null;
+        saveSocial();renderSocial();
+        _activeBrowserPublishes.delete(postId); // server has taken over
+        toast('Uploading to Instagram…','You can leave the page — the server will finish publishing and update the status','info',6000);
+        return; // browser's work is done
+      }
+      // Fallback: server delegation failed — poll in browser
+      p.status='posting';p.serverPosting=false;p.error=null;saveSocial();renderSocial();
       let igId=json.igId;let posted=false;
-      for(let i=0;i<20;i++){
-        await new Promise(function(r){setTimeout(r,4000);});
+      for(let i=0;i<30;i++){
+        await new Promise(function(r){setTimeout(r,10000);});
         const sr=await fetch('/api/social/instagram/container/'+json.containerId).catch(function(){return null;});
         if(!sr){continue;}
         const sj=await _igSafeJson(sr);
@@ -22698,13 +22732,13 @@ async function postToInstagram(postId){
           }
           break;
         }else if(sj.statusCode==='ERROR'){
-          p.status='failed';p.error='Video processing failed on Instagram — check format and try again';
+          p.status='failed';p.error='Video processing failed on Instagram — check format (needs H.264, AAC, 9:16 vertical MP4) and try again';
           toast('Instagram post failed',p.error,'error');break;
         }
       }
       if(!posted&&p.status==='posting'){
-        p.status='failed';p.error='Video is taking too long to process. Try again in a few minutes.';
-        toast('Still processing',p.error,'warning',6000);
+        p.status='failed';p.error='Video is taking too long to process. Check Instagram — it may have posted anyway. Click Mark Done if it\'s live, or Post to retry.';
+        toast('Still processing',p.error,'warning',8000);
       }
     }else if(json.id){
       // Image/story — already published
@@ -22722,6 +22756,8 @@ async function postToInstagram(postId){
   }catch(e){
     p.status='failed';p.error=e.message;
     toast('Instagram post failed',e.message,'error');
+  }finally{
+    _activeBrowserPublishes.delete(postId);
   }
   saveSocial();renderSocial();
 }
@@ -22783,11 +22819,14 @@ async function socialRetryPost(postId){
   if(p.status==='posted'){
     toast('Already posted','This post has already been published','warning',3000);return;
   }
+  // If this tab is actively publishing, don't allow a concurrent retry
+  if(_activeBrowserPublishes.has(postId)){
+    toast('Already publishing…','This post is currently being uploaded — wait for it to finish','info',4000);return;
+  }
   if(p.status==='posting'&&p.serverPosting){
     toast('Server is publishing…','The scheduler is actively posting this — check back in a minute','info',4000);return;
   }
-  // For browser-owned "posting" (stale/interrupted) — reset so postToInstagram can proceed.
-  // Clear serverPosting so the browser owns this attempt and startup cleanup works correctly.
+  // For stale "posting" (not active in this tab, not server-owned) — clear so postToInstagram proceeds
   if(p.status==='posting'){p.status='failed';}
   if(p.serverPosting){p.serverPosting=false;}
   await postToInstagram(postId);
