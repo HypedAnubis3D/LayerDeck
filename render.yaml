@@ -10,3 +10,13 @@ services:
         value: production
       - key: PORT
         value: 3000
+
+  - type: web
+    name: layerdeck-app
+    runtime: static
+    rootDir: artifacts/studio-manager
+    buildCommand: npm install -g pnpm && pnpm install --no-frozen-lockfile && pnpm build
+    staticPublishPath: dist
+    envVars:
+      - key: VITE_API_URL
+        value: https://layerdeck-api.onrender.com
