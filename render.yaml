@@ -14,9 +14,8 @@ services:
   - type: web
     name: layerdeck-app
     runtime: static
-    rootDir: artifacts/studio-manager
-    buildCommand: npm install -g pnpm@9.15.9 && pnpm install --no-frozen-lockfile && pnpm build
-    staticPublishPath: dist/public
+    rootDir: artifacts/studio-manager/dist/public
+    staticPublishPath: .
     envVars:
       - key: VITE_API_URL
         value: https://layerdeck-api.onrender.com
