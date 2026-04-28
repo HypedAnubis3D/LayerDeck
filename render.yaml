@@ -15,7 +15,7 @@ services:
     name: layerdeck-app
     runtime: static
     rootDir: artifacts/studio-manager
-    buildCommand: npm install -g pnpm && pnpm install --no-frozen-lockfile && pnpm build
+    buildCommand: curl -fsSL https://get.pnpm.io/install.sh | PNPM_VERSION=9.15.9 sh - && export PATH="$HOME/.local/share/pnpm:$PATH" && pnpm install --no-frozen-lockfile && pnpm build
     staticPublishPath: dist
     envVars:
       - key: VITE_API_URL
