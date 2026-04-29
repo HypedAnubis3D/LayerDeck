@@ -14,8 +14,23 @@ services:
   - type: web
     name: layerdeck-app
     runtime: static
-    rootDir: artifacts/studio-manager/dist/public
-    staticPublishPath: .
+    rootDir: artifacts/studio-manager
+    buildCommand: npm install -g pnpm@9.15.9 && pnpm install --no-frozen-lockfile && pnpm build
+    staticPublishPath: dist/public
+    envVars:
+      - key: VITE_API_URL
+        value: https://layerdeck-api.onrender.com
+      - key: SUPABASE_URL
+        value: https://rwbnivevzdazkfuxteng.supabase.co
+      - key: SUPABASE_ANON_KEY
+        value: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ3Ym5pdmV2emRhemtmdXh0ZW5nIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQyNzczMDksImV4cCI6MjA4OTg1MzMwOX0.QeSm1wYUfbfUIzMh2pcReGdJ8mPqetuaC2kuGfdm2sU
+
+  - type: web
+    name: layerdeck-companion
+    runtime: static
+    rootDir: artifacts/desktop-companion
+    buildCommand: npm install -g pnpm@9.15.9 && pnpm install --no-frozen-lockfile && pnpm build
+    staticPublishPath: dist
     envVars:
       - key: VITE_API_URL
         value: https://layerdeck-api.onrender.com
