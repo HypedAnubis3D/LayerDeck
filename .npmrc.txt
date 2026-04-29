@@ -1,5 +1,5 @@
 auto-install-peers=false
 strict-peer-dependencies=false
-ignore-scripts=true
 frozen-lockfile=false
 prefer-frozen-lockfile=false
+ignore-scripts=true
