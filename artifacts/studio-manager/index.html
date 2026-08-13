@@ -9691,13 +9691,11 @@ function renderSpools(){
   if(_spBrandEl){const _cb=_spBrandEl.value;const _brs=[...new Set(spools.map(s=>(s.brand||'').trim()).filter(Boolean))].sort();_spBrandEl.innerHTML='<option value="">All Brands</option>'+_brs.map(b=>'<option value="'+esc(b)+'"'+(_cb===b?' selected':'')+'>'+esc(b)+'</option>').join('');if(_cb)_spBrandEl.value=_cb;}
   const fb=(_spBrandEl&&_spBrandEl.value)||'';
   const fa=document.getElementById('sp-a').value;
+  // Non-status filters (material/brand/search) apply per spool — every spool in a
+  // color group shares name+material anyway, so this can't split a group in half.
   const f=spools.filter(s=>{
     if(fm&&s.material!==fm)return false;
     if(fb&&(s.brand||'').trim()!==fb)return false;
-    if(fa==='critical'&&pct(s)>=_spoolThreshCrit)return false;
-    if(fa==='low'&&(pct(s)>=_spoolThreshLow||pct(s)<_spoolThreshCrit))return false;
-    if(fa==='ok'&&(pct(s)<_spoolThreshLow||pct(s)>=_spoolThreshOk))return false;
-    if(fa==='full'&&pct(s)<_spoolThreshOk)return false;
     if(q&&!(s.name+s.material+s.color+(s.brand||'')+(s.tags||[]).join(' ')).toLowerCase().includes(q))return false;
     return true;
   });
@@ -9705,7 +9703,23 @@ function renderSpools(){
   // ── Group by name + material ──
   const groupMap=new Map();
   f.forEach(s=>{const k=getGroupKey(s);if(!groupMap.has(k))groupMap.set(k,[]);groupMap.get(k).push(s);});
-  const groups=[...groupMap.entries()];
+  let groups=[...groupMap.entries()];
+
+  // ── Status filter (Critical/Low/OK/Full) applies to the GROUP's combined %, ──
+  // ── not any individual spool — a group with 3 spools isn't "critical" just  ──
+  // ── because one of them happens to be empty.                               ──
+  if(fa){
+    groups=groups.filter(([,ss])=>{
+      const totalRem=ss.reduce((a,s)=>a+s.remaining,0);
+      const totalCap=ss.reduce((a,s)=>a+s.total,0);
+      const grpPct=totalCap?Math.round(totalRem/totalCap*100):0;
+      if(fa==='critical')return grpPct<_spoolThreshCrit;
+      if(fa==='low')return grpPct>=_spoolThreshCrit&&grpPct<_spoolThreshLow;
+      if(fa==='ok')return grpPct>=_spoolThreshLow&&grpPct<_spoolThreshOk;
+      if(fa==='full')return grpPct>=_spoolThreshOk;
+      return true;
+    });
+  }
 
   // ── Sort groups ──
   const _sortVal=(document.getElementById('sp-sort')?.value)||'recent';
@@ -9724,7 +9738,8 @@ function renderSpools(){
     return tsB-tsA;
   });
 
-  document.getElementById('sp-cnt').textContent=groups.length+' color'+(groups.length!==1?'s':'')+' · '+f.length+' spool'+(f.length!==1?'s':'');
+  const _visSpoolCount=groups.reduce((a,[,ss])=>a+ss.length,0);
+  document.getElementById('sp-cnt').textContent=groups.length+' color'+(groups.length!==1?'s':'')+' · '+_visSpoolCount+' spool'+(_visSpoolCount!==1?'s':'');
   const g=document.getElementById('spool-grid');
 
   if(!groups.length){
@@ -11892,7 +11907,21 @@ window.addEventListener('offline',()=>{
 // ── SYNC-AWARE SAVE FUNCTIONS ──
 // These replace the base save functions entirely — write to localStorage AND queue cloud sync.
 // Using ss() directly avoids any recursive override chain.
-function saveSpools(){ss(KEYS.spools,spools);queueSync('spools',spools);requestAnimationFrame(()=>flashNewCard('spool-grid'));}
+function saveSpools(){
+  // Round remaining/total to 2 decimals — repeated float subtraction otherwise drifts
+  // into junk like "51.08000000000019g" over many usage-log entries.
+  spools.forEach(function(s){
+    if(s.remaining!=null)s.remaining=Math.round(s.remaining*100)/100;
+    if(s.total!=null)s.total=Math.round(s.total*100)/100;
+  });
+  // Auto-remove fully depleted spools (<=0.05g left, i.e. effectively empty).
+  const depleted=spools.filter(function(s){return(s.remaining||0)<=0.05;});
+  if(depleted.length){
+    spools=spools.filter(function(s){return(s.remaining||0)>0.05;});
+    depleted.forEach(function(s){toast('Spool Depleted','"'+(s.name||s.material||'Spool')+'" removed — 0g remaining','info',6000);});
+  }
+  ss(KEYS.spools,spools);queueSync('spools',spools);requestAnimationFrame(()=>flashNewCard('spool-grid'));
+}
 function savePrints(){ss(KEYS.prints,prints);queueSync('prints',prints);requestAnimationFrame(()=>flashNewCard('prints-grid'));}
 function saveQueue(){ss(KEYS.queue,queueItems);queueSync('queueItems',queueItems);}
 function saveOrders(){ss(KEYS.orders,orders);queueSync('orders',orders);}

@@ -55,6 +55,15 @@ const PI_PORT        = 3000;
 const printerStates  = {};
 const printerClients = {};
 
+// ── Command sequence counter ──
+// Every previous command publish hardcoded sequence_id:'0'. Bambu firmware can
+// silently drop a command whose sequence_id matches one it already processed
+// (e.g. skip sent right after a pause) — a monotonically increasing id per
+// command avoids that collision. Purely additive: this only changes what we
+// send, never how we parse incoming state.
+let _cmdSeqCounter = 1;
+function nextSeq() { return String(_cmdSeqCounter++); }
+
 // Track previous gcode state per printer so we can detect transitions
 // (RUNNING → FINISH, * → FAILED) without re-alerting on every poll tick
 const _prevStatePath = path.join(__dirname, '.prev_gcode_state.json');
@@ -555,18 +564,24 @@ app.post('/control', (req, res) => {
 
   if (command === 'skip') {
     if (!objectId) return res.status(400).json({ error: 'objectId required for skip' });
+    // Bambu's skip_objects expects obj_list as integers — coerce defensively in
+    // case the id came through as a string anywhere upstream (JSON round-trip,
+    // frontend fallback path, etc). A string here would make firmware silently
+    // ignore the command instead of erroring.
+    const objIdNum = Number(objectId);
+    if (Number.isNaN(objIdNum)) return res.status(400).json({ error: 'objectId must be numeric' });
     payload = JSON.stringify({
-      print: { sequence_id: '0', command: 'skip_objects', obj_list: [objectId] }
+      print: { sequence_id: nextSeq(), command: 'skip_objects', obj_list: [objIdNum] }
     });
   } else if (command === 'calibration') {
     // option bitmask: 1=bed leveling, 2=vibration compensation, 4=flow calibration, 7=all
     payload = JSON.stringify({
-      print: { sequence_id: '0', command: 'calibration', option: option || 7 }
+      print: { sequence_id: nextSeq(), command: 'calibration', option: option || 7 }
     });
   } else if (command === 'light_on' || command === 'light_off') {
     payload = JSON.stringify({
       system: {
-        sequence_id: '0',
+        sequence_id: nextSeq(),
         command:  'ledctrl',
         led_node: 'work_light',
         led_mode: command === 'light_on' ? 'on' : 'off'
@@ -574,7 +589,7 @@ app.post('/control', (req, res) => {
     });
   } else {
     payload = JSON.stringify({
-      print: { sequence_id: '0', command }
+      print: { sequence_id: nextSeq(), command }
     });
   }
 
@@ -590,7 +605,7 @@ app.post('/ams/set-slot', (req, res) => {
   if (!p) return res.status(404).json({ error: 'Printer not found' });
   p.client.publish(p.REQUEST_TOPIC, JSON.stringify({
     print: {
-      sequence_id: '0',
+      sequence_id: nextSeq(),
       command:     'ams_filament_setting',
       ams_id:      amsId,
       tray_id:     trayId,
@@ -618,7 +633,7 @@ app.post('/ams/load', (req, res) => {
   const _tarTemp  = _currTemp;
   p.client.publish(p.REQUEST_TOPIC, JSON.stringify({
     print: {
-      sequence_id: '0',
+      sequence_id: nextSeq(),
       command:     'ams_change_filament',
       target:      target,
       curr_temp:   _currTemp,
@@ -636,7 +651,7 @@ app.post('/ams/unload', (req, res) => {
   if (!p) return res.status(404).json({ error: 'Printer not found' });
   p.client.publish(p.REQUEST_TOPIC, JSON.stringify({
     print: {
-      sequence_id: '0',
+      sequence_id: nextSeq(),
       command:     'ams_change_filament',
       target:      255,
       curr_temp:   220,
@@ -655,7 +670,7 @@ app.post('/ams/set-ext-spool', (req, res) => {
   const col = (color || '#1A1A1A').replace('#', '').toUpperCase().slice(0, 6) + 'FF';
   p.client.publish(p.REQUEST_TOPIC, JSON.stringify({
     print: {
-      sequence_id:     '0',
+      sequence_id:     nextSeq(),
       command:         'ams_filament_setting',
       ams_id:          255,
       tray_id:         254,
@@ -1135,7 +1150,7 @@ async function _visionScan(name, manual = false) {
       // Require 2 consecutive failure detections before auto-pausing (reduces false positives)
       const pc = printerClients[name];
       if (consecCount >= 2 && pc && st2?.gcode_state === 'RUNNING') {
-        pc.client.publish(pc.REQUEST_TOPIC, JSON.stringify({ print: { sequence_id: '0', command: 'pause' } }));
+        pc.client.publish(pc.REQUEST_TOPIC, JSON.stringify({ print: { sequence_id: nextSeq(), command: 'pause' } }));
         autoPaused = true;
         console.log(`[Vision] Auto-paused ${name} — ${consecCount} consecutive failures`);
       }
