@@ -183,9 +183,11 @@ function ControlButton({
       disabled={pending}
     >
       {pending ? (
-        <ActivityIndicator size="small" color="#fff" />
+        <ActivityIndicator size="small" color={danger ? '#fff' : colors.bg} />
       ) : (
-        <Text style={styles.controlButtonText}>{label}</Text>
+        <Text style={[styles.controlButtonText, danger && styles.controlButtonTextDanger]}>
+          {label}
+        </Text>
       )}
     </Pressable>
   );
@@ -246,5 +248,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   controlButtonDanger: { backgroundColor: colors.danger },
-  controlButtonText: { color: '#fff', fontSize: 12, fontWeight: '600' },
+  controlButtonText: { color: colors.bg, fontSize: 12, fontWeight: '700' },
+  controlButtonTextDanger: { color: '#fff' },
 });

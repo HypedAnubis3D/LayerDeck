@@ -7,6 +7,7 @@ import OrdersStackNavigator from './OrdersStackNavigator';
 import QueueScreen from '../screens/QueueScreen';
 import SpoolsScreen from '../screens/SpoolsScreen';
 import PrintersScreen from '../screens/PrintersScreen';
+import HeaderTitle from './HeaderTitle';
 import { colors } from '../lib/theme';
 
 const Tab = createBottomTabNavigator();
@@ -26,8 +27,9 @@ function MainTabs() {
   return (
     <Tab.Navigator
       screenOptions={{
-        headerStyle: { backgroundColor: colors.bg },
-        headerTintColor: colors.text,
+        headerStyle: { backgroundColor: colors.card, borderBottomColor: colors.border, borderBottomWidth: 1 },
+        headerTintColor: colors.accent,
+        headerShadowVisible: false,
         tabBarStyle: { backgroundColor: colors.card, borderTopColor: colors.border },
         tabBarActiveTintColor: colors.accent,
         tabBarInactiveTintColor: colors.textMuted,
@@ -38,9 +40,21 @@ function MainTabs() {
         component={OrdersStackNavigator}
         options={{ title: 'Orders', headerShown: false }}
       />
-      <Tab.Screen name="Queue" component={QueueScreen} options={{ title: 'Print Queue' }} />
-      <Tab.Screen name="Spools" component={SpoolsScreen} options={{ title: 'Spools' }} />
-      <Tab.Screen name="Printers" component={PrintersScreen} options={{ title: 'Printers' }} />
+      <Tab.Screen
+        name="Queue"
+        component={QueueScreen}
+        options={{ title: 'Print Queue', headerTitle: () => <HeaderTitle title="Print Queue" /> }}
+      />
+      <Tab.Screen
+        name="Spools"
+        component={SpoolsScreen}
+        options={{ title: 'Spools', headerTitle: () => <HeaderTitle title="Spools" /> }}
+      />
+      <Tab.Screen
+        name="Printers"
+        component={PrintersScreen}
+        options={{ title: 'Printers', headerTitle: () => <HeaderTitle title="Printers" /> }}
+      />
     </Tab.Navigator>
   );
 }

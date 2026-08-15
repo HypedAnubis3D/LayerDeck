@@ -87,7 +87,7 @@ export default function SpoolsScreen() {
         renderItem={({ item: group }) => {
           const isOpen = expanded.has(group.key);
           return (
-            <View style={styles.card}>
+            <View style={[styles.card, { borderLeftColor: statusColors[group.status], borderLeftWidth: 3 }]}>
               <Pressable style={styles.cardTop} onPress={() => toggleExpanded(group.key)}>
                 <View style={[styles.colorDot, { backgroundColor: group.color || '#888' }]} />
                 <View style={{ flex: 1 }}>
@@ -162,7 +162,7 @@ const styles = StyleSheet.create({
   },
   filterChipActive: { backgroundColor: colors.accent, borderColor: colors.accent },
   filterText: { color: colors.textMuted, fontSize: 13, textTransform: 'capitalize' },
-  filterTextActive: { color: '#fff', fontWeight: '600' },
+  filterTextActive: { color: colors.bg, fontWeight: '700' },
   listContent: { padding: 16, paddingBottom: 24 },
   card: {
     backgroundColor: colors.card,
@@ -202,7 +202,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
   logButton: { backgroundColor: colors.accent, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 7 },
-  logButtonText: { color: '#fff', fontSize: 12, fontWeight: '600' },
+  logButtonText: { color: colors.bg, fontSize: 12, fontWeight: '700' },
   error: { color: colors.danger, marginHorizontal: 16, marginTop: 8 },
   empty: { color: colors.textMuted, textAlign: 'center', marginTop: 40 },
 });

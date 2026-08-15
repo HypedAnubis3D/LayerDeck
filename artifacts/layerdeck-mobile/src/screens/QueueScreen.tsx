@@ -82,24 +82,13 @@ export default function QueueScreen() {
         )}
         renderItem={({ item }) => {
           const next = NEXT_STAGE[item.stage || 'queued'];
+          const priorityColor = PRIORITY_COLORS[item.priority] ?? PRIORITY_COLORS.normal;
           return (
-            <View style={styles.card}>
+            <View style={[styles.card, { borderLeftColor: priorityColor, borderLeftWidth: 3 }]}>
               <View style={styles.cardTop}>
                 <Text style={styles.name}>{item.name}</Text>
-                <View
-                  style={[
-                    styles.priorityBadge,
-                    { backgroundColor: `${PRIORITY_COLORS[item.priority] ?? PRIORITY_COLORS.normal}33` },
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.priorityText,
-                      { color: PRIORITY_COLORS[item.priority] ?? PRIORITY_COLORS.normal },
-                    ]}
-                  >
-                    {item.priority}
-                  </Text>
+                <View style={[styles.priorityBadge, { backgroundColor: `${priorityColor}33` }]}>
+                  <Text style={[styles.priorityText, { color: priorityColor }]}>{item.priority}</Text>
                 </View>
               </View>
               <Text style={styles.meta}>
@@ -162,7 +151,7 @@ const styles = StyleSheet.create({
     paddingVertical: 9,
     paddingHorizontal: 14,
   },
-  primaryButtonText: { color: '#fff', fontSize: 13, fontWeight: '600' },
+  primaryButtonText: { color: colors.bg, fontSize: 13, fontWeight: '700' },
   secondaryButton: {
     backgroundColor: 'transparent',
     borderWidth: 1,

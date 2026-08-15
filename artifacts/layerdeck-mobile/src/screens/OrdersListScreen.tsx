@@ -83,7 +83,10 @@ export default function OrdersListScreen({ navigation }: Props) {
           <Text style={styles.empty}>No orders match.</Text>
         }
         renderItem={({ item }) => (
-          <Pressable style={styles.card} onPress={() => navigation.navigate('OrderDetail', { order: item })}>
+          <Pressable
+            style={[styles.card, { borderLeftColor: statusAccent(item.status), borderLeftWidth: 3 }]}
+            onPress={() => navigation.navigate('OrderDetail', { order: item })}
+          >
             <View style={styles.cardTop}>
               <Text style={styles.customer}>{item.customer || 'Unnamed customer'}</Text>
               <StatusBadge status={item.status} />
@@ -101,12 +104,16 @@ export default function OrdersListScreen({ navigation }: Props) {
   );
 }
 
+function statusAccent(status: string): string {
+  if (status === 'shipped') return '#22c55e';
+  if (status === 'cancelled') return '#ef4444';
+  return '#f59e0b';
+}
+
 function StatusBadge({ status }: { status: string }) {
-  const bg =
-    status === 'shipped' ? '#22c55e33' : status === 'cancelled' ? '#ef444433' : '#f59e0b33';
-  const fg = status === 'shipped' ? '#22c55e' : status === 'cancelled' ? '#ef4444' : '#f59e0b';
+  const fg = statusAccent(status);
   return (
-    <View style={[styles.badge, { backgroundColor: bg }]}>
+    <View style={[styles.badge, { backgroundColor: `${fg}33` }]}>
       <Text style={[styles.badgeText, { color: fg }]}>{status || 'pending'}</Text>
     </View>
   );
@@ -137,7 +144,7 @@ const styles = StyleSheet.create({
   },
   filterChipActive: { backgroundColor: colors.accent, borderColor: colors.accent },
   filterText: { color: colors.textMuted, fontSize: 13, textTransform: 'capitalize' },
-  filterTextActive: { color: '#fff', fontWeight: '600' },
+  filterTextActive: { color: colors.bg, fontWeight: '700' },
   listContent: { paddingHorizontal: 16, paddingBottom: 24 },
   card: {
     backgroundColor: colors.card,

@@ -8,8 +8,10 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
+  Image,
 } from 'react-native';
 import { useAuth } from '../lib/AuthContext';
+import { colors } from '../lib/theme';
 
 export default function SignInScreen() {
   const { signIn } = useAuth();
@@ -36,12 +38,18 @@ export default function SignInScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <View style={styles.container}>
-        <Text style={styles.title}>LayerDeck</Text>
+        <Image
+          source={require('../../assets/android-icon-foreground.png')}
+          style={styles.logo}
+          resizeMode="contain"
+        />
+        <Text style={styles.title}>LAYERDECK</Text>
         <Text style={styles.subtitle}>Sign in to your Studio Manager account</Text>
 
         <TextInput
           style={styles.input}
           placeholder="Email"
+          placeholderTextColor={colors.textMuted}
           autoCapitalize="none"
           autoCorrect={false}
           keyboardType="email-address"
@@ -52,6 +60,7 @@ export default function SignInScreen() {
         <TextInput
           style={styles.input}
           placeholder="Password"
+          placeholderTextColor={colors.textMuted}
           secureTextEntry
           value={password}
           onChangeText={setPassword}
@@ -63,7 +72,7 @@ export default function SignInScreen() {
 
         <Pressable style={styles.button} onPress={onSubmit} disabled={loading}>
           {loading ? (
-            <ActivityIndicator color="#fff" />
+            <ActivityIndicator color={colors.bg} />
           ) : (
             <Text style={styles.buttonText}>Sign In</Text>
           )}
@@ -79,28 +88,36 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     paddingHorizontal: 24,
-    backgroundColor: '#0b0f14',
+    backgroundColor: colors.bg,
   },
-  title: { fontSize: 32, fontWeight: '700', color: '#fff', marginBottom: 4 },
-  subtitle: { fontSize: 14, color: '#8a94a3', marginBottom: 32 },
+  logo: { width: 180, height: 94, alignSelf: 'center', marginBottom: 8 },
+  title: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: colors.accent,
+    letterSpacing: 4,
+    textAlign: 'center',
+    marginBottom: 4,
+  },
+  subtitle: { fontSize: 14, color: colors.textMuted, textAlign: 'center', marginBottom: 32 },
   input: {
-    backgroundColor: '#161c25',
-    color: '#fff',
+    backgroundColor: colors.card,
+    color: colors.text,
     borderRadius: 10,
     paddingHorizontal: 16,
     paddingVertical: 14,
     fontSize: 16,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: '#232b38',
+    borderColor: colors.border,
   },
-  error: { color: '#ff6b6b', marginBottom: 12, fontSize: 14 },
+  error: { color: colors.danger, marginBottom: 12, fontSize: 14 },
   button: {
-    backgroundColor: '#3b82f6',
+    backgroundColor: colors.accent,
     borderRadius: 10,
     paddingVertical: 14,
     alignItems: 'center',
     marginTop: 8,
   },
-  buttonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
+  buttonText: { color: colors.bg, fontSize: 16, fontWeight: '700' },
 });

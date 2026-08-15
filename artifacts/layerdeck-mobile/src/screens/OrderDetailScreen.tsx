@@ -156,7 +156,7 @@ export default function OrderDetailScreen({ route, navigation }: Props) {
       )}
 
       <Pressable style={styles.saveButton} onPress={onSave} disabled={saving}>
-        {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveButtonText}>Save</Text>}
+        {saving ? <ActivityIndicator color={colors.bg} /> : <Text style={styles.saveButtonText}>Save</Text>}
       </Pressable>
     </ScrollView>
   );
@@ -229,7 +229,7 @@ const styles = StyleSheet.create({
   },
   chipActive: { backgroundColor: colors.accent, borderColor: colors.accent },
   chipText: { color: colors.textMuted, fontSize: 13, textTransform: 'capitalize' },
-  chipTextActive: { color: '#fff', fontWeight: '600' },
+  chipTextActive: { color: colors.bg, fontWeight: '700' },
   itemRow: {
     backgroundColor: colors.card,
     borderRadius: 10,
@@ -247,5 +247,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 16,
   },
-  saveButtonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
+  saveButtonText: { color: colors.bg, fontSize: 16, fontWeight: '700' },
 });
