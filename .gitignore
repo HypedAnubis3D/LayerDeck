@@ -11,6 +11,10 @@ out-tsc
 # dependencies
 node_modules
 
+# pnpm regenerates this locally, but it must not be committed —
+# Render auto-installs from it if present (see commit e440245)
+pnpm-lock.yaml
+
 # IDEs and editors
 /.idea
 .project
