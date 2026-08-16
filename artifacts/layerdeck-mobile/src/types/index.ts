@@ -45,11 +45,16 @@ export interface QueueItem {
   timestamp: number;
   fromShopify?: boolean;
   noTmf?: boolean;
+  printId?: string;
+  linkedPrintId?: string;
+  finishedAt?: number;
+  outcome?: 'done' | 'failed';
 }
 
 export interface PrintFilament {
   spoolId: string;
-  grams: number;
+  grams: number; // planned/expected
+  actualGrams?: number; // only set once the print is marked failed
 }
 
 export type PrintStatus = 'printing' | 'done' | 'failed';
@@ -67,10 +72,49 @@ export interface Print {
   tmfId: string | null;
   timestamp: number;
   status?: PrintStatus;
+  failPct?: number;
+  failNote?: string;
   finishedAt?: number;
   fromQueueItemId?: string;
   linkedOrderId?: string;
   autoFromPi?: boolean;
+}
+
+export interface PrintGroup {
+  id: string;
+  name: string;
+  printIds: string[];
+}
+
+export interface UsageHistEntry {
+  id: string;
+  spoolId: string;
+  spoolName: string;
+  material: string;
+  amount: number; // positive = deducted, negative = refunded
+  job: string; // print name; refunds are prefixed '[REFUND] '
+  notes: string;
+  timestamp: number;
+}
+
+export interface WasteLogEntry {
+  id: string;
+  date: string;
+  printerName: string;
+  jobName: string;
+  reason: string;
+  materialWasted: number; // grams — observed as 0 across all live data
+  timestamp: number;
+}
+
+export interface MaintLogEntry {
+  id: string;
+  printer: string;
+  type: string; // e.g. 'Lubrication' | 'Nozzle Change' | 'Bed Cleaning' | 'Full Service'
+  date: string;
+  interval: number; // days between service
+  notes: string;
+  timestamp: number;
 }
 
 export interface Spool {

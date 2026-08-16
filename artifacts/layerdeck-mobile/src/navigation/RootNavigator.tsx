@@ -6,8 +6,8 @@ import SignInScreen from '../screens/SignInScreen';
 import OrdersStackNavigator from './OrdersStackNavigator';
 import PrintsStackNavigator from './PrintsStackNavigator';
 import QueueScreen from '../screens/QueueScreen';
-import SpoolsScreen from '../screens/SpoolsScreen';
-import PrintersScreen from '../screens/PrintersScreen';
+import SpoolsStackNavigator from './SpoolsStackNavigator';
+import PrintersStackNavigator from './PrintersStackNavigator';
 import HeaderTitle from './HeaderTitle';
 import { colors } from '../lib/theme';
 
@@ -18,7 +18,7 @@ const navTheme = {
   colors: {
     ...DarkTheme.colors,
     background: colors.bg,
-    card: colors.card,
+    card: colors.navBg,
     border: colors.border,
     primary: colors.accent,
   },
@@ -31,7 +31,7 @@ function MainTabs() {
         headerStyle: { backgroundColor: colors.card, borderBottomColor: colors.border, borderBottomWidth: 1 },
         headerTintColor: colors.accent,
         headerShadowVisible: false,
-        tabBarStyle: { backgroundColor: colors.card, borderTopColor: colors.border },
+        tabBarStyle: { backgroundColor: colors.navBg, borderTopColor: colors.border },
         tabBarActiveTintColor: colors.accent,
         tabBarInactiveTintColor: colors.textMuted,
       }}
@@ -52,14 +52,14 @@ function MainTabs() {
         options={{ title: 'Print Queue', headerTitle: () => <HeaderTitle title="Print Queue" /> }}
       />
       <Tab.Screen
-        name="Spools"
-        component={SpoolsScreen}
-        options={{ title: 'Spools', headerTitle: () => <HeaderTitle title="Spools" /> }}
+        name="SpoolsTab"
+        component={SpoolsStackNavigator}
+        options={{ title: 'Spools', headerShown: false }}
       />
       <Tab.Screen
-        name="Printers"
-        component={PrintersScreen}
-        options={{ title: 'Printers', headerTitle: () => <HeaderTitle title="Printers" /> }}
+        name="PrintersTab"
+        component={PrintersStackNavigator}
+        options={{ title: 'Printers', headerShown: false }}
       />
     </Tab.Navigator>
   );

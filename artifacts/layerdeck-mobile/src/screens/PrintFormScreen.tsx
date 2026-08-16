@@ -12,9 +12,9 @@ import {
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { PrintsStackParamList } from '../navigation/PrintsStackNavigator';
 import { getCollection, setCollection, uid } from '../lib/userData';
-import { applyFilamentDelta } from '../lib/prints';
+import { applyFilamentDelta, buildUsageHistForDelta } from '../lib/prints';
 import { colors } from '../lib/theme';
-import type { Print, PrintFilament, Spool } from '../types';
+import type { Print, PrintFilament, Spool, UsageHistEntry } from '../types';
 
 type Props = NativeStackScreenProps<PrintsStackParamList, 'PrintForm'>;
 
@@ -62,12 +62,21 @@ export default function PrintFormScreen({ route, navigation }: Props) {
 
     setSaving(true);
     try {
-      const [freshPrints, freshSpools] = await Promise.all([
+      const [freshPrints, freshSpools, freshHist] = await Promise.all([
         getCollection<Print>('prints'),
         getCollection<Spool>('spools'),
+        getCollection<UsageHistEntry>('usageHist'),
       ]);
 
       const { spools: nextSpools } = applyFilamentDelta(
+        freshSpools,
+        existing?.filaments ?? [],
+        existing?.qty ?? 0,
+        validFilaments,
+        parsedQty
+      );
+      const histEntries = buildUsageHistForDelta(
+        name.trim(),
         freshSpools,
         existing?.filaments ?? [],
         existing?.qty ?? 0,
@@ -97,7 +106,11 @@ export default function PrintFormScreen({ route, navigation }: Props) {
       const idx = freshPrints.findIndex((p) => p.id === printRecord.id);
       const nextPrints = idx >= 0 ? freshPrints.map((p, i) => (i === idx ? printRecord : p)) : [...freshPrints, printRecord];
 
-      await Promise.all([setCollection('prints', nextPrints), setCollection('spools', nextSpools)]);
+      await Promise.all([
+        setCollection('prints', nextPrints),
+        setCollection('spools', nextSpools),
+        histEntries.length ? setCollection('usageHist', [...freshHist, ...histEntries]) : Promise.resolve(),
+      ]);
       navigation.goBack();
     } catch (err) {
       Alert.alert('Save failed', err instanceof Error ? err.message : 'Unknown error');

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -8,14 +8,16 @@ import {
   StyleSheet,
   ActivityIndicator,
   RefreshControl,
+  Alert,
 } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { PrintsStackParamList } from '../navigation/PrintsStackNavigator';
 import { useCollection } from '../lib/useCollection';
-import { getCollection } from '../lib/userData';
-import { estimateFilamentCost } from '../lib/prints';
+import { getCollection, setCollection } from '../lib/userData';
+import { estimateFilamentCost, computeFinish } from '../lib/prints';
+import { findGroupForPrint, assignPrintToGroup } from '../lib/printGroups';
 import { colors } from '../lib/theme';
-import type { Print, Spool } from '../types';
+import type { Print, PrintGroup, QueueItem, Spool, UsageHistEntry } from '../types';
 
 type Props = NativeStackScreenProps<PrintsStackParamList, 'PrintsList'>;
 
@@ -36,15 +38,39 @@ function statusColor(status: string): string {
 export default function PrintsListScreen({ navigation }: Props) {
   const { items: prints, loading, refreshing, error, refresh, save } = useCollection<Print>('prints');
   const [spools, setSpools] = useState<Spool[]>([]);
+  const [groups, setGroups] = useState<PrintGroup[]>([]);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [dateFilter, setDateFilter] = useState('all');
-  const [finishing, setFinishing] = useState<string | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [failingId, setFailingId] = useState<string | null>(null);
+  const [failPctDraft, setFailPctDraft] = useState('');
+  const [failNoteDraft, setFailNoteDraft] = useState('');
+  const [groupPickerId, setGroupPickerId] = useState<string | null>(null);
 
   useEffect(() => {
     getCollection<Spool>('spools').then(setSpools).catch(() => {});
+    getCollection<PrintGroup>('printGroups').then(setGroups).catch(() => {});
   }, [prints]);
+
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerRight: () => (
+        <View style={styles.headerButtons}>
+          <Pressable onPress={() => navigation.navigate('Groups')} style={styles.headerButton}>
+            <Text style={styles.headerButtonText}>Groups</Text>
+          </Pressable>
+          <Pressable onPress={() => navigation.navigate('FailRates')} style={styles.headerButton}>
+            <Text style={styles.headerButtonText}>Fails</Text>
+          </Pressable>
+          <Pressable onPress={() => navigation.navigate('WasteLog')} style={styles.headerButton}>
+            <Text style={styles.headerButtonText}>Waste</Text>
+          </Pressable>
+        </View>
+      ),
+    });
+  }, [navigation]);
 
   const categories = useMemo(() => {
     const set = new Set(prints.map((p) => p.category).filter(Boolean));
@@ -71,16 +97,55 @@ export default function PrintsListScreen({ navigation }: Props) {
       .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
   }, [prints, search, statusFilter, categoryFilter, dateFilter]);
 
-  const markFinished = async (print: Print) => {
-    setFinishing(print.id);
+  const finish = async (print: Print, outcome: 'done' | 'failed', failPct?: number, failNote?: string) => {
+    setBusyId(print.id);
     try {
-      const next = prints.map((p) =>
-        p.id === print.id ? { ...p, status: 'done' as const, finishedAt: Date.now() } : p
-      );
-      await save(next);
+      const [freshPrints, freshSpools, freshQueue, freshHist] = await Promise.all([
+        getCollection<Print>('prints'),
+        getCollection<Spool>('spools'),
+        getCollection<QueueItem>('queueItems'),
+        getCollection<UsageHistEntry>('usageHist'),
+      ]);
+      const freshPrint = freshPrints.find((p) => p.id === print.id) ?? print;
+
+      const result = computeFinish(freshPrint, outcome, {
+        failPct,
+        failNote,
+        spools: freshSpools,
+        queueItems: freshQueue,
+      });
+
+      const nextPrints = freshPrints.map((p) => (p.id === print.id ? result.print : p));
+      const writes: Promise<unknown>[] = [setCollection('prints', nextPrints)];
+      if (result.spools) writes.push(setCollection('spools', result.spools));
+      if (result.queueItems) writes.push(setCollection('queueItems', result.queueItems));
+      if (result.usageHistEntries.length) {
+        writes.push(setCollection('usageHist', [...freshHist, ...result.usageHistEntries]));
+      }
+      await Promise.all(writes);
+
+      await refresh();
+      if (result.spools) setSpools(result.spools);
+      setFailingId(null);
+      setFailPctDraft('');
+      setFailNoteDraft('');
+    } catch (err) {
+      Alert.alert('Failed to update print', err instanceof Error ? err.message : 'Unknown error');
     } finally {
-      setFinishing(null);
+      setBusyId(null);
     }
+  };
+
+  const confirmFail = (print: Print) => {
+    const pct = Math.min(100, Math.max(0, Number(failPctDraft) || 0));
+    finish(print, 'failed', pct, failNoteDraft.trim());
+  };
+
+  const setPrintGroup = async (printId: string, groupId: string | null) => {
+    const next = assignPrintToGroup(groups, printId, groupId);
+    setGroups(next);
+    setGroupPickerId(null);
+    await setCollection('printGroups', next);
   };
 
   if (loading) {
@@ -162,6 +227,10 @@ export default function PrintsListScreen({ navigation }: Props) {
         renderItem={({ item }) => {
           const status = item.status || 'done';
           const cost = estimateFilamentCost(item.filaments || [], item.qty || 1, spools);
+          const group = findGroupForPrint(groups, item.id);
+          const isBusy = busyId === item.id;
+          const isFailing = failingId === item.id;
+
           return (
             <Pressable
               style={[styles.card, { borderLeftColor: statusColor(status), borderLeftWidth: 3 }]}
@@ -185,13 +254,18 @@ export default function PrintsListScreen({ navigation }: Props) {
                     return (
                       <View key={idx} style={styles.filamentChip}>
                         <View
-                          style={[
-                            styles.filamentDot,
-                            { backgroundColor: spool?.color || colors.border },
-                          ]}
+                          style={[styles.filamentDot, { backgroundColor: spool?.color || colors.border }]}
                         />
                         <Text style={styles.filamentText}>
-                          {spool?.name || 'Unassigned'} · {f.grams.toFixed(1)}g
+                          {spool?.name || 'Unassigned'} ·{' '}
+                          {f.actualGrams != null ? (
+                            <>
+                              {f.actualGrams.toFixed(1)}g{' '}
+                              <Text style={styles.strike}>{f.grams.toFixed(1)}g</Text>
+                            </>
+                          ) : (
+                            `${f.grams.toFixed(1)}g`
+                          )}
                         </Text>
                       </View>
                     );
@@ -200,19 +274,106 @@ export default function PrintsListScreen({ navigation }: Props) {
               )}
 
               {cost > 0 && <Text style={styles.costText}>Est. filament cost: ${cost.toFixed(2)}</Text>}
+              {item.failPct != null && (
+                <Text style={styles.costText}>
+                  Failed at {item.failPct}% complete{item.failNote ? ` · ${item.failNote}` : ''}
+                </Text>
+              )}
 
-              {status === 'printing' && (
-                <Pressable
-                  style={styles.finishButton}
-                  onPress={() => markFinished(item)}
-                  disabled={finishing === item.id}
-                >
-                  {finishing === item.id ? (
-                    <ActivityIndicator size="small" color={colors.bg} />
-                  ) : (
-                    <Text style={styles.finishButtonText}>Mark as Finished</Text>
-                  )}
-                </Pressable>
+              <Pressable
+                style={styles.groupRow}
+                onPress={(e) => {
+                  e.stopPropagation();
+                  setGroupPickerId(groupPickerId === item.id ? null : item.id);
+                }}
+              >
+                <Text style={styles.groupRowText}>
+                  📁 {group ? group.name : 'No group'}
+                </Text>
+              </Pressable>
+
+              {groupPickerId === item.id && (
+                <View style={styles.groupPicker}>
+                  <Pressable style={styles.groupOption} onPress={(e) => { e.stopPropagation(); setPrintGroup(item.id, null); }}>
+                    <Text style={styles.groupOptionText}>No group</Text>
+                  </Pressable>
+                  {groups.map((g) => (
+                    <Pressable
+                      key={g.id}
+                      style={styles.groupOption}
+                      onPress={(e) => {
+                        e.stopPropagation();
+                        setPrintGroup(item.id, g.id);
+                      }}
+                    >
+                      <Text style={styles.groupOptionText}>{g.name}</Text>
+                    </Pressable>
+                  ))}
+                  {!groups.length && <Text style={styles.groupOptionText}>No groups yet — create one first.</Text>}
+                </View>
+              )}
+
+              {status === 'printing' && !isFailing && (
+                <View style={styles.actionsRow}>
+                  <Pressable
+                    style={styles.finishButton}
+                    onPress={(e) => { e.stopPropagation(); finish(item, 'done'); }}
+                    disabled={isBusy}
+                  >
+                    {isBusy ? (
+                      <ActivityIndicator size="small" color={colors.bg} />
+                    ) : (
+                      <Text style={styles.finishButtonText}>Mark as Finished</Text>
+                    )}
+                  </Pressable>
+                  <Pressable
+                    style={styles.failButton}
+                    onPress={(e) => { e.stopPropagation(); setFailingId(item.id); }}
+                    disabled={isBusy}
+                  >
+                    <Text style={styles.failButtonText}>Mark as Failed</Text>
+                  </Pressable>
+                </View>
+              )}
+
+              {isFailing && (
+                <View style={styles.failForm}>
+                  <Text style={styles.failFormLabel}>% complete when it failed</Text>
+                  <TextInput
+                    style={styles.failInput}
+                    placeholder="e.g. 62"
+                    placeholderTextColor={colors.textMuted}
+                    keyboardType="number-pad"
+                    value={failPctDraft}
+                    onChangeText={setFailPctDraft}
+                  />
+                  <TextInput
+                    style={styles.failInput}
+                    placeholder="Note (optional)"
+                    placeholderTextColor={colors.textMuted}
+                    value={failNoteDraft}
+                    onChangeText={setFailNoteDraft}
+                  />
+                  <View style={styles.actionsRow}>
+                    <Pressable
+                      style={styles.failButton}
+                      onPress={(e) => { e.stopPropagation(); confirmFail(item); }}
+                      disabled={isBusy}
+                    >
+                      {isBusy ? (
+                        <ActivityIndicator size="small" color="#fff" />
+                      ) : (
+                        <Text style={styles.failButtonText}>Confirm Failed</Text>
+                      )}
+                    </Pressable>
+                    <Pressable
+                      style={styles.cancelButton}
+                      onPress={(e) => { e.stopPropagation(); setFailingId(null); }}
+                    >
+                      <Text style={styles.cancelButtonText}>Cancel</Text>
+                    </Pressable>
+                  </View>
+                </View>
               )}
             </Pressable>
           );
@@ -225,6 +386,9 @@ export default function PrintsListScreen({ navigation }: Props) {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
   center: { flex: 1, backgroundColor: colors.bg, alignItems: 'center', justifyContent: 'center' },
+  headerButtons: { flexDirection: 'row', gap: 12, marginRight: 8 },
+  headerButton: {},
+  headerButtonText: { color: colors.accent, fontSize: 13, fontWeight: '600' },
   topRow: { flexDirection: 'row', gap: 8, paddingHorizontal: 16, marginTop: 16, marginBottom: 8 },
   search: {
     flex: 1,
@@ -282,15 +446,64 @@ const styles = StyleSheet.create({
   },
   filamentDot: { width: 10, height: 10, borderRadius: 5 },
   filamentText: { color: colors.textMuted, fontSize: 11 },
+  strike: { textDecorationLine: 'line-through', opacity: 0.6 },
   costText: { color: colors.textMuted, fontSize: 12, marginTop: 6, fontStyle: 'italic' },
+  groupRow: { marginTop: 8 },
+  groupRowText: { color: colors.textMuted, fontSize: 12 },
+  groupPicker: {
+    marginTop: 6,
+    backgroundColor: colors.bg,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 6,
+  },
+  groupOption: { paddingVertical: 8, paddingHorizontal: 8 },
+  groupOptionText: { color: colors.text, fontSize: 13 },
+  actionsRow: { flexDirection: 'row', gap: 8, marginTop: 10 },
   finishButton: {
+    flex: 1,
     backgroundColor: colors.accent,
     borderRadius: 8,
     paddingVertical: 8,
     alignItems: 'center',
-    marginTop: 10,
   },
   finishButtonText: { color: colors.bg, fontSize: 13, fontWeight: '700' },
+  failButton: {
+    flex: 1,
+    backgroundColor: colors.danger,
+    borderRadius: 8,
+    paddingVertical: 8,
+    alignItems: 'center',
+  },
+  failButtonText: { color: '#fff', fontSize: 13, fontWeight: '700' },
+  cancelButton: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 8,
+    paddingVertical: 8,
+    alignItems: 'center',
+  },
+  cancelButtonText: { color: colors.textMuted, fontSize: 13, fontWeight: '600' },
+  failForm: {
+    marginTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    paddingTop: 10,
+    gap: 8,
+  },
+  failFormLabel: { color: colors.textMuted, fontSize: 11, textTransform: 'uppercase' },
+  failInput: {
+    backgroundColor: colors.bg,
+    color: colors.text,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    fontSize: 13,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
   error: { color: colors.danger, marginHorizontal: 16, marginBottom: 8 },
   empty: { color: colors.textMuted, textAlign: 'center', marginTop: 40 },
 });

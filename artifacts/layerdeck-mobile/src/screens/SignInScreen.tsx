@@ -11,7 +11,7 @@ import {
   Image,
 } from 'react-native';
 import { useAuth } from '../lib/AuthContext';
-import { colors } from '../lib/theme';
+import { colors, fonts } from '../lib/theme';
 
 export default function SignInScreen() {
   const { signIn } = useAuth();
@@ -92,8 +92,8 @@ const styles = StyleSheet.create({
   },
   logo: { width: 180, height: 94, alignSelf: 'center', marginBottom: 8 },
   title: {
-    fontSize: 28,
-    fontWeight: '800',
+    fontSize: 26,
+    fontFamily: fonts.display,
     color: colors.accent,
     letterSpacing: 4,
     textAlign: 'center',

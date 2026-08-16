@@ -1,5 +1,5 @@
 import { View, Text, Image, StyleSheet } from 'react-native';
-import { colors } from '../lib/theme';
+import { colors, fonts } from '../lib/theme';
 
 export default function HeaderTitle({ title }: { title: string }) {
   return (
@@ -17,5 +17,5 @@ export default function HeaderTitle({ title }: { title: string }) {
 const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   logo: { width: 26, height: 26 },
-  title: { color: colors.text, fontSize: 18, fontWeight: '700' },
+  title: { color: colors.text, fontSize: 16, fontFamily: fonts.display },
 });
