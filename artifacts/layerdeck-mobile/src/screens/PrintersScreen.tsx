@@ -12,13 +12,18 @@ import { colors } from '../lib/theme';
 import {
   getAllStatus,
   sendControl,
+  getTapoDevices,
+  setTapoPower,
+  matchTapoDevice,
   PiHubUnreachableError,
   type AllPrinterStatus,
   type ControlCommand,
+  type TapoDevice,
 } from '../lib/piHub';
 
 export default function PrintersScreen() {
   const [status, setStatus] = useState<AllPrinterStatus>({});
+  const [tapoDevices, setTapoDevices] = useState<TapoDevice[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -42,6 +47,14 @@ export default function PrintersScreen() {
     } finally {
       isRefresh ? setRefreshing(false) : setLoading(false);
     }
+    // Smart plugs are a separate, optional subsystem (needs tp-link-tapo-connect
+    // installed on the Pi) — fail silently so a missing/misconfigured Tapo setup
+    // never blocks the core printer status view.
+    try {
+      setTapoDevices(await getTapoDevices());
+    } catch {
+      setTapoDevices([]);
+    }
   }, []);
 
   useEffect(() => {
@@ -58,6 +71,19 @@ export default function PrintersScreen() {
       await load(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Control command failed');
+    } finally {
+      setPendingAction(null);
+    }
+  };
+
+  const runTapoPower = async (alias: string, on: boolean) => {
+    const key = `tapo:${alias}`;
+    setPendingAction(key);
+    try {
+      await setTapoPower(alias, on);
+      await load(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Plug command failed');
     } finally {
       setPendingAction(null);
     }
@@ -97,6 +123,7 @@ export default function PrintersScreen() {
         const state = p.online === false ? 'OFFLINE' : (p.gcode_state || 'IDLE');
         const progress = p.mc_percent ?? 0;
         const isPrinting = state === 'RUNNING' || state === 'PAUSE';
+        const plug = matchTapoDevice(name, tapoDevices);
         return (
           <View key={name} style={styles.card}>
             <View style={styles.cardTop}>
@@ -149,6 +176,11 @@ export default function PrintersScreen() {
                 onPress={() => runControl(name, 'skip')}
               />
               <ControlButton
+                label="Calibrate"
+                pending={pendingAction === `${name}:calibration`}
+                onPress={() => runControl(name, 'calibration')}
+              />
+              <ControlButton
                 label="Light On"
                 pending={pendingAction === `${name}:light_on`}
                 onPress={() => runControl(name, 'light_on')}
@@ -159,6 +191,43 @@ export default function PrintersScreen() {
                 onPress={() => runControl(name, 'light_off')}
               />
             </View>
+
+            {plug && (
+              <View style={styles.plugRow}>
+                <View style={styles.plugInfo}>
+                  <Text style={styles.plugAlias}>⚡ {plug.alias}</Text>
+                  <Text style={styles.plugMeta}>
+                    {plug.error
+                      ? plug.error
+                      : plug.on == null
+                      ? 'unknown'
+                      : plug.on
+                      ? `On${plug.power_mw != null ? ` · ${Math.round(plug.power_mw / 1000)}W` : ''}`
+                      : 'Off'}
+                  </Text>
+                </View>
+                <View style={styles.plugButtons}>
+                  <Pressable
+                    style={[styles.plugButton, plug.on === true && styles.plugButtonOn]}
+                    disabled={pendingAction === `tapo:${plug.alias}`}
+                    onPress={() => runTapoPower(plug.alias, true)}
+                  >
+                    {pendingAction === `tapo:${plug.alias}` ? (
+                      <ActivityIndicator size="small" color={colors.bg} />
+                    ) : (
+                      <Text style={styles.plugButtonText}>ON</Text>
+                    )}
+                  </Pressable>
+                  <Pressable
+                    style={[styles.plugButton, plug.on === false && styles.plugButtonOff]}
+                    disabled={pendingAction === `tapo:${plug.alias}`}
+                    onPress={() => runTapoPower(plug.alias, false)}
+                  >
+                    <Text style={styles.plugButtonText}>OFF</Text>
+                  </Pressable>
+                </View>
+              </View>
+            )}
           </View>
         );
       })}
@@ -256,4 +325,29 @@ const styles = StyleSheet.create({
   controlButtonDanger: { backgroundColor: colors.danger },
   controlButtonText: { color: colors.bg, fontSize: 12, fontWeight: '700' },
   controlButtonTextDanger: { color: '#fff' },
+  plugRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  plugInfo: { flex: 1 },
+  plugAlias: { color: colors.text, fontSize: 13, fontWeight: '600' },
+  plugMeta: { color: colors.textMuted, fontSize: 12, marginTop: 2, textTransform: 'capitalize' },
+  plugButtons: { flexDirection: 'row', gap: 6 },
+  plugButton: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    minWidth: 52,
+    alignItems: 'center',
+  },
+  plugButtonOn: { backgroundColor: colors.success, borderColor: colors.success },
+  plugButtonOff: { backgroundColor: colors.danger, borderColor: colors.danger },
+  plugButtonText: { color: colors.bg, fontSize: 12, fontWeight: '700' },
 });

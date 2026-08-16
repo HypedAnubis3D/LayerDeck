@@ -111,3 +111,37 @@ export function setExtSpool(params: {
 }): Promise<unknown> {
   return request('/ams/set-ext-spool', { method: 'POST', body: JSON.stringify(params) });
 }
+
+export interface TapoDevice {
+  alias: string;
+  ip: string;
+  on: boolean | null;
+  power_mw: number | null;
+  error: string | null;
+}
+
+export async function getTapoDevices(): Promise<TapoDevice[]> {
+  const res = await request<{ ok: boolean; devices: TapoDevice[] }>('/tapo/devices');
+  return res.devices ?? [];
+}
+
+export function setTapoPower(alias: string, on: boolean): Promise<unknown> {
+  return request('/tapo/power', { method: 'POST', body: JSON.stringify({ alias, on }) });
+}
+
+// Mirrors studio-manager's _aliasMatchesPrinter(): strips plug/outlet/socket/smart
+// from the alias, then checks every remaining word appears in the printer name
+// (e.g. "P1S Room Plug" -> matches printer "P1S (Room)").
+export function matchTapoDevice(printerName: string, devices: TapoDevice[]): TapoDevice | undefined {
+  const p = printerName.toLowerCase().replace(/[^a-z0-9\s]/g, '').trim();
+  return devices.find((d) => {
+    const core = (d.alias || '')
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, '')
+      .replace(/\b(plug|outlet|socket|smart)\b/g, '')
+      .trim();
+    if (!core) return false;
+    const tokens = core.split(/\s+/).filter((t) => t.length > 1);
+    return tokens.length > 0 && tokens.every((t) => p.includes(t));
+  });
+}
