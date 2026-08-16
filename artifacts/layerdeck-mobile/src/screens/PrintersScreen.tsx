@@ -5,6 +5,7 @@ import {
   ScrollView,
   Pressable,
   Switch,
+  TextInput,
   StyleSheet,
   ActivityIndicator,
   RefreshControl,
@@ -21,10 +22,14 @@ import {
   cancelTapoOff,
   matchTapoDevice,
   setPiHubPublicUrl,
+  setAmsSlot,
+  loadAms,
+  unloadAms,
   PiHubUnreachableError,
   type AllPrinterStatus,
   type ControlCommand,
   type TapoDevice,
+  type AmsTray,
 } from '../lib/piHub';
 
 interface PiHubConfig {
@@ -52,6 +57,9 @@ export default function PrintersScreen() {
   const [autoOffEnabled, setAutoOffEnabled] = useState<Record<string, boolean>>({});
   const [countdowns, setCountdowns] = useState<Record<string, AutoOffCountdown>>({});
   const [, forceTick] = useState(0);
+  const [expandedTray, setExpandedTray] = useState<string | null>(null);
+  const [typeDraft, setTypeDraft] = useState('');
+  const [colorDraft, setColorDraft] = useState('');
 
   const lastGcodeState = useRef<Record<string, string>>({});
   // `load` and `loadTapo` are set up once and polled on stable intervals, but
@@ -195,6 +203,46 @@ export default function PrintersScreen() {
     }
   };
 
+  const runAmsLoad = async (printer: string, amsId: string, trayId: string) => {
+    const key = `ams-load:${printer}:${amsId}:${trayId}`;
+    setPendingAction(key);
+    try {
+      await loadAms(printer, Number(amsId), Number(trayId));
+      await load(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'AMS load failed');
+    } finally {
+      setPendingAction(null);
+    }
+  };
+
+  const runAmsUnload = async (printer: string) => {
+    const key = `ams-unload:${printer}`;
+    setPendingAction(key);
+    try {
+      await unloadAms(printer);
+      await load(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'AMS unload failed');
+    } finally {
+      setPendingAction(null);
+    }
+  };
+
+  const runAmsSet = async (printer: string, amsId: string, trayId: string) => {
+    const key = `ams-set:${printer}:${amsId}:${trayId}`;
+    setPendingAction(key);
+    try {
+      await setAmsSlot({ printer, amsId, trayId, filamentType: typeDraft, color: colorDraft });
+      setExpandedTray(null);
+      await load(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'AMS set failed');
+    } finally {
+      setPendingAction(null);
+    }
+  };
+
   const runTapoPower = async (alias: string, on: boolean) => {
     const key = `tapo:${alias}`;
     setPendingAction(key);
@@ -300,6 +348,84 @@ export default function PrintersScreen() {
               <Text style={styles.tempText}>Nozzle: {fmtTemp(p.nozzle_temper)}</Text>
               <Text style={styles.tempText}>Bed: {fmtTemp(p.bed_temper)}</Text>
             </View>
+
+            {!!p.ams?.ams?.length && (
+              <View style={styles.amsSection}>
+                {p.ams.ams.map((unit) => (
+                  <View key={unit.id} style={styles.amsUnit}>
+                    <Text style={styles.amsUnitLabel}>AMS {unit.id}</Text>
+                    <View style={styles.amsTrayRow}>
+                      {unit.tray.map((tray: AmsTray) => {
+                        const trayKey = `${name}:${unit.id}:${tray.id}`;
+                        const isExpanded = expandedTray === trayKey;
+                        const hex = tray.tray_color ? `#${tray.tray_color.slice(0, 6)}` : undefined;
+                        return (
+                          <View key={tray.id} style={styles.amsTrayWrap}>
+                            <Pressable
+                              style={styles.amsTray}
+                              onPress={() => {
+                                setExpandedTray(isExpanded ? null : trayKey);
+                                setTypeDraft(tray.tray_type ?? '');
+                                setColorDraft(tray.tray_color?.slice(0, 6) ?? '');
+                              }}
+                            >
+                              <View style={[styles.amsColorDot, { backgroundColor: hex || colors.border }]} />
+                              <Text style={styles.amsTrayType} numberOfLines={1}>
+                                {tray.tray_type || 'Empty'}
+                              </Text>
+                              {tray.remain != null && <Text style={styles.amsTrayPct}>{tray.remain}%</Text>}
+                            </Pressable>
+
+                            {isExpanded && (
+                              <View style={styles.amsEditor}>
+                                <TextInput
+                                  style={styles.amsInput}
+                                  placeholder="Type (e.g. PLA)"
+                                  placeholderTextColor={colors.textMuted}
+                                  value={typeDraft}
+                                  onChangeText={setTypeDraft}
+                                />
+                                <TextInput
+                                  style={styles.amsInput}
+                                  placeholder="Color hex (no #)"
+                                  placeholderTextColor={colors.textMuted}
+                                  value={colorDraft}
+                                  onChangeText={setColorDraft}
+                                  autoCapitalize="characters"
+                                />
+                                <View style={styles.amsEditorButtons}>
+                                  <Pressable
+                                    style={styles.amsSmallButton}
+                                    disabled={pendingAction === `ams-set:${name}:${unit.id}:${tray.id}`}
+                                    onPress={() => runAmsSet(name, unit.id, tray.id)}
+                                  >
+                                    <Text style={styles.amsSmallButtonText}>Set</Text>
+                                  </Pressable>
+                                  <Pressable
+                                    style={styles.amsSmallButton}
+                                    disabled={pendingAction === `ams-load:${name}:${unit.id}:${tray.id}`}
+                                    onPress={() => runAmsLoad(name, unit.id, tray.id)}
+                                  >
+                                    <Text style={styles.amsSmallButtonText}>Load</Text>
+                                  </Pressable>
+                                  <Pressable
+                                    style={styles.amsSmallButton}
+                                    disabled={pendingAction === `ams-unload:${name}`}
+                                    onPress={() => runAmsUnload(name)}
+                                  >
+                                    <Text style={styles.amsSmallButtonText}>Unload</Text>
+                                  </Pressable>
+                                </View>
+                              </View>
+                            )}
+                          </View>
+                        );
+                      })}
+                    </View>
+                  </View>
+                ))}
+              </View>
+            )}
 
             <View style={styles.actions}>
               <ControlButton
@@ -502,6 +628,44 @@ const styles = StyleSheet.create({
   progressText: { color: colors.textMuted, fontSize: 12, marginTop: 4 },
   tempsRow: { flexDirection: 'row', gap: 12, marginTop: 8 },
   tempText: { color: colors.textMuted, fontSize: 12 },
+  amsSection: { marginTop: 10, gap: 8 },
+  amsUnit: { gap: 6 },
+  amsUnitLabel: { color: colors.textMuted, fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5 },
+  amsTrayRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  amsTrayWrap: { width: '23%' },
+  amsTray: {
+    backgroundColor: colors.bg,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 6,
+    alignItems: 'center',
+  },
+  amsColorDot: { width: 16, height: 16, borderRadius: 8, borderWidth: 1, borderColor: colors.border },
+  amsTrayType: { color: colors.text, fontSize: 10, marginTop: 3, textAlign: 'center' },
+  amsTrayPct: { color: colors.textMuted, fontSize: 10, marginTop: 1 },
+  amsEditor: {
+    marginTop: 4,
+    backgroundColor: colors.card,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 6,
+    gap: 4,
+  },
+  amsInput: {
+    backgroundColor: colors.bg,
+    color: colors.text,
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+    fontSize: 10,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  amsEditorButtons: { flexDirection: 'row', flexWrap: 'wrap', gap: 4 },
+  amsSmallButton: { backgroundColor: colors.accent, borderRadius: 6, paddingHorizontal: 6, paddingVertical: 4 },
+  amsSmallButtonText: { color: colors.bg, fontSize: 9, fontWeight: '700' },
   actions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 },
   controlButton: {
     backgroundColor: colors.accent,

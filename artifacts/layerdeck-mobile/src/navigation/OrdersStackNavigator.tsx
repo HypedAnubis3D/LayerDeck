@@ -7,7 +7,7 @@ import type { Order } from '../types';
 
 export type OrdersStackParamList = {
   OrdersList: undefined;
-  OrderDetail: { order: Order };
+  OrderDetail: { order?: Order } | undefined;
 };
 
 const Stack = createNativeStackNavigator<OrdersStackParamList>();
@@ -26,7 +26,11 @@ export default function OrdersStackNavigator() {
         component={OrdersListScreen}
         options={{ headerTitle: () => <HeaderTitle title="Orders" /> }}
       />
-      <Stack.Screen name="OrderDetail" component={OrderDetailScreen} options={{ title: 'Order' }} />
+      <Stack.Screen
+        name="OrderDetail"
+        component={OrderDetailScreen}
+        options={({ route }) => ({ title: route.params?.order ? 'Order' : 'New Order' })}
+      />
     </Stack.Navigator>
   );
 }

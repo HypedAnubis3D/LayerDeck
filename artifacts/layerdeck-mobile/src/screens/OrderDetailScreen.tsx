@@ -11,25 +11,48 @@ import {
 } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { OrdersStackParamList } from '../navigation/OrdersStackNavigator';
-import { getCollection, setCollection } from '../lib/userData';
+import { getCollection, setCollection, uid } from '../lib/userData';
 import { colors } from '../lib/theme';
-import type { Order } from '../types';
+import type { Order, OrderItem } from '../types';
 
 type Props = NativeStackScreenProps<OrdersStackParamList, 'OrderDetail'>;
 
 const STATUS_OPTIONS = ['pending', 'processing', 'printing', 'ready', 'shipped', 'cancelled'];
 
+function blankOrder(): Order {
+  return {
+    id: uid(),
+    customer: '',
+    orderId: '',
+    platform: 'manual',
+    date: new Date().toISOString().slice(0, 10),
+    customerEmail: '',
+    customerPhone: '',
+    shippingAddress: '',
+    items: [],
+    status: 'pending',
+    shipping: 0,
+    notes: '',
+    trackingNumber: '',
+    timestamp: Date.now(),
+    linkedPrintIds: [],
+    miscCost: 0,
+  };
+}
+
 export default function OrderDetailScreen({ route, navigation }: Props) {
-  const initialOrder = route.params.order;
-  const [order, setOrder] = useState<Order>(initialOrder);
-  const [loading, setLoading] = useState(true);
+  const existing = route.params?.order;
+  const isNew = !existing;
+  const [order, setOrder] = useState<Order>(existing ?? blankOrder());
+  const [loading, setLoading] = useState(!isNew);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
+    if (isNew || !existing) return;
     (async () => {
       try {
         const all = await getCollection<Order>('orders');
-        const fresh = all.find((o) => o.id === initialOrder.id);
+        const fresh = all.find((o) => o.id === existing.id);
         if (fresh) setOrder(fresh);
       } finally {
         setLoading(false);
@@ -40,7 +63,16 @@ export default function OrderDetailScreen({ route, navigation }: Props) {
 
   const update = (patch: Partial<Order>) => setOrder((prev) => ({ ...prev, ...patch }));
 
+  const addItem = () => update({ items: [...(order.items ?? []), { name: '', qty: 1, price: 0 }] });
+  const updateItem = (idx: number, patch: Partial<OrderItem>) =>
+    update({ items: (order.items ?? []).map((it, i) => (i === idx ? { ...it, ...patch } : it)) });
+  const removeItem = (idx: number) => update({ items: (order.items ?? []).filter((_, i) => i !== idx) });
+
   const onSave = async () => {
+    if (isNew && !order.customer.trim()) {
+      Alert.alert('Customer required', 'Give this order a customer name.');
+      return;
+    }
     setSaving(true);
     try {
       const all = await getCollection<Order>('orders');
@@ -56,7 +88,6 @@ export default function OrderDetailScreen({ route, navigation }: Props) {
 
       const next = idx >= 0 ? all.map((o, i) => (i === idx ? finalOrder : o)) : [...all, finalOrder];
       await setCollection('orders', next);
-      Alert.alert('Saved', 'Order updated.');
       navigation.goBack();
     } catch (err) {
       Alert.alert('Save failed', err instanceof Error ? err.message : 'Unknown error');
@@ -137,14 +168,42 @@ export default function OrderDetailScreen({ route, navigation }: Props) {
       />
       <Field label="Notes" value={order.notes ?? ''} onChangeText={(v) => update({ notes: v })} multiline />
 
-      <Text style={styles.sectionLabel}>Items ({order.items?.length ?? 0})</Text>
+      <View style={styles.filamentHeader}>
+        <Text style={styles.sectionLabel}>Items ({order.items?.length ?? 0})</Text>
+        <Pressable onPress={addItem}>
+          <Text style={styles.addLink}>+ Add</Text>
+        </Pressable>
+      </View>
       {(order.items ?? []).map((item, idx) => (
         <View key={idx} style={styles.itemRow}>
-          <Text style={styles.itemName}>{item.name}</Text>
-          <Text style={styles.itemMeta}>
-            qty {item.qty}
-            {item.price != null ? ` · $${item.price}` : ''}
-          </Text>
+          <TextInput
+            style={styles.itemNameInput}
+            placeholder="Item name"
+            placeholderTextColor={colors.textMuted}
+            value={item.name}
+            onChangeText={(v) => updateItem(idx, { name: v })}
+          />
+          <View style={styles.itemNumbersRow}>
+            <TextInput
+              style={styles.itemNumberInput}
+              placeholder="qty"
+              placeholderTextColor={colors.textMuted}
+              keyboardType="number-pad"
+              value={String(item.qty ?? '')}
+              onChangeText={(v) => updateItem(idx, { qty: Number(v) || 1 })}
+            />
+            <TextInput
+              style={styles.itemNumberInput}
+              placeholder="price"
+              placeholderTextColor={colors.textMuted}
+              keyboardType="decimal-pad"
+              value={item.price != null ? String(item.price) : ''}
+              onChangeText={(v) => updateItem(idx, { price: Number(v) || 0 })}
+            />
+            <Pressable onPress={() => removeItem(idx)} style={styles.removeItemButton}>
+              <Text style={styles.removeItemText}>×</Text>
+            </Pressable>
+          </View>
         </View>
       ))}
 
@@ -230,6 +289,8 @@ const styles = StyleSheet.create({
   chipActive: { backgroundColor: colors.accent, borderColor: colors.accent },
   chipText: { color: colors.textMuted, fontSize: 13, textTransform: 'capitalize' },
   chipTextActive: { color: colors.bg, fontWeight: '700' },
+  filamentHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  addLink: { color: colors.accent, fontSize: 13, fontWeight: '700' },
   itemRow: {
     backgroundColor: colors.card,
     borderRadius: 10,
@@ -238,7 +299,21 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
   },
-  itemName: { color: colors.text, fontSize: 14, fontWeight: '600' },
+  itemNameInput: { color: colors.text, fontSize: 14, fontWeight: '600', paddingVertical: 2 },
+  itemNumbersRow: { flexDirection: 'row', gap: 8, marginTop: 8, alignItems: 'center' },
+  itemNumberInput: {
+    flex: 1,
+    backgroundColor: colors.bg,
+    color: colors.text,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    fontSize: 13,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  removeItemButton: { paddingHorizontal: 6 },
+  removeItemText: { color: colors.danger, fontSize: 20, lineHeight: 20 },
   itemMeta: { color: colors.textMuted, fontSize: 13, marginTop: 2 },
   saveButton: {
     backgroundColor: colors.accent,

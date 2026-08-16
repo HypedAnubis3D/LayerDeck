@@ -23,10 +23,17 @@ export default function OrdersListScreen({ navigation }: Props) {
   const { items: orders, loading, refreshing, error, refresh } = useCollection<Order>('orders');
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [platformFilter, setPlatformFilter] = useState('all');
+
+  const platforms = useMemo(() => {
+    const set = new Set(orders.map((o) => o.platform).filter(Boolean));
+    return ['all', ...Array.from(set).sort()];
+  }, [orders]);
 
   const filtered = useMemo(() => {
     return orders
       .filter((o) => statusFilter === 'all' || o.status === statusFilter)
+      .filter((o) => platformFilter === 'all' || o.platform === platformFilter)
       .filter((o) => {
         if (!search.trim()) return true;
         const q = search.toLowerCase();
@@ -37,7 +44,7 @@ export default function OrdersListScreen({ navigation }: Props) {
         );
       })
       .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-  }, [orders, search, statusFilter]);
+  }, [orders, search, statusFilter, platformFilter]);
 
   if (loading) {
     return (
@@ -49,13 +56,19 @@ export default function OrdersListScreen({ navigation }: Props) {
 
   return (
     <View style={styles.container}>
-      <TextInput
-        style={styles.search}
-        placeholder="Search customer, order ID, tracking..."
-        placeholderTextColor={colors.textMuted}
-        value={search}
-        onChangeText={setSearch}
-      />
+      <View style={styles.topRow}>
+        <TextInput
+          style={styles.search}
+          placeholder="Search customer, order ID, tracking..."
+          placeholderTextColor={colors.textMuted}
+          value={search}
+          onChangeText={setSearch}
+        />
+        <Pressable style={styles.newButton} onPress={() => navigation.navigate('OrderDetail', undefined)}>
+          <Text style={styles.newButtonText}>+ New</Text>
+        </Pressable>
+      </View>
+
       <View style={styles.filterRow}>
         {STATUS_FILTERS.map((f) => (
           <Pressable
@@ -69,6 +82,25 @@ export default function OrdersListScreen({ navigation }: Props) {
           </Pressable>
         ))}
       </View>
+
+      {platforms.length > 1 && (
+        <FlatList
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          data={platforms}
+          keyExtractor={(p) => p}
+          style={styles.platformRow}
+          contentContainerStyle={{ paddingHorizontal: 16, gap: 8 }}
+          renderItem={({ item: p }) => (
+            <Pressable
+              style={[styles.filterChip, platformFilter === p && styles.filterChipActive]}
+              onPress={() => setPlatformFilter(p)}
+            >
+              <Text style={[styles.filterText, platformFilter === p && styles.filterTextActive]}>{p}</Text>
+            </Pressable>
+          )}
+        />
+      )}
 
       {error && <Text style={styles.error}>{error}</Text>}
 
@@ -122,9 +154,9 @@ function StatusBadge({ status }: { status: string }) {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bg },
   center: { flex: 1, backgroundColor: colors.bg, alignItems: 'center', justifyContent: 'center' },
+  topRow: { flexDirection: 'row', gap: 8, paddingHorizontal: 16, marginTop: 16, marginBottom: 8 },
   search: {
-    margin: 16,
-    marginBottom: 8,
+    flex: 1,
     backgroundColor: colors.card,
     color: colors.text,
     borderRadius: 10,
@@ -133,7 +165,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
   },
+  newButton: { backgroundColor: colors.accent, borderRadius: 10, paddingHorizontal: 14, justifyContent: 'center' },
+  newButtonText: { color: colors.bg, fontSize: 13, fontWeight: '700' },
   filterRow: { flexDirection: 'row', paddingHorizontal: 16, gap: 8, marginBottom: 8 },
+  platformRow: { marginBottom: 8, flexGrow: 0 },
   filterChip: {
     paddingHorizontal: 12,
     paddingVertical: 6,

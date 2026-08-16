@@ -1,6 +1,7 @@
 import { NavigationContainer, DarkTheme } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { View, ActivityIndicator } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../lib/AuthContext';
 import SignInScreen from '../screens/SignInScreen';
 import OrdersStackNavigator from './OrdersStackNavigator';
@@ -24,6 +25,14 @@ const navTheme = {
   },
 };
 
+type IoniconName = keyof typeof Ionicons.glyphMap;
+
+function tabIcon(name: IoniconName) {
+  return ({ color, size }: { color: string; size: number }) => (
+    <Ionicons name={name} color={color} size={size} />
+  );
+}
+
 function MainTabs() {
   return (
     <Tab.Navigator
@@ -39,27 +48,31 @@ function MainTabs() {
       <Tab.Screen
         name="OrdersTab"
         component={OrdersStackNavigator}
-        options={{ title: 'Orders', headerShown: false }}
+        options={{ title: 'Orders', headerShown: false, tabBarIcon: tabIcon('mail-outline') }}
       />
       <Tab.Screen
         name="PrintsTab"
         component={PrintsStackNavigator}
-        options={{ title: 'Prints', headerShown: false }}
+        options={{ title: 'Prints', headerShown: false, tabBarIcon: tabIcon('print-outline') }}
       />
       <Tab.Screen
         name="Queue"
         component={QueueScreen}
-        options={{ title: 'Print Queue', headerTitle: () => <HeaderTitle title="Print Queue" /> }}
+        options={{
+          title: 'Print Queue',
+          headerTitle: () => <HeaderTitle title="Print Queue" />,
+          tabBarIcon: tabIcon('clipboard-outline'),
+        }}
       />
       <Tab.Screen
         name="SpoolsTab"
         component={SpoolsStackNavigator}
-        options={{ title: 'Spools', headerShown: false }}
+        options={{ title: 'Spools', headerShown: false, tabBarIcon: tabIcon('disc-outline') }}
       />
       <Tab.Screen
         name="PrintersTab"
         component={PrintersStackNavigator}
-        options={{ title: 'Printers', headerShown: false }}
+        options={{ title: 'Printers', headerShown: false, tabBarIcon: tabIcon('hardware-chip-outline') }}
       />
     </Tab.Navigator>
   );

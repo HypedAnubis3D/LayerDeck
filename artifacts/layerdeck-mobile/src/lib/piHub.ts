@@ -72,6 +72,7 @@ export interface PrinterStatus {
   nozzle_temper?: number;
   bed_temper?: number;
   subtask_name?: string;
+  ams?: { ams: AmsUnit[] };
   [key: string]: unknown;
 }
 
@@ -115,12 +116,31 @@ export function setAmsSlot(params: {
   return request('/ams/set-slot', { method: 'POST', body: JSON.stringify(params) });
 }
 
-export function loadAms(printer: string, target: string): Promise<unknown> {
-  return request('/ams/load', { method: 'POST', body: JSON.stringify({ printer, target }) });
+// Real body shapes confirmed against pi-hub/server.js:619-662 — amsId=255
+// (or -1) means the external/virtual spool, not an AMS unit.
+export function loadAms(printer: string, amsId: number, trayId: number): Promise<unknown> {
+  return request('/ams/load', { method: 'POST', body: JSON.stringify({ printer, amsId, trayId }) });
 }
 
-export function unloadAms(printer: string, target: string): Promise<unknown> {
-  return request('/ams/unload', { method: 'POST', body: JSON.stringify({ printer, target }) });
+export function unloadAms(printer: string): Promise<unknown> {
+  return request('/ams/unload', { method: 'POST', body: JSON.stringify({ printer }) });
+}
+
+export interface AmsTray {
+  id: string;
+  tray_type?: string;
+  tray_color?: string; // hex, no leading '#', e.g. "3F8E43FF"
+  remain?: number; // 0-100
+}
+
+export interface AmsUnit {
+  id: string;
+  humidity?: string;
+  tray: AmsTray[];
+}
+
+export interface AmsStatus {
+  ams: AmsUnit[];
 }
 
 export function setExtSpool(params: {
