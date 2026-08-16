@@ -94,36 +94,37 @@ export default function PrintersScreen() {
 
       {printerNames.map((name) => {
         const p = status[name];
-        const progress = typeof p.progress === 'number' ? p.progress : undefined;
+        const state = p.online === false ? 'OFFLINE' : (p.gcode_state || 'IDLE');
+        const progress = p.mc_percent ?? 0;
+        const isPrinting = state === 'RUNNING' || state === 'PAUSE';
         return (
           <View key={name} style={styles.card}>
             <View style={styles.cardTop}>
               <Text style={styles.printerName}>{name}</Text>
-              <View style={[styles.stateBadge, { backgroundColor: stateColor(p.state) + '33' }]}>
-                <Text style={[styles.stateText, { color: stateColor(p.state) }]}>
-                  {p.state ?? 'unknown'}
-                </Text>
+              <View style={[styles.stateBadge, { backgroundColor: stateColor(state) + '33' }]}>
+                <Text style={[styles.stateText, { color: stateColor(state) }]}>{state}</Text>
               </View>
             </View>
 
-            {progress !== undefined && (
+            {!!p.subtask_name && <Text style={styles.jobName}>{p.subtask_name}</Text>}
+
+            {isPrinting && (
               <>
                 <View style={styles.barTrack}>
                   <View style={[styles.barFill, { width: `${Math.min(100, progress)}%` }]} />
                 </View>
-                <Text style={styles.progressText}>{progress}%</Text>
+                <Text style={styles.progressText}>
+                  {progress}%
+                  {p.layer_num != null && p.total_layer_num ? ` · layer ${p.layer_num}/${p.total_layer_num}` : ''}
+                  {p.mc_remaining_time != null ? ` · ${Math.round(p.mc_remaining_time)}m left` : ''}
+                </Text>
               </>
             )}
 
-            {p.temps && (
-              <View style={styles.tempsRow}>
-                {Object.entries(p.temps).map(([k, v]) => (
-                  <Text key={k} style={styles.tempText}>
-                    {k}: {v}°
-                  </Text>
-                ))}
-              </View>
-            )}
+            <View style={styles.tempsRow}>
+              <Text style={styles.tempText}>Nozzle: {fmtTemp(p.nozzle_temper)}</Text>
+              <Text style={styles.tempText}>Bed: {fmtTemp(p.bed_temper)}</Text>
+            </View>
 
             <View style={styles.actions}>
               <ControlButton
@@ -193,12 +194,16 @@ function ControlButton({
   );
 }
 
-function stateColor(state: unknown): string {
-  const s = String(state ?? '').toLowerCase();
-  if (s.includes('print') || s.includes('run')) return '#22c55e';
-  if (s.includes('pause')) return '#f59e0b';
-  if (s.includes('error') || s.includes('offline') || s.includes('fail')) return '#ef4444';
+function stateColor(state: string): string {
+  const s = state.toLowerCase();
+  if (s === 'running') return '#22c55e';
+  if (s === 'pause') return '#f59e0b';
+  if (s === 'offline' || s === 'failed') return '#ef4444';
   return '#8a94a3';
+}
+
+function fmtTemp(t: number | undefined): string {
+  return t ? `${Math.round(t)}°` : '—';
 }
 
 const styles = StyleSheet.create({
@@ -233,6 +238,7 @@ const styles = StyleSheet.create({
   printerName: { color: colors.text, fontSize: 16, fontWeight: '700' },
   stateBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
   stateText: { fontSize: 12, fontWeight: '600', textTransform: 'capitalize' },
+  jobName: { color: colors.textMuted, fontSize: 13, marginTop: 8 },
   barTrack: { height: 6, borderRadius: 3, backgroundColor: colors.border, marginTop: 10, overflow: 'hidden' },
   barFill: { height: '100%', borderRadius: 3, backgroundColor: colors.accent },
   progressText: { color: colors.textMuted, fontSize: 12, marginTop: 4 },

@@ -39,10 +39,20 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   }
 }
 
+// Field names match the raw Bambu Lab MQTT "print" report, passed through
+// almost untouched by pi-hub's /status (see artifacts/pi-hub/server.js:312).
+// Not a shape we invented — confirmed against how studio-manager's own
+// index.html reads this same payload (e.g. line 20393-20404).
 export interface PrinterStatus {
-  state?: string;
-  progress?: number;
-  temps?: Record<string, number>;
+  online?: boolean;
+  gcode_state?: string; // 'RUNNING' | 'PAUSE' | 'IDLE' | 'FINISH' | 'FAILED' | ...
+  mc_percent?: number; // 0-100
+  mc_remaining_time?: number; // minutes
+  layer_num?: number;
+  total_layer_num?: number;
+  nozzle_temper?: number;
+  bed_temper?: number;
+  subtask_name?: string;
   [key: string]: unknown;
 }
 
