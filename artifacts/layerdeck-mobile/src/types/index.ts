@@ -47,6 +47,32 @@ export interface QueueItem {
   noTmf?: boolean;
 }
 
+export interface PrintFilament {
+  spoolId: string;
+  grams: number;
+}
+
+export type PrintStatus = 'printing' | 'done' | 'failed';
+
+export interface Print {
+  id: string;
+  name: string;
+  category: string;
+  printer: string;
+  hrs: number;
+  qty: number;
+  filaments: PrintFilament[];
+  notes: string;
+  tmfName: string | null;
+  tmfId: string | null;
+  timestamp: number;
+  status?: PrintStatus;
+  finishedAt?: number;
+  fromQueueItemId?: string;
+  linkedOrderId?: string;
+  autoFromPi?: boolean;
+}
+
 export interface Spool {
   id: string;
   name: string;

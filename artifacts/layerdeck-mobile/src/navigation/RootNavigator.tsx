@@ -4,6 +4,7 @@ import { View, ActivityIndicator } from 'react-native';
 import { useAuth } from '../lib/AuthContext';
 import SignInScreen from '../screens/SignInScreen';
 import OrdersStackNavigator from './OrdersStackNavigator';
+import PrintsStackNavigator from './PrintsStackNavigator';
 import QueueScreen from '../screens/QueueScreen';
 import SpoolsScreen from '../screens/SpoolsScreen';
 import PrintersScreen from '../screens/PrintersScreen';
@@ -39,6 +40,11 @@ function MainTabs() {
         name="OrdersTab"
         component={OrdersStackNavigator}
         options={{ title: 'Orders', headerShown: false }}
+      />
+      <Tab.Screen
+        name="PrintsTab"
+        component={PrintsStackNavigator}
+        options={{ title: 'Prints', headerShown: false }}
       />
       <Tab.Screen
         name="Queue"
