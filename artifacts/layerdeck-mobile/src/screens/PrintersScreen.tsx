@@ -1,25 +1,37 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
   ScrollView,
   Pressable,
+  Switch,
   StyleSheet,
   ActivityIndicator,
   RefreshControl,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors } from '../lib/theme';
 import {
   getAllStatus,
   sendControl,
   getTapoDevices,
   setTapoPower,
+  scheduleTapoOff,
+  cancelTapoOff,
   matchTapoDevice,
   PiHubUnreachableError,
   type AllPrinterStatus,
   type ControlCommand,
   type TapoDevice,
 } from '../lib/piHub';
+
+const AUTO_OFF_DELAY_MS = 10 * 60 * 1000;
+const AUTO_OFF_STORAGE_PREFIX = 'layerdeck:autoOff:';
+
+interface AutoOffCountdown {
+  alias: string;
+  endsAt: number;
+}
 
 export default function PrintersScreen() {
   const [status, setStatus] = useState<AllPrinterStatus>({});
@@ -28,6 +40,44 @@ export default function PrintersScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pendingAction, setPendingAction] = useState<string | null>(null);
+  const [autoOffEnabled, setAutoOffEnabled] = useState<Record<string, boolean>>({});
+  const [countdowns, setCountdowns] = useState<Record<string, AutoOffCountdown>>({});
+  const [, forceTick] = useState(0);
+
+  const lastGcodeState = useRef<Record<string, string>>({});
+  // `load` is set up once and polled on a stable interval, but still needs to
+  // see the latest autoOffEnabled/tapoDevices without being redefined every
+  // render — so it reads through these refs instead of closing over state.
+  const autoOffEnabledRef = useRef<Record<string, boolean>>({});
+  const tapoDevicesRef = useRef<TapoDevice[]>([]);
+
+  useEffect(() => {
+    autoOffEnabledRef.current = autoOffEnabled;
+  }, [autoOffEnabled]);
+
+  useEffect(() => {
+    tapoDevicesRef.current = tapoDevices;
+  }, [tapoDevices]);
+
+  useEffect(() => {
+    AsyncStorage.getAllKeys().then(async (keys) => {
+      const ownKeys = keys.filter((k) => k.startsWith(AUTO_OFF_STORAGE_PREFIX));
+      if (!ownKeys.length) return;
+      const pairs = await AsyncStorage.multiGet(ownKeys);
+      const next: Record<string, boolean> = {};
+      for (const [key, value] of pairs) {
+        next[key.slice(AUTO_OFF_STORAGE_PREFIX.length)] = value === 'true';
+      }
+      setAutoOffEnabled(next);
+    });
+  }, []);
+
+  // Countdown banners tick every second while any auto-off is pending.
+  useEffect(() => {
+    if (!Object.keys(countdowns).length) return;
+    const interval = setInterval(() => forceTick((n) => n + 1), 1000);
+    return () => clearInterval(interval);
+  }, [countdowns]);
 
   const load = useCallback(async (isRefresh = false) => {
     isRefresh ? setRefreshing(true) : setLoading(true);
@@ -35,6 +85,23 @@ export default function PrintersScreen() {
     try {
       const data = await getAllStatus();
       setStatus(data);
+
+      // Detect RUNNING/PAUSE -> FINISH transitions to trigger auto-off.
+      for (const [name, p] of Object.entries(data)) {
+        const prevState = lastGcodeState.current[name];
+        const curState = p.gcode_state || 'IDLE';
+        if (prevState && prevState !== 'FINISH' && curState === 'FINISH' && autoOffEnabledRef.current[name]) {
+          const plug = matchTapoDevice(name, tapoDevicesRef.current);
+          if (plug) {
+            scheduleTapoOff(plug.alias, AUTO_OFF_DELAY_MS).catch(() => {});
+            setCountdowns((prev) => ({
+              ...prev,
+              [name]: { alias: plug.alias, endsAt: Date.now() + AUTO_OFF_DELAY_MS },
+            }));
+          }
+        }
+        lastGcodeState.current[name] = curState;
+      }
     } catch (err) {
       setStatus({});
       setError(
@@ -48,12 +115,14 @@ export default function PrintersScreen() {
       isRefresh ? setRefreshing(false) : setLoading(false);
     }
     // Smart plugs are a separate, optional subsystem (needs tp-link-tapo-connect
-    // installed on the Pi) — fail silently so a missing/misconfigured Tapo setup
-    // never blocks the core printer status view.
+    // installed on the Pi) and the local Tapo login can be intermittently flaky
+    // under polling — on failure, keep the last-known device list rather than
+    // wiping the plug row every time a single poll hiccups.
     try {
-      setTapoDevices(await getTapoDevices());
+      const devices = await getTapoDevices();
+      setTapoDevices(devices);
     } catch {
-      setTapoDevices([]);
+      // keep previous tapoDevices
     }
   }, []);
 
@@ -87,6 +156,22 @@ export default function PrintersScreen() {
     } finally {
       setPendingAction(null);
     }
+  };
+
+  const toggleAutoOff = async (printerName: string, value: boolean) => {
+    setAutoOffEnabled((prev) => ({ ...prev, [printerName]: value }));
+    await AsyncStorage.setItem(`${AUTO_OFF_STORAGE_PREFIX}${printerName}`, value ? 'true' : 'false');
+  };
+
+  const keepOn = async (printerName: string) => {
+    const c = countdowns[printerName];
+    if (!c) return;
+    setCountdowns((prev) => {
+      const next = { ...prev };
+      delete next[printerName];
+      return next;
+    });
+    cancelTapoOff(c.alias).catch(() => {});
   };
 
   const printerNames = Object.keys(status);
@@ -124,6 +209,9 @@ export default function PrintersScreen() {
         const progress = p.mc_percent ?? 0;
         const isPrinting = state === 'RUNNING' || state === 'PAUSE';
         const plug = matchTapoDevice(name, tapoDevices);
+        const countdown = countdowns[name];
+        const secsLeft = countdown ? Math.max(0, Math.round((countdown.endsAt - Date.now()) / 1000)) : 0;
+
         return (
           <View key={name} style={styles.card}>
             <View style={styles.cardTop}>
@@ -193,39 +281,62 @@ export default function PrintersScreen() {
             </View>
 
             {plug && (
-              <View style={styles.plugRow}>
-                <View style={styles.plugInfo}>
-                  <Text style={styles.plugAlias}>⚡ {plug.alias}</Text>
-                  <Text style={styles.plugMeta}>
-                    {plug.error
-                      ? plug.error
-                      : plug.on == null
-                      ? 'unknown'
-                      : plug.on
-                      ? `On${plug.power_mw != null ? ` · ${Math.round(plug.power_mw / 1000)}W` : ''}`
-                      : 'Off'}
-                  </Text>
+              <View style={styles.plugSection}>
+                <View style={styles.plugRow}>
+                  <View style={styles.plugInfo}>
+                    <Text style={styles.plugAlias}>⚡ {plug.alias}</Text>
+                    <Text style={styles.plugMeta}>
+                      {plug.error
+                        ? plug.error
+                        : plug.on == null
+                        ? 'unknown'
+                        : plug.on
+                        ? `On${plug.power_mw != null ? ` · ${Math.round(plug.power_mw / 1000)}W` : ''}`
+                        : 'Off'}
+                    </Text>
+                  </View>
+                  <View style={styles.plugButtons}>
+                    <Pressable
+                      style={[styles.plugButton, plug.on === true && styles.plugButtonOn]}
+                      disabled={pendingAction === `tapo:${plug.alias}`}
+                      onPress={() => runTapoPower(plug.alias, true)}
+                    >
+                      {pendingAction === `tapo:${plug.alias}` ? (
+                        <ActivityIndicator size="small" color={colors.bg} />
+                      ) : (
+                        <Text style={styles.plugButtonText}>ON</Text>
+                      )}
+                    </Pressable>
+                    <Pressable
+                      style={[styles.plugButton, plug.on === false && styles.plugButtonOff]}
+                      disabled={pendingAction === `tapo:${plug.alias}`}
+                      onPress={() => runTapoPower(plug.alias, false)}
+                    >
+                      <Text style={styles.plugButtonText}>OFF</Text>
+                    </Pressable>
+                  </View>
                 </View>
-                <View style={styles.plugButtons}>
-                  <Pressable
-                    style={[styles.plugButton, plug.on === true && styles.plugButtonOn]}
-                    disabled={pendingAction === `tapo:${plug.alias}`}
-                    onPress={() => runTapoPower(plug.alias, true)}
-                  >
-                    {pendingAction === `tapo:${plug.alias}` ? (
-                      <ActivityIndicator size="small" color={colors.bg} />
-                    ) : (
-                      <Text style={styles.plugButtonText}>ON</Text>
-                    )}
-                  </Pressable>
-                  <Pressable
-                    style={[styles.plugButton, plug.on === false && styles.plugButtonOff]}
-                    disabled={pendingAction === `tapo:${plug.alias}`}
-                    onPress={() => runTapoPower(plug.alias, false)}
-                  >
-                    <Text style={styles.plugButtonText}>OFF</Text>
-                  </Pressable>
+
+                <View style={styles.autoOffRow}>
+                  <Text style={styles.autoOffLabel}>Auto OFF 10 min after print finishes</Text>
+                  <Switch
+                    value={!!autoOffEnabled[name]}
+                    onValueChange={(v) => toggleAutoOff(name, v)}
+                    trackColor={{ false: colors.border, true: colors.accentMuted }}
+                    thumbColor={autoOffEnabled[name] ? colors.accent : colors.textMuted}
+                  />
                 </View>
+
+                {countdown && secsLeft > 0 && (
+                  <View style={styles.countdownBanner}>
+                    <Text style={styles.countdownText}>
+                      {plug.alias} turns off in {Math.floor(secsLeft / 60)}:{String(secsLeft % 60).padStart(2, '0')}
+                    </Text>
+                    <Pressable style={styles.keepOnButton} onPress={() => keepOn(name)}>
+                      <Text style={styles.keepOnButtonText}>Keep ON</Text>
+                    </Pressable>
+                  </View>
+                )}
               </View>
             )}
           </View>
@@ -325,15 +436,13 @@ const styles = StyleSheet.create({
   controlButtonDanger: { backgroundColor: colors.danger },
   controlButtonText: { color: colors.bg, fontSize: 12, fontWeight: '700' },
   controlButtonTextDanger: { color: '#fff' },
-  plugRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+  plugSection: {
     marginTop: 12,
     paddingTop: 12,
     borderTopWidth: 1,
     borderTopColor: colors.border,
   },
+  plugRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   plugInfo: { flex: 1 },
   plugAlias: { color: colors.text, fontSize: 13, fontWeight: '600' },
   plugMeta: { color: colors.textMuted, fontSize: 12, marginTop: 2, textTransform: 'capitalize' },
@@ -350,4 +459,31 @@ const styles = StyleSheet.create({
   plugButtonOn: { backgroundColor: colors.success, borderColor: colors.success },
   plugButtonOff: { backgroundColor: colors.danger, borderColor: colors.danger },
   plugButtonText: { color: colors.bg, fontSize: 12, fontWeight: '700' },
+  autoOffRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  autoOffLabel: { color: colors.textMuted, fontSize: 12, flex: 1, marginRight: 8 },
+  countdownBanner: {
+    marginTop: 10,
+    backgroundColor: `${colors.accent}1a`,
+    borderWidth: 1,
+    borderColor: colors.accent,
+    borderRadius: 8,
+    padding: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  countdownText: { color: colors.text, fontSize: 12, flex: 1 },
+  keepOnButton: {
+    backgroundColor: colors.accent,
+    borderRadius: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  keepOnButtonText: { color: colors.bg, fontSize: 11, fontWeight: '700' },
 });

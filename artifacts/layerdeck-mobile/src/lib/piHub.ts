@@ -129,6 +129,15 @@ export function setTapoPower(alias: string, on: boolean): Promise<unknown> {
   return request('/tapo/power', { method: 'POST', body: JSON.stringify({ alias, on }) });
 }
 
+// Server-side timer on Pi Hub itself — fires even if the app is closed.
+export function scheduleTapoOff(alias: string, delayMs: number): Promise<unknown> {
+  return request('/tapo/schedule-off', { method: 'POST', body: JSON.stringify({ alias, delayMs }) });
+}
+
+export function cancelTapoOff(alias: string): Promise<unknown> {
+  return request(`/tapo/schedule-off/${encodeURIComponent(alias)}`, { method: 'DELETE' });
+}
+
 // Mirrors studio-manager's _aliasMatchesPrinter(): strips plug/outlet/socket/smart
 // from the alias, then checks every remaining word appears in the printer name
 // (e.g. "P1S Room Plug" -> matches printer "P1S (Room)").
