@@ -27,6 +27,8 @@ import {
 
 const AUTO_OFF_DELAY_MS = 10 * 60 * 1000;
 const AUTO_OFF_STORAGE_PREFIX = 'layerdeck:autoOff:';
+const TAPO_POLL_MS = 20000; // steady-state, once at least one fetch has succeeded
+const TAPO_RETRY_MS = 3000; // fast retry until the first successful fetch
 
 interface AutoOffCountdown {
   alias: string;
@@ -36,6 +38,7 @@ interface AutoOffCountdown {
 export default function PrintersScreen() {
   const [status, setStatus] = useState<AllPrinterStatus>({});
   const [tapoDevices, setTapoDevices] = useState<TapoDevice[]>([]);
+  const [tapoLoading, setTapoLoading] = useState(true);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -45,11 +48,14 @@ export default function PrintersScreen() {
   const [, forceTick] = useState(0);
 
   const lastGcodeState = useRef<Record<string, string>>({});
-  // `load` is set up once and polled on a stable interval, but still needs to
-  // see the latest autoOffEnabled/tapoDevices without being redefined every
-  // render — so it reads through these refs instead of closing over state.
+  // `load` and `loadTapo` are set up once and polled on stable intervals, but
+  // still need to see the latest autoOffEnabled/tapoDevices without being
+  // redefined every render — so they read through these refs instead of
+  // closing over state.
   const autoOffEnabledRef = useRef<Record<string, boolean>>({});
   const tapoDevicesRef = useRef<TapoDevice[]>([]);
+  const tapoLoadedOnce = useRef(false);
+  const tapoRetryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     autoOffEnabledRef.current = autoOffEnabled;
@@ -60,16 +66,18 @@ export default function PrintersScreen() {
   }, [tapoDevices]);
 
   useEffect(() => {
-    AsyncStorage.getAllKeys().then(async (keys) => {
-      const ownKeys = keys.filter((k) => k.startsWith(AUTO_OFF_STORAGE_PREFIX));
-      if (!ownKeys.length) return;
-      const pairs = await AsyncStorage.multiGet(ownKeys);
-      const next: Record<string, boolean> = {};
-      for (const [key, value] of pairs) {
-        next[key.slice(AUTO_OFF_STORAGE_PREFIX.length)] = value === 'true';
-      }
-      setAutoOffEnabled(next);
-    });
+    AsyncStorage.getAllKeys()
+      .then(async (keys) => {
+        const ownKeys = keys.filter((k) => k.startsWith(AUTO_OFF_STORAGE_PREFIX));
+        if (!ownKeys.length) return;
+        const pairs = await AsyncStorage.multiGet(ownKeys);
+        const next: Record<string, boolean> = {};
+        for (const [key, value] of pairs) {
+          next[key.slice(AUTO_OFF_STORAGE_PREFIX.length)] = value === 'true';
+        }
+        setAutoOffEnabled(next);
+      })
+      .catch(() => {});
   }, []);
 
   // Countdown banners tick every second while any auto-off is pending.
@@ -114,16 +122,6 @@ export default function PrintersScreen() {
     } finally {
       isRefresh ? setRefreshing(false) : setLoading(false);
     }
-    // Smart plugs are a separate, optional subsystem (needs tp-link-tapo-connect
-    // installed on the Pi) and the local Tapo login can be intermittently flaky
-    // under polling — on failure, keep the last-known device list rather than
-    // wiping the plug row every time a single poll hiccups.
-    try {
-      const devices = await getTapoDevices();
-      setTapoDevices(devices);
-    } catch {
-      // keep previous tapoDevices
-    }
   }, []);
 
   useEffect(() => {
@@ -131,6 +129,40 @@ export default function PrintersScreen() {
     const interval = setInterval(() => load(), 10000);
     return () => clearInterval(interval);
   }, [load]);
+
+  // Smart plugs are a separate, optional subsystem (needs tp-link-tapo-connect
+  // installed on the Pi, and the local Tapo login re-authenticates fresh on
+  // every single request — so the very first fetch after opening the app is
+  // prone to failing). Retry quickly until the first successful load, then
+  // settle into a slower steady-state poll and keep the last-known device
+  // list on any later failure rather than blanking the plug row.
+  const loadTapo = useCallback(async () => {
+    if (tapoRetryTimer.current) {
+      clearTimeout(tapoRetryTimer.current);
+      tapoRetryTimer.current = null;
+    }
+    try {
+      const devices = await getTapoDevices();
+      setTapoDevices(devices);
+      tapoLoadedOnce.current = true;
+      setTapoLoading(false);
+    } catch {
+      if (!tapoLoadedOnce.current) {
+        setTapoLoading(true);
+        tapoRetryTimer.current = setTimeout(loadTapo, TAPO_RETRY_MS);
+      }
+      // else: already have last-known-good data — skip this cycle silently
+    }
+  }, []);
+
+  useEffect(() => {
+    loadTapo();
+    const interval = setInterval(loadTapo, TAPO_POLL_MS);
+    return () => {
+      clearInterval(interval);
+      if (tapoRetryTimer.current) clearTimeout(tapoRetryTimer.current);
+    };
+  }, [loadTapo]);
 
   const runControl = async (printer: string, command: ControlCommand) => {
     const key = `${printer}:${command}`;
@@ -150,7 +182,7 @@ export default function PrintersScreen() {
     setPendingAction(key);
     try {
       await setTapoPower(alias, on);
-      await load(true);
+      await loadTapo();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Plug command failed');
     } finally {
@@ -188,7 +220,16 @@ export default function PrintersScreen() {
     <ScrollView
       style={styles.container}
       contentContainerStyle={styles.content}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} tintColor={colors.accent} />}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={() => {
+            load(true);
+            loadTapo();
+          }}
+          tintColor={colors.accent}
+        />
+      }
     >
       {error && (
         <View style={styles.errorBanner}>
@@ -232,6 +273,7 @@ export default function PrintersScreen() {
                   {progress}%
                   {p.layer_num != null && p.total_layer_num ? ` · layer ${p.layer_num}/${p.total_layer_num}` : ''}
                   {p.mc_remaining_time != null ? ` · ${Math.round(p.mc_remaining_time)}m left` : ''}
+                  {p.mc_remaining_time != null ? ` · ETA ${fmtEta(p.mc_remaining_time)}` : ''}
                 </Text>
               </>
             )}
@@ -280,7 +322,7 @@ export default function PrintersScreen() {
               />
             </View>
 
-            {plug && (
+            {plug ? (
               <View style={styles.plugSection}>
                 <View style={styles.plugRow}>
                   <View style={styles.plugInfo}>
@@ -338,6 +380,12 @@ export default function PrintersScreen() {
                   </View>
                 )}
               </View>
+            ) : (
+              tapoLoading && (
+                <View style={styles.plugSection}>
+                  <Text style={styles.plugLoadingText}>Connecting to smart plug…</Text>
+                </View>
+              )
             )}
           </View>
         );
@@ -384,6 +432,18 @@ function stateColor(state: string): string {
 
 function fmtTemp(t: number | undefined): string {
   return t ? `${Math.round(t)}°` : '—';
+}
+
+// mc_remaining_time is minutes-from-now; format as e.g. "8/15 8:19pm".
+function fmtEta(remainingMinutes: number): string {
+  const d = new Date(Date.now() + remainingMinutes * 60000);
+  const month = d.getMonth() + 1;
+  const day = d.getDate();
+  let hours = d.getHours();
+  const ampm = hours >= 12 ? 'pm' : 'am';
+  hours = hours % 12 || 12;
+  const minutes = String(d.getMinutes()).padStart(2, '0');
+  return `${month}/${day} ${hours}:${minutes}${ampm}`;
 }
 
 const styles = StyleSheet.create({
@@ -442,6 +502,7 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: colors.border,
   },
+  plugLoadingText: { color: colors.textMuted, fontSize: 12, fontStyle: 'italic' },
   plugRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   plugInfo: { flex: 1 },
   plugAlias: { color: colors.text, fontSize: 13, fontWeight: '600' },
