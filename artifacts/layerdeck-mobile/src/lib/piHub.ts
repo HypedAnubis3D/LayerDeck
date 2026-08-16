@@ -1,21 +1,40 @@
-const BASE_URL = process.env.EXPO_PUBLIC_PI_HUB_URL || 'http://192.168.1.183:3000';
+const LAN_FALLBACK_URL = process.env.EXPO_PUBLIC_PI_HUB_URL || 'http://192.168.1.183:3000';
+
+// Pi Hub's own printerHub config in Supabase carries a Tailscale Funnel
+// publicUrl — a real public HTTPS endpoint, reachable off the home WiFi,
+// already used by the web app's own getPiUrl(). Set once auth resolves
+// (see PrintersScreen); falls back to the LAN-only IP until then / if unset.
+let publicBaseUrl: string | null = null;
+
+export function setPiHubPublicUrl(url: string | null | undefined): void {
+  publicBaseUrl = url || null;
+}
+
+function baseUrl(): string {
+  return publicBaseUrl || LAN_FALLBACK_URL;
+}
 
 const REQUEST_TIMEOUT_MS = 5000;
+// The Pi's local Tapo login re-authenticates from scratch on every call
+// (no session reuse) and has been observed taking ~6.5s for a handful of
+// plugs — well past the default timeout, which was aborting requests
+// moments before they would have succeeded.
+const TAPO_TIMEOUT_MS = 15000;
 
 export class PiHubUnreachableError extends Error {
   constructor(cause?: unknown) {
-    super('Pi Hub is unreachable — check you are on the same WiFi network as the Pi');
+    super('Pi Hub is unreachable — check you are on the same WiFi network as the Pi, or that its remote URL is reachable');
     this.name = 'PiHubUnreachableError';
     this.cause = cause;
   }
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+async function request<T>(path: string, init?: RequestInit & { timeoutMs?: number }): Promise<T> {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const timeout = setTimeout(() => controller.abort(), init?.timeoutMs ?? REQUEST_TIMEOUT_MS);
 
   try {
-    const res = await fetch(`${BASE_URL}${path}`, {
+    const res = await fetch(`${baseUrl()}${path}`, {
       ...init,
       signal: controller.signal,
       headers: { 'Content-Type': 'application/json', ...init?.headers },
@@ -121,7 +140,9 @@ export interface TapoDevice {
 }
 
 export async function getTapoDevices(): Promise<TapoDevice[]> {
-  const res = await request<{ ok: boolean; devices: TapoDevice[] }>('/tapo/devices');
+  const res = await request<{ ok: boolean; devices: TapoDevice[] }>('/tapo/devices', {
+    timeoutMs: TAPO_TIMEOUT_MS,
+  });
   return res.devices ?? [];
 }
 

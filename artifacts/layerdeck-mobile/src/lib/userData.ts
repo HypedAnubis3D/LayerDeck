@@ -32,6 +32,31 @@ export async function getCollection<T>(collection: string): Promise<T[]> {
   }
 }
 
+// A handful of collections (e.g. 'printerHub') store a single config object
+// rather than an array of items — same table, different payload shape.
+export async function getConfigObject<T>(collection: string): Promise<T | null> {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error('Not signed in');
+
+  const { data, error } = await supabase
+    .from('ha3d_user_data')
+    .select('payload')
+    .eq('user_id', user.id)
+    .eq('collection', collection)
+    .maybeSingle();
+
+  if (error) throw error;
+  if (!data?.payload) return null;
+
+  try {
+    return JSON.parse(data.payload) as T;
+  } catch {
+    return null;
+  }
+}
+
 export async function setCollection<T>(collection: string, items: T[]): Promise<void> {
   const {
     data: { user },

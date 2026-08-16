@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors } from '../lib/theme';
+import { getConfigObject } from '../lib/userData';
 import {
   getAllStatus,
   sendControl,
@@ -19,11 +20,16 @@ import {
   scheduleTapoOff,
   cancelTapoOff,
   matchTapoDevice,
+  setPiHubPublicUrl,
   PiHubUnreachableError,
   type AllPrinterStatus,
   type ControlCommand,
   type TapoDevice,
 } from '../lib/piHub';
+
+interface PiHubConfig {
+  publicUrl?: string;
+}
 
 const AUTO_OFF_DELAY_MS = 10 * 60 * 1000;
 const AUTO_OFF_STORAGE_PREFIX = 'layerdeck:autoOff:';
@@ -77,6 +83,18 @@ export default function PrintersScreen() {
         }
         setAutoOffEnabled(next);
       })
+      .catch(() => {});
+  }, []);
+
+  // Prefer the Tailscale Funnel publicUrl from the same printerHub config
+  // the web app uses (getPiUrl()) — a real public HTTPS endpoint, so the
+  // Printers tab works off the home WiFi too. Falls back to the LAN IP
+  // (EXPO_PUBLIC_PI_HUB_URL) if unset. In-flight/queued requests made
+  // before this resolves just use the LAN fallback and self-correct on
+  // the next poll.
+  useEffect(() => {
+    getConfigObject<PiHubConfig>('printerHub')
+      .then((config) => setPiHubPublicUrl(config?.publicUrl))
       .catch(() => {});
   }, []);
 
