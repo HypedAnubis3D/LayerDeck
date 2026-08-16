@@ -6,6 +6,7 @@ import GroupsScreen from '../screens/GroupsScreen';
 import GroupMembersScreen from '../screens/GroupMembersScreen';
 import WasteLogScreen from '../screens/WasteLogScreen';
 import HeaderTitle from './HeaderTitle';
+import DrawerMenuButton from './DrawerMenuButton';
 import { colors } from '../lib/theme';
 import type { Print, PrintGroup } from '../types';
 
@@ -32,7 +33,7 @@ export default function PrintsStackNavigator() {
       <Stack.Screen
         name="PrintsList"
         component={PrintsListScreen}
-        options={{ headerTitle: () => <HeaderTitle title="Prints" /> }}
+        options={{ headerTitle: () => <HeaderTitle title="Prints" />, headerLeft: () => <DrawerMenuButton /> }}
       />
       <Stack.Screen
         name="PrintForm"

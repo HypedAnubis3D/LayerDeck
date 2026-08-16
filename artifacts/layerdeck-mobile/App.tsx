@@ -10,7 +10,9 @@ import {
 import { useFonts as useOrbitron, Orbitron_700Bold, Orbitron_900Black } from '@expo-google-fonts/orbitron';
 import { useFonts as useShareTechMono, ShareTechMono_400Regular } from '@expo-google-fonts/share-tech-mono';
 import { AuthProvider } from './src/lib/AuthContext';
+import { DrawerProvider } from './src/lib/DrawerContext';
 import RootNavigator from './src/navigation/RootNavigator';
+import DrawerMenu from './src/navigation/DrawerMenu';
 import { colors } from './src/lib/theme';
 
 export default function App() {
@@ -33,7 +35,10 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <AuthProvider>
-        <RootNavigator />
+        <DrawerProvider>
+          <RootNavigator />
+          <DrawerMenu />
+        </DrawerProvider>
         <StatusBar style="light" />
       </AuthProvider>
     </SafeAreaProvider>

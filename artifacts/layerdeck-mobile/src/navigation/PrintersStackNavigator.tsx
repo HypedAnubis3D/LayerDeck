@@ -3,6 +3,7 @@ import { View, Text, Pressable, StyleSheet } from 'react-native';
 import PrintersScreen from '../screens/PrintersScreen';
 import MaintenanceScreen from '../screens/MaintenanceScreen';
 import HeaderTitle from './HeaderTitle';
+import DrawerMenuButton from './DrawerMenuButton';
 import { colors } from '../lib/theme';
 
 export type PrintersStackParamList = {
@@ -26,6 +27,7 @@ export default function PrintersStackNavigator() {
         component={PrintersScreen}
         options={({ navigation }) => ({
           headerTitle: () => <HeaderTitle title="Printers" />,
+          headerLeft: () => <DrawerMenuButton />,
           headerRight: () => (
             <View style={styles.headerButtons}>
               <Pressable onPress={() => navigation.navigate('Maintenance')} style={styles.headerButton}>

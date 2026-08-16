@@ -3,6 +3,7 @@ import { View, Text, Pressable, StyleSheet } from 'react-native';
 import SpoolsScreen from '../screens/SpoolsScreen';
 import UsageHistoryScreen from '../screens/UsageHistoryScreen';
 import HeaderTitle from './HeaderTitle';
+import DrawerMenuButton from './DrawerMenuButton';
 import { colors } from '../lib/theme';
 
 export type SpoolsStackParamList = {
@@ -26,6 +27,7 @@ export default function SpoolsStackNavigator() {
         component={SpoolsScreen}
         options={({ navigation }) => ({
           headerTitle: () => <HeaderTitle title="Spools" />,
+          headerLeft: () => <DrawerMenuButton />,
           headerRight: () => (
             <View style={styles.headerButtons}>
               <Pressable onPress={() => navigation.navigate('UsageHistory')} style={styles.headerButton}>

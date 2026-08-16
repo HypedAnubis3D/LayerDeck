@@ -117,6 +117,55 @@ export interface MaintLogEntry {
   timestamp: number;
 }
 
+export interface CatalogVariant {
+  title: string;
+  price: number;
+  tmfId: string | null;
+}
+
+export interface CatalogItem {
+  id: string;
+  name: string;
+  photo: string;
+  shopifyImage?: string;
+  price: number;
+  cost: number;
+  stockQty?: number;
+  lowStockAt: number; // default 3
+  category: string;
+  tags: string[];
+  description: string;
+  notes?: string;
+  variants: CatalogVariant[];
+  tmfId: string | null;
+  tmfIds?: string[];
+  shopifyId?: string;
+  fromShopify?: boolean;
+  createdAt: number;
+}
+
+export interface TmfLibItem {
+  id: string;
+  name: string;
+  filename: string;
+  printer: string;
+  hrs: number;
+  hasGcode: boolean;
+  nozzleDiam: string;
+  layerHeight: number;
+  purgeGrams: number;
+  supportGrams: number;
+  filamentType: string;
+  filamentColor: string;
+  filamentTypes: string[];
+  filamentColors: string[];
+  plateFilamentGrams: { plateId: string | null; filGrams: Record<string, number> }[];
+  filamentGramsPerColor: number[];
+  objects: unknown[];
+  uploadedAt: number;
+  folderId?: string;
+}
+
 export interface Spool {
   id: string;
   name: string;

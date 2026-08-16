@@ -2,6 +2,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import OrdersListScreen from '../screens/OrdersListScreen';
 import OrderDetailScreen from '../screens/OrderDetailScreen';
 import HeaderTitle from './HeaderTitle';
+import DrawerMenuButton from './DrawerMenuButton';
 import { colors } from '../lib/theme';
 import type { Order } from '../types';
 
@@ -24,7 +25,7 @@ export default function OrdersStackNavigator() {
       <Stack.Screen
         name="OrdersList"
         component={OrdersListScreen}
-        options={{ headerTitle: () => <HeaderTitle title="Orders" /> }}
+        options={{ headerTitle: () => <HeaderTitle title="Orders" />, headerLeft: () => <DrawerMenuButton /> }}
       />
       <Stack.Screen
         name="OrderDetail"
