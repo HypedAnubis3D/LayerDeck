@@ -1,6 +1,5 @@
 import { NavigationContainer, DarkTheme } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { View, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../lib/AuthContext';
@@ -20,7 +19,6 @@ import { navigationRef } from './navigationRef';
 import { colors } from '../lib/theme';
 
 const Tab = createBottomTabNavigator();
-const RootStack = createNativeStackNavigator();
 
 const navTheme = {
   ...DarkTheme,
@@ -41,9 +39,18 @@ function tabIcon(name: IoniconName) {
   );
 }
 
+// Screens reachable only from the hamburger drawer, not the bottom tab bar —
+// still registered as tabs (not a stack sitting above the tab navigator) so
+// the bottom bar stays visible on them too, just with tabBarButton hidden so
+// they don't add a 6th/7th/8th visible icon next to the 5 main tabs.
+function hiddenTab() {
+  return { tabBarButton: () => null };
+}
+
 function MainTabs() {
   return (
     <Tab.Navigator
+      initialRouteName="Dashboard"
       screenOptions={{
         headerStyle: { backgroundColor: colors.card, borderBottomColor: colors.border, borderBottomWidth: 1 },
         headerTintColor: colors.accent,
@@ -54,6 +61,11 @@ function MainTabs() {
         tabBarInactiveTintColor: colors.textMuted,
       }}
     >
+      <Tab.Screen
+        name="Dashboard"
+        component={DashboardScreen}
+        options={{ ...hiddenTab(), headerTitle: () => <HeaderTitle title="Dashboard" /> }}
+      />
       <Tab.Screen
         name="OrdersTab"
         component={OrdersStackNavigator}
@@ -83,40 +95,22 @@ function MainTabs() {
         component={PrintersStackNavigator}
         options={{ title: 'Printers', headerShown: false, tabBarIcon: tabIcon('hardware-chip-outline') }}
       />
-    </Tab.Navigator>
-  );
-}
-
-// Sits above the tabs so the hidden drawer nav can reach screens that
-// aren't one of the 5 main tabs (those stay as-is — most-used, so they
-// keep their dedicated bottom-tab slots).
-function AppStack() {
-  return (
-    <RootStack.Navigator
-      screenOptions={{
-        headerStyle: { backgroundColor: colors.card },
-        headerTintColor: colors.accent,
-        headerShadowVisible: false,
-      }}
-    >
-      <RootStack.Screen name="Tabs" component={MainTabs} options={{ headerShown: false }} />
-      <RootStack.Screen
-        name="Dashboard"
-        component={DashboardScreen}
-        options={{ headerTitle: () => <HeaderTitle title="Dashboard" />, headerLeft: () => <DrawerMenuButton /> }}
+      <Tab.Screen
+        name="Catalog"
+        component={CatalogStackNavigator}
+        options={{ ...hiddenTab(), headerShown: false }}
       />
-      <RootStack.Screen name="Catalog" component={CatalogStackNavigator} options={{ headerShown: false }} />
-      <RootStack.Screen
+      <Tab.Screen
         name="TmfLibrary"
         component={TmfLibraryScreen}
-        options={{ headerTitle: () => <HeaderTitle title="3MF Library" />, headerLeft: () => <DrawerMenuButton /> }}
+        options={{ ...hiddenTab(), headerTitle: () => <HeaderTitle title="3MF Library" /> }}
       />
-      <RootStack.Screen
+      <Tab.Screen
         name="Settings"
         component={SettingsScreen}
-        options={{ headerTitle: () => <HeaderTitle title="Settings" />, headerLeft: () => <DrawerMenuButton /> }}
+        options={{ ...hiddenTab(), headerTitle: () => <HeaderTitle title="Settings" /> }}
       />
-    </RootStack.Navigator>
+    </Tab.Navigator>
   );
 }
 
@@ -133,7 +127,7 @@ export default function RootNavigator() {
 
   return (
     <NavigationContainer ref={navigationRef} theme={navTheme}>
-      {session ? <AppStack /> : <SignInScreen />}
+      {session ? <MainTabs /> : <SignInScreen />}
     </NavigationContainer>
   );
 }
